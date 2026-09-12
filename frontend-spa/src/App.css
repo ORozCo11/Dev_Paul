@@ -1849,6 +1849,15 @@ html[data-theme="light"] .toast-notice.error {
   flex-direction: column;
   gap: 12px;
   padding: 20px 24px;
+  /* Without a height cap here, the card's content (and thus this grid
+     item's max-content contribution) grows with every new report, which
+     forces the "auto" rows it spans to stretch to match — making the
+     whole stat-card/filter area taller instead of just scrolling the
+     list. Capping it keeps the section's footprint fixed regardless of
+     how many reports come in; see .latest-issue-timeline-list below for
+     the part that actually scrolls. */
+  max-height: 460px;
+  overflow: hidden;
 }
 @media (max-width: 900px) {
   .latest-issue-card {
@@ -1896,6 +1905,8 @@ html[data-theme="light"] .toast-notice.error {
   position: relative;
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   max-height: 440px;
   overflow-y: auto;
   padding-left: 22px;
