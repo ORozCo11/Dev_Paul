@@ -2322,6 +2322,7 @@ function Workspace() {
           ) : logRepairsTicketId ? (
             <LogRepairsPage
               ticket={flattenSubIssueRows(records.ticketWorkOrders).find((r) => String(r.ticket_id) === String(logRepairsTicketId) && String(r.sub_issue_id) === String(logRepairsSubIssueId))}
+              vehicleOptions={lookups.vehicles ?? []}
               onBack={() => returnToModule('ticketWorkOrders')}
               onSubmit={(subIssueRow, payload) => ticketAction(`/tickets/${subIssueRow.ticket_id}/sub-issues/${subIssueRow.sub_issue_id}/log-repairs`, payload, 'Repair logs submitted. Sent for Custodian verification.').then((ok) => { if (ok) returnToModule('ticketWorkOrders'); })}
               onDirty={() => setHasUnsavedChanges(true)}
@@ -2963,12 +2964,16 @@ function Workspace() {
             <h3>Maintenance Records <span className="count-badge">{visibleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <ViewModeDropdown value={maintenanceViewMode} onChange={changeMaintenanceViewMode} />
+              {/* No general "+ Add" entry point here anymore — repair data
+                  is now entered through Tickets. This form still exists and
+                  is still reachable from the "Send to External Shop" bridge
+                  off a deferred ticket sub-issue (handleSendToExternalShop)
+                  and from Maintenance Schedule completions, which create
+                  records through their own dedicated paths, not this list. */}
               <LocalSearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search maintenance..."
-                onAdd={(hasRole(user, 'Admin') || hasRole(user, 'Maintenance Personnel') || hasRole(user, 'Custodian')) ? () => navigate(`${roleRoutes[user.role]}/maintenance/new`) : undefined}
-                addLabel="Add Maintenance"
               />
             </div>
           </div>
@@ -10290,14 +10295,31 @@ function TicketProfilePage({ ticketId, role, userId, ticketLookups, onBack, onDe
   );
 }
 
+// The four ways a ticket can be reported. Everything but 'inspection' means
+// the issue AND its repair type are already known — Repair Type used to
+// only live on the separate Maintenance Record form; it's captured here
+// instead so it isn't asked for twice. Shared with the Log Repairs step,
+// where the same repair type gets confirmed/corrected once work starts.
+const ENTRY_MODE_OPTIONS = [
+  { value: 'inspection', label: 'Needs Inspection' },
+  { value: 'in_house', label: 'In-House Repair' },
+  { value: 'cannibalized', label: 'Used Cannibalized Part' },
+  { value: 'external', label: 'Sent to External Shop' },
+];
+
 function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTicket, basePath, onDirty }) {
   // Stable across re-renders (only changes if prefilledTicketData itself
   // changes) — resetting on every render would wipe out whatever the user
   // already typed.
-  const initialTicketValues = useMemo(
-    () => ({ entry_mode: 'inspection', ...(prefilledTicketData ?? {}) }),
-    [prefilledTicketData]
-  );
+  const initialTicketValues = useMemo(() => {
+    const base = { entry_mode: 'inspection', ...(prefilledTicketData ?? {}) };
+    // 'prediagnosed' no longer exists as its own entry mode — the issue is
+    // known (carried over from an Issue Report/Condition Check) but WHICH
+    // repair type applies isn't, so leave the toggle unselected instead of
+    // guessing one, forcing an explicit pick before submit.
+    if (base.entry_mode === 'prediagnosed') base.entry_mode = null;
+    return base;
+  }, [prefilledTicketData]);
   const [liveValues, setLiveValues] = useState(initialTicketValues);
   const [subIssueRows, setSubIssueRows] = useState(() => {
     const seeded = (prefilledTicketData?.sub_issues_text ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
@@ -10347,7 +10369,21 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
   }, [selectedVehicleId, liveValues.fault_category, liveValues.ticket_title]);
 
   const setField = (name, value) => { setLiveValues((v) => ({ ...v, [name]: value })); onDirty?.(); };
-  const preDiagnosed = liveValues.entry_mode === 'prediagnosed';
+  // Any repair-type-specific entry mode means the issue (and how it'll be
+  // fixed) is already known — 'inspection' is the only mode where it isn't,
+  // and a null/unset mode (only reachable via the legacy prefill case above)
+  // means the choice hasn't been made yet.
+  const preDiagnosed = Boolean(liveValues.entry_mode) && liveValues.entry_mode !== 'inspection';
+  const isCannibalized = liveValues.entry_mode === 'cannibalized';
+  const isExternal = liveValues.entry_mode === 'external';
+  // Cannibalized/External each carry ONE shared context value (a single
+  // donor vehicle, or a single vendor+warranty) for every sub-issue on the
+  // ticket — a multi-item list would wrongly imply several distinct
+  // problems all used the same donor part or went to the same shop visit,
+  // when in practice each would need its own. In-House has no such
+  // per-ticket constraint, so a real list of independently assignable
+  // problems still makes sense there.
+  const isSingleIssueMode = isCannibalized || isExternal;
 
   // Same add/remove list pattern as Root Causes on the Inspect Ticket page —
   // one consistent way to build a list of findings anywhere in the app,
@@ -10355,6 +10391,16 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
   const updateSubIssue = (index, value) => { setSubIssueRows((rows) => rows.map((r, i) => (i === index ? value : r))); onDirty?.(); };
   const addSubIssueRow = () => setSubIssueRows((rows) => [...rows, '']);
   const removeSubIssueRow = (index) => setSubIssueRows((rows) => rows.filter((_, i) => i !== index));
+  // Switching INTO Cannibalized/External drops any extra rows already
+  // typed under In-House — those modes only ever submit one sub-issue (see
+  // isSingleIssueMode above), so a leftover second/third row would just be
+  // silently discarded on submit otherwise.
+  const selectEntryMode = (value) => {
+    setField('entry_mode', value);
+    if (value === 'cannibalized' || value === 'external') {
+      setSubIssueRows((rows) => rows.slice(0, 1));
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -10373,6 +10419,11 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
       };
       if (preDiagnosed) {
         out.sub_issues = subIssueRows.map((t) => t.trim()).filter(Boolean).map((title) => ({ title, maintenance_type: subIssueCategory || null }));
+        if (isCannibalized) out.source_vehicle_id = liveValues.source_vehicle_id;
+        if (isExternal) {
+          out.external_vendor = liveValues.external_vendor || undefined;
+          out.warranty_until = liveValues.warranty_until || undefined;
+        }
       }
       const created = await onCreateTicket(out);
       if (created) onBack();
@@ -10387,6 +10438,8 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
   const priorityOptions = ticketLookups.priorities ?? [];
   const selectedVehicle = vehicleOptions.find((v) => String(v.vehicle_id) === String(liveValues.vehicle_id)) ?? null;
   const selectedCustodian = custodianOptions.find((c) => String(c.id) === String(liveValues.assigned_custodian_id)) ?? null;
+  // Can't cannibalize a part from the same vehicle the ticket is for.
+  const sourceVehicleOptions = vehicleOptions.filter((v) => String(v.vehicle_id) !== String(liveValues.vehicle_id));
 
   return (
     <ModulePanel description="Create a new maintenance ticket and assign it to a custodian.">
@@ -10454,35 +10507,76 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
       <form className="smart-form ticket-create-form" onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Entry mode comes first, not last — it decides what the rest of
-            the form even asks for, so it shouldn't be buried at the bottom. */}
+            the form even asks for, so it shouldn't be buried at the bottom.
+            Repair Type used to only exist on the separate Maintenance Record
+            form; it's folded in here now instead of asking for it twice —
+            "Pre-Diagnosed" as a generic option is gone, since picking a
+            specific repair type already implies the issue is diagnosed. */}
         <section className="veh-card">
           <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>How Is This Being Reported?</h4></div>
           <div style={{ padding: 18 }}>
             <div className="entry-mode-toggle" role="radiogroup" aria-label="Entry mode">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={!preDiagnosed}
-                className={!preDiagnosed ? 'primary-button' : 'ghost-button'}
-                onClick={() => setField('entry_mode', 'inspection')}
-              >
-                Needs Inspection
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={preDiagnosed}
-                className={preDiagnosed ? 'primary-button' : 'ghost-button'}
-                onClick={() => setField('entry_mode', 'prediagnosed')}
-              >
-                Pre-Diagnosed
-              </button>
+              {ENTRY_MODE_OPTIONS.map((opt) => {
+                const checked = liveValues.entry_mode === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={checked}
+                    className={`entry-mode-btn entry-mode-btn--${opt.value} ${checked ? 'primary-button' : 'ghost-button'}`}
+                    onClick={() => selectEntryMode(opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
             <p className="muted" style={{ margin: '10px 0 0', fontSize: '0.82rem' }}>
-              {preDiagnosed
-                ? 'The problem is already known — this skips straight to a mechanic, no custodian inspection needed.'
-                : "Nobody has confirmed what's wrong yet — the assigned custodian will inspect the vehicle first."}
+              {liveValues.entry_mode == null
+                ? 'Pick whichever matches what you already know about this repair.'
+                : preDiagnosed
+                  ? 'The problem (and how it will be fixed) is already known — this skips straight to a mechanic, no custodian inspection needed.'
+                  : "Nobody has confirmed what's wrong yet — the assigned custodian will inspect the vehicle first."}
             </p>
+            {isCannibalized && (
+              <label style={{ marginTop: 12, maxWidth: 320 }}>
+                <span>Source Vehicle (donor) <span className="required-asterisk">*</span></span>
+                <select
+                  required
+                  value={liveValues.source_vehicle_id ?? ''}
+                  onChange={(e) => setField('source_vehicle_id', e.target.value)}
+                >
+                  <option value="">Select</option>
+                  {sourceVehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
+                </select>
+              </label>
+            )}
+            {/* Neither field is required here — the vendor may not be
+                picked yet, and there's no warranty to record until the
+                repair is actually done. Both stay editable later at Log
+                Repairs, once that's known for sure. */}
+            {isExternal && (
+              <div className="ticket-form-grid-2" style={{ padding: 0, marginTop: 12, maxWidth: 500 }}>
+                <label>
+                  <span>External Vendor / Shop Name</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dela Cruz Auto Repair"
+                    value={liveValues.external_vendor ?? ''}
+                    onChange={(e) => setField('external_vendor', e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Warranty Until</span>
+                  <input
+                    type="date"
+                    value={liveValues.warranty_until ?? ''}
+                    onChange={(e) => setField('warranty_until', e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
           </div>
         </section>
 
@@ -10497,7 +10591,10 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
               </select>
             </label>
             <label>
-              <span>Assign to Custodian (verifies the repair later) <span className="required-asterisk">*</span></span>
+              <span>
+                Assign to Custodian ({isExternal ? 'checks the vehicle when it returns' : 'verifies the repair later'})
+                {' '}<span className="required-asterisk">*</span>
+              </span>
               <select required value={liveValues.assigned_custodian_id ?? ''} onChange={(e) => setField('assigned_custodian_id', e.target.value)}>
                 <option value="">Select</option>
                 {custodianOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -10573,9 +10670,18 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
 
         {preDiagnosed && (
           <section className="veh-card">
-            <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>Known Sub-Issues</h4></div>
+            <div className="veh-card-head">
+              <Icon name="wrench" size={16} />
+              <h4>{isSingleIssueMode ? 'Known Issue' : 'Known Sub-Issues'}</h4>
+            </div>
             <div style={{ padding: 18 }}>
-              <p className="muted" style={{ marginTop: 0, marginBottom: 14 }}>List each specific problem already found — a mechanic will be assigned to each one. All sub-issues here share one category.</p>
+              <p className="muted" style={{ marginTop: 0, marginBottom: 14 }}>
+                {isCannibalized
+                  ? 'Describe the specific problem this cannibalized part fixes — one donor vehicle can only be tied to one problem here.'
+                  : isExternal
+                    ? 'Describe the problem being sent out. Everything the shop actually finds/fixes gets logged in detail later, once they report back.'
+                    : 'List each specific problem already found — a mechanic will be assigned to each one. All sub-issues here share one category.'}
+              </p>
 
               <label style={{ maxWidth: 320 }}>
                 <span>Category</span>
@@ -10592,40 +10698,44 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
               <div className="sub-issue-rows">
                 {subIssueRows.map((title, index) => (
                   <div key={index} className="sub-issue-row">
-                    <span className="sub-issue-row-index">{index + 1}</span>
+                    {!isSingleIssueMode && <span className="sub-issue-row-index">{index + 1}</span>}
                     <input
                       type="text"
                       placeholder="e.g. Low coolant level"
                       value={title}
                       onChange={(e) => updateSubIssue(index, e.target.value)}
                     />
-                    <button
-                      type="button"
-                      className="btn-delete-action icon-btn"
-                      onClick={() => removeSubIssueRow(index)}
-                      disabled={subIssueRows.length === 1}
-                      title="Remove sub-issue"
-                      aria-label="Remove sub-issue"
-                    >
-                      <Icon name="close" size={14} />
-                    </button>
+                    {!isSingleIssueMode && (
+                      <button
+                        type="button"
+                        className="btn-delete-action icon-btn"
+                        onClick={() => removeSubIssueRow(index)}
+                        disabled={subIssueRows.length === 1}
+                        title="Remove sub-issue"
+                        aria-label="Remove sub-issue"
+                      >
+                        <Icon name="close" size={14} />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
-              <button type="button" className="primary-button" onClick={addSubIssueRow}><Icon name="plus" size={14} /> Add another sub-issue</button>
+              {!isSingleIssueMode && (
+                <button type="button" className="primary-button" onClick={addSubIssueRow}><Icon name="plus" size={14} /> Add another sub-issue</button>
+              )}
             </div>
           </section>
         )}
 
         <div className="form-actions">
           <button className="ghost-button" onClick={onBack} type="button">Cancel</button>
-          <button className="primary-button" type="submit" disabled={submitting}>
+          <button className="primary-button" type="submit" disabled={submitting || liveValues.entry_mode == null}>
             {submitting ? (
               <span className="btn-loading">
                 <Icon name="gear" size={16} className="btn-gear-spinner" filled />
                 Creating…
               </span>
-            ) : (preDiagnosed ? 'Create Pre-Diagnosed Ticket' : 'Create Ticket & Assign')}
+            ) : (preDiagnosed ? 'Create Ticket & Assign Mechanic' : 'Create Ticket & Assign')}
           </button>
         </div>
       </form>
@@ -12319,12 +12429,23 @@ function MechanicWorkOrderModule({
   );
 }
 
-function LogRepairsPage({ ticket, onBack, onSubmit, onDirty }) {
+function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty }) {
   const [repairLogs, setRepairLogs] = useState('');
   const [parts, setParts] = useState([{ name: '', cost: '' }]);
   const [attachment, setAttachment] = useState(null);
   const [repairStartedAt, setRepairStartedAt] = useState('');
   const [repairCompletedAt, setRepairCompletedAt] = useState('');
+  // Pre-filled from whatever was chosen at ticket creation (if this was a
+  // pre-diagnosed sub-issue) — still editable here, since the actual repair
+  // sometimes ends up differing from the original plan. Sub-issues created
+  // via "Needs Inspection" arrive with this blank, since nobody could know
+  // it yet — this is the first point it's actually knowable.
+  const [repairType, setRepairType] = useState(ticket?.repair_type ?? '');
+  const [sourceVehicleId, setSourceVehicleId] = useState(ticket?.source_vehicle_id ?? '');
+  const [externalVendor, setExternalVendor] = useState(ticket?.external_vendor ?? '');
+  // date casts serialize with a time component (ISO datetime) — <input
+  // type="date"> needs exactly YYYY-MM-DD or it silently fails to populate.
+  const [warrantyUntil, setWarrantyUntil] = useState((ticket?.warranty_until ?? '').slice(0, 10));
 
   if (!ticket) {
     return (
@@ -12341,6 +12462,7 @@ function LogRepairsPage({ ticket, onBack, onSubmit, onDirty }) {
   // total would go stale the moment another row is added or edited after
   // pressing it. This always reflects exactly what's in the rows right now.
   const totalCost = parts.reduce((sum, p) => sum + (parseFloat(p.cost) || 0), 0);
+  const sourceVehicleOptions = vehicleOptions.filter((v) => String(v.vehicle_id) !== String(ticket.vehicle?.vehicle_id));
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -12352,6 +12474,10 @@ function LogRepairsPage({ ticket, onBack, onSubmit, onDirty }) {
       maintenance_cost: totalCost > 0 ? totalCost : undefined,
       repair_started_at: repairStartedAt || undefined,
       repair_completed_at: repairCompletedAt || undefined,
+      repair_type: repairType || undefined,
+      source_vehicle_id: repairType === 'cannibalized' ? sourceVehicleId : undefined,
+      external_vendor: repairType === 'external' ? (externalVendor || undefined) : undefined,
+      warranty_until: repairType === 'external' ? (warrantyUntil || undefined) : undefined,
     });
   };
 
@@ -12378,6 +12504,52 @@ function LogRepairsPage({ ticket, onBack, onSubmit, onDirty }) {
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, marginBottom: 8 }}>
           <h4 style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, color: '#0f172a', fontSize: '0.85rem' }}><Icon name="clipboard" size={14} /> Repair Log Entry</h4>
           <textarea required rows={2} value={repairLogs} onChange={(e) => { setRepairLogs(e.target.value); onDirty?.(); }} style={{ width: '100%' }} />
+        </div>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10, marginBottom: 8 }}>
+          <h4 style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, color: '#0f172a', fontSize: '0.85rem' }}><Icon name="wrench" size={14} /> Repair Type</h4>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <select
+              required
+              value={repairType}
+              onChange={(e) => { setRepairType(e.target.value); onDirty?.(); }}
+              style={{ maxWidth: 260 }}
+            >
+              <option value="">Select</option>
+              <option value="in_house">In-House Repair</option>
+              <option value="cannibalized">Used Cannibalized Part</option>
+              <option value="external">Sent to External Shop</option>
+            </select>
+            {repairType === 'cannibalized' && (
+              <select
+                required
+                value={sourceVehicleId}
+                onChange={(e) => { setSourceVehicleId(e.target.value); onDirty?.(); }}
+                style={{ maxWidth: 260 }}
+              >
+                <option value="">Select source vehicle</option>
+                {sourceVehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
+              </select>
+            )}
+            {repairType === 'external' && (
+              <>
+                <input
+                  type="text"
+                  placeholder="Vendor / Shop name"
+                  value={externalVendor}
+                  onChange={(e) => { setExternalVendor(e.target.value); onDirty?.(); }}
+                  style={{ maxWidth: 220 }}
+                />
+                <input
+                  type="date"
+                  title="Warranty Until"
+                  value={warrantyUntil}
+                  onChange={(e) => { setWarrantyUntil(e.target.value); onDirty?.(); }}
+                  style={{ maxWidth: 180 }}
+                />
+              </>
+            )}
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 190px', gap: 8, marginBottom: 12, alignItems: 'start' }}>
