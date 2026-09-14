@@ -1,6 +1,5 @@
 import { useContext } from 'react';
 import { Link } from 'react-router-dom';
-import Icon from './Icon';
 import { AuthContext } from '../context/AuthContextObject';
 
 const roleRoutes = {
@@ -24,12 +23,6 @@ export default function AuthFooter() {
       <div className="auth-footer-main">
         <div className="auth-footer-brand">
           <h2 className="auth-footer-tagline">A Smarter Way to Manage Your Barangay's Fleet.</h2>
-          <div className="auth-footer-social">
-            <a href="#" aria-label="LinkedIn"><Icon name="linkedin" size={15} filled /></a>
-            <a href="#" aria-label="Facebook"><Icon name="facebook" size={15} filled /></a>
-            <a href="#" aria-label="Instagram"><Icon name="instagram" size={15} filled /></a>
-            <a href="#" aria-label="X"><Icon name="twitterX" size={15} filled /></a>
-          </div>
         </div>
         <div className="auth-footer-links">
           <Link to={dashboardPath ?? '/login'}>{dashboardPath ? 'Dashboard' : 'Home'}</Link>
