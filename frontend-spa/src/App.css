@@ -3467,7 +3467,25 @@ button.wizard-step-pill:hover {
   transition: top 0.15s ease, font-size 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 .smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):focus-within > span,
-.smart-form label.has-value:not(:has(.checkbox-group)):not(:has(input[type="file"])) > span {
+.smart-form label.has-value:not(:has(.checkbox-group)):not(:has(input[type="file"])) > span,
+/* CSS-only fallback for the many hand-built forms in this file that never
+   go through SmartForm's renderField (Create Ticket, Complete Inspection,
+   Log Repairs, the Add/Edit Location page, more likely to come) — those
+   don't compute the .has-value class above, so a field that mounts
+   pre-filled (e.g. prefilled from converting an Issue Report into a
+   Ticket) never floats its caption, leaving it sitting centered directly
+   on top of the real value: overlapping, garbled text. This mirrors
+   .has-value using only what the browser already tracks: an input/textarea
+   whose placeholder isn't currently showing (i.e. it has real content —
+   set by SmartForm's inputs already, worth adding to hand-written ones
+   too) is filled; a select failing :invalid means some option besides the
+   blank default one is chosen. Selects with no `required` and inputs with
+   no `placeholder` attribute fall back to always-floated rather than
+   risking the overlap again — a label sitting on the border the whole
+   time is a much smaller issue than one sitting on top of real text. */
+.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):has(input:not(:placeholder-shown)) > span,
+.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):has(textarea:not(:placeholder-shown)) > span,
+.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):has(select:not(:invalid)) > span {
   top: -8px;
   transform: translateY(0);
   font-size: 0.68rem;
