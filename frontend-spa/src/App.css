@@ -11073,7 +11073,8 @@ html[data-theme="light"] .issue-id-badge {
   margin-top: 18px;
 }
 
-.dashboard-command-pills span {
+.dashboard-command-pills span,
+.dashboard-command-pills button {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
@@ -11081,6 +11082,17 @@ html[data-theme="light"] .issue-id-badge {
   font-size: 0.74rem;
   font-weight: 800;
   padding: 6px 10px;
+}
+
+.dashboard-command-pills button {
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.dashboard-command-pills button:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.32);
 }
 
 .dashboard-hologram-core {
@@ -11230,6 +11242,19 @@ html[data-theme="light"] .issue-id-badge {
 .dashboard-micro-metric.is-ok > span { color: #86efac; }
 .dashboard-micro-metric.is-warn > span { color: #fbbf24; }
 .dashboard-micro-metric.is-alert > span { color: #fca5a5; }
+
+button.dashboard-micro-metric {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+button.dashboard-micro-metric:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
 
 .dashboard-signal-grid {
   display: grid;
