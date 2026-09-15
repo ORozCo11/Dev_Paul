@@ -7887,6 +7887,31 @@ table button,
   color: var(--primary-strong, #1d4ed8);
 }
 
+/* Header cells draggable straight from the table (DataTable's
+   onReorderColumn) — same reorder as Choose Columns' popover list, just
+   without opening it first. A locked/keyless column (e.g. ID, Action)
+   renders as a plain <th>, no affordance, since it was never draggable. */
+.table-shell th.is-draggable-column {
+  cursor: grab;
+  user-select: none;
+}
+.table-shell th.is-draggable-column:hover {
+  background: var(--surface-2, #f8fafc);
+}
+.table-shell th.is-draggable-column:active {
+  cursor: grabbing;
+}
+/* Drop-position line — drawn with an inset box-shadow (adds no extra width,
+   so the column grid doesn't jitter as the indicator moves from header to
+   header) right on whichever edge the dragged column would land against,
+   matching the realcore reference's line between columns. */
+.table-shell th.is-drop-before {
+  box-shadow: inset 3px 0 0 0 var(--primary, #2563eb);
+}
+.table-shell th.is-drop-after {
+  box-shadow: inset -3px 0 0 0 var(--primary, #2563eb);
+}
+
 .table-pagination {
   display: flex;
   align-items: center;
