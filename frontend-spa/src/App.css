@@ -5708,6 +5708,124 @@ button.file-card-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-
   .icon-add-btn-label { display: none; }
 }
 
+.export-btn.is-active {
+  background: #dbeafe;
+}
+
+/* Choose Columns toolbar button + popover — show/hide a table's columns
+   and drag to reorder them, matching the realcore reference. Currently
+   wired to the Vehicle Management table only (the pilot); other tables
+   can opt in later by passing a `columnChooser` prop through
+   LocalSearchInput the same way. */
+.column-chooser {
+  position: relative;
+}
+.column-chooser-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 260px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  overflow: hidden;
+}
+.column-chooser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  flex-shrink: 0;
+}
+.column-chooser-head h4 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-strong, #0f172a);
+}
+.column-chooser-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 8px;
+  color: var(--text-muted, #64748b);
+  flex-shrink: 0;
+}
+.column-chooser-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 0.8rem;
+  color: var(--text-strong, #0f172a);
+}
+.column-chooser-list {
+  overflow-y: auto;
+  padding: 0 6px 6px;
+}
+.column-chooser-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  cursor: grab;
+}
+.column-chooser-row:hover {
+  background: var(--surface-2, #f8fafc);
+}
+.column-chooser-row:active {
+  cursor: grabbing;
+}
+.column-chooser-grip {
+  display: flex;
+  align-items: center;
+  color: var(--text-faint, #cbd5e1);
+  flex-shrink: 0;
+}
+.column-chooser-grip.is-disabled {
+  opacity: 0.4;
+}
+.column-chooser-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+  color: var(--text-strong, #0f172a);
+  cursor: pointer;
+}
+.column-chooser-checkbox input {
+  flex-shrink: 0;
+  width: auto;
+  margin: 0;
+}
+.column-chooser-checkbox span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.column-chooser-empty {
+  margin: 10px 8px;
+  font-size: 0.8rem;
+  color: var(--text-muted, #64748b);
+}
+.column-chooser-foot {
+  flex-shrink: 0;
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--border-subtle, #e2e8f0);
+}
+
 /* Filter Bar Styles */
 .filter-bar-container {
   display: flex;

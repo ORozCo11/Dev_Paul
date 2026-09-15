@@ -1663,6 +1663,15 @@ function Workspace() {
     [user, viewVehicleOnMap, navigate],
   );
 
+  // "All Vehicles" is the pilot table for the Choose Columns toolbar button
+  // (show/hide + drag to reorder, persisted per browser) — see
+  // ColumnChooserButton/useColumnChooser below.
+  const vehicleColumnDefs = useMemo(
+    () => vehicleColumns(user.role, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile),
+    [user.role, openVehicleProfile, deleteRecord, restoreRecord, filterStatus, openTicketProfile],
+  );
+  const vehicleColumnChooser = useColumnChooser('vms_vehicle_columns', vehicleColumnDefs);
+
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   const toggleSidebar = () => {
@@ -2506,12 +2515,13 @@ function Workspace() {
               value={searchQuery}
               onChange={setSearchQuery}
               placeholder="Search vehicles..."
+              columnChooser={vehicleColumnChooser}
               onAdd={hasRole(user, 'Admin') ? () => navigate(`${roleRoutes[user.role]}/vehicles/new`) : undefined}
               addLabel="Add Vehicle"
               onExport={() => exportRowsToCsv('vehicles.csv', VEHICLE_EXPORT_COLUMNS, visibleRows)}
             />
           </div>
-          <PaginatedTable columns={vehicleColumns(user.role, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile)} rows={visibleRows} onRowClick={openVehicleProfile} emptyMessage="No vehicles here yet — click the + button to register one." />
+          <PaginatedTable columns={vehicleColumnChooser.visibleColumns} rows={visibleRows} onRowClick={openVehicleProfile} emptyMessage="No vehicles here yet — click the + button to register one." />
         </ModulePanel>
       );
     }
@@ -7513,9 +7523,11 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFil
 
 function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus, onViewTicket) {
   const columns = [
-    { label: 'ID', render: (row) => row.vehicle_id },
+    { key: 'id', label: 'ID', locked: true, render: (row) => row.vehicle_id },
     {
+      key: 'vehicle',
       label: 'Vehicle',
+      locked: true,
       render: (row) => (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
           <PhotoCell alt={row.vehicle_name} url={row.photo_url} />
@@ -7523,12 +7535,13 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
         </div>
       ),
     },
-    { label: 'Plate', render: (row) => row.plate_number },
-    { label: 'Type', render: (row) => row.category?.category_name ?? 'Unassigned' },
-    { label: 'Brand / Model', render: (row) => `${row.brand} ${row.model}` },
-    { label: 'Capacity', render: (row) => row.capacity },
-    { label: 'Location', render: (row) => row.current_location },
+    { key: 'plate', label: 'Plate', render: (row) => row.plate_number },
+    { key: 'type', label: 'Type', render: (row) => row.category?.category_name ?? 'Unassigned' },
+    { key: 'brand_model', label: 'Brand / Model', render: (row) => `${row.brand} ${row.model}` },
+    { key: 'capacity', label: 'Capacity', render: (row) => row.capacity },
+    { key: 'location', label: 'Location', render: (row) => row.current_location },
     {
+      key: 'status',
       label: 'Status',
       render: (row) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
@@ -7550,8 +7563,9 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
         </div>
       ),
     },
-    { label: 'Condition', render: (row) => <StatusBadge value={row.condition} /> },
+    { key: 'condition', label: 'Condition', render: (row) => <StatusBadge value={row.condition} /> },
     {
+      key: 'ready',
       label: 'Ready to Respond',
       render: (row) => {
         const badge = READINESS_BADGE[row.readiness_state];
@@ -7570,14 +7584,16 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
 
   if (filterStatus?.includes?.('Inactive')) {
     columns.push(
-      { label: 'Archived At', render: (row) => <DateBadge value={row.archived_at} /> },
-      { label: 'Archived By', render: (row) => <UserAvatarName user={row.archived_by} fallback="—" /> },
+      { key: 'archived_at', label: 'Archived At', render: (row) => <DateBadge value={row.archived_at} /> },
+      { key: 'archived_by', label: 'Archived By', render: (row) => <UserAvatarName user={row.archived_by} fallback="—" /> },
     );
   }
 
   if (role === 'Admin') {
     columns.push({
+      key: 'action',
       label: 'Action',
+      locked: true,
       render: (row) => (
         <div className="row-actions">
           {/* Jumps straight to whatever ticket is keeping this vehicle
@@ -13875,7 +13891,7 @@ function FilterBar({
   );
 }
 
-function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport, onAdd, addLabel = "Add" }) {
+function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport, onAdd, addLabel = "Add", columnChooser }) {
   return (
     <div className="local-search-bar">
       <div className="local-search-container">
@@ -13896,6 +13912,7 @@ function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport
           </button>
         )}
       </div>
+      {columnChooser && <ColumnChooserButton {...columnChooser} />}
       {onAdd && (
         <button className="icon-add-btn has-label" onClick={onAdd} type="button" title={addLabel} aria-label={addLabel}>
           <Icon name="plus" size={18} />
@@ -13906,6 +13923,182 @@ function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport
         <button className="export-btn" onClick={onExport} type="button" title="Export to CSV" aria-label="Export to CSV">
           <Icon name="download" size={15} />
         </button>
+      )}
+    </div>
+  );
+}
+
+// Persists which columns a table shows and in what order, per browser (one
+// localStorage entry per `storageKey`, so e.g. Vehicle Management's choices
+// don't bleed into a different table reusing this same hook later).
+// `allColumns` must be a stable array of {key, label, locked?, ...} — `key`
+// is the identity persisted to storage, `locked` (e.g. ID/Action) hides the
+// checkbox instead of letting a table lose its own row identifier or
+// actions. Returns the already order-applied, hidden-filtered array to pass
+// straight into DataTable/PaginatedTable's `columns` prop.
+function useColumnChooser(storageKey, allColumns) {
+  const columnKeys = allColumns.map((c) => c.key);
+  // Real deps for the effect below — a plain array literal would be a new
+  // reference (and re-run the effect) every render even when unchanged.
+  const columnKeysSignature = columnKeys.join('|');
+
+  const [order, setOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`${storageKey}_order`) ?? 'null');
+      if (Array.isArray(saved) && saved.length) {
+        const stillValid = saved.filter((k) => columnKeys.includes(k));
+        const newOnes = columnKeys.filter((k) => !stillValid.includes(k));
+        return [...stillValid, ...newOnes];
+      }
+    } catch { /* fall through to default order */ }
+    return columnKeys;
+  });
+  const [hidden, setHidden] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`${storageKey}_hidden`) ?? '[]');
+      return new Set(Array.isArray(saved) ? saved.filter((k) => columnKeys.includes(k)) : []);
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Keeps a saved preference from a previous session in sync if the column
+  // set itself changes shape later (e.g. the role-gated Action column
+  // appearing/disappearing) — drops keys that no longer exist, appends any
+  // new ones at the end rather than silently hiding them.
+  useEffect(() => {
+    setOrder((prev) => {
+      const stillValid = prev.filter((k) => columnKeys.includes(k));
+      const newOnes = columnKeys.filter((k) => !stillValid.includes(k));
+      return newOnes.length || stillValid.length !== prev.length ? [...stillValid, ...newOnes] : prev;
+    });
+    setHidden((prev) => {
+      const next = new Set([...prev].filter((k) => columnKeys.includes(k)));
+      return next.size === prev.size ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnKeysSignature]);
+
+  useEffect(() => {
+    try { localStorage.setItem(`${storageKey}_order`, JSON.stringify(order)); } catch { /* storage unavailable */ }
+  }, [storageKey, order]);
+  useEffect(() => {
+    try { localStorage.setItem(`${storageKey}_hidden`, JSON.stringify([...hidden])); } catch { /* storage unavailable */ }
+  }, [storageKey, hidden]);
+
+  const toggleColumn = (key) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const reorderColumn = (dragKey, dropKey) => {
+    if (dragKey === dropKey) return;
+    setOrder((prev) => {
+      const next = [...prev];
+      const from = next.indexOf(dragKey);
+      const to = next.indexOf(dropKey);
+      if (from === -1 || to === -1) return prev;
+      next.splice(from, 1);
+      next.splice(to, 0, dragKey);
+      return next;
+    });
+  };
+  const resetColumns = () => {
+    setOrder(columnKeys);
+    setHidden(new Set());
+  };
+
+  const byKey = new Map(allColumns.map((c) => [c.key, c]));
+  const visibleColumns = order.map((k) => byKey.get(k)).filter((c) => c && !hidden.has(c.key));
+
+  return { allColumns, order, hidden, toggleColumn, reorderColumn, resetColumns, visibleColumns };
+}
+
+// Toolbar trigger + popover for picking which columns a table shows and
+// reordering them by drag — spread straight from useColumnChooser's return
+// value as <ColumnChooserButton {...chooser} />.
+function ColumnChooserButton({ allColumns, order, hidden, toggleColumn, reorderColumn, resetColumns }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const dragKeyRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [open]);
+
+  const byKey = new Map(allColumns.map((c) => [c.key, c]));
+  const orderedColumns = order.map((k) => byKey.get(k)).filter(Boolean);
+  const query = search.trim().toLowerCase();
+  const filtered = query ? orderedColumns.filter((c) => c.label.toLowerCase().includes(query)) : orderedColumns;
+  // Dragging to reorder only makes sense against the full, unfiltered list —
+  // disabled while a search is narrowing the rows shown, same reasoning
+  // CreatableSelect's own filtered list uses.
+  const dragEnabled = !query;
+
+  return (
+    <div className="column-chooser" ref={containerRef}>
+      <button
+        type="button"
+        className={`export-btn${open ? ' is-active' : ''}`}
+        onClick={() => setOpen((v) => !v)}
+        title="Choose columns"
+        aria-label="Choose columns"
+      >
+        <Icon name="columns" size={16} />
+      </button>
+      {open && (
+        <div className="column-chooser-panel" role="dialog" aria-label="Choose columns">
+          <div className="column-chooser-head">
+            <h4>Choose Columns</h4>
+            <button type="button" className="toast-notice-close" onClick={() => setOpen(false)} aria-label="Close">
+              <Icon name="close" size={13} />
+            </button>
+          </div>
+          <div className="column-chooser-search">
+            <Icon name="search" size={13} />
+            <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="column-chooser-list">
+            {filtered.map((col) => (
+              <div
+                key={col.key}
+                className="column-chooser-row"
+                draggable={dragEnabled}
+                onDragStart={() => { dragKeyRef.current = col.key; }}
+                onDragOver={(e) => { if (dragEnabled) e.preventDefault(); }}
+                onDrop={() => {
+                  if (dragEnabled && dragKeyRef.current) reorderColumn(dragKeyRef.current, col.key);
+                  dragKeyRef.current = null;
+                }}
+              >
+                <span className={`column-chooser-grip${dragEnabled ? '' : ' is-disabled'}`} aria-hidden="true">
+                  <Icon name="gripVertical" size={14} />
+                </span>
+                <label className="column-chooser-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={!hidden.has(col.key)}
+                    disabled={col.locked}
+                    onChange={() => toggleColumn(col.key)}
+                  />
+                  <span>{col.label}</span>
+                </label>
+              </div>
+            ))}
+            {filtered.length === 0 && <p className="column-chooser-empty">No columns match &quot;{search}&quot;.</p>}
+          </div>
+          <div className="column-chooser-foot">
+            <button type="button" className="link-button" onClick={resetColumns}>Reset to default</button>
+          </div>
+        </div>
       )}
     </div>
   );
