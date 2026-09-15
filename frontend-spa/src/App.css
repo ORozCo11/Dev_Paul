@@ -3435,21 +3435,54 @@ button.wizard-step-pill:hover {
 .smart-form .password-field-wrapper input {
   max-width: none;
 }
-/* Outlined "legend on the border" look — the label sits on top of the
-   input's border line (like a <fieldset><legend>) instead of stacked above
-   it, matching the realcore reference. Excludes file/checkbox fields, which
-   don't have a single-line box for a label to sit on. */
+/* Floating label — at rest it sits centered inside the field like a
+   placeholder; the moment the field is focused (or already holds a value,
+   via the .has-value class SmartForm adds per field), it floats up to sit
+   on the input's border line instead, like a <fieldset><legend>, matching
+   the realcore reference. Excludes file/checkbox fields, which don't have
+   a single-line box for a label to float onto. */
 .smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])) {
   position: relative;
   margin-top: 10px;
 }
 .smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])) > span {
   position: absolute;
-  top: -8px;
+  top: 50%;
   left: 10px;
+  transform: translateY(-50%);
   z-index: 1;
   padding: 0 6px;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #94a3b8;
+  pointer-events: none;
+  transition: top 0.15s ease, font-size 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):focus-within > span,
+.smart-form label.has-value:not(:has(.checkbox-group)):not(:has(input[type="file"])) > span {
+  top: -8px;
+  transform: translateY(0);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   background: var(--surface-2, #f8fafc);
+}
+/* Native placeholder mirrors the label text (SmartForm defaults it to
+   field.label) but stays invisible until focus, so it doesn't double up
+   with the centered label above it at rest — once the label floats away
+   on focus, the same words are revealed underneath in its old spot. */
+.smart-form input:not([type="file"]):not([type="checkbox"])::placeholder,
+.smart-form textarea::placeholder {
+  color: transparent;
+  transition: color 0.15s ease;
+}
+.smart-form input:not([type="file"]):not([type="checkbox"]):focus::placeholder,
+.smart-form textarea:focus::placeholder {
+  color: #94a3b8;
 }
 .smart-form input:not([type="file"]):not([type="checkbox"]),
 .smart-form select,
@@ -3502,12 +3535,10 @@ button.wizard-step-pill:hover {
   background-position: right 10px center;
   background-size: 16px;
 }
-/* Focus accent — while actually focused, tint the border-sitting caption
-   the accent color instead of its default neutral gray, so it's clear
-   which field currently has focus without needing an idle/floated state
-   switch (every label already sits on the border permanently via the
-   rule above). */
-.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):has(input:focus, textarea:focus, select:focus) > span {
+/* Focus accent — while actually focused, tint the floated caption the
+   accent color instead of the neutral gray it floats up with on value
+   alone, so it's clear at a glance which field currently has focus. */
+.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):focus-within > span {
   color: var(--primary, #2563eb);
 }
 /* Page-level title, sitting inside the card above the field legends — dark
@@ -7704,7 +7735,16 @@ table button,
 }
 
 .table-shell tbody tr.is-clickable { cursor: pointer; }
-.table-shell tbody tr.is-clickable:hover { background: rgba(37, 99, 235, 0.08); }
+/* Underline just the row's own title/name text on hover instead of washing
+   the whole row in a background tint — shading every cell (including ones
+   that aren't what gets clicked, e.g. a Reported By name in an
+   Issue-Reports row whose click target is the vehicle) read as "the whole
+   row is one link" and was easy to misread. .row-title-text marks the one
+   cell per row whose text actually matches what onRowClick opens. */
+.table-shell tbody tr.is-clickable:hover .row-title-text {
+  text-decoration: underline;
+  color: var(--primary-strong, #1d4ed8);
+}
 
 .table-pagination {
   display: flex;
@@ -7812,7 +7852,7 @@ table button,
 }
 .table-shell.is-compact thead th {
   padding: 9px 10px;
-  font-size: 0.66rem;
+  font-size: 0.78rem;
   letter-spacing: 0.03em;
   white-space: normal;
   line-height: 1.25;
@@ -9644,10 +9684,9 @@ button.btn-view-action svg {
 
 /* Tables */
 [data-theme="light"] thead th {
-  background: #2563eb;
-  color: #ffffff;
-  border-bottom: 2px solid #2563eb;
-  border-right: 1px solid rgba(255, 255, 255, 0.25);
+  background: #ffffff;
+  color: #0f172a;
+  border-bottom: 2px solid #e2e8f0;
 }
 [data-theme="light"] tbody td {
   color: #334155;
@@ -10323,8 +10362,8 @@ html[data-theme="light"] .filter-clear-btn:hover {
 
 html[data-theme="light"] .table-shell {
   background: #ffffff;
-  border: 3px solid #2563eb;
-  border-radius: 6px;
+  border: none;
+  border-radius: 10px;
   box-shadow: none;
   margin-bottom: 0;
   overflow: auto;
@@ -10338,14 +10377,13 @@ html[data-theme="light"] .table-shell table {
 }
 
 html[data-theme="light"] thead th {
-  background: #2563eb;
-  border-bottom: 1px solid #2563eb;
-  border-right: 1px solid rgba(255, 255, 255, 0.25);
-  color: #ffffff;
-  font-size: 0.7rem;
+  background: #ffffff;
+  border-bottom: 2px solid #e2e8f0;
+  color: #0f172a;
+  font-size: 0.85rem;
   font-weight: 700;
-  line-height: 1.25;
-  padding: 8px 10px;
+  line-height: 1.3;
+  padding: 10px 12px;
   text-align: center;
   text-transform: none;
   white-space: normal;
@@ -10353,19 +10391,13 @@ html[data-theme="light"] thead th {
 
 html[data-theme="light"] tbody td {
   background: #ffffff;
-  border-bottom: 1px solid #dbe3ee;
-  border-right: 1px solid #e5ebf4;
+  border-bottom: 1px solid #edf1f7;
   color: #17243a;
   font-size: 0.72rem;
   font-weight: 500;
   line-height: 1.35;
   padding: 8px 10px;
   vertical-align: middle;
-}
-
-html[data-theme="light"] thead th:last-child,
-html[data-theme="light"] tbody td:last-child {
-  border-right: none;
 }
 
 html[data-theme="light"] tbody tr:nth-child(even) td {

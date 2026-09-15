@@ -5439,7 +5439,7 @@ function SelectOrOtherField({ field, value, onChange }) {
           }
         }}
       >
-        <option value="">Select</option>
+        <option value="">{' '}</option>
         {options.map((option, i) => (
           <option key={option?.value != null ? option.value : `opt-${i}`} value={option?.value ?? option ?? ''}>
             {option?.label ?? option}
@@ -5639,10 +5639,17 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
       {(() => {
         const renderField = (field) => {
         const quantity = field.type === 'quantity' ? splitQuantityValue(values[field.name], field.units) : null;
+        // Drives the floating-label float-up: a value counts even for an
+        // array (checkboxes/list), so those fields' captions float too
+        // once at least one row/option is filled in.
+        const rawFieldValue = values[field.name];
+        const fieldHasValue = Array.isArray(rawFieldValue)
+          ? rawFieldValue.some((v) => String(v ?? '').trim() !== '')
+          : rawFieldValue !== undefined && rawFieldValue !== null && String(rawFieldValue).trim() !== '';
         return (
         <Fragment key={field.name}>
         <label
-          className={field.compactFile ? 'file-inline' : undefined}
+          className={[field.compactFile ? 'file-inline' : null, fieldHasValue ? 'has-value' : null].filter(Boolean).join(' ') || undefined}
           style={field.fullWidth ? { gridColumn: '1 / -1' } : undefined}
         >
           <span style={field.action ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } : undefined}>
@@ -5687,7 +5694,7 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
             <textarea
               name={field.name}
               onChange={handleChange}
-              placeholder={field.placeholder}
+              placeholder={field.placeholder ?? field.label}
               required={field.required}
               rows={field.rows ?? 3}
               value={values[field.name] ?? ''}
@@ -5700,7 +5707,10 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
               required={field.required}
               value={values[field.name] ?? ''}
             >
-              <option value="">Select</option>
+              {/* Blank rather than "Select" — at rest the floating label
+                  sits centered over the field like a placeholder, so a
+                  visible option here would double up with it. */}
+              <option value="">{' '}</option>
               {field.options.map((option, i) => (
                 <option
                   key={option?.value != null ? option.value : `opt-${i}`}
@@ -5850,7 +5860,7 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
                 autoComplete="new-password"
                 name={field.name}
                 onChange={handleChange}
-                placeholder={field.placeholder}
+                placeholder={field.placeholder ?? field.label}
                 required={field.required}
                 title={field.title}
                 type={visiblePasswords[field.name] ? 'text' : 'password'}
@@ -5875,7 +5885,7 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
               name={field.name}
               onChange={handleChange}
               pattern={field.pattern}
-              placeholder={field.placeholder}
+              placeholder={field.placeholder ?? field.label}
               required={field.required}
               title={field.title}
               type={field.type}
@@ -7213,7 +7223,7 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
       render: (row) => (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
           <PhotoCell alt={row.vehicle_name} url={row.photo_url} />
-          <span>{row.vehicle_name}</span>
+          <span className="row-title-text">{row.vehicle_name}</span>
         </div>
       ),
     },
@@ -8499,12 +8509,21 @@ function UserAvatarName({ user, fallback = '-' }) {
 
 // Vehicle cell (photo + name). The name opens the vehicle profile; the photo
 // still opens the full-size image in a new tab.
-function VehicleCell({ vehicle }) {
+// `isRowTitle` (default true) marks whether THIS column is also what the
+// row's own onRowClick opens — true in every table except the Maintenance
+// Tickets list, whose row click opens the ticket (the Title column) rather
+// than this vehicle, so only that one caller passes false. Drives whether
+// hovering anywhere in the row underlines this name too (row-title-text) —
+// leaving it on everywhere would underline two different "click targets"
+// at once on that one table.
+function VehicleCell({ vehicle, isRowTitle = true }) {
   const actions = useContext(RowActionsContext);
 
   if (!vehicle) {
     return '-';
   }
+
+  const textClassName = `vcn-text${isRowTitle ? ' row-title-text' : ''}`;
 
   return (
     <div className="vehicle-cell">
@@ -8516,11 +8535,11 @@ function VehicleCell({ vehicle }) {
           onClick={(e) => { e.stopPropagation(); actions.viewVehicle(vehicle); }}
           title={vehicle.vehicle_name}
         >
-          <span className="vcn-text">{vehicle.vehicle_name}</span>
+          <span className={textClassName}>{vehicle.vehicle_name}</span>
         </button>
       ) : (
         <span className="vehicle-cell-name" title={vehicle.vehicle_name}>
-          <span className="vcn-text">{vehicle.vehicle_name}</span>
+          <span className={textClassName}>{vehicle.vehicle_name}</span>
         </span>
       )}
     </div>
@@ -10547,7 +10566,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
                   value={liveValues.source_vehicle_id ?? ''}
                   onChange={(e) => setField('source_vehicle_id', e.target.value)}
                 >
-                  <option value="">Select</option>
+                  <option value="">{' '}</option>
                   {sourceVehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
                 </select>
               </label>
@@ -10586,7 +10605,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
             <label>
               <span>Vehicle <span className="required-asterisk">*</span></span>
               <select required value={liveValues.vehicle_id ?? ''} onChange={(e) => setField('vehicle_id', e.target.value)}>
-                <option value="">Select</option>
+                <option value="">{' '}</option>
                 {vehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
               </select>
             </label>
@@ -10596,7 +10615,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
                 {' '}<span className="required-asterisk">*</span>
               </span>
               <select required value={liveValues.assigned_custodian_id ?? ''} onChange={(e) => setField('assigned_custodian_id', e.target.value)}>
-                <option value="">Select</option>
+                <option value="">{' '}</option>
                 {custodianOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </label>
@@ -10661,7 +10680,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
             <label style={{ maxWidth: 260 }}>
               <span>Priority <span className="required-asterisk">*</span></span>
               <select required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
-                <option value="">Select</option>
+                <option value="">{' '}</option>
                 {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </label>
@@ -12064,7 +12083,7 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
         <label>
           <span>Inspection Result</span>
           <select required value={resultValue} onChange={(e) => { setResultValue(e.target.value); onDirty?.(); }}>
-            <option value="">Select</option>
+            <option value="">{' '}</option>
             <option value="Needs Maintenance">Needs Maintenance</option>
             <option value="No Issues">No Issues</option>
           </select>
@@ -12674,12 +12693,12 @@ function ticketTableColumns(unreadByTicket = {}) {
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
-            {r.ticket_title}
+            <span className="row-title-text">{r.ticket_title}</span>
           </span>
         );
       },
     },
-    { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
     { label: 'Status', render: (r) => <TicketStatusBadge value={r.status} /> },
     { label: 'Next Step', render: (r) => <TicketStageBadge ticket={r} /> },
     { label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
@@ -13155,7 +13174,7 @@ function CreatableSelect({
                   value={addModalExtra[f.name] ?? ''}
                   onChange={(e) => setAddModalExtra((cur) => ({ ...cur, [f.name]: e.target.value }))}
                 >
-                  <option value="" disabled>Select {f.label}</option>
+                  <option value="" disabled>{' '}</option>
                   {f.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               )}
