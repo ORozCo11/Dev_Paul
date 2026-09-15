@@ -10661,6 +10661,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
   // originally reported.
   const [subIssueCategory, setSubIssueCategory] = useState(() => prefilledTicketData?.fault_category ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const [validationLines, setValidationLines] = useState(null);
   const selectedVehicleId = liveValues.vehicle_id ?? null;
   const [openTicketsOnVehicle, setOpenTicketsOnVehicle] = useState([]);
   // Same reasoning as the open-tickets check above, for recurrence instead of
@@ -10728,6 +10729,27 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // The submit button used to just stay disabled until every required
+    // field (entry mode included) was filled — silent and easy to miss,
+    // especially "How Is This Being Reported?", which isn't a native form
+    // control the browser could nudge about on its own. Clicking now
+    // always works; a toast spells out exactly what's still needed instead.
+    const errors = [];
+    if (!liveValues.entry_mode) errors.push('Pick how this is being reported, above.');
+    if (!liveValues.vehicle_id) errors.push('Vehicle is required.');
+    if (!liveValues.assigned_custodian_id) errors.push('Assign to Custodian is required.');
+    if (!(liveValues.ticket_title ?? '').trim()) errors.push('Ticket Title is required.');
+    if (!(liveValues.ticket_description ?? '').trim()) errors.push('Description / Details is required.');
+    if (!liveValues.priority) errors.push('Priority is required.');
+    if (preDiagnosed && !subIssueRows.some((row) => row.trim())) {
+      errors.push(`At least one ${isSingleIssueMode ? 'issue' : 'sub-issue'} is required.`);
+    }
+    if (isCannibalized && !liveValues.source_vehicle_id) errors.push('Source Vehicle is required.');
+    if (errors.length) {
+      setValidationLines(errors);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const out = {
@@ -10829,6 +10851,19 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
           hand-built form. Reuses the .smart-form input/label styling so
           every field still looks consistent with the rest of the app. */}
       <form className="smart-form ticket-create-form" onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {validationLines && (
+          <div className="toast-notice-overlay" onClick={() => setValidationLines(null)}>
+            <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
+              <Icon name="alert" size={17} className="toast-notice-icon" />
+              <div className="toast-notice-lines">
+                {validationLines.map((line, i) => <span key={i}>{line}</span>)}
+              </div>
+              <button type="button" className="toast-notice-close" onClick={() => setValidationLines(null)} aria-label="Dismiss">
+                <Icon name="close" size={13} />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Entry mode comes first, not last — it decides what the rest of
             the form even asks for, so it shouldn't be buried at the bottom.
@@ -11053,7 +11088,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
 
         <div className="form-actions">
           <button className="ghost-button" onClick={onBack} type="button">Cancel</button>
-          <button className="primary-button" type="submit" disabled={submitting || liveValues.entry_mode == null}>
+          <button className="primary-button" type="submit" disabled={submitting}>
             {submitting ? (
               <span className="btn-loading">
                 <Icon name="gear" size={16} className="btn-gear-spinner" filled />
