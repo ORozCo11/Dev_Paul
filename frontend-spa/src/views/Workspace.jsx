@@ -4,12 +4,15 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
 import LocationDensityMap from '../components/LocationDensityMap';
 import VehicleLocationMap from '../components/VehicleLocationMap';
+import AddLocationMap from '../components/AddLocationMap';
 import Icon from '../components/Icon';
 import TextType from '../components/TextType';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { AuthContext } from '../context/AuthContextObject';
-import { groupLocationRowsByHub } from '../data/paknaanLocationDensity';
+import { groupLocationRowsByHub, PAKNAAN_POLYGON } from '../data/paknaanLocationDensity';
+import { geoJsonToRings, isPointWithinBoundaryRings } from '../utils/boundary';
+import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 
 const FormNoticeContext = createContext(null);
 // Lets shared table cells (VehicleCell, UserAvatarName) open the right detail
@@ -377,6 +380,7 @@ function Workspace() {
   const isNewUserPage = /\/users\/new$/.test(location.pathname);
   const editUserId = location.pathname.match(/\/users\/(\d+)\/edit$/)?.[1] ?? null;
   const viewUserId = location.pathname.match(/\/users\/(\d+)$/)?.[1] ?? null;
+  const isNewLocationPage = /\/locations\/new$/.test(location.pathname);
   const logRepairsMatch = location.pathname.match(/\/work-orders\/(\d+)\/(\d+)\/log-repairs$/);
   const logRepairsTicketId = logRepairsMatch?.[1] ?? null;
   const logRepairsSubIssueId = logRepairsMatch?.[2] ?? null;
@@ -387,7 +391,7 @@ function Workspace() {
     || isNewCategoryPage || editCategoryId || isNewSchedulePage || editScheduleId
     || isNewIssuePage || editIssueId || viewIssueId || isNewConditionPage || editConditionId
     || isNewMaintenancePage || editMaintenanceId || maintenanceProfileId || isNewUserPage || editUserId || viewUserId
-    || logRepairsTicketId || inspectTicketId || isProfilePage
+    || logRepairsTicketId || inspectTicketId || isProfilePage || isNewLocationPage
   );
   // The bold page title for whichever create/edit/view sub-page is active —
   // null when just looking at a module's own list, in which case the heading
@@ -415,6 +419,7 @@ function Workspace() {
     || (logRepairsTicketId && 'Log Repairs')
     || (inspectTicketId && 'Inspect Vehicle')
     || (isProfilePage && 'My Profile')
+    || (isNewLocationPage && 'Add Location')
     || null;
   const { user, logout, refreshUser } = useContext(AuthContext);
   const moduleGroups = useMemo(() => resolveModuleGroups(user), [user.role, user.roles]);
@@ -454,6 +459,7 @@ function Workspace() {
     : isNewIssuePage || editIssueId || viewIssueId ? 'issues'
     : isNewConditionPage || editConditionId ? 'conditions'
     : isNewUserPage || editUserId || viewUserId ? 'users'
+    : isNewLocationPage ? 'locations'
     : logRepairsTicketId ? 'ticketWorkOrders'
     : inspectTicketId ? 'ticketInspections'
     : activeModule;
@@ -1721,6 +1727,16 @@ function Workspace() {
   const [mapBarangays, setMapBarangays] = useState([]);
   const [mapBarangayId, setMapBarangayId] = useState('');
   const [mapBoundaryOverride, setMapBoundaryOverride] = useState(null);
+  // Same "what counts as inside the service area" boundary the map draws,
+  // recomputed here so the Add Location form can reject a geocoded address
+  // that falls outside it — mirrors LocationDensityMap's own fallback (the
+  // hardcoded Paknaan outline when no barangay override is selected, or the
+  // override has no boundary geometry on file).
+  const locationBoundaryRings = useMemo(() => {
+    const overrideRings = geoJsonToRings(mapBoundaryOverride?.geometry);
+    return overrideRings.length ? overrideRings : [PAKNAAN_POLYGON];
+  }, [mapBoundaryOverride]);
+  const locationBoundaryLabel = mapBoundaryOverride?.label ?? 'Paknaan';
   // Guards the one-time "default to Paknaan" seed below from re-firing on a
   // second effect invocation (React's dev-only StrictMode double-invokes
   // effects on mount) — without this, a second run would call
@@ -2185,6 +2201,18 @@ function Workspace() {
               onSubmit={handleCreateVehicle}
               onDirty={() => setHasUnsavedChanges(true)}
             />
+          ) : isNewLocationPage ? (
+            <NewLocationPage
+              onBack={() => returnToModule('locations')}
+              boundaryRings={locationBoundaryRings}
+              boundaryLabel={locationBoundaryLabel}
+              onSubmit={async (hub) => {
+                await api.post('/hubs', hub);
+                setNotice({ type: 'success', text: 'Location added.' });
+                await refreshCurrent();
+                returnToModule('locations');
+              }}
+            />
           ) : isNewTicketPage ? (
             <NewTicketPage
               onBack={() => { setPrefilledTicketData(null); returnToModule('tickets'); }}
@@ -2646,8 +2674,15 @@ function Workspace() {
                     value={searchQuery}
                     onChange={setSearchQuery}
                     placeholder="Search records..."
-                    onAdd={() => setEditTarget({})}
-                    addLabel="Add Record"
+                    // A vehicle's current location is already set from the
+                    // Add/Edit Vehicle form (its Current Location field is a
+                    // creatable-select, so it can introduce a new hub name
+                    // too). What THIS tab had no way to do was define a new
+                    // hub's actual map position — "Add Location" is its own
+                    // page (fields + a live map, either one fills the
+                    // other) instead of a click-the-map-first flow.
+                    onAdd={hasRole(user, 'Admin') ? () => navigate(`${roleRoutes[user.role]}/locations/new`) : undefined}
+                    addLabel="Add Location"
                   />
                 </div>
                 <div style={{ overflowX: 'auto' }}>
@@ -2658,20 +2693,6 @@ function Workspace() {
                     emptyMessage="No location records yet."
                   />
                 </div>
-                {editTarget !== null && (
-                  <div className="location-form-panel">
-                    <h3>{editTarget?.location_record_id ? 'Update Location Record' : 'Add Location Record'}</h3>
-                    <SmartForm
-                      fields={locationFields(lookups, allHubs)}
-                      initialValues={editTarget?.vehicle_id ? editTarget : EMPTY_OBJ}
-                      key="location-create"
-                      onCancel={() => setEditTarget(null)}
-                      onSubmit={submitModuleForm}
-                      submitLabel={editTarget?.location_record_id ? 'Update Record' : 'Add Record'}
-                      title=""
-                    />
-                  </div>
-                )}
               </div>
             )}
           </ModulePanel>
@@ -5985,6 +6006,157 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
   );
 }
 
+// Its own page (not a modal/inline panel) reached at .../locations/new —
+// typing a Complete Address geocodes it and drops/moves the map pin there;
+// clicking the map instead reverse-geocodes the click back into the Address
+// field. Either path has to land inside the active service-area boundary
+// (the same polygon the fleet map draws) before Save is allowed — an
+// out-of-bounds result shows why instead of silently creating a hub nobody
+// can find on the map. Saving POSTs to /hubs, same endpoint and shape the
+// map's own "Add Hub" flow uses.
+function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [marker, setMarker] = useState(null);
+  const [error, setError] = useState(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  // Distinguishes "the map just moved the pin, don't re-geocode the address
+  // that produced it" from "the admin is typing" — without it, a map click
+  // (which fills Address via reverse geocoding) would immediately trigger
+  // the address-typing effect below and re-geocode right back, wasting a
+  // lookup and risking a slightly different point than the one clicked.
+  const addressFromMapRef = useRef(false);
+
+  // Debounced geocode-as-you-type — waits for a pause in typing so it's not
+  // firing a lookup on every keystroke.
+  useEffect(() => {
+    if (addressFromMapRef.current) {
+      addressFromMapRef.current = false;
+      return undefined;
+    }
+    const trimmed = address.trim();
+    if (!trimmed) return undefined;
+
+    const timer = setTimeout(async () => {
+      setLookingUp(true);
+      setError(null);
+      try {
+        const match = await geocodeAddress(trimmed);
+        if (!match) {
+          setError(`Couldn't find that address yet — keep typing, or click the map instead.`);
+          return;
+        }
+        setMarker({ lat: match.lat, lng: match.lng });
+        if (!isPointWithinBoundaryRings(match, boundaryRings)) {
+          setError(`That address is outside the ${boundaryLabel} boundary — only locations within ${boundaryLabel} can be added.`);
+        }
+      } catch (err) {
+        setError(err.message || 'Address lookup failed.');
+      } finally {
+        setLookingUp(false);
+      }
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [address, boundaryRings, boundaryLabel]);
+
+  const handleMapPick = useCallback(async (latLng) => {
+    setMarker(latLng);
+    setError(null);
+
+    if (!isPointWithinBoundaryRings(latLng, boundaryRings)) {
+      setError(`That spot is outside the ${boundaryLabel} boundary — only locations within ${boundaryLabel} can be added.`);
+      return;
+    }
+
+    setLookingUp(true);
+    try {
+      const displayName = await reverseGeocode(latLng.lat, latLng.lng);
+      if (displayName) {
+        addressFromMapRef.current = true;
+        setAddress(displayName);
+      }
+    } catch {
+      // Reverse geocoding is a convenience, not a requirement — a failed
+      // lookup still leaves a valid, in-bounds pin; the admin can type the
+      // address in by hand instead.
+    } finally {
+      setLookingUp(false);
+    }
+  }, [boundaryRings, boundaryLabel]);
+
+  const isPinValid = marker && isPointWithinBoundaryRings(marker, boundaryRings);
+  const canSubmit = name.trim() && isPinValid && !lookingUp && !submitting;
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onSubmit({
+        name: name.trim(),
+        lat: marker.lat,
+        lng: marker.lng,
+        label: name.trim().substring(0, 2).toUpperCase(),
+      });
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Failed to add location.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <ModulePanel description="Type the complete address or click the map — either one fills in the other.">
+      <form className="add-location-page" onSubmit={handleSubmit} noValidate>
+        <div className="add-location-fields smart-form">
+          {error && (
+            <div className="toast-notice toast-notice-validation error" role="alert">
+              <Icon name="alert" size={17} className="toast-notice-icon" />
+              <div className="toast-notice-lines"><span>{error}</span></div>
+            </div>
+          )}
+          <label>
+            <span>Location Name <span className="required-asterisk">*</span></span>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Paknaan Health Center"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </label>
+          <label>
+            <span>Complete Address <span className="required-asterisk">*</span></span>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Purok 5, Paknaan, Mandaue City, Cebu"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+            <small className="field-hint">
+              {lookingUp ? 'Looking up…' : `Must be within the ${boundaryLabel} boundary — you can also click the map to pinpoint it.`}
+            </small>
+          </label>
+          <div className="form-actions">
+            <button className="ghost-button" onClick={onBack} type="button" disabled={submitting}>Cancel</button>
+            <button className="primary-button" type="submit" disabled={!canSubmit}>
+              {submitting ? 'Saving…' : 'Add Location'}
+            </button>
+          </div>
+        </div>
+        <div className="add-location-map-shell">
+          <AddLocationMap marker={marker} boundaryRings={boundaryRings} onPick={handleMapPick} />
+        </div>
+      </form>
+    </ModulePanel>
+  );
+}
+
 function PartsTags({ value }) {
   if (!value) return <span style={{ color: '#94a3b8' }}>-</span>;
   const parts = value.split(',').map((p) => p.trim()).filter(Boolean);
@@ -6661,20 +6833,6 @@ function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl 
         ) : null;
       },
     },
-  ];
-}
-
-function locationFields(lookups, allHubs = []) {
-  const hubOptions = allHubs.map((hub) => ({
-    value: hub.name,
-    label: hub.name,
-  }));
-
-  return [
-    { label: 'Vehicle', name: 'vehicle_id', options: vehicleOptions(lookups), required: true, type: 'select' },
-    { label: 'Current Location', name: 'current_location', options: hubOptions, required: true, type: 'select' },
-    { label: 'Address / Area', name: 'address_area', type: 'text' },
-    { label: 'Remarks', name: 'remarks', type: 'textarea' },
   ];
 }
 
@@ -8618,10 +8776,6 @@ function moduleRequest(moduleKey, editTarget, payload) {
     return (editTarget && editTarget.id)
       ? { method: 'put', path: `/users/${editTarget.id}`, success: 'User updated.' }
       : { method: 'post', path: '/users', success: 'User added.' };
-  }
-
-  if (moduleKey === 'locations') {
-    return { method: 'post', path: '/locations', success: 'Location updated.' };
   }
 
   if (moduleKey === 'conditions') {
