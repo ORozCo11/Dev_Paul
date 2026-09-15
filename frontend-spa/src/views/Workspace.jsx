@@ -381,6 +381,7 @@ function Workspace() {
   const editUserId = location.pathname.match(/\/users\/(\d+)\/edit$/)?.[1] ?? null;
   const viewUserId = location.pathname.match(/\/users\/(\d+)$/)?.[1] ?? null;
   const isNewLocationPage = /\/locations\/new$/.test(location.pathname);
+  const editLocationVehicleId = location.pathname.match(/\/locations\/(\d+)\/edit$/)?.[1] ?? null;
   const logRepairsMatch = location.pathname.match(/\/work-orders\/(\d+)\/(\d+)\/log-repairs$/);
   const logRepairsTicketId = logRepairsMatch?.[1] ?? null;
   const logRepairsSubIssueId = logRepairsMatch?.[2] ?? null;
@@ -391,7 +392,7 @@ function Workspace() {
     || isNewCategoryPage || editCategoryId || isNewSchedulePage || editScheduleId
     || isNewIssuePage || editIssueId || viewIssueId || isNewConditionPage || editConditionId
     || isNewMaintenancePage || editMaintenanceId || maintenanceProfileId || isNewUserPage || editUserId || viewUserId
-    || logRepairsTicketId || inspectTicketId || isProfilePage || isNewLocationPage
+    || logRepairsTicketId || inspectTicketId || isProfilePage || isNewLocationPage || editLocationVehicleId
   );
   // The bold page title for whichever create/edit/view sub-page is active —
   // null when just looking at a module's own list, in which case the heading
@@ -420,6 +421,7 @@ function Workspace() {
     || (inspectTicketId && 'Inspect Vehicle')
     || (isProfilePage && 'My Profile')
     || (isNewLocationPage && 'Add Location')
+    || (editLocationVehicleId && 'Update Location')
     || null;
   const { user, logout, refreshUser } = useContext(AuthContext);
   const moduleGroups = useMemo(() => resolveModuleGroups(user), [user.role, user.roles]);
@@ -459,7 +461,7 @@ function Workspace() {
     : isNewIssuePage || editIssueId || viewIssueId ? 'issues'
     : isNewConditionPage || editConditionId ? 'conditions'
     : isNewUserPage || editUserId || viewUserId ? 'users'
-    : isNewLocationPage ? 'locations'
+    : isNewLocationPage || editLocationVehicleId ? 'locations'
     : logRepairsTicketId ? 'ticketWorkOrders'
     : inspectTicketId ? 'ticketInspections'
     : activeModule;
@@ -1657,8 +1659,8 @@ function Workspace() {
   }, []);
 
   const locationTableColumns = useMemo(
-    () => locationColumns(user, viewVehicleOnMap),
-    [user, viewVehicleOnMap],
+    () => locationColumns(user, viewVehicleOnMap, (row) => navigate(`${roleRoutes[user.role]}/locations/${row.vehicle_id}/edit`)),
+    [user, viewVehicleOnMap, navigate],
   );
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
@@ -2209,6 +2211,36 @@ function Workspace() {
               onSubmit={async (hub) => {
                 await api.post('/hubs', hub);
                 setNotice({ type: 'success', text: 'Location added.' });
+                await refreshCurrent();
+                returnToModule('locations');
+              }}
+            />
+          ) : editLocationVehicleId ? (
+            <EditLocationPage
+              row={locationRows.find((r) => String(r.vehicle_id) === String(editLocationVehicleId)) ?? null}
+              allHubs={allHubs}
+              boundaryRings={locationBoundaryRings}
+              boundaryLabel={locationBoundaryLabel}
+              onBack={() => returnToModule('locations')}
+              onSubmit={async ({ name, lat, lng, label, addressArea, remarks }) => {
+                // Reuse the hub if that name already exists (case-insensitive
+                // — hub names are unique per barangay); otherwise this is a
+                // brand-new location, so create it first exactly like Add
+                // Location does. Either way the vehicle's location update
+                // itself always goes through POST /locations, so it's still
+                // one more entry in that vehicle's location history, not an
+                // edit of a past one.
+                const existingHub = allHubs.find((h) => h.name.toLowerCase() === name.toLowerCase());
+                if (!existingHub) {
+                  await api.post('/hubs', { name, lat, lng, label });
+                }
+                await api.post('/locations', {
+                  vehicle_id: editLocationVehicleId,
+                  current_location: existingHub ? existingHub.name : name,
+                  address_area: addressArea,
+                  remarks,
+                });
+                setNotice({ type: 'success', text: 'Location updated.' });
                 await refreshCurrent();
                 returnToModule('locations');
               }}
@@ -6014,10 +6046,29 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
 // out-of-bounds result shows why instead of silently creating a hub nobody
 // can find on the map. Saving POSTs to /hubs, same endpoint and shape the
 // map's own "Add Hub" flow uses.
-function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
-  const [name, setName] = useState('');
-  const [address, setAddress] = useState('');
-  const [marker, setMarker] = useState(null);
+// Shared by NewLocationPage ("Add Location", defines a brand-new hub) and
+// EditLocationPage ("Update Location", reassigns a vehicle — to an existing
+// hub OR, same as Add, a brand-new one typed/clicked in) — both need the
+// exact same address<->map sync and boundary check; only the extra
+// Address/Area + Remarks fields and the submit wiring differ by mode.
+function LocationAddressMapForm({
+  mode = 'add',
+  initialName = '',
+  initialAddress = '',
+  initialMarker = null,
+  initialAddressArea = '',
+  initialRemarks = '',
+  boundaryRings,
+  boundaryLabel,
+  onBack,
+  onSubmit,
+}) {
+  const isEdit = mode === 'edit';
+  const [name, setName] = useState(initialName);
+  const [address, setAddress] = useState(initialAddress);
+  const [marker, setMarker] = useState(initialMarker);
+  const [addressArea, setAddressArea] = useState(initialAddressArea);
+  const [remarks, setRemarks] = useState(initialRemarks);
   const [error, setError] = useState(null);
   const [lookingUp, setLookingUp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -6027,6 +6078,16 @@ function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
   // the address-typing effect below and re-geocode right back, wasting a
   // lookup and risking a slightly different point than the one clicked.
   const addressFromMapRef = useRef(false);
+  // Edit mode starts with `address` already non-empty (the hub's own
+  // internal name/address, paired with a marker we already know is correct
+  // from initialMarker) — without this, mounting immediately re-triggers
+  // the geocode effect below on that pre-filled value, which usually isn't
+  // a real searchable address string, showing a spurious "couldn't find
+  // that address" error over a perfectly valid pin. Compared by VALUE
+  // (not a one-shot consumed flag) so React StrictMode's dev-only double
+  // effect invocation — same address, effect body run twice — still skips
+  // both times instead of geocoding on the second pass.
+  const skipGeocodeForAddressRef = useRef(initialAddress || null);
 
   // Debounced geocode-as-you-type — waits for a pause in typing so it's not
   // firing a lookup on every keystroke.
@@ -6035,6 +6096,10 @@ function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
       addressFromMapRef.current = false;
       return undefined;
     }
+    if (skipGeocodeForAddressRef.current !== null && address === skipGeocodeForAddressRef.current) {
+      return undefined;
+    }
+    skipGeocodeForAddressRef.current = null;
     const trimmed = address.trim();
     if (!trimmed) return undefined;
 
@@ -6101,16 +6166,22 @@ function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
         lat: marker.lat,
         lng: marker.lng,
         label: name.trim().substring(0, 2).toUpperCase(),
+        addressArea: addressArea.trim(),
+        remarks: remarks.trim(),
       });
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Failed to add location.');
+      setError(err.response?.data?.message || err.message || `Failed to ${isEdit ? 'update' : 'add'} location.`);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <ModulePanel description="Type the complete address or click the map — either one fills in the other.">
+    <ModulePanel description={
+      isEdit
+        ? 'Type the complete address or click the map — either one fills in the other. Pick where this vehicle already is, or move it to a brand-new location the same way you would add one.'
+        : 'Type the complete address or click the map — either one fills in the other.'
+    }>
       <form className="add-location-page" onSubmit={handleSubmit} noValidate>
         <div className="add-location-fields smart-form">
           {error && (
@@ -6119,7 +6190,7 @@ function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
               <div className="toast-notice-lines"><span>{error}</span></div>
             </div>
           )}
-          <label>
+          <label className={name.trim() ? 'has-value' : undefined}>
             <span>Location Name <span className="required-asterisk">*</span></span>
             <input
               type="text"
@@ -6128,8 +6199,9 @@ function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+            {isEdit && <small className="field-hint">An existing name reuses that location; a new one creates it.</small>}
           </label>
-          <label>
+          <label className={address.trim() ? 'has-value' : undefined}>
             <span>Complete Address <span className="required-asterisk">*</span></span>
             <input
               type="text"
@@ -6142,10 +6214,27 @@ function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
               {lookingUp ? 'Looking up…' : `Must be within the ${boundaryLabel} boundary — you can also click the map to pinpoint it.`}
             </small>
           </label>
+          {isEdit && (
+            <>
+              <label className={addressArea.trim() ? 'has-value' : undefined}>
+                <span>Address / Area</span>
+                <input
+                  type="text"
+                  placeholder="e.g. Bay 3, near the north gate"
+                  value={addressArea}
+                  onChange={(e) => setAddressArea(e.target.value)}
+                />
+              </label>
+              <label className={remarks.trim() ? 'has-value' : undefined}>
+                <span>Remarks</span>
+                <textarea rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+              </label>
+            </>
+          )}
           <div className="form-actions">
             <button className="ghost-button" onClick={onBack} type="button" disabled={submitting}>Cancel</button>
             <button className="primary-button" type="submit" disabled={!canSubmit}>
-              {submitting ? 'Saving…' : 'Add Location'}
+              {submitting ? 'Saving…' : (isEdit ? 'Update Location' : 'Add Location')}
             </button>
           </div>
         </div>
@@ -6154,6 +6243,55 @@ function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
         </div>
       </form>
     </ModulePanel>
+  );
+}
+
+function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
+  return (
+    <LocationAddressMapForm
+      mode="add"
+      boundaryRings={boundaryRings}
+      boundaryLabel={boundaryLabel}
+      onBack={onBack}
+      onSubmit={({ name, lat, lng, label }) => onSubmit({ name, lat, lng, label })}
+    />
+  );
+}
+
+// Its own page (.../locations/:vehicleId/edit), reached from the pencil icon
+// on the Location Records table — reassigns a vehicle's current location.
+// Reuses the exact same address/map picker Add Location uses (not just a
+// dropdown of existing hubs) so moving a vehicle to a genuinely new spot
+// doesn't require a separate trip to Add Location first; the parent's
+// onSubmit decides whether the typed name matches an existing hub (reuse
+// it) or not (create it), same as Add Location's own POST /hubs.
+function EditLocationPage({ row, allHubs, boundaryRings, boundaryLabel, onBack, onSubmit }) {
+  if (!row) {
+    return (
+      <ModulePanel description="Update a vehicle's current location.">
+        <p className="empty-state">
+          That vehicle's location record couldn't be found — it may have been removed.{' '}
+          <button type="button" className="link-button" onClick={onBack}>Back to Location Records</button>
+        </p>
+      </ModulePanel>
+    );
+  }
+
+  const currentHub = allHubs.find((h) => h.name === row.current_location);
+
+  return (
+    <LocationAddressMapForm
+      mode="edit"
+      initialName={row.current_location ?? ''}
+      initialAddress={currentHub?.address ?? row.current_location ?? ''}
+      initialMarker={currentHub ? { lat: currentHub.lat, lng: currentHub.lng } : null}
+      initialAddressArea={row.address_area ?? ''}
+      initialRemarks={row.remarks ?? ''}
+      boundaryRings={boundaryRings}
+      boundaryLabel={boundaryLabel}
+      onBack={onBack}
+      onSubmit={onSubmit}
+    />
   );
 }
 
@@ -7519,7 +7657,7 @@ function userColumns(onEdit, onToggleActive, currentUserId) {
   ];
 }
 
-function locationColumns(currentUser, onViewOnMap) {
+function locationColumns(currentUser, onViewOnMap, onEdit) {
   return [
   { label: 'ID', render: (row) => row.location_record_id ?? 'Current' },
   { label: 'Vehicle', render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
@@ -7533,20 +7671,33 @@ function locationColumns(currentUser, onViewOnMap) {
   { label: 'Date Updated', render: (row) => <DateBadge value={row.updated_at} /> },
   { label: 'Time', render: (row) => formatTime(row.updated_at) },
   {
-    label: 'View',
+    label: 'Action',
     render: (row) => (
-      <button
-        className="btn-view-action icon-btn"
-        onClick={() => onViewOnMap(row)}
-        title="View vehicle on map"
-        aria-label="View vehicle on map"
-        type="button"
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      </button>
+      <div className="row-actions">
+        {hasRole(currentUser, 'Admin') && (
+          <button
+            className="btn-edit-action icon-btn"
+            onClick={() => onEdit(row)}
+            title="Update this vehicle's location"
+            aria-label="Update this vehicle's location"
+            type="button"
+          >
+            <Icon name="edit" size={14} />
+          </button>
+        )}
+        <button
+          className="btn-view-action icon-btn"
+          onClick={() => onViewOnMap(row)}
+          title="View vehicle on map"
+          aria-label="View vehicle on map"
+          type="button"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
+      </div>
     ),
   },
   ];
