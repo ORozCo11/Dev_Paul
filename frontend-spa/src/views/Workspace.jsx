@@ -7223,7 +7223,7 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
       render: (row) => (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
           <PhotoCell alt={row.vehicle_name} url={row.photo_url} />
-          <span>{row.vehicle_name}</span>
+          <span className="row-title-text">{row.vehicle_name}</span>
         </div>
       ),
     },
@@ -8509,12 +8509,21 @@ function UserAvatarName({ user, fallback = '-' }) {
 
 // Vehicle cell (photo + name). The name opens the vehicle profile; the photo
 // still opens the full-size image in a new tab.
-function VehicleCell({ vehicle }) {
+// `isRowTitle` (default true) marks whether THIS column is also what the
+// row's own onRowClick opens — true in every table except the Maintenance
+// Tickets list, whose row click opens the ticket (the Title column) rather
+// than this vehicle, so only that one caller passes false. Drives whether
+// hovering anywhere in the row underlines this name too (row-title-text) —
+// leaving it on everywhere would underline two different "click targets"
+// at once on that one table.
+function VehicleCell({ vehicle, isRowTitle = true }) {
   const actions = useContext(RowActionsContext);
 
   if (!vehicle) {
     return '-';
   }
+
+  const textClassName = `vcn-text${isRowTitle ? ' row-title-text' : ''}`;
 
   return (
     <div className="vehicle-cell">
@@ -8526,11 +8535,11 @@ function VehicleCell({ vehicle }) {
           onClick={(e) => { e.stopPropagation(); actions.viewVehicle(vehicle); }}
           title={vehicle.vehicle_name}
         >
-          <span className="vcn-text">{vehicle.vehicle_name}</span>
+          <span className={textClassName}>{vehicle.vehicle_name}</span>
         </button>
       ) : (
         <span className="vehicle-cell-name" title={vehicle.vehicle_name}>
-          <span className="vcn-text">{vehicle.vehicle_name}</span>
+          <span className={textClassName}>{vehicle.vehicle_name}</span>
         </span>
       )}
     </div>
@@ -12684,12 +12693,12 @@ function ticketTableColumns(unreadByTicket = {}) {
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
-            {r.ticket_title}
+            <span className="row-title-text">{r.ticket_title}</span>
           </span>
         );
       },
     },
-    { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
     { label: 'Status', render: (r) => <TicketStatusBadge value={r.status} /> },
     { label: 'Next Step', render: (r) => <TicketStageBadge ticket={r} /> },
     { label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },

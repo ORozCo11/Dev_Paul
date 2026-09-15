@@ -7735,7 +7735,16 @@ table button,
 }
 
 .table-shell tbody tr.is-clickable { cursor: pointer; }
-.table-shell tbody tr.is-clickable:hover { background: rgba(37, 99, 235, 0.08); }
+/* Underline just the row's own title/name text on hover instead of washing
+   the whole row in a background tint — shading every cell (including ones
+   that aren't what gets clicked, e.g. a Reported By name in an
+   Issue-Reports row whose click target is the vehicle) read as "the whole
+   row is one link" and was easy to misread. .row-title-text marks the one
+   cell per row whose text actually matches what onRowClick opens. */
+.table-shell tbody tr.is-clickable:hover .row-title-text {
+  text-decoration: underline;
+  color: var(--primary-strong, #1d4ed8);
+}
 
 .table-pagination {
   display: flex;
