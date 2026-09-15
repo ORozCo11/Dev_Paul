@@ -1147,7 +1147,8 @@ function Workspace() {
   // it (usually just the bare dashboard route), not "the module the user was
   // on". This is the deterministic replacement — go to the base route AND
   // explicitly set the module, instead of trusting history.
-  const returnToModule = useCallback((moduleKey) => {
+  const returnToModule = useCallback((moduleKey, filter) => {
+    if (filter !== undefined) setFilterStatus(filter);
     navigate(roleRoutes[user.role]);
     setActiveModule(moduleKey);
   }, [navigate, user.role]);
@@ -2461,6 +2462,7 @@ function Workspace() {
           basePath={roleRoutes[user.role]}
           onNavigate={navigate}
           onGoToSchedules={() => returnToModule('schedules')}
+          onGoToModule={returnToModule}
         />
       );
     }
@@ -3917,16 +3919,26 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function DashboardMicroMetric({ icon, label, value, tone = 'neutral' }) {
-  return (
-    <div className={`dashboard-micro-metric is-${tone}`}>
+function DashboardMicroMetric({ icon, label, value, tone = 'neutral', onClick }) {
+  const content = (
+    <>
       <span><Icon name={icon} size={15} /></span>
       <div>
         <small>{label}</small>
         <strong>{value}</strong>
       </div>
-    </div>
+    </>
   );
+
+  if (onClick) {
+    return (
+      <button type="button" className={`dashboard-micro-metric is-${tone} is-clickable`} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={`dashboard-micro-metric is-${tone}`}>{content}</div>;
 }
 
 function DashboardSignalCard({ icon, label, value, detail, tone = 'neutral', meter = 0, onClick }) {
@@ -3969,7 +3981,7 @@ function DashboardStatusStrip({ rows }) {
   );
 }
 
-function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedules }) {
+function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedules, onGoToModule }) {
   const [weather, setWeather] = useState(null);
   const [greeting, setGreeting] = useState(() => buildLocalGreeting(user?.name));
   const [greetingRole, setGreetingRole] = useState(() => dashboardRoleLabel(user?.role));
@@ -4156,9 +4168,9 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
           />
           <p>{dateStr || 'Today'}</p>
           <div className="dashboard-command-pills">
-            <span>{totalVehicles} fleet units</span>
-            <span>{locationsByHub.length} active sites</span>
-            <span>{data.vehicles_by_type?.length ?? 0} vehicle types</span>
+            <button type="button" onClick={() => onGoToModule('vehicles', [])}>{totalVehicles} fleet units</button>
+            <button type="button" onClick={() => onGoToModule('locations', [])}>{locationsByHub.length} active sites</button>
+            <button type="button" onClick={() => onGoToModule('categories', [])}>{data.vehicles_by_type?.length ?? 0} vehicle types</button>
           </div>
         </div>
 
@@ -4186,10 +4198,10 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
             )}
           </div>
           <div className="dashboard-command-mini-grid">
-            <DashboardMicroMetric icon="vehicle" label="Available" value={availableVehicles} tone="ok" />
-            <DashboardMicroMetric icon="wrench" label="In Shop" value={underMaintenanceVehicles} tone="warn" />
-            <DashboardMicroMetric icon="alert" label="Issues" value={reportedIssues} tone={reportedIssues > 0 ? 'alert' : 'ok'} />
-            <DashboardMicroMetric icon="calendar" label="Overdue" value={overdueMaintenanceCount} tone={overdueMaintenanceCount > 0 ? 'alert' : 'neutral'} />
+            <DashboardMicroMetric icon="vehicle" label="Available" value={availableVehicles} tone="ok" onClick={() => onGoToModule('vehicles', ['Available'])} />
+            <DashboardMicroMetric icon="wrench" label="In Shop" value={underMaintenanceVehicles} tone="warn" onClick={() => onGoToModule('vehicles', ['Under Maintenance'])} />
+            <DashboardMicroMetric icon="alert" label="Issues" value={reportedIssues} tone={reportedIssues > 0 ? 'alert' : 'ok'} onClick={() => onGoToModule('issues', [])} />
+            <DashboardMicroMetric icon="calendar" label="Overdue" value={overdueMaintenanceCount} tone={overdueMaintenanceCount > 0 ? 'alert' : 'neutral'} onClick={onGoToSchedules} />
           </div>
         </div>
       </section>
