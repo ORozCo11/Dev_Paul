@@ -2521,7 +2521,7 @@ function Workspace() {
               onExport={() => exportRowsToCsv('vehicles.csv', VEHICLE_EXPORT_COLUMNS, visibleRows)}
             />
           </div>
-          <PaginatedTable columns={vehicleColumnChooser.visibleColumns} rows={visibleRows} onRowClick={openVehicleProfile} emptyMessage="No vehicles here yet — click the + button to register one." />
+          <PaginatedTable columns={vehicleColumnChooser.visibleColumns} rows={visibleRows} onRowClick={openVehicleProfile} onReorderColumn={vehicleColumnChooser.reorderColumn} emptyMessage="No vehicles here yet — click the + button to register one." />
         </ModulePanel>
       );
     }
@@ -6318,12 +6318,30 @@ function PartsTags({ value }) {
   );
 }
 
-function DataTable({ columns, rows, compact = false, onRowClick, emptyMessage = 'No records found.' }) {
+// Column headers are drag-reorderable in-place whenever `onReorderColumn`
+// is passed AND the columns carry a stable `key` (only some tables' column
+// functions set one so far, e.g. vehicleColumns — the rest render exactly
+// as before, since a column with no `key` just never becomes draggable).
+// Mirrors the same reorder semantics ColumnChooserButton's popover list
+// uses, so dragging a header does the same thing as dragging its row there
+// — just without opening the popover first.
+function DataTable({ columns, rows, compact = false, onRowClick, onReorderColumn, emptyMessage = 'No records found.' }) {
+  // Which side of which header the dragged column would land on — drawn as
+  // a thin vertical line right on that edge (matching the realcore
+  // reference), so there's no guessing where a drop will actually land.
+  // Declared before the early return below so the hook itself is always
+  // called regardless of whether `rows` is empty on a given render.
+  const [dropIndicator, setDropIndicator] = useState(null);
+
   if (!rows?.length) {
     return <p className="empty-state">{emptyMessage}</p>;
   }
 
   const hasWidths = columns.some((column) => column.width);
+  const sideOf = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return e.clientX - rect.left < rect.width / 2 ? 'before' : 'after';
+  };
 
   return (
     <div className={`table-shell${compact ? ' is-compact' : ''}${hasWidths ? ' is-fixed' : ''}`}>
@@ -6337,9 +6355,37 @@ function DataTable({ columns, rows, compact = false, onRowClick, emptyMessage = 
         )}
         <thead>
           <tr>
-            {columns.map((column) => (
-              <th key={column.label}>{column.label}</th>
-            ))}
+            {columns.map((column) => {
+              const draggable = Boolean(onReorderColumn && column.key && !column.locked);
+              const isDropTarget = draggable && dropIndicator?.key === column.key;
+              return (
+                <th
+                  key={column.label}
+                  className={[
+                    draggable ? 'is-draggable-column' : null,
+                    isDropTarget ? `is-drop-${dropIndicator.side}` : null,
+                  ].filter(Boolean).join(' ') || undefined}
+                  draggable={draggable}
+                  title={draggable ? `Drag to move "${column.label}"` : undefined}
+                  onDragStart={draggable ? (e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', column.key); } : undefined}
+                  onDragOver={draggable ? (e) => {
+                    e.preventDefault();
+                    const side = sideOf(e);
+                    setDropIndicator((prev) => (prev?.key === column.key && prev.side === side ? prev : { key: column.key, side }));
+                  } : undefined}
+                  onDragLeave={draggable ? () => setDropIndicator((prev) => (prev?.key === column.key ? null : prev)) : undefined}
+                  onDragEnd={draggable ? () => setDropIndicator(null) : undefined}
+                  onDrop={draggable ? (e) => {
+                    e.preventDefault();
+                    const dragKey = e.dataTransfer.getData('text/plain');
+                    if (dragKey) onReorderColumn(dragKey, column.key, sideOf(e));
+                    setDropIndicator(null);
+                  } : undefined}
+                >
+                  {column.label}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -8579,7 +8625,7 @@ function logColumns(vehicles, onViewVehicle) {
   ];
 }
 
-function PaginatedTable({ columns, rows, onRowClick, emptyMessage, compact = false, pageSizeOptions = [10, 25, 50, 100], initialPageSize = 25 }) {
+function PaginatedTable({ columns, rows, onRowClick, onReorderColumn, emptyMessage, compact = false, pageSizeOptions = [10, 25, 50, 100], initialPageSize = 25 }) {
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [page, setPage] = useState(1);
 
@@ -8588,7 +8634,7 @@ function PaginatedTable({ columns, rows, onRowClick, emptyMessage, compact = fal
   }, [rows.length, pageSize]);
 
   if (!rows?.length) {
-    return <DataTable columns={columns} rows={rows} onRowClick={onRowClick} emptyMessage={emptyMessage} compact={compact} />;
+    return <DataTable columns={columns} rows={rows} onRowClick={onRowClick} onReorderColumn={onReorderColumn} emptyMessage={emptyMessage} compact={compact} />;
   }
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -8598,7 +8644,7 @@ function PaginatedTable({ columns, rows, onRowClick, emptyMessage, compact = fal
 
   return (
     <>
-      <DataTable columns={columns} rows={pageRows} onRowClick={onRowClick} compact={compact} />
+      <DataTable columns={columns} rows={pageRows} onRowClick={onRowClick} onReorderColumn={onReorderColumn} compact={compact} />
       <div className="table-pagination">
         <span className="muted">Showing {start + 1}-{Math.min(start + pageSize, rows.length)} of {rows.length}</span>
         <div className="table-pagination-controls">
@@ -13993,14 +14039,21 @@ function useColumnChooser(storageKey, allColumns) {
       return next;
     });
   };
-  const reorderColumn = (dragKey, dropKey) => {
+  // `side` ('before' | 'after') lets the table header's own drag handler
+  // place a column on whichever side of the drop target the cursor was
+  // actually over (matching the drop-line indicator DataTable draws there)
+  // — the popover's simpler row list never passes it, so it keeps its
+  // original "insert at the target's position" behavior.
+  const reorderColumn = (dragKey, dropKey, side = 'before') => {
     if (dragKey === dropKey) return;
     setOrder((prev) => {
       const next = [...prev];
       const from = next.indexOf(dragKey);
-      const to = next.indexOf(dropKey);
-      if (from === -1 || to === -1) return prev;
+      if (from === -1) return prev;
       next.splice(from, 1);
+      let to = next.indexOf(dropKey);
+      if (to === -1) return prev;
+      if (side === 'after') to += 1;
       next.splice(to, 0, dragKey);
       return next;
     });
