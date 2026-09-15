@@ -8584,6 +8584,19 @@ button.btn-view-action svg {
   flex: 1;
 }
 
+.location-edit-panel {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+}
+.location-edit-panel h3 {
+  margin: 0 0 16px 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
 /* Add Location page — a plain name/address form beside a live pick-a-point
    map; either one drives the other (typing geocodes onto the map, clicking
    the map reverse-geocodes into the address field). Fields take a fixed,
