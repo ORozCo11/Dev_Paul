@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
@@ -83,40 +83,40 @@ const roleRoutes = {
 const modulesByRole = {
   Admin: [
     { section: null, items: [['dashboard', 'Dashboard']] },
-    { section: 'Operations', items: [
+    { section: 'Operations', icon: 'clipboard', items: [
       ['issues', 'Issue Reports'],
       ['tickets', 'Maintenance Tickets'],
       ['ticketArchives', 'Ticket Archives'],
     ] },
-    { section: 'Fleet & Assets', items: [
+    { section: 'Fleet & Assets', icon: 'vehicle', items: [
       ['vehicles', 'Vehicle Management'],
       ['categories', 'Vehicle Types'],
       ['locations', 'Vehicle Location'],
       ['histories', 'Vehicle History'],
     ] },
-    { section: 'Monitoring & Schedules', items: [
+    { section: 'Monitoring & Schedules', icon: 'calendar', items: [
       ['conditions', 'Condition Monitoring'],
       ['schedules', 'Maintenance Schedule'],
       ['maintenance', 'Maintenance Records'],
     ] },
-    { section: 'Administration', items: [
+    { section: 'Administration', icon: 'key', items: [
       ['users', 'Users'],
       ['reports', 'Reports'],
-      ['logs', 'Logs'],
+      ['logs', 'Activity Log'],
     ] },
   ],
   Custodian: [
     { section: null, items: [['dashboard', 'Dashboard']] },
-    { section: 'Daily Tasks', items: [
+    { section: 'Daily Tasks', icon: 'checkCircle', items: [
       ['issues', 'Report Vehicle Issue'],
       ['ticketInspections', 'Assigned Inspections'],
       ['ticketVerifications', 'Repair Verifications'],
       ['workTracker', 'Work Tracker'],
     ] },
-    { section: 'Fleet & Assets', items: [
+    { section: 'Fleet & Assets', icon: 'vehicle', items: [
       ['vehicles', 'View Vehicles'],
     ] },
-    { section: 'Monitoring & Schedules', items: [
+    { section: 'Monitoring & Schedules', icon: 'calendar', items: [
       ['conditions', 'Condition Monitoring'],
       ['schedules', 'Maintenance Schedule'],
       ['maintenanceStatus', 'Maintenance Status'],
@@ -125,13 +125,13 @@ const modulesByRole = {
   ],
   'Maintenance Personnel': [
     { section: null, items: [['dashboard', 'Dashboard']] },
-    { section: 'Work Orders & Repairs', items: [
+    { section: 'Work Orders & Repairs', icon: 'wrench', items: [
       ['ticketWorkOrders', 'My Work Orders'],
       ['workTracker', 'Work Tracker'],
       ['issues', 'View Vehicle Issues'],
       ['schedules', 'Maintenance Schedule'],
     ] },
-    { section: 'Monitoring & Schedules', items: [
+    { section: 'Monitoring & Schedules', icon: 'calendar', items: [
       ['maintenanceHistory', 'Maintenance History'],
       ['maintenance', 'Maintenance Records'],
     ] },
@@ -171,9 +171,11 @@ function resolveModuleGroups(user) {
   const seenKeys = new Set();
   const order = [];
   const bySection = new Map();
+  const iconBySection = new Map();
 
-  source.forEach((r) => (modulesByRole[r] ?? []).forEach(({ section, items }) => {
+  source.forEach((r) => (modulesByRole[r] ?? []).forEach(({ section, icon, items }) => {
     if (!bySection.has(section)) { bySection.set(section, []); order.push(section); }
+    if (icon && !iconBySection.has(section)) iconBySection.set(section, icon);
     const bucket = bySection.get(section);
     items.forEach((item) => {
       if (seenKeys.has(item[0])) return;
@@ -185,7 +187,7 @@ function resolveModuleGroups(user) {
   // A section can end up empty when every module in it was already claimed by
   // an earlier role's section — don't render a header with nothing under it.
   return order
-    .map((section) => ({ section, items: bySection.get(section) }))
+    .map((section) => ({ section, icon: iconBySection.get(section), items: bySection.get(section) }))
     .filter((g) => g.items.length > 0);
 }
 
@@ -428,15 +430,17 @@ function Workspace() {
   const modules = useMemo(() => moduleGroups.flatMap((g) => g.items), [moduleGroups]);
   const [activeModule, setActiveModule] = useState(modules[0]?.[0] ?? 'dashboard');
   // Which sidebar sections the user has folded away, remembered per browser.
-  // Stored as the collapsed set (not expanded) so a brand-new section added in
-  // a future release defaults to visible rather than silently hidden.
+  // Stored as the collapsed set. Unlike a brand-new section defaulting open,
+  // a first-ever visit (nothing in localStorage yet) starts every section
+  // collapsed — an accordion, matching the reference nav's closed-by-default
+  // look — rather than the old always-expanded list. Whichever group holds
+  // the current module still force-expands below regardless of this set.
   const [collapsedNavGroups, setCollapsedNavGroups] = useState(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem('vms_nav_collapsed_groups') ?? '[]');
-      return Array.isArray(raw) ? raw : [];
-    } catch {
-      return [];
-    }
+      const raw = JSON.parse(localStorage.getItem('vms_nav_collapsed_groups') ?? 'null');
+      if (Array.isArray(raw)) return raw;
+    } catch { /* fall through to default: everything collapsed */ }
+    return moduleGroups.map((g) => g.section).filter(Boolean);
   });
   const toggleNavGroup = (section) => {
     setCollapsedNavGroups((current) => {
@@ -517,6 +521,18 @@ function Workspace() {
     setScheduleViewMode(mode);
     localStorage.setItem('vms_schedule_view', mode);
   };
+  const [historyViewMode, setHistoryViewMode] = useState(
+    () => localStorage.getItem('vms_history_view') || 'table'
+  );
+  const changeHistoryViewMode = (mode) => {
+    setHistoryViewMode(mode);
+    localStorage.setItem('vms_history_view', mode);
+  };
+  // List/Recent-Activities tab for the Activity Log — not persisted, since
+  // "recent activities" is a quick-glance view you'd want defaulting back
+  // to the full list on your next visit rather than staying sticky.
+  const [logsView, setLogsView] = useState('list');
+  const [usersViewMode, setUsersViewMode] = useState('list');
   // Drives the conditional External Shop / Vendor / Receipt fields in the
   // Mark Done form below — reset wherever the modal is opened (see
   // openCompleteSchedule) rather than in an effect.
@@ -587,7 +603,9 @@ function Workspace() {
   const [filterCapacity, setFilterCapacity] = useState([]);
   const [filterStatus, setFilterStatus] = useState([]);
   const [filterPriority, setFilterPriority] = useState([]);
-  // Advanced filter — Vehicle Management only (see FilterBar's `showAdvanced`).
+  // Location/Domain filters — Vehicle Management only (FilterBar shows
+  // these whenever it's given the setters, so only this module's own call
+  // site passing them determines whether they render).
   const [filterLocation, setFilterLocation] = useState([]);
   const [filterDomain, setFilterDomain] = useState([]);
   // Module-specific extra filter dimensions — each only read/written by its
@@ -1308,6 +1326,8 @@ function Workspace() {
       result = result.filter((row) => (
         row.status === 'Completed' && row.resulting_maintenance && row.resulting_maintenance.progress_status !== 'Completed'
       ));
+    } else if (activeModule === 'schedules' && filterStatus.some((s) => SCHEDULE_URGENCY_KEYS.includes(s))) {
+      result = result.filter((row) => filterStatus.includes(scheduleUrgencyBucket(row)));
     } else if (activeModule === 'ticketInspections') {
       result = result.filter((row) => (
         filterStatus.includes('Inspected') ? row.status !== 'Open' : row.status === 'Open'
@@ -1550,6 +1570,10 @@ function Workspace() {
     () => countByValues(records.issues ?? [], (r) => r.status, ['Pending', 'Under Review', 'In Maintenance', 'Resolved']),
     [records.issues]
   );
+  const issueSeverityStats = useMemo(
+    () => countByValues(records.issues ?? [], (r) => r.severity_level, ['High', 'Medium', 'Low']),
+    [records.issues]
+  );
 
   const scheduleStats = useMemo(() => {
     const base = countByValues(records.schedules ?? [], (r) => r.status, ['Scheduled', 'Completed', 'Cancelled']);
@@ -1565,7 +1589,14 @@ function Workspace() {
     const myAssigned = (records.schedules ?? []).filter(
       (r) => r.status === 'Scheduled' && String(r.assigned_to) === String(user.id)
     ).length;
-    return { ...base, AwaitingVerification: awaitingVerification, MyAssigned: myAssigned };
+    // How soon each still-scheduled row is due — same buckets the top-row
+    // urgency cards show and filter by (see scheduleUrgencyBucket).
+    const urgency = { Overdue: 0, Due1to3: 0, Due4to7: 0, Due8plus: 0 };
+    (records.schedules ?? []).forEach((r) => {
+      const bucket = scheduleUrgencyBucket(r);
+      if (bucket) urgency[bucket] += 1;
+    });
+    return { ...base, ...urgency, AwaitingVerification: awaitingVerification, MyAssigned: myAssigned };
   }, [records.schedules, user.id]);
 
   const conditionStats = useMemo(
@@ -1580,6 +1611,10 @@ function Workspace() {
 
   const userStats = useMemo(
     () => countByValues(records.users ?? [], (r) => r.role, ['Admin', 'Custodian', 'Maintenance Personnel']),
+    [records.users]
+  );
+  const userStatusStats = useMemo(
+    () => countByValues(records.users ?? [], (r) => (r.is_active ? 'Active' : 'Inactive'), ['Active', 'Inactive']),
     [records.users]
   );
 
@@ -1672,6 +1707,118 @@ function Workspace() {
     [user.role, openVehicleProfile, deleteRecord, restoreRecord, filterStatus, openTicketProfile],
   );
   const vehicleColumnChooser = useColumnChooser('vms_vehicle_columns', vehicleColumnDefs);
+
+  // Every other module's table gets the same Choose Columns / drag-to-reorder
+  // treatment as Vehicle Management above — one useColumnChooser call per
+  // table, hoisted up here (not inside renderModule's per-module branches)
+  // because hooks can't run conditionally; renderModule only executes the
+  // branch matching the current activeModule.
+  const categoryColumnDefs = useMemo(
+    () => categoryColumns((row) => navigate(`${roleRoutes[user.role]}/categories/${row.category_id}/edit`), deleteRecord),
+    [navigate, user.role, deleteRecord],
+  );
+  const categoryColumnChooser = useColumnChooser('vms_category_columns', categoryColumnDefs);
+
+  const userColumnDefs = useMemo(
+    () => userColumns((row) => navigate(`${roleRoutes[user.role]}/users/${row.id}/edit`), toggleUserActive, user.id),
+    [navigate, user.role, toggleUserActive, user.id],
+  );
+  const userColumnChooser = useColumnChooser('vms_user_columns', userColumnDefs);
+
+  const locationColumnChooser = useColumnChooser('vms_location_columns', locationTableColumns);
+
+  const conditionColumnDefs = useMemo(
+    () => conditionColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/conditions/${row.condition_check_id}/edit`), deleteRecord, handleCreateTicketFromCondition, handleSuggestScheduleFromCondition),
+    [user.role, navigate, deleteRecord, handleCreateTicketFromCondition, handleSuggestScheduleFromCondition],
+  );
+  const conditionColumnChooser = useColumnChooser('vms_condition_columns', conditionColumnDefs);
+
+  const issueColumnDefs = useMemo(
+    () => issueColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}/edit`), handleCreateTicketFromIssue, setUserInfoTarget, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`), deleteRecord),
+    [user.role, navigate, handleCreateTicketFromIssue, deleteRecord],
+  );
+  const issueColumnChooser = useColumnChooser('vms_issue_columns', issueColumnDefs);
+
+  const maintenanceColumnDefs = useMemo(
+    () => maintenanceColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}/edit`), updateRecord, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`)),
+    [user.role, navigate, updateRecord],
+  );
+  const maintenanceColumnChooser = useColumnChooser('vms_maintenance_columns', maintenanceColumnDefs);
+
+  const maintenanceStatusColumnDefs = useMemo(
+    () => maintenanceStatusColumns(setEditTarget, user.id),
+    [user.id],
+  );
+  const maintenanceStatusColumnChooser = useColumnChooser('vms_maintenance_status_columns', maintenanceStatusColumnDefs);
+
+  const scheduleColumnDefs = useMemo(
+    () => scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, openCompleteSchedule, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord),
+    [navigate, user, deleteRecord, restoreRecord],
+  );
+  const scheduleColumnChooser = useColumnChooser('vms_schedule_columns', scheduleColumnDefs);
+
+  const maintenanceHistoryColumnChooser = useColumnChooser('vms_maintenance_history_columns', maintenanceHistoryColumns);
+  const vehicleHistoryColumnChooser = useColumnChooser('vms_vehicle_history_columns', historyColumns);
+
+  const logColumnDefs = useMemo(
+    () => logColumns(lookups.vehicles, openVehicleProfile, openTicketProfile),
+    [lookups.vehicles, openVehicleProfile, openTicketProfile],
+  );
+  const logColumnChooser = useColumnChooser('vms_activity_log_columns', logColumnDefs);
+
+  const archiveColumnDefs = useMemo(() => [
+    ...ticketArchiveColumns,
+    {
+      key: 'actions',
+      label: 'Actions',
+      locked: true,
+      render: (row) => {
+        if (row.final_status === 'Deleted') {
+          return (
+            <div className="row-actions">
+              <button
+                className="btn-reopen-action icon-btn"
+                type="button"
+                title="Reopen Ticket"
+                aria-label="Reopen Ticket"
+                onClick={() => {
+                  setConfirmDialog({
+                    title: 'Reopen Deleted Ticket',
+                    message: `Are you sure you want to reopen Ticket #${row.ticket_id} for ${row.vehicle_name}? It will be restored with all its sub-issues to how they were before it was deleted.`,
+                    confirmLabel: 'Reopen Ticket',
+                    variant: 'primary',
+                    onConfirm: () => ticketAction(`/ticket-archives/${row.archive_id}/reopen`, {}, 'Ticket successfully reopened.'),
+                  });
+                }}
+              >
+                <Icon name="undo" size={14} />
+              </button>
+            </div>
+          );
+        }
+        // A Closed ticket is permanently locked (no Reopen), but its
+        // record still exists — the Admin can still open it read-only
+        // to see the full history of what was done.
+        if (row.final_status === 'Closed') {
+          return (
+            <div className="row-actions">
+              <button
+                className="btn-view-action icon-btn"
+                type="button"
+                title="View Ticket"
+                aria-label="View Ticket"
+                onClick={() => openTicketProfile({ ticket_id: row.ticket_id })}
+              >
+                <Icon name="eye" size={14} />
+              </button>
+            </div>
+          );
+        }
+        return <span className="muted">—</span>;
+      },
+    },
+  ], [setConfirmDialog, openTicketProfile]);
+  const archiveColumnChooser = useColumnChooser('vms_ticket_archive_columns', archiveColumnDefs);
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
@@ -2083,7 +2230,7 @@ function Workspace() {
       <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`}>
           <nav className="module-nav" aria-label="Workspace modules">
-            {moduleGroups.map(({ section, items }) => {
+            {moduleGroups.map(({ section, icon, items }) => {
               const renderItem = ([key, label]) => {
                 const badgeCount = dashboard?.badge_counts?.[key] ?? 0;
                 return (
@@ -2129,9 +2276,10 @@ function Workspace() {
                     onClick={() => toggleNavGroup(section)}
                     aria-expanded={expanded}
                   >
+                    {icon && <Icon name={icon} size={16} className="nav-icon" />}
                     <span className="module-nav-section-label">{section}</span>
                     {!expanded && groupBadge > 0 && <span className="module-nav-badge">{groupBadge}</span>}
-                    <Icon name="chevronDown" size={13} className={`module-nav-section-chevron${expanded ? '' : ' is-collapsed'}`} />
+                    <Icon name="chevronDown" size={14} className={`module-nav-section-chevron${expanded ? ' is-expanded' : ''}`} />
                   </button>
                   {expanded && items.map(renderItem)}
                 </div>
@@ -2306,6 +2454,7 @@ function Workspace() {
               submitLabel={editCategoryId ? 'Update Type' : 'Add Type'}
               wrapperClassName="category-form-grid"
               onDirty={() => setHasUnsavedChanges(true)}
+              showDomainPreview
             />
           ) : (isNewSchedulePage || editScheduleId) ? (
             <FormPage
@@ -2496,7 +2645,6 @@ function Workspace() {
               statusOptions={lookups.vehicle_statuses}
               priorityOptions={lookups.condition_results}
               priorityLabel="Condition"
-              showAdvanced
               filterLocation={filterLocation}
               setFilterLocation={setFilterLocation}
               filterDomain={filterDomain}
@@ -2541,11 +2689,6 @@ function Workspace() {
                 selected={filterDomain}
                 onChange={setFilterDomain}
               />
-              {filterDomain.length > 0 && (
-                <button type="button" className="filter-clear-btn" onClick={() => setFilterDomain([])}>
-                  Clear Filters
-                </button>
-              )}
             </div>
           }
         >
@@ -2555,28 +2698,46 @@ function Workspace() {
               value={searchQuery}
               onChange={setSearchQuery}
               placeholder="Search types..."
+              columnChooser={categoryColumnChooser}
               onAdd={() => navigate(`${roleRoutes[user.role]}/categories/new`)}
               addLabel="Add Type"
             />
           </div>
-          <DataTable columns={categoryColumns((row) => navigate(`${roleRoutes[user.role]}/categories/${row.category_id}/edit`), deleteRecord)} rows={visibleRows} emptyMessage="No vehicle types yet — click the + button to add one." />
+          <DataTable columns={categoryColumnChooser.visibleColumns} onReorderColumn={categoryColumnChooser.reorderColumn} rows={visibleRows} emptyMessage="No vehicle types yet — click the + button to add one." />
         </ModulePanel>
       );
     }
 
     if (activeModule === 'users') {
+      const userRoleSegments = [
+        { label: 'Admin', value: userStats.Admin, color: '#7c3aed' },
+        { label: 'Custodian', value: userStats.Custodian, color: '#0284c7' },
+        { label: 'Maintenance Personnel', value: userStats['Maintenance Personnel'], color: '#d97706' },
+      ];
+      const userStatusSegments = [
+        { label: 'Active', value: userStatusStats.Active, color: '#2563eb' },
+        { label: 'Inactive', value: userStatusStats.Inactive, color: '#cbd5e1' },
+      ];
       return (
         <ModulePanel
           description="Create and manage user accounts — Admin, Custodian, and Maintenance Personnel."
           statCards={
-            <ModuleStatCards
-              totalLabel="Total Users"
-              total={userStats.total}
-              cards={USER_STAT_CARDS}
-              counts={userStats}
-              activeFilter={filterStatus}
-              onFilterChange={setFilterStatus}
-            />
+            <div className="user-analytics-grid">
+              <div className="panel user-analytics-card">
+                <h4 className="user-analytics-title">Users by Status</h4>
+                <div className="dashboard-condition-core">
+                  <div className="dashboard-condition-donut">
+                    <DonutChart centerLabel={userStatusStats.total} centerSubLabel="Users" segments={userStatusSegments} />
+                  </div>
+                  <ChartLegend rows={userStatusSegments} />
+                </div>
+              </div>
+              <div className="panel user-analytics-card">
+                <h4 className="user-analytics-title">Users by Role</h4>
+                <SegmentedBar segments={userRoleSegments} />
+                <ChartLegend rows={userRoleSegments} />
+              </div>
+            </div>
           }
           filterBar={
             <div className="filter-bar-container">
@@ -2593,15 +2754,6 @@ function Workspace() {
                 selected={filterActive}
                 onChange={setFilterActive}
               />
-              {(filterStatus.length > 0 || filterActive.length > 0) && (
-                <button
-                  type="button"
-                  className="filter-clear-btn"
-                  onClick={() => { setFilterStatus([]); setFilterActive([]); }}
-                >
-                  Clear Filters
-                </button>
-              )}
             </div>
           }
         >
@@ -2627,15 +2779,33 @@ function Workspace() {
               value={searchQuery}
               onChange={setSearchQuery}
               placeholder="Search users..."
+              columnChooser={usersViewMode === 'card' ? undefined : userColumnChooser}
               onAdd={() => navigate(`${roleRoutes[user.role]}/users/new`)}
               addLabel="Add User"
+              onExport={() => exportRowsToCsv('users.csv', USER_EXPORT_COLUMNS, visibleRows)}
             />
           </div>
-          <DataTable
-            columns={userColumns((row) => navigate(`${roleRoutes[user.role]}/users/${row.id}/edit`), toggleUserActive, user.id)}
-            emptyMessage="No user accounts yet — click the + button to create one."
-            rows={visibleRows}
-          />
+          <div className="view-tabs">
+            <button type="button" className={usersViewMode === 'list' ? 'active' : ''} onClick={() => setUsersViewMode('list')}>List View</button>
+            <button type="button" className={usersViewMode === 'card' ? 'active' : ''} onClick={() => setUsersViewMode('card')}>Card View</button>
+          </div>
+          {usersViewMode === 'card' ? (
+            <PaginatedCardGrid
+              items={visibleRows}
+              keyOf={(row) => row.id}
+              emptyMessage="No user accounts yet — click the + button to create one."
+              renderItem={(row) => (
+                <UserCard user={row} onClick={() => navigate(`${roleRoutes[user.role]}/users/${row.id}/edit`)} />
+              )}
+            />
+          ) : (
+            <PaginatedTable
+              columns={userColumnChooser.visibleColumns}
+              onReorderColumn={userColumnChooser.reorderColumn}
+              emptyMessage="No user accounts yet — click the + button to create one."
+              rows={visibleRows}
+            />
+          )}
         </ModulePanel>
       );
     }
@@ -2681,6 +2851,7 @@ function Workspace() {
                     onHubsChange={setAllHubs}
                     canManageHubs={hasRole(user, 'Admin')}
                     boundaryOverride={mapBoundaryOverride}
+                    onAddHub={() => navigate(`${roleRoutes[user.role]}/locations/new`)}
                   />
                 </div>
               </div>
@@ -2702,15 +2873,6 @@ function Workspace() {
                     selected={filterLocation}
                     onChange={setFilterLocation}
                   />
-                  {(filterStatus.length > 0 || filterLocation.length > 0) && (
-                    <button
-                      type="button"
-                      className="filter-clear-btn"
-                      onClick={() => { setFilterStatus([]); setFilterLocation([]); }}
-                    >
-                      Clear Filters
-                    </button>
-                  )}
                 </div>
                 <div className="panel-header-bar">
                   <h3>Location Records <span className="count-badge">{locationRows.length}</span></h3>
@@ -2727,11 +2889,13 @@ function Workspace() {
                     // other) instead of a click-the-map-first flow.
                     onAdd={hasRole(user, 'Admin') ? () => navigate(`${roleRoutes[user.role]}/locations/new`) : undefined}
                     addLabel="Add Location"
+                    columnChooser={locationColumnChooser}
                   />
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <PaginatedTable
-                    columns={locationTableColumns}
+                    columns={locationColumnChooser.visibleColumns}
+                    onReorderColumn={locationColumnChooser.reorderColumn}
                     rows={locationRows}
                     onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
                     emptyMessage="No location records yet."
@@ -2765,6 +2929,7 @@ function Workspace() {
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search conditions..."
+                columnChooser={conditionColumnChooser}
                 onAdd={hasRole(user, 'Custodian') ? () => navigate(`${roleRoutes[user.role]}/conditions/new`) : undefined}
                 addLabel="Add Condition Check"
               />
@@ -2856,34 +3021,15 @@ function Workspace() {
                 Filter
               </button>
 
-              {/* Clear Filters */}
-              {(filterCategory.length || filterStatus.length || filterCapacity.length || filterCheckedBy.length
-                || condFilterStartDate || condFilterEndDate
-                || condDraft.category.length || condDraft.status.length || condDraft.capacity.length || condDraft.checkedBy.length
-                || condDraft.start || condDraft.end) && (
-                <button
-                  type="button"
-                  className="filter-clear-btn"
-                  onClick={() => {
-                    setFilterCategory([]);
-                    setFilterStatus([]);
-                    setFilterCapacity([]);
-                    setFilterCheckedBy([]);
-                    setCondFilterStartDate('');
-                    setCondFilterEndDate('');
-                    setCondDraft({ category: [], status: [], capacity: [], checkedBy: [], start: '', end: '' });
-                  }}
-                >
-                  Clear Filters
-                </button>
-              )}
             </div>
 
             <DataTable
-              columns={conditionColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/conditions/${row.condition_check_id}/edit`), deleteRecord, handleCreateTicketFromCondition, handleSuggestScheduleFromCondition, (ticketId) => navigate(`${roleRoutes[user.role]}/tickets/${ticketId}`))}
+              columns={conditionColumnChooser.visibleColumns}
+              onReorderColumn={conditionColumnChooser.reorderColumn}
               emptyMessage="No condition checks logged yet — click the + button to record one."
               rows={visibleRows}
               onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
+              renderSubRow={(row) => row.observations}
             />
         </ModulePanel>
       );
@@ -2916,37 +3062,40 @@ function Workspace() {
                   onFilterChange={setFilterStatus}
                 />
               </div>
+              <div className="issue-summary-chart">
+                <StackedBarChart
+                  title="Issue Reports"
+                  segments={[
+                    { label: 'High', value: issueSeverityStats.High, color: '#dc2626' },
+                    { label: 'Medium', value: issueSeverityStats.Medium, color: '#f59e0b' },
+                    { label: 'Low', value: issueSeverityStats.Low, color: '#0ea5e9' },
+                  ]}
+                />
+              </div>
+              <LatestIssueCard issues={records.issues ?? []} onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)} />
               <section className="panel module-filter-panel issue-summary-filters">
-                <FilterBar
+                <IssueFilterPanel
                   categories={lookups.categories}
                   vehicles={lookups.vehicles}
+                  issueTypes={lookups.issue_types ?? []}
+                  severityLevels={lookups.severity_levels ?? []}
+                  statusOptions={lookups.issue_statuses ?? []}
                   filterCategory={filterCategory}
                   setFilterCategory={setFilterCategory}
                   filterCapacity={filterCapacity}
                   setFilterCapacity={setFilterCapacity}
+                  filterIssueType={filterIssueType}
+                  setFilterIssueType={setFilterIssueType}
                   filterStatus={filterStatus}
                   setFilterStatus={setFilterStatus}
                   filterPriority={filterPriority}
                   setFilterPriority={setFilterPriority}
-                  statusOptions={lookups.issue_statuses}
-                  priorityOptions={lookups.severity_levels}
-                  priorityLabel="Severity"
-                  extraFilters={[{
-                    key: 'issueType',
-                    label: 'Issue Types',
-                    options: lookups.issue_types ?? [],
-                    selected: filterIssueType,
-                    setSelected: setFilterIssueType,
-                  }]}
-                  dateRange={{
-                    start: filterDateStart,
-                    setStart: setFilterDateStart,
-                    end: filterDateEnd,
-                    setEnd: setFilterDateEnd,
-                  }}
+                  filterDateStart={filterDateStart}
+                  setFilterDateStart={setFilterDateStart}
+                  filterDateEnd={filterDateEnd}
+                  setFilterDateEnd={setFilterDateEnd}
                 />
               </section>
-              <LatestIssueCard issues={records.issues ?? []} onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)} />
             </div>
           }
         >
@@ -2956,15 +3105,18 @@ function Workspace() {
               value={searchQuery}
               onChange={setSearchQuery}
               placeholder="Search issues..."
+              columnChooser={issueColumnChooser}
               onAdd={hasRole(user, 'Custodian') ? () => navigate(`${roleRoutes[user.role]}/issues/new`) : undefined}
               addLabel="Report Issue"
             />
           </div>
           <PaginatedTable
-            columns={issueColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}/edit`), handleCreateTicketFromIssue, setUserInfoTarget, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`), deleteRecord)}
+            columns={issueColumnChooser.visibleColumns}
+            onReorderColumn={issueColumnChooser.reorderColumn}
             emptyMessage="No issues reported — the fleet has no open problems right now."
             rows={visibleRows}
             onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
+            renderSubRow={(row) => row.issue_description}
           />
         </ModulePanel>
       );
@@ -3039,6 +3191,7 @@ function Workspace() {
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search maintenance..."
+                columnChooser={maintenanceViewMode === 'card' ? undefined : maintenanceColumnChooser}
               />
             </div>
           </div>
@@ -3056,11 +3209,13 @@ function Workspace() {
             />
           ) : (
             <PaginatedTable
-              columns={maintenanceColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}/edit`), updateRecord, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`))}
+              columns={maintenanceColumnChooser.visibleColumns}
+              onReorderColumn={maintenanceColumnChooser.reorderColumn}
               emptyMessage="No maintenance records yet — click the + button to log one."
               rows={visibleRows}
               compact
               onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
+              renderSubRow={(row) => row.problem_reason}
             />
           )}
         </ModulePanel>
@@ -3073,13 +3228,15 @@ function Workspace() {
           <ModulePanel description="Review records marked for field verification and send the result back to the ticket loop.">
             <div className="panel-header-bar">
               <h3>Pending Verifications <span className="count-badge">{visibleRows.length}</span></h3>
-              <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search verifications..." />
+              <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search verifications..." columnChooser={maintenanceStatusColumnChooser} />
             </div>
             <DataTable
-              columns={maintenanceStatusColumns(setEditTarget, user.id)}
+              columns={maintenanceStatusColumnChooser.visibleColumns}
+              onReorderColumn={maintenanceStatusColumnChooser.reorderColumn}
               emptyMessage="Nothing awaiting your verification right now."
               rows={visibleRows}
               onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
+              renderSubRow={(row) => subRowFields([['Problem / Reason', row.problem_reason], ['Action Taken', row.action_taken]])}
             />
           </ModulePanel>
           <FormModal open={!!editTarget} title={`Verify Maintenance #${editTarget?.maintenance_id}`} onClose={() => setEditTarget(null)}>
@@ -3146,6 +3303,7 @@ function Workspace() {
               counts={scheduleStats}
               activeFilter={filterStatus}
               onFilterChange={setFilterStatus}
+              gridClassName="schedule-stat-grid"
             />
           }
           filterBar={
@@ -3183,6 +3341,7 @@ function Workspace() {
                   : undefined}
                 addLabel="Add Schedule"
                 onExport={() => exportRowsToCsv('maintenance-schedules.csv', SCHEDULE_EXPORT_COLUMNS, visibleRows)}
+                columnChooser={scheduleViewMode === 'card' ? undefined : scheduleColumnChooser}
               />
             </div>
           </div>
@@ -3205,7 +3364,8 @@ function Workspace() {
             />
           ) : (
             <PaginatedTable
-              columns={scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, openCompleteSchedule, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord)}
+              columns={scheduleColumnChooser.visibleColumns}
+              onReorderColumn={scheduleColumnChooser.reorderColumn}
               emptyMessage="No maintenance scheduled — click the + button to plan one."
               rows={scheduleRows}
               onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
@@ -3279,13 +3439,15 @@ function Workspace() {
         <ModulePanel description="Completed repair and service records are listed here automatically.">
           <div className="panel-header-bar">
             <h3>Completed Maintenance <span className="count-badge">{visibleRows.length}</span></h3>
-            <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search records..." />
+            <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search records..." columnChooser={maintenanceHistoryColumnChooser} />
           </div>
           <DataTable
-            columns={maintenanceHistoryColumns}
+            columns={maintenanceHistoryColumnChooser.visibleColumns}
+            onReorderColumn={maintenanceHistoryColumnChooser.reorderColumn}
             emptyMessage="No completed maintenance yet — finished work will appear here."
             rows={visibleRows}
             onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
+            renderSubRow={(row) => subRowFields([['Problem / Reason', row.problem_reason], ['Action Taken', row.action_taken]])}
           />
         </ModulePanel>
       );
@@ -3325,30 +3487,75 @@ function Workspace() {
                   onChange={(e) => setFilterDateEnd(e.target.value)}
                 />
               </div>
-              {(filterActivityType.length > 0 || filterDateStart || filterDateEnd) && (
-                <button
-                  type="button"
-                  className="filter-clear-btn"
-                  onClick={() => { setFilterActivityType([]); setFilterDateStart(''); setFilterDateEnd(''); }}
-                >
-                  Clear Filters
-                </button>
-              )}
             </div>
           }
         >
           <div className="panel-header-bar">
             <h3>Activity History <span className="count-badge">{visibleRows.length}</span></h3>
-            <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search history..." />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ViewModeDropdown value={historyViewMode} onChange={changeHistoryViewMode} />
+              <LocalSearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search history..."
+                onExport={() => exportRowsToCsv('vehicle-history.csv', VEHICLE_HISTORY_EXPORT_COLUMNS, visibleRows)}
+                columnChooser={historyViewMode === 'card' ? undefined : vehicleHistoryColumnChooser}
+              />
+              <button className="ghost-button" onClick={() => window.print()} type="button">Print</button>
+            </div>
           </div>
-          <PaginatedTable
-            columns={historyColumns}
-            emptyMessage="No vehicle activity recorded yet."
-            rows={visibleRows}
-            onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
-            pageSizeOptions={[10, 20, 40, 50]}
-            initialPageSize={10}
-          />
+          {historyViewMode === 'card' ? (
+            <PaginatedCardGrid
+              items={visibleRows}
+              keyOf={(row) => row.history_id}
+              emptyMessage="No vehicle activity recorded yet."
+              renderItem={(row) => (
+                <HistoryCard row={row} onClick={() => row.vehicle && openVehicleProfile(row.vehicle)} />
+              )}
+            />
+          ) : (
+            <PaginatedTable
+              columns={vehicleHistoryColumnChooser.visibleColumns}
+              onReorderColumn={vehicleHistoryColumnChooser.reorderColumn}
+              emptyMessage="No vehicle activity recorded yet."
+              rows={visibleRows}
+              onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
+              pageSizeOptions={[10, 20, 40, 50]}
+              initialPageSize={10}
+              renderSubRow={(row) => row.description}
+            />
+          )}
+
+          {/* Print-only — same convention as ReportPreview's print view:
+              portaled to <body> since the app's @media print rule hides
+              #root entirely, so this has to live outside it. */}
+          {createPortal(
+            <div className="report-print-view">
+              <div className="veh-print-header">
+                <div className="veh-print-header-left">
+                  <h2>Vehicle Activity History</h2>
+                  <p>Printed on {formatDate(new Date().toISOString())}</p>
+                </div>
+                <div className="veh-print-header-right">
+                  <Icon name="gear" size={48} className="topbar-gear-icon" filled />
+                  <span className="vms-wordmark">vms</span>
+                </div>
+              </div>
+              <table className="report-print-table">
+                <thead>
+                  <tr>{historyColumns.map((col) => <th key={col.label}>{col.label}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {visibleRows.length ? visibleRows.map((row, i) => (
+                    <tr key={row.history_id ?? i}>{historyColumns.map((col) => <td key={col.label}>{col.render(row)}</td>)}</tr>
+                  )) : (
+                    <tr><td colSpan={historyColumns.length}>No records</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>,
+            document.body,
+          )}
         </ModulePanel>
       );
     }
@@ -3369,10 +3576,21 @@ function Workspace() {
       return (
         <ModulePanel description="Read-only accountability log of user actions.">
           <div className="panel-header-bar">
-            <h3>System Activity Logs <span className="count-badge">{visibleRows.length}</span></h3>
-            <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search logs..." />
+            <h3>Activity Log <span className="count-badge">{visibleRows.length}</span></h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <GenerateReportButton rows={visibleRows} />
+              <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search logs..." columnChooser={logsView === 'list' ? logColumnChooser : undefined} />
+            </div>
           </div>
-          <PaginatedTable columns={logColumns(lookups.vehicles, openVehicleProfile)} rows={visibleRows} emptyMessage="No activity logged yet." />
+          <div className="view-tabs">
+            <button type="button" className={logsView === 'list' ? 'active' : ''} onClick={() => setLogsView('list')}>List View</button>
+            <button type="button" className={logsView === 'recent' ? 'active' : ''} onClick={() => setLogsView('recent')}>Recent Activities</button>
+          </div>
+          {logsView === 'list' ? (
+            <PaginatedTable columns={logColumnChooser.visibleColumns} onReorderColumn={logColumnChooser.reorderColumn} rows={visibleRows} emptyMessage="No activity logged yet." />
+          ) : (
+            <ActivityTimeline rows={visibleRows} />
+          )}
         </ModulePanel>
       );
     }
@@ -3472,68 +3690,121 @@ function Workspace() {
         archiveDraft.end !== archiveEnd ||
         archiveDraft.status !== archiveStatusFilter;
 
-      const hasActiveFilter = Boolean(archiveStart || archiveEnd || archiveStatusFilter ||
-        archiveDraft.start || archiveDraft.end || archiveDraft.status || archiveDraft.quick ||
-        filterCategory.length || filterCapacity.length);
-
-      // A Closed ticket is permanently locked — no reopen action, ever (a
-      // recurring problem opens a brand-new ticket instead, see Workflow 10).
-      // A "Deleted" entry is different: it means real progress existed
-      // (at least one sub-issue was Done) when it got accidentally deleted,
-      // so it's recoverable — same safety net Cancel/Uncancel already has.
-      const archiveColumnsWithAction = [
-        ...ticketArchiveColumns,
-        {
-          label: 'Actions',
-          render: (row) => {
-            if (row.final_status === 'Deleted') {
-              return (
-                <div className="row-actions">
-                  <button
-                    className="btn-reopen-action icon-btn"
-                    type="button"
-                    title="Reopen Ticket"
-                    aria-label="Reopen Ticket"
-                    onClick={() => {
-                      setConfirmDialog({
-                        title: 'Reopen Deleted Ticket',
-                        message: `Are you sure you want to reopen Ticket #${row.ticket_id} for ${row.vehicle_name}? It will be restored with all its sub-issues to how they were before it was deleted.`,
-                        confirmLabel: 'Reopen Ticket',
-                        variant: 'primary',
-                        onConfirm: () => ticketAction(`/ticket-archives/${row.archive_id}/reopen`, {}, 'Ticket successfully reopened.'),
-                      });
-                    }}
-                  >
-                    <Icon name="undo" size={14} />
-                  </button>
-                </div>
-              );
-            }
-            // A Closed ticket is permanently locked (no Reopen), but its
-            // record still exists — the Admin can still open it read-only
-            // to see the full history of what was done.
-            if (row.final_status === 'Closed') {
-              return (
-                <div className="row-actions">
-                  <button
-                    className="btn-view-action icon-btn"
-                    type="button"
-                    title="View Ticket"
-                    aria-label="View Ticket"
-                    onClick={() => openTicketProfile({ ticket_id: row.ticket_id })}
-                  >
-                    <Icon name="eye" size={14} />
-                  </button>
-                </div>
-              );
-            }
-            return <span className="muted">—</span>;
-          },
-        },
-      ];
-
       return (
-        <ModulePanel description="Immutable audit trail of all completed and closed maintenance tickets (Phase 5 — History Logging & Archive Auditing).">
+        <ModulePanel
+          description="Immutable audit trail of all completed and closed maintenance tickets (Phase 5 — History Logging & Archive Auditing)."
+          filterBar={
+            <div className="filter-bar-container" style={{ flexWrap: 'wrap', gap: '8px 12px', alignItems: 'center' }}>
+              <div className="filter-label"><span>Vehicle:</span></div>
+              <MultiSelectDropdown
+                placeholder="All Categories"
+                options={(lookups.categories ?? []).map((c) => ({ value: String(c.category_id), label: c.category_name }))}
+                selected={filterCategory}
+                onChange={setFilterCategory}
+              />
+              <MultiSelectDropdown
+                placeholder="All Capacities"
+                options={[...new Set((lookups.vehicles ?? []).map((v) => v.capacity).filter(Boolean))]}
+                selected={filterCapacity}
+                onChange={setFilterCapacity}
+              />
+
+              <div style={{ width: 1, height: 22, background: 'var(--border, #334155)', flexShrink: 0 }} />
+
+              <div className="filter-label"><span>DATE FILTER:</span></div>
+
+              {/* Quick relative filters — dropdown */}
+              <select
+                className="filter-select"
+                value={archiveDraft.quick}
+                onChange={(e) => applyQuickFilter(e.target.value)}
+              >
+                <option value="">Quick Filter</option>
+                <option value="this_year">This Year</option>
+                <option value="last_year">Last Year</option>
+                <option value="over_1yr">Older than 1 Year</option>
+                <option value="over_3yr">Older than 3 Years</option>
+              </select>
+
+              <div style={{ width: 1, height: 22, background: 'var(--border, #334155)', flexShrink: 0 }} />
+
+              {/* Year dropdown — only years that actually have archived tickets */}
+              <select
+                className="filter-select"
+                value={selectedYear}
+                onChange={(e) => applyYearFilter(e.target.value)}
+              >
+                <option value="">All Years</option>
+                {archiveYears.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr} — {yearCounts[yr]} {yearCounts[yr] === 1 ? 'ticket' : 'tickets'}
+                  </option>
+                ))}
+              </select>
+
+              {/* Custom date range */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.65 }}>From:</span>
+                <input
+                  type="date"
+                  className="filter-select"
+                  style={{ minWidth: 'auto' }}
+                  value={archiveDraft.start}
+                  onChange={(e) => setArchiveDraft((d) => ({ ...d, start: e.target.value, quick: '' }))}
+                />
+              </div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.65 }}>To:</span>
+                <input
+                  type="date"
+                  className="filter-select"
+                  style={{ minWidth: 'auto' }}
+                  value={archiveDraft.end}
+                  onChange={(e) => setArchiveDraft((d) => ({ ...d, end: e.target.value, quick: '' }))}
+                />
+              </div>
+
+              {/* Final status filter */}
+              {archiveFinalStatuses.length > 0 && (
+                <select
+                  className="filter-select"
+                  value={archiveDraft.status}
+                  onChange={(e) => setArchiveDraft((d) => ({ ...d, status: e.target.value }))}
+                >
+                  <option value="">All Statuses</option>
+                  {archiveFinalStatuses.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Apply — only shown when draft differs from applied */}
+              <button
+                type="button"
+                className="filter-apply-btn"
+                disabled={!isDraftDifferent}
+                onClick={() => {
+                  setArchiveStart(archiveDraft.start);
+                  setArchiveEnd(archiveDraft.end);
+                  setArchiveStatusFilter(archiveDraft.status);
+                }}
+              >
+                Apply
+              </button>
+
+              {/* Active range summary pill */}
+              {(archiveStart || archiveEnd) && (
+                <span style={{ fontSize: '0.75rem', opacity: 0.55, fontStyle: 'italic' }}>
+                  {archiveStart && archiveEnd
+                    ? `${archiveStart} → ${archiveEnd}`
+                    : archiveStart
+                    ? `From ${archiveStart}`
+                    : `Up to ${archiveEnd}`}
+                </span>
+              )}
+            </div>
+          }
+        >
           <div className="panel-header-bar">
             <h3>
               Archived Tickets <span className="count-badge">{visibleRows.length}</span>
@@ -3541,136 +3812,7 @@ function Workspace() {
                 <span style={{ fontWeight: 400, fontSize: '0.8rem', marginLeft: 6 }}>of {allArchiveRows.length} total</span>
               )}
             </h3>
-            <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search archives..." />
-          </div>
-
-          {/* ── Archive Date Filter Bar ─────────────────────────────── */}
-          <div className="filter-bar-container" style={{ flexWrap: 'wrap', gap: '8px 12px', alignItems: 'center' }}>
-            <div className="filter-label"><span>Vehicle:</span></div>
-            <MultiSelectDropdown
-              placeholder="All Categories"
-              options={(lookups.categories ?? []).map((c) => ({ value: String(c.category_id), label: c.category_name }))}
-              selected={filterCategory}
-              onChange={setFilterCategory}
-            />
-            <MultiSelectDropdown
-              placeholder="All Capacities"
-              options={[...new Set((lookups.vehicles ?? []).map((v) => v.capacity).filter(Boolean))]}
-              selected={filterCapacity}
-              onChange={setFilterCapacity}
-            />
-
-            <div style={{ width: 1, height: 22, background: 'var(--border, #334155)', flexShrink: 0 }} />
-
-            <div className="filter-label"><span>DATE FILTER:</span></div>
-
-            {/* Quick relative filters — dropdown */}
-            <select
-              className="filter-select"
-              value={archiveDraft.quick}
-              onChange={(e) => applyQuickFilter(e.target.value)}
-            >
-              <option value="">Quick Filter</option>
-              <option value="this_year">This Year</option>
-              <option value="last_year">Last Year</option>
-              <option value="over_1yr">Older than 1 Year</option>
-              <option value="over_3yr">Older than 3 Years</option>
-            </select>
-
-            <div style={{ width: 1, height: 22, background: 'var(--border, #334155)', flexShrink: 0 }} />
-
-            {/* Year dropdown — only years that actually have archived tickets */}
-            <select
-              className="filter-select"
-              value={selectedYear}
-              onChange={(e) => applyYearFilter(e.target.value)}
-            >
-              <option value="">All Years</option>
-              {archiveYears.map((yr) => (
-                <option key={yr} value={yr}>
-                  {yr} — {yearCounts[yr]} {yearCounts[yr] === 1 ? 'ticket' : 'tickets'}
-                </option>
-              ))}
-            </select>
-
-            {/* Custom date range */}
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.65 }}>From:</span>
-              <input
-                type="date"
-                className="filter-select"
-                style={{ minWidth: 'auto' }}
-                value={archiveDraft.start}
-                onChange={(e) => setArchiveDraft((d) => ({ ...d, start: e.target.value, quick: '' }))}
-              />
-            </div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.65 }}>To:</span>
-              <input
-                type="date"
-                className="filter-select"
-                style={{ minWidth: 'auto' }}
-                value={archiveDraft.end}
-                onChange={(e) => setArchiveDraft((d) => ({ ...d, end: e.target.value, quick: '' }))}
-              />
-            </div>
-
-            {/* Final status filter */}
-            {archiveFinalStatuses.length > 0 && (
-              <select
-                className="filter-select"
-                value={archiveDraft.status}
-                onChange={(e) => setArchiveDraft((d) => ({ ...d, status: e.target.value }))}
-              >
-                <option value="">All Statuses</option>
-                {archiveFinalStatuses.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            )}
-
-            {/* Apply — only shown when draft differs from applied */}
-            <button
-              type="button"
-              className="filter-apply-btn"
-              disabled={!isDraftDifferent}
-              onClick={() => {
-                setArchiveStart(archiveDraft.start);
-                setArchiveEnd(archiveDraft.end);
-                setArchiveStatusFilter(archiveDraft.status);
-              }}
-            >
-              Apply
-            </button>
-
-            {/* Clear all */}
-            {hasActiveFilter && (
-              <button
-                type="button"
-                className="filter-clear-btn"
-                onClick={() => {
-                  setArchiveDraft({ start: '', end: '', status: '', quick: '' });
-                  setArchiveStart('');
-                  setArchiveEnd('');
-                  setArchiveStatusFilter('');
-                  setFilterCategory([]);
-                  setFilterCapacity([]);
-                }}
-              >
-                Clear
-              </button>
-            )}
-
-            {/* Active range summary pill */}
-            {(archiveStart || archiveEnd) && (
-              <span style={{ fontSize: '0.75rem', opacity: 0.55, fontStyle: 'italic' }}>
-                {archiveStart && archiveEnd
-                  ? `${archiveStart} → ${archiveEnd}`
-                  : archiveStart
-                  ? `From ${archiveStart}`
-                  : `Up to ${archiveEnd}`}
-              </span>
-            )}
+            <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search archives..." columnChooser={archiveColumnChooser} />
           </div>
 
           {/* No-result hint when filters are active but nothing matched */}
@@ -3680,8 +3822,9 @@ function Workspace() {
             </p>
           )}
 
-          <DataTable
-            columns={archiveColumnsWithAction}
+          <PaginatedTable
+            columns={archiveColumnChooser.visibleColumns}
+            onReorderColumn={archiveColumnChooser.reorderColumn}
             emptyMessage="No archived tickets yet — completed tickets are stored here automatically."
             rows={visibleRows}
             onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
@@ -4781,6 +4924,111 @@ function DonutChart({ segments, centerLabel, centerSubLabel }) {
       <div className="donut-center">
         <strong>{centerLabel}</strong>
         <span>{centerSubLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+// One filled horizontal bar split proportionally into colored segments (e.g.
+// role breakdown) — paired with ChartLegend below it for the label/count per
+// segment, rather than HorizontalBarChart's stack of separate per-row bars.
+// A dual-handle range slider over a small fixed set of labeled stops (e.g.
+// severity levels), not a continuous 0-100 value — built from two overlaid
+// native <input type="range"> elements (a well-worn CSS trick: both share
+// the same track, but only their thumbs are clickable, via pointer-events
+// stripped from the input itself and restored on ::-webkit/-moz-range-thumb)
+// rather than hand-rolling pointer-drag math.
+function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
+  const lastIndex = labels.length - 1;
+  const percentOf = (i) => (lastIndex === 0 ? 0 : (i / lastIndex) * 100);
+
+  return (
+    <div className="dual-range-slider">
+      <div className="dual-range-track">
+        <div
+          className="dual-range-fill"
+          style={{ left: `${percentOf(minIndex)}%`, right: `${100 - percentOf(maxIndex)}%` }}
+        />
+        <input
+          type="range"
+          className="dual-range-input"
+          min={0}
+          max={lastIndex}
+          step={1}
+          value={minIndex}
+          onChange={(e) => onChange(Math.min(Number(e.target.value), maxIndex), maxIndex)}
+        />
+        <input
+          type="range"
+          className="dual-range-input"
+          min={0}
+          max={lastIndex}
+          step={1}
+          value={maxIndex}
+          onChange={(e) => onChange(minIndex, Math.max(Number(e.target.value), minIndex))}
+        />
+      </div>
+      <div className="dual-range-labels">
+        {labels.map((label) => <span key={label}>{label}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function SegmentedBar({ segments }) {
+  const total = segments.reduce((sum, s) => sum + (Number(s.value) || 0), 0);
+  return (
+    <div className="segmented-bar">
+      {total === 0
+        ? <span style={{ width: '100%', background: 'var(--surface-2, #f1f5f9)' }} />
+        : segments.filter((s) => s.value > 0).map((s) => (
+          <span key={s.label} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.value}`} />
+        ))}
+    </div>
+  );
+}
+
+// A titled card wrapping a tall segmented bar (each segment showing its own
+// count), a hover tooltip breaking down every segment at once, and a plain
+// color+label legend underneath — the "Projects"-style chart. Distinct from
+// the plainer SegmentedBar (no title/tooltip/card chrome, used inline in a
+// smaller stat widget like Users by Role).
+function StackedBarChart({ title, segments }) {
+  const [hovered, setHovered] = useState(false);
+  const total = segments.reduce((sum, s) => sum + (Number(s.value) || 0), 0);
+  const visible = segments.filter((s) => s.value > 0);
+
+  return (
+    <div className="stacked-bar-chart">
+      {title && <h3 className="stacked-bar-chart-title">{title}</h3>}
+      <div className="stacked-bar-wrap" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+        <div className="stacked-bar">
+          {total === 0 ? (
+            <span className="stacked-bar-segment" style={{ width: '100%', background: 'var(--surface-2, #f1f5f9)' }} />
+          ) : visible.map((s) => (
+            <span key={s.label} className="stacked-bar-segment" style={{ width: `${(s.value / total) * 100}%`, background: s.color }}>
+              {s.value}
+            </span>
+          ))}
+        </div>
+        {hovered && visible.length > 0 && (
+          <div className="stacked-bar-tooltip">
+            {visible.map((s) => (
+              <div key={s.label} className="stacked-bar-tooltip-row">
+                <span style={{ background: s.color }} />
+                {s.label} : {s.value}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="stacked-bar-legend">
+        {segments.map((s) => (
+          <span key={s.label} className="stacked-bar-legend-item">
+            <span style={{ background: s.color }} />
+            {s.label}
+          </span>
+        ))}
       </div>
     </div>
   );
@@ -6337,7 +6585,7 @@ function PartsTags({ value }) {
 // Mirrors the same reorder semantics ColumnChooserButton's popover list
 // uses, so dragging a header does the same thing as dragging its row there
 // — just without opening the popover first.
-function DataTable({ columns, rows, compact = false, onRowClick, onReorderColumn, emptyMessage = 'No records found.' }) {
+function DataTable({ columns, rows, compact = false, onRowClick, onReorderColumn, emptyMessage = 'No records found.', renderSubRow }) {
   // Which side of which header the dragged column would land on — drawn as
   // a thin vertical line right on that edge (matching the realcore
   // reference), so there's no guessing where a drop will actually land.
@@ -6401,17 +6649,26 @@ function DataTable({ columns, rows, compact = false, onRowClick, onReorderColumn
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
-            <tr
-              key={rowKey(row, index)}
-              className={onRowClick ? 'is-clickable' : undefined}
-              onClick={onRowClick ? (e) => { if (!e.target.closest('button, a')) onRowClick(row); } : undefined}
-            >
-              {columns.map((column) => (
-                <td key={column.label} className={column.className}>{column.render ? column.render(row) : row[column.key]}</td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row, index) => {
+            const subContent = renderSubRow ? renderSubRow(row) : null;
+            return (
+              <Fragment key={rowKey(row, index)}>
+                <tr
+                  className={onRowClick ? 'is-clickable' : undefined}
+                  onClick={onRowClick ? (e) => { if (!e.target.closest('button, a')) onRowClick(row); } : undefined}
+                >
+                  {columns.map((column) => (
+                    <td key={column.label} className={column.className}>{column.render ? column.render(row) : row[column.key]}</td>
+                  ))}
+                </tr>
+                {subContent && (
+                  <tr className="table-subrow">
+                    <td colSpan={columns.length}>{subContent}</td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -6643,6 +6900,11 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
 
   const stepFields = {
     1: [
+      // Asked first, before the vehicle even has a name — everything else on
+      // this step (the plate/registration field's label and pattern, which
+      // vehicle types are offered below) depends on Land vs Water, so this
+      // has to be answered before those can make sense.
+      { label: 'Land or Water Vehicle', name: 'vehicle_domain', options: domainOptions, required: true, type: 'select' },
       { label: 'Vehicle Name', name: 'vehicle_name', required: true, type: 'text' },
       domainFilter === 'Water'
         ? {
@@ -6656,7 +6918,6 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
             placeholder: 'e.g. ABC 1234', pattern: '^[A-Za-z]{2,6}[ \\-]?\\d{2,6}[A-Za-z]?$',
             title: 'Enter a valid plate number, e.g. ABC 1234 or ABC-1234', uppercase: true, maxLength: 10,
           },
-      { label: 'Category', name: 'vehicle_domain', options: domainOptions, required: true, type: 'select' },
       {
         label: 'Vehicle Type',
         name: 'category_id',
@@ -6669,7 +6930,7 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
         nameField: 'category_name',
         valueIsId: true,
         // Pre-fills the add-new-type modal's Domain field to match the
-        // Category already picked above, instead of leaving it blank.
+        // domain already picked above, instead of leaving it blank.
         extraFields: [{ name: 'domain', label: 'Domain', options: domainOptions.length ? domainOptions : ['Land', 'Water'], required: true, default: domainFilter || 'Land' }],
       },
     ],
@@ -6844,7 +7105,7 @@ function OpenItemsWarning({ kind, rows, basePath }) {
 // When `contextVehicles` is provided, the page renders Realcore-style: the form
 // fields sit in a card on the right, and the left side live-previews the
 // selected vehicle (photo, info, location map) as the user picks one.
-function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty }) {
+function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty, showDomainPreview = false }) {
   const [liveValues, setLiveValues] = useState(initialValues ?? EMPTY_OBJ);
   const [warnRows, setWarnRows] = useState([]);
   // Opt-in two-step flow (Maintenance Records today): fill the fields, hit
@@ -6954,14 +7215,37 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   // reviewStep forms skip the persistent side panel entirely — step 1 gets
   // the form full-width (no vehicle card competing for space while typing),
   // and step 2 (above) folds the vehicle card back in alongside the summary.
-  const useSideLayout = hasContext && !reviewStep;
+  const useSideLayout = (hasContext || showDomainPreview) && !reviewStep;
+
+  // Live preview of what a vehicle's own Add/Edit form will ask for once
+  // it's assigned this Vehicle Type — so picking Land vs Water here shows
+  // its consequence immediately, instead of only being discovered later
+  // when actually adding a vehicle of this type.
+  const previewDomain = liveValues?.domain || 'Land';
+  const domainPreviewFields = [
+    { label: plateFieldLabel(previewDomain), note: previewDomain === 'Water' ? 'registration / hull number' : 'plate number' },
+    { label: 'Capacity', note: `in ${capacityUnits(previewDomain).join(', ')}` },
+    ...vehicleDomainFields(previewDomain).map((f) => ({ label: f.label, note: f.options ? f.options.slice(0, 3).join(', ') + (f.options.length > 3 ? '…' : '') : 'free text' })),
+  ];
 
   return (
     <ModulePanel description={description}>
       {useSideLayout ? (
         <div className="form-context-layout">
           <div className="form-context-side">
-            {vehicle ? (
+            {showDomainPreview ? (
+              <section className="veh-card">
+                <div className="veh-card-head"><Icon name={vehicleIconName(previewDomain)} size={16} /><h4>{previewDomain} Vehicle Fields</h4></div>
+                <p className="muted" style={{ margin: '0 0 10px', fontSize: '0.8rem' }}>
+                  A vehicle assigned this type will additionally ask for:
+                </p>
+                <dl className="veh-kv">
+                  {domainPreviewFields.map((f) => (
+                    <div key={f.label}><dt>{f.label}</dt><dd>{f.note}</dd></div>
+                  ))}
+                </dl>
+              </section>
+            ) : vehicle ? (
               <>
                 {vehicleInfoCard}
                 <section className="veh-card">
@@ -7319,31 +7603,31 @@ const REPORT_CATALOG = [
     category: 'Fleet Reports',
     icon: 'vehicle',
     reports: [
-      { type: 'Vehicle Inventory Report', description: 'Full list of every registered vehicle.', fields: [] },
-      { type: 'Vehicle Type Report', description: 'Vehicles filtered by vehicle type.', fields: ['category_id'] },
-      { type: 'Vehicle Location Report', description: 'Vehicles filtered by current location.', fields: ['location'] },
+      { type: 'Vehicle Inventory Report', icon: 'grid', description: 'Full list of every registered vehicle.', fields: [] },
+      { type: 'Vehicle Type Report', icon: 'list', description: 'Vehicles filtered by vehicle type.', fields: ['category_id'] },
+      { type: 'Vehicle Location Report', icon: 'pin', description: 'Vehicles filtered by current location.', fields: ['location'] },
     ],
   },
   {
     category: 'Issue Reports',
     icon: 'alert',
     reports: [
-      { type: 'Vehicle Issue Report', description: 'Reported issues filtered by type, severity, and date.', fields: ['issue_type', 'severity_level', 'dates'] },
+      { type: 'Vehicle Issue Report', icon: 'alert', description: 'Reported issues filtered by type, severity, and date.', fields: ['issue_type', 'severity_level', 'dates'] },
     ],
   },
   {
     category: 'Maintenance Reports',
     icon: 'wrench',
     reports: [
-      { type: 'Vehicle Maintenance Report', description: 'Repair records filtered by maintenance type and date.', fields: ['maintenance_type', 'dates'] },
-      { type: 'Vehicle Maintenance Schedule Report', description: 'Scheduled maintenance within a date range.', fields: ['dates'] },
+      { type: 'Vehicle Maintenance Report', icon: 'wrench', description: 'Repair records filtered by maintenance type and date.', fields: ['maintenance_type', 'dates'] },
+      { type: 'Vehicle Maintenance Schedule Report', icon: 'calendar', description: 'Scheduled maintenance within a date range.', fields: ['dates'] },
     ],
   },
   {
     category: 'History Reports',
     icon: 'clipboard',
     reports: [
-      { type: 'Vehicle History Report', description: 'Full activity timeline across every vehicle.', fields: [] },
+      { type: 'Vehicle History Report', icon: 'archive', description: 'Full activity timeline across every vehicle.', fields: [] },
     ],
   },
 ];
@@ -7373,52 +7657,61 @@ function reportFieldDefs(lookups, reportDef) {
   return defs;
 }
 
+// Cycled per category (not stored on REPORT_CATALOG itself) so adding a
+// fifth category just wraps back to blue rather than needing a color picked
+// for it — same reasoning as the chart palettes elsewhere in this file.
+const REPORT_CATEGORY_TONES = ['blue', 'green', 'purple', 'amber'];
+
 function ReportsModule({ lookups, onGenerate }) {
-  const [openCategory, setOpenCategory] = useState(REPORT_CATALOG[0].category);
-  const [selected, setSelected] = useState(null);
+  // Only one report's form is open at a time, across all categories — same
+  // "pick one thing to act on" feel as the reference's report catalog,
+  // and it means Generate only ever appears once on screen.
+  const [expandedType, setExpandedType] = useState(null);
 
   return (
-    <div className="report-catalog">
-      {REPORT_CATALOG.map((group) => (
-        <section key={group.category} className="report-category">
-          <button
-            type="button"
-            className="report-category-header"
-            onClick={() => setOpenCategory((c) => (c === group.category ? null : group.category))}
-          >
-            <span><Icon name={group.icon} size={15} /> {group.category}</span>
-            <Icon name={openCategory === group.category ? 'undo' : 'menu'} size={13} />
-          </button>
-          {openCategory === group.category && (
-            <div className="report-category-body">
-              {group.reports.map((r) => (
-                <button
-                  key={r.type}
-                  type="button"
-                  className={`report-type-item${selected?.type === r.type ? ' active' : ''}`}
-                  onClick={() => setSelected(r)}
-                >
-                  <strong>{r.type}</strong>
-                  <span>{r.description}</span>
-                </button>
-              ))}
-            </div>
-          )}
+    <div className="report-catalog-grid">
+      {REPORT_CATALOG.map((group, i) => (
+        <section key={group.category} className={`report-category-card tone-${REPORT_CATEGORY_TONES[i % REPORT_CATEGORY_TONES.length]}`}>
+          <div className="report-category-card-head">
+            <span className="report-category-card-icon"><Icon name={group.icon} size={16} /></span>
+            <h4>{group.category}</h4>
+            <span className="report-category-count">{group.reports.length}</span>
+          </div>
+          <div className="report-category-card-body">
+            {group.reports.map((r) => {
+              const isOpen = expandedType === r.type;
+              return (
+                <div key={r.type} className={`report-type-row${isOpen ? ' is-open' : ''}`}>
+                  <button
+                    type="button"
+                    className="report-type-item"
+                    onClick={() => setExpandedType((t) => (t === r.type ? null : r.type))}
+                    aria-expanded={isOpen}
+                  >
+                    <span className="report-type-icon"><Icon name={r.icon} size={15} /></span>
+                    <span className="report-type-text">
+                      <strong>{r.type}</strong>
+                      <span>{r.description}</span>
+                    </span>
+                    <Icon name="chevronDown" size={14} className={isOpen ? 'is-expanded' : ''} />
+                  </button>
+                  {isOpen && (
+                    <div className="report-generator-panel">
+                      <SmartForm
+                        fields={reportFieldDefs(lookups, r)}
+                        key={r.type}
+                        onSubmit={(values) => onGenerate({ report_type: r.type, ...values })}
+                        submitLabel="Generate Report"
+                        title=""
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </section>
       ))}
-
-      {selected && (
-        <div className="report-generator-panel">
-          <h4><Icon name="search" size={14} /> {selected.type}</h4>
-          <SmartForm
-            fields={reportFieldDefs(lookups, selected)}
-            key={selected.type}
-            onSubmit={(values) => onGenerate({ report_type: selected.type, ...values })}
-            submitLabel="Generate Report"
-            title=""
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -7462,14 +7755,20 @@ const ISSUE_STAT_CARDS = [
   { key: 'Resolved', label: 'Resolved', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
 
+// "Scheduled" used to be one bucket — now split into 4 urgency buckets (how
+// soon each row is due) so an Admin/Mechanic can spot what needs attention
+// today vs what's still days out, instead of one undifferentiated count.
 const SCHEDULE_STAT_CARDS = [
-  { key: 'Scheduled', label: 'Scheduled', icon: 'calendar', bg: '#e0f2fe', color: '#0284c7' },
+  { key: 'Overdue', label: 'Due Today / Overdue', icon: 'alert', bg: '#fee2e2', color: '#dc2626' },
+  { key: 'Due1to3', label: '1 - 3 Days', icon: 'calendar', bg: '#ffedd5', color: '#c2410c' },
+  { key: 'Due4to7', label: '4 - 7 Days', icon: 'calendar', bg: '#fef3c7', color: '#d97706' },
+  { key: 'Due8plus', label: '8+ Days', icon: 'calendar', bg: '#e0f2fe', color: '#0284c7' },
   { key: 'Completed', label: 'Completed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
   // A schedule marked "Completed" only means the calendar task is done —
   // its record might still be sitting unverified. Its own filter so those
   // rows are findable instead of scrolling through fully-verified ones.
   { key: 'AwaitingVerification', label: 'Awaiting Verification', icon: 'search', bg: '#fef9c3', color: '#854d0e' },
-  { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#fee2e2', color: '#dc2626' },
+  { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#f1f5f9', color: '#64748b' },
 ];
 
 // Only shown to a Maintenance-Personnel-only viewer — "how many vehicles do
@@ -7521,29 +7820,34 @@ const WORK_TRACKER_STAT_CARDS = [
   { key: 'completed', label: 'Completed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
 
-const USER_STAT_CARDS = [
-  { key: 'Admin', label: 'Admin', icon: 'key', bg: '#ede9fe', color: '#7c3aed' },
-  { key: 'Custodian', label: 'Custodian', icon: 'checkCircle', bg: '#e0f2fe', color: '#0284c7' },
-  { key: 'Maintenance Personnel', label: 'Maintenance Personnel', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
-];
-
 // Reusable "Total + clickable status breakdown" card row, sitting above a
 // module's table, matching the Vehicle Management stat cards exactly.
 // `cards` is [{ key, label, icon, bg, color }]; `counts` maps key -> number;
 // clicking a card toggles `activeFilter` via `onFilterChange`.
-function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFilter, onFilterChange }) {
+function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFilter, onFilterChange, gridClassName = '' }) {
+  const isFilterMulti = Array.isArray(activeFilter);
+  const isTotalActive = isFilterMulti ? activeFilter.length === 0 : !activeFilter;
   return (
-    <section className="metric-grid" aria-label="Status summary" style={{ marginBottom: '16px' }}>
-      <article className="metric-card metric-card-iconic metric-card-solid" style={{ background: '#2563eb' }}>
-        <span className="metric-card-icon" style={{ background: 'rgba(255, 255, 255, 0.22)', color: '#ffffff' }}>
+    <section className={`metric-grid${gridClassName ? ` ${gridClassName}` : ''}`} aria-label="Status summary" style={{ marginBottom: '16px' }}>
+      <button
+        type="button"
+        className={`metric-card metric-card-iconic stat-filter-card${isTotalActive ? ' is-active' : ''}`}
+        style={{
+          cursor: 'pointer',
+          boxShadow: isTotalActive ? '0 0 0 2px #2563eb' : undefined,
+        }}
+        onClick={() => onFilterChange(isFilterMulti ? [] : '')}
+        title={`Show all ${totalLabel.replace(/^Total\s*/i, '') || 'items'}`.trim()}
+      >
+        <span className="metric-card-icon is-total">
           <Icon name="grid" size={18} />
         </span>
         <div className="metric-card-body">
-          <span style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{totalLabel}</span>
-          <strong style={{ color: '#ffffff' }}>{total}</strong>
+          <span>{totalLabel}</span>
+          <strong>{total}</strong>
         </div>
-      </article>
-      {cards.map(({ key, label, icon, color }) => {
+      </button>
+      {cards.map(({ key, label, icon, bg, color }) => {
         // activeFilter is a plain string in some modules (a dedicated
         // single-purpose bucket filter) and an array in others (the shared
         // filter state now that FilterBar's dropdowns are multi-select) —
@@ -7554,23 +7858,20 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFil
           <button
             key={key}
             type="button"
-            className={`metric-card metric-card-iconic metric-card-solid stat-filter-card${isActive ? ' is-active' : ''}`}
+            className={`metric-card metric-card-iconic stat-filter-card${isActive ? ' is-active' : ''}`}
             style={{
               cursor: 'pointer',
-              background: color,
-              boxShadow: isActive
-                ? `0 0 0 3px #ffffff, 0 0 0 5px ${color}, 0 10px 24px 2px color-mix(in srgb, ${color} 55%, transparent)`
-                : undefined,
+              boxShadow: isActive ? `0 0 0 2px ${color}` : undefined,
             }}
             onClick={() => onFilterChange(isActive ? (isMulti ? [] : '') : (isMulti ? [key] : key))}
             title={`Filter: ${label}`}
           >
-            <span className="metric-card-icon" style={{ background: 'rgba(255, 255, 255, 0.22)', color: '#ffffff' }}>
+            <span className="metric-card-icon" style={{ background: bg, color }}>
               <Icon name={icon} size={18} />
             </span>
             <div className="metric-card-body">
-              <span style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{label}</span>
-              <strong style={{ color: '#ffffff' }}>{counts[key] ?? 0}</strong>
+              <span>{label}</span>
+              <strong>{counts[key] ?? 0}</strong>
             </div>
           </button>
         );
@@ -7680,14 +7981,16 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
 
 function categoryColumns(onEdit, deleteRecord) {
   return [
-    { label: 'ID', width: '6%', render: (row) => row.category_id },
-    { label: 'Vehicle Type', width: '18%', render: (row) => row.category_name },
-    { label: 'Domain', width: '10%', render: (row) => <StatusBadge value={row.domain ?? 'Land'} /> },
-    { label: 'Vehicles', width: '9%', render: (row) => row.vehicles_count ?? 0 },
-    { label: 'Description', width: '49%', render: (row) => row.description ?? '-' },
+    { key: 'id', label: 'ID', width: '6%', locked: true, render: (row) => row.category_id },
+    { key: 'category', label: 'Vehicle Type', width: '18%', render: (row) => row.category_name },
+    { key: 'domain', label: 'Domain', width: '10%', render: (row) => <StatusBadge value={row.domain ?? 'Land'} /> },
+    { key: 'vehicles', label: 'Vehicles', width: '9%', render: (row) => row.vehicles_count ?? 0 },
+    { key: 'description', label: 'Description', width: '49%', render: (row) => row.description ?? '-' },
     {
+      key: 'action',
       label: 'Action',
       width: '8%',
+      locked: true,
       render: (row) => (
         <div className="row-actions">
           <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
@@ -7700,11 +8003,11 @@ function categoryColumns(onEdit, deleteRecord) {
 
 function userColumns(onEdit, onToggleActive, currentUserId) {
   return [
-    { label: 'ID', render: (row) => row.id },
-    { label: 'User', render: (row) => <UserAvatarName user={row} /> },
-    { label: 'Email', render: (row) => row.email },
-    { label: 'Phone', render: (row) => row.phone ?? '-' },
-    { label: 'Role', render: (row) => {
+    { key: 'id', label: 'ID', locked: true, render: (row) => row.id },
+    { key: 'user', label: 'User', locked: true, render: (row) => <UserAvatarName user={row} /> },
+    { key: 'email', label: 'Email', render: (row) => row.email },
+    { key: 'phone', label: 'Phone', render: (row) => row.phone ?? '-' },
+    { key: 'role', label: 'Role', render: (row) => {
       const roles = (Array.isArray(row.roles) && row.roles.length) ? row.roles : [row.role].filter(Boolean);
       return (
         <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
@@ -7712,9 +8015,11 @@ function userColumns(onEdit, onToggleActive, currentUserId) {
         </span>
       );
     } },
-    { label: 'Status', render: (row) => <StatusBadge value={row.is_active ? 'Active' : 'Inactive'} /> },
+    { key: 'status', label: 'Status', render: (row) => <StatusBadge value={row.is_active ? 'Active' : 'Inactive'} /> },
     {
+      key: 'action',
       label: 'Action',
+      locked: true,
       render: (row) => (
         <div className="row-actions">
           <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
@@ -7731,21 +8036,48 @@ function userColumns(onEdit, onToggleActive, currentUserId) {
   ];
 }
 
+// Card-view counterpart to the Users table row — avatar, name, role(s), and
+// contact details on a single clickable tile, mirroring TicketCard/
+// MaintenanceRecordCard's click-to-edit convention for this module's card view.
+function UserCard({ user: person, onClick }) {
+  const initials = (person.name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+  const roles = (Array.isArray(person.roles) && person.roles.length) ? person.roles : [person.role].filter(Boolean);
+
+  return (
+    <div className="user-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
+      <div className="user-card-avatar">
+        {person.photo_url ? <img src={resolvePhotoUrl(person.photo_url)} alt={person.name} /> : <span>{initials}</span>}
+      </div>
+      <strong className="user-card-name">{person.name}</strong>
+      <span className="user-card-role">{roles.join(', ') || '—'}</span>
+      <span className="user-card-underline" />
+      <div className="user-card-contact">
+        <span>{person.phone || 'No phone on file'}</span>
+        <a href={`mailto:${person.email}`} onClick={(e) => e.stopPropagation()}>{person.email}</a>
+      </div>
+      <StatusBadge value={person.is_active ? 'Active' : 'Inactive'} />
+    </div>
+  );
+}
+
 function locationColumns(currentUser, onViewOnMap, onEdit) {
   return [
-  { label: 'ID', render: (row) => row.location_record_id ?? 'Current' },
-  { label: 'Vehicle', render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-  { label: 'Status', render: (row) => <StatusBadge value={row.vehicle?.status ?? '-'} /> },
-  { label: 'Current Location', render: (row) => row.current_location ?? '-' },
-  { label: 'Address / Area', render: (row) => row.address_area ?? '-' },
+  { key: 'id', label: 'ID', locked: true, render: (row) => row.location_record_id ?? 'Current' },
+  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
+  { key: 'status', label: 'Status', render: (row) => <StatusBadge value={row.vehicle?.status ?? '-'} /> },
+  { key: 'current_location', label: 'Current Location', render: (row) => row.current_location ?? '-' },
+  { key: 'address_area', label: 'Address / Area', render: (row) => row.address_area ?? '-' },
   {
+    key: 'updated_by',
     label: 'Updated By',
     render: (row) => <UserAvatarName user={row.is_current_snapshot ? currentUser : row.updated_by} />,
   },
-  { label: 'Date Updated', render: (row) => <DateBadge value={row.updated_at} /> },
-  { label: 'Time', render: (row) => formatTime(row.updated_at) },
+  { key: 'date_updated', label: 'Date Updated', render: (row) => <DateBadge value={row.updated_at} /> },
+  { key: 'time', label: 'Time', render: (row) => formatTime(row.updated_at) },
   {
+    key: 'action',
     label: 'Action',
+    locked: true,
     render: (row) => (
       <div className="row-actions">
         {hasRole(currentUser, 'Admin') && (
@@ -7777,37 +8109,21 @@ function locationColumns(currentUser, onViewOnMap, onEdit) {
   ];
 }
 
-function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onViewTicket) {
+function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition) {
   const columns = [
-    { label: 'ID', render: (row) => row.condition_check_id },
-    { label: 'Vehicle', render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { label: 'Result', render: (row) => <StatusBadge value={row.condition_result} /> },
-    { label: 'Checked By', render: (row) => <UserAvatarName user={row.checked_by} /> },
-    { label: 'Observations', className: 'cell-text', render: (row) => <ExpandableText text={row.observations} /> },
-    {
-      // Set once when a ticket is created from this check, never changed
-      // again — but its STATUS is read live off the linked ticket, so this
-      // always reflects reality without any extra sync step. No link at
-      // all means nobody's acted on this finding yet.
-      label: 'Escalated To',
-      render: (row) => row.resulting_ticket ? (
-        <button
-          type="button"
-          className="link-button"
-          onClick={(e) => { e.stopPropagation(); onViewTicket(row.resulting_ticket.ticket_id); }}
-          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 5 }}
-        >
-          Ticket #{row.resulting_ticket.ticket_id} <StatusBadge value={row.resulting_ticket.status} />
-        </button>
-      ) : <span className="muted">—</span>,
-    },
-    { label: 'Date', render: (row) => <DateBadge value={row.created_at} /> },
-    { label: 'Time', render: (row) => formatTime(row.created_at) },
+    { key: 'id', label: 'ID', locked: true, render: (row) => row.condition_check_id },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'result', label: 'Result', render: (row) => <StatusBadge value={row.condition_result} /> },
+    { key: 'checked_by', label: 'Checked By', render: (row) => <UserAvatarName user={row.checked_by} /> },
+    { key: 'date', label: 'Date', render: (row) => <DateBadge value={row.created_at} /> },
+    { key: 'time', label: 'Time', render: (row) => formatTime(row.created_at) },
   ];
 
   if (['Custodian', 'Admin'].includes(role)) {
     columns.push({
+      key: 'action',
       label: 'Action',
+      locked: true,
       render: (row) => (
         <div className="row-actions">
           {/* #2 — Admin can turn a problem-finding condition check (Needs
@@ -7916,28 +8232,315 @@ function LatestIssueCard({ issues = [], onRowClick }) {
   );
 }
 
+// Maps a set of selected severity labels back to the [minIndex, maxIndex]
+// span DualRangeSlider needs — the inverse of what applyFilters below does
+// when it turns the slider's span back into that same selected-labels array
+// (the actual filter state stays a plain string array, same shape every
+// other multi-select filter in this app already uses).
+function severityRangeFromSelection(selected, levels) {
+  if (!selected?.length) return [0, levels.length - 1];
+  const indices = selected.map((s) => levels.indexOf(s)).filter((i) => i !== -1);
+  if (!indices.length) return [0, levels.length - 1];
+  return [Math.min(...indices), Math.max(...indices)];
+}
+
+// A one-off, richer filter panel built specifically for Issue Reports (a
+// search box, a severity range slider, and status shown as colored
+// checkbox chips instead of a dropdown) rather than stretching the generic
+// FilterBar — none of these are concepts the other ~15 FilterBar callers
+// share, so bolting them on there would leak Issue-Reports-only UI into a
+// shared component. Everything except the search box is staged (a local
+// draft, applied together on "Filter") — same convention FilterBar itself
+// uses, just with these different field types.
+function IssueFilterPanel({
+  categories = [],
+  vehicles = [],
+  issueTypes = [],
+  severityLevels = [],
+  statusOptions = [],
+  filterCategory,
+  setFilterCategory,
+  filterCapacity,
+  setFilterCapacity,
+  filterIssueType,
+  setFilterIssueType,
+  filterStatus,
+  setFilterStatus,
+  filterPriority,
+  setFilterPriority,
+  filterDateStart,
+  setFilterDateStart,
+  filterDateEnd,
+  setFilterDateEnd,
+}) {
+  const capacities = useMemo(() => {
+    const caps = new Set();
+    vehicles.forEach((v) => { if (v.capacity) caps.add(v.capacity.trim()); });
+    return Array.from(caps).sort();
+  }, [vehicles]);
+
+  // Pre-filled on first load only (not on every resync below — otherwise
+  // clicking "Clear Filters" would immediately un-clear the dates right
+  // back to these defaults, since that also flows through applied state).
+  const [draft, setDraft] = useState({
+    category: filterCategory ?? [],
+    capacity: filterCapacity ?? [],
+    issueType: filterIssueType ?? [],
+    status: filterStatus ?? [],
+    severityRange: severityRangeFromSelection(filterPriority, severityLevels),
+    dateStart: filterDateStart || '2026-01-01',
+    dateEnd: filterDateEnd || '2026-12-31',
+  });
+
+  useEffect(() => {
+    setDraft({
+      category: filterCategory ?? [],
+      capacity: filterCapacity ?? [],
+      issueType: filterIssueType ?? [],
+      status: filterStatus ?? [],
+      severityRange: severityRangeFromSelection(filterPriority, severityLevels),
+      dateStart: filterDateStart ?? '',
+      dateEnd: filterDateEnd ?? '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterCategory, filterCapacity, filterIssueType, filterStatus, filterPriority, filterDateStart, filterDateEnd]);
+
+  const toggleDraftStatus = (key) => {
+    setDraft((d) => ({
+      ...d,
+      status: d.status.includes(key) ? d.status.filter((s) => s !== key) : [...d.status, key],
+    }));
+  };
+
+  const applyFilters = () => {
+    setFilterCategory(draft.category);
+    setFilterCapacity(draft.capacity);
+    setFilterIssueType(draft.issueType);
+    setFilterStatus(draft.status);
+    setFilterPriority(severityLevels.slice(draft.severityRange[0], draft.severityRange[1] + 1));
+    setFilterDateStart(draft.dateStart);
+    setFilterDateEnd(draft.dateEnd);
+  };
+
+  const isFullSeverityRange = draft.severityRange[0] === 0 && draft.severityRange[1] === severityLevels.length - 1;
+  const isDirty = !sameSelection(draft.category, filterCategory ?? [])
+    || !sameSelection(draft.capacity, filterCapacity ?? [])
+    || !sameSelection(draft.issueType, filterIssueType ?? [])
+    || !sameSelection(draft.status, filterStatus ?? [])
+    || !isFullSeverityRange && !sameSelection(severityLevels.slice(draft.severityRange[0], draft.severityRange[1] + 1), filterPriority ?? [])
+    || draft.dateStart !== (filterDateStart ?? '')
+    || draft.dateEnd !== (filterDateEnd ?? '');
+
+  return (
+    <div className="issue-filter-panel">
+      <div className="issue-filter-row">
+        <MultiSelectDropdown
+          placeholder="All Categories"
+          options={categories.map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
+          selected={draft.category}
+          onChange={(vals) => setDraft((d) => ({ ...d, category: vals }))}
+        />
+        <MultiSelectDropdown
+          placeholder="All Capacities"
+          options={capacities}
+          selected={draft.capacity}
+          onChange={(vals) => setDraft((d) => ({ ...d, capacity: vals }))}
+        />
+        <MultiSelectDropdown
+          placeholder="All Issue Types"
+          options={issueTypes}
+          selected={draft.issueType}
+          onChange={(vals) => setDraft((d) => ({ ...d, issueType: vals }))}
+        />
+        <div className="issue-filter-dates">
+          <div className="filter-date-group issue-filter-date-input">
+            <span>From Date</span>
+            <input type="date" className="filter-select" value={draft.dateStart} onChange={(e) => setDraft((d) => ({ ...d, dateStart: e.target.value }))} />
+          </div>
+          <div className="filter-date-group issue-filter-date-input">
+            <span>To Date</span>
+            <input type="date" className="filter-select" value={draft.dateEnd} onChange={(e) => setDraft((d) => ({ ...d, dateEnd: e.target.value }))} />
+          </div>
+        </div>
+      </div>
+
+      <div className="issue-filter-row issue-filter-row-bottom">
+        <div className="issue-filter-severity-card">
+          <span className="issue-filter-severity-label">Severity</span>
+          <DualRangeSlider
+            labels={severityLevels}
+            minIndex={draft.severityRange[0]}
+            maxIndex={draft.severityRange[1]}
+            onChange={(min, max) => setDraft((d) => ({ ...d, severityRange: [min, max] }))}
+          />
+        </div>
+        <div className="issue-filter-status-grid">
+          {ISSUE_STAT_CARDS.filter((c) => statusOptions.includes(c.key)).map((c) => (
+            <label key={c.key} className="issue-filter-status-chip" style={{ background: c.bg }}>
+              <input type="checkbox" checked={draft.status.includes(c.key)} onChange={() => toggleDraftStatus(c.key)} />
+              <span style={{ color: c.color }}>{c.label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="issue-filter-actions">
+          <button type="button" className="filter-apply-btn issue-filter-apply-btn" onClick={applyFilters} disabled={!isDirty}>Filter</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Same bespoke filter panel design as IssueFilterPanel, adapted for
+// Maintenance Tickets: no Issue Type dropdown (tickets don't have one),
+// the range slider covers ticket Priority (Low/Medium/High) instead of
+// Severity, and the status chips use TICKET_STAT_CARDS (Open/Active/
+// Closed/Cancelled) instead of ISSUE_STAT_CARDS.
+function TicketFilterPanel({
+  categories = [],
+  vehicles = [],
+  priorityLevels = [],
+  statusOptions = [],
+  filterCategory,
+  setFilterCategory,
+  filterCapacity,
+  setFilterCapacity,
+  filterStatus,
+  setFilterStatus,
+  filterPriority,
+  setFilterPriority,
+  filterDateStart,
+  setFilterDateStart,
+  filterDateEnd,
+  setFilterDateEnd,
+}) {
+  const capacities = useMemo(() => {
+    const caps = new Set();
+    vehicles.forEach((v) => { if (v.capacity) caps.add(v.capacity.trim()); });
+    return Array.from(caps).sort();
+  }, [vehicles]);
+
+  // Pre-filled on first load only (not on every resync below — otherwise
+  // clicking "Clear Filters" would immediately un-clear the dates right
+  // back to these defaults, since that also flows through applied state).
+  const [draft, setDraft] = useState({
+    category: filterCategory ?? [],
+    capacity: filterCapacity ?? [],
+    status: filterStatus ?? [],
+    priorityRange: severityRangeFromSelection(filterPriority, priorityLevels),
+    dateStart: filterDateStart || '2026-01-01',
+    dateEnd: filterDateEnd || '2026-12-31',
+  });
+
+  useEffect(() => {
+    setDraft({
+      category: filterCategory ?? [],
+      capacity: filterCapacity ?? [],
+      status: filterStatus ?? [],
+      priorityRange: severityRangeFromSelection(filterPriority, priorityLevels),
+      dateStart: filterDateStart ?? '',
+      dateEnd: filterDateEnd ?? '',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterCategory, filterCapacity, filterStatus, filterPriority, filterDateStart, filterDateEnd]);
+
+  const toggleDraftStatus = (key) => {
+    setDraft((d) => ({
+      ...d,
+      status: d.status.includes(key) ? d.status.filter((s) => s !== key) : [...d.status, key],
+    }));
+  };
+
+  const applyFilters = () => {
+    setFilterCategory(draft.category);
+    setFilterCapacity(draft.capacity);
+    setFilterStatus(draft.status);
+    setFilterPriority(priorityLevels.slice(draft.priorityRange[0], draft.priorityRange[1] + 1));
+    setFilterDateStart(draft.dateStart);
+    setFilterDateEnd(draft.dateEnd);
+  };
+
+  const isFullPriorityRange = draft.priorityRange[0] === 0 && draft.priorityRange[1] === priorityLevels.length - 1;
+  const isDirty = !sameSelection(draft.category, filterCategory ?? [])
+    || !sameSelection(draft.capacity, filterCapacity ?? [])
+    || !sameSelection(draft.status, filterStatus ?? [])
+    || !isFullPriorityRange && !sameSelection(priorityLevels.slice(draft.priorityRange[0], draft.priorityRange[1] + 1), filterPriority ?? [])
+    || draft.dateStart !== (filterDateStart ?? '')
+    || draft.dateEnd !== (filterDateEnd ?? '');
+
+  return (
+    <div className="issue-filter-panel">
+      <div className="issue-filter-row">
+        <MultiSelectDropdown
+          placeholder="All Categories"
+          options={categories.map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
+          selected={draft.category}
+          onChange={(vals) => setDraft((d) => ({ ...d, category: vals }))}
+        />
+        <MultiSelectDropdown
+          placeholder="All Capacities"
+          options={capacities}
+          selected={draft.capacity}
+          onChange={(vals) => setDraft((d) => ({ ...d, capacity: vals }))}
+        />
+        <div className="issue-filter-dates">
+          <div className="filter-date-group issue-filter-date-input">
+            <span>From Date</span>
+            <input type="date" className="filter-select" value={draft.dateStart} onChange={(e) => setDraft((d) => ({ ...d, dateStart: e.target.value }))} />
+          </div>
+          <div className="filter-date-group issue-filter-date-input">
+            <span>To Date</span>
+            <input type="date" className="filter-select" value={draft.dateEnd} onChange={(e) => setDraft((d) => ({ ...d, dateEnd: e.target.value }))} />
+          </div>
+        </div>
+      </div>
+
+      <div className="issue-filter-row issue-filter-row-bottom">
+        <div className="issue-filter-severity-card">
+          <span className="issue-filter-severity-label">Priority</span>
+          <DualRangeSlider
+            labels={priorityLevels}
+            minIndex={draft.priorityRange[0]}
+            maxIndex={draft.priorityRange[1]}
+            onChange={(min, max) => setDraft((d) => ({ ...d, priorityRange: [min, max] }))}
+          />
+        </div>
+        <div className="issue-filter-status-grid">
+          {TICKET_STAT_CARDS.filter((c) => statusOptions.includes(c.key)).map((c) => (
+            <label key={c.key} className="issue-filter-status-chip" style={{ background: c.bg }}>
+              <input type="checkbox" checked={draft.status.includes(c.key)} onChange={() => toggleDraftStatus(c.key)} />
+              <span style={{ color: c.color }}>{c.label}</span>
+            </label>
+          ))}
+        </div>
+        <div className="issue-filter-actions">
+          <button type="button" className="filter-apply-btn issue-filter-apply-btn" onClick={applyFilters} disabled={!isDirty}>Filter</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, onView, deleteRecord) {
   const columns = [
-    { label: 'ID', width: '5%', render: (row) => row.issue_report_id },
+    { key: 'id', label: 'ID', width: '5%', locked: true, render: (row) => row.issue_report_id },
     {
+      key: 'issue',
       label: 'Issue',
-      width: '27%',
+      width: '12%',
       render: (row) => (
         <div className="issue-cell">
           <div className="issue-cell-top">
             <span className="issue-type">{row.issue_type}</span>
           </div>
-          {row.issue_description && (
-            <ExpandableText text={row.issue_description} className="issue-desc" lines={1} />
-          )}
         </div>
       ),
     },
-    { label: 'Vehicle', width: '13%', render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { label: 'Plate', width: '7%', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { label: 'Severity', width: '9%', render: (row) => <TicketStatusBadge value={row.severity_level} /> },
-    { label: 'Status', width: '9%', render: (row) => <StatusBadge value={row.status} /> },
+    { key: 'vehicle', label: 'Vehicle', width: '28%', render: (row) => <VehicleCell vehicle={row.vehicle} /> },
+    { key: 'plate', label: 'Plate', width: '7%', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'severity', label: 'Severity', width: '9%', render: (row) => <TicketStatusBadge value={row.severity_level} /> },
+    { key: 'status', label: 'Status', width: '9%', render: (row) => <StatusBadge value={row.status} /> },
     {
+      key: 'reported_by',
       label: 'Reported By',
       width: '12%',
       render: (row) => (
@@ -7946,13 +8549,15 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
           : <span className="issue-reporter">-</span>
       ),
     },
-    { label: 'Date', width: '9%', render: (row) => <DateBadge value={row.created_at} /> },
+    { key: 'date', label: 'Date', width: '9%', render: (row) => <DateBadge value={row.created_at} /> },
   ];
 
   if (['Admin', 'Maintenance Personnel'].includes(role)) {
     columns.push({
+      key: 'action',
       label: 'Action',
       width: '10%',
+      locked: true,
       render: (row) => (
         <div className="row-actions" style={{ flexWrap: 'nowrap' }}>
           <button className="btn-view-action icon-btn" onClick={() => onView(row)} type="button" title="View" aria-label="View"><Icon name="eye" size={14} /></button>
@@ -7988,10 +8593,11 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
 
 function maintenanceColumns(role, setEditTarget, updateRecord, onViewRecord) {
   const columns = [
-    { label: 'ID', width: '4%', render: (row) => row.maintenance_id },
-    { label: 'Vehicle', width: '15%', render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { label: 'Plate', width: '8%', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'id', label: 'ID', width: '4%', locked: true, render: (row) => row.maintenance_id },
+    { key: 'vehicle', label: 'Vehicle', width: '15%', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
+    { key: 'plate', label: 'Plate', width: '8%', render: (row) => row.vehicle?.plate_number ?? '-' },
     {
+      key: 'type',
       label: 'Type',
       width: '9%',
       render: (row) => (
@@ -8017,16 +8623,17 @@ function maintenanceColumns(role, setEditTarget, updateRecord, onViewRecord) {
         </div>
       ),
     },
-    { label: 'Source', width: '9%', render: (row) => <StatusBadge value={row.source} /> },
-    { label: 'Problem / Reason', width: '14%', className: 'cell-text', render: (row) => <ExpandableText text={row.problem_reason} /> },
-    { label: 'Personnel', width: '10%', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
-    { label: 'Progress', width: '8%', render: (row) => <StatusBadge value={row.progress_status} /> },
-    { label: 'Verification', width: '8%', render: (row) => row.verification_result ? <StatusBadge value={row.verification_result} /> : '-' },
-    { label: 'Date Started', width: '5%', render: (row) => <DateBadge value={row.date_started} /> },
-    { label: 'Date Completed', width: '5%', render: (row) => <DateBadge value={row.date_completed} /> },
+    { key: 'source', label: 'Source', width: '9%', render: (row) => <StatusBadge value={row.source} /> },
+    { key: 'personnel', label: 'Personnel', width: '10%', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
+    { key: 'progress', label: 'Progress', width: '8%', render: (row) => <StatusBadge value={row.progress_status} /> },
+    { key: 'verification', label: 'Verification', width: '8%', render: (row) => row.verification_result ? <StatusBadge value={row.verification_result} /> : '-' },
+    { key: 'date_started', label: 'Date Started', width: '5%', render: (row) => <DateBadge value={row.date_started} /> },
+    { key: 'date_completed', label: 'Date Completed', width: '5%', render: (row) => <DateBadge value={row.date_completed} /> },
     {
+      key: 'action',
       label: 'Action',
       width: '8%',
+      locked: true,
       render: (row) => (
         <div className="row-actions" style={{ flexWrap: 'wrap' }}>
           {onViewRecord && (
@@ -8366,16 +8973,16 @@ function MaintenanceRecordProfilePage({ maintenanceId, onConfirm, onReopen, onDe
 
 function maintenanceStatusColumns(setEditTarget, currentUserId) {
   return [
-    { label: 'ID', render: (row) => row.maintenance_id },
-    { label: 'Vehicle', render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { label: 'Type', render: (row) => row.maintenance_type },
-    { label: 'Source', render: (row) => <StatusBadge value={row.source} /> },
-    { label: 'Problem / Reason', className: 'cell-text', render: (row) => <ExpandableText text={row.problem_reason} /> },
-    { label: 'Action Taken', className: 'cell-text', render: (row) => <ExpandableText text={row.action_taken} /> },
-    { label: 'Personnel', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
-    { label: 'Progress', render: (row) => <StatusBadge value={row.progress_status} /> },
+    { key: 'id', label: 'ID', locked: true, render: (row) => row.maintenance_id },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'type', label: 'Type', render: (row) => row.maintenance_type },
+    { key: 'source', label: 'Source', render: (row) => <StatusBadge value={row.source} /> },
+    { key: 'personnel', label: 'Personnel', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
+    { key: 'progress', label: 'Progress', render: (row) => <StatusBadge value={row.progress_status} /> },
     {
+      key: 'action',
       label: 'Action',
+      locked: true,
       render: (row) => {
         // The backend blocks a Custodian from verifying their own repair
         // (dual-role Custodian/mechanic accounts can log one) — matching
@@ -8394,10 +9001,11 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
   const isAdmin = hasRole(currentUser, 'Admin');
   const currentUserId = currentUser?.id;
   return [
-    { label: 'ID', render: (row) => row.schedule_id },
-    { label: 'Vehicle', render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { label: 'Type', render: (row) => row.maintenance_type },
+    { key: 'id', label: 'ID', locked: true, render: (row) => row.schedule_id },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'type', label: 'Type', render: (row) => row.maintenance_type },
     {
+      key: 'assigned_to',
       label: 'Assigned To',
       render: (row) => {
         const name = row.assigned_to_user?.name;
@@ -8411,11 +9019,12 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
         );
       },
     },
-    { label: 'Date', render: (row) => <DateBadge value={row.scheduled_date} /> },
-    { label: 'Time', render: (row) => row.scheduled_time ?? '-' },
-    { label: 'Repeat', render: (row) => row.recurrence_months ? <StatusBadge value={RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`} /> : <span className="muted">One-time</span> },
-    { label: 'Location', render: (row) => row.service_location ?? '-' },
+    { key: 'date', label: 'Date', render: (row) => <DateBadge value={row.scheduled_date} /> },
+    { key: 'time', label: 'Time', render: (row) => row.scheduled_time ?? '-' },
+    { key: 'repeat', label: 'Repeat', render: (row) => row.recurrence_months ? <StatusBadge value={RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`} /> : <span className="muted">One-time</span> },
+    { key: 'location', label: 'Location', render: (row) => row.service_location ?? '-' },
     {
+      key: 'status',
       label: 'Status',
       render: (row) => (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -8452,7 +9061,9 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
       ),
     },
     {
+      key: 'action',
       label: 'Action',
+      locked: true,
       render: (row) => (
         <div className="row-actions" style={{ flexWrap: 'wrap' }}>
           {row.status === 'Scheduled' && onComplete && (isAdmin || (currentUserId != null && String(row.assigned_to) === String(currentUserId))) && (
@@ -8485,6 +9096,22 @@ function isScheduleOverdue(row) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const due = new Date(row.scheduled_date); due.setHours(0, 0, 0, 0);
   return due < today;
+}
+
+const SCHEDULE_URGENCY_KEYS = ['Overdue', 'Due1to3', 'Due4to7', 'Due8plus'];
+
+// How soon a still-Scheduled row is due, in the same 4 buckets the top-row
+// urgency stat cards count and filter by. Null for anything that isn't an
+// upcoming Scheduled row (Completed/Cancelled rows have no "due in" left).
+function scheduleUrgencyBucket(row) {
+  if (row.status !== 'Scheduled' || !row.scheduled_date) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const due = new Date(row.scheduled_date); due.setHours(0, 0, 0, 0);
+  const days = Math.round((due - today) / 86400000);
+  if (days <= 0) return 'Overdue';
+  if (days <= 3) return 'Due1to3';
+  if (days <= 7) return 'Due4to7';
+  return 'Due8plus';
 }
 
 // Card-view counterpart to scheduleColumns — same information and the same
@@ -8590,114 +9217,356 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
 }
 
 const maintenanceHistoryColumns = [
-  { label: 'ID', render: (row) => row.maintenance_id },
-  { label: 'Vehicle', render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-  { label: 'Type', render: (row) => row.maintenance_type },
-  { label: 'Problem / Reason', className: 'cell-text', render: (row) => <ExpandableText text={row.problem_reason} /> },
-  { label: 'Action Taken', className: 'cell-text', render: (row) => <ExpandableText text={row.action_taken} /> },
-  { label: 'Parts Used', render: (row) => <PartsTags value={row.parts_used} /> },
-  { label: 'Personnel', render: (row) => row.maintenance_personnel?.name ?? row.performed_by_other ?? '-' },
-  { label: 'Completed', render: (row) => <DateBadge value={row.date_completed ?? row.updated_at} /> },
-  { label: 'Time', render: (row) => formatTime(row.date_completed ?? row.updated_at) },
+  { key: 'id', label: 'ID', locked: true, render: (row) => row.maintenance_id },
+  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
+  { key: 'type', label: 'Type', render: (row) => row.maintenance_type },
+  { key: 'parts_used', label: 'Parts Used', render: (row) => <PartsTags value={row.parts_used} /> },
+  { key: 'personnel', label: 'Personnel', render: (row) => row.maintenance_personnel?.name ?? row.performed_by_other ?? '-' },
+  { key: 'completed', label: 'Completed', render: (row) => <DateBadge value={row.date_completed ?? row.updated_at} /> },
+  { key: 'time', label: 'Time', render: (row) => formatTime(row.date_completed ?? row.updated_at) },
 ];
 
 const historyColumns = [
-  { label: 'ID', render: (row) => row.history_id },
-  { label: 'Vehicle', render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-  { label: 'Activity', render: (row) => row.activity_type },
-  { label: 'Description', className: 'cell-text', render: (row) => <ExpandableText text={row.description} /> },
-  { label: 'Related Record', render: (row) => row.related_record_id ?? '-' },
-  { label: 'Updated By', render: (row) => <UserAvatarName user={row.updated_by} /> },
-  { label: 'Date', render: (row) => <DateBadge value={row.created_at} /> },
-  { label: 'Time', render: (row) => formatTime(row.created_at) },
+  { key: 'id', label: 'ID', locked: true, render: (row) => row.history_id },
+  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
+  { key: 'activity', label: 'Activity', render: (row) => row.activity_type },
+  { key: 'related_record', label: 'Related Record', render: (row) => row.related_record_id ?? '-' },
+  { key: 'updated_by', label: 'Updated By', render: (row) => <UserAvatarName user={row.updated_by} /> },
+  { key: 'date', label: 'Date', render: (row) => <DateBadge value={row.created_at} /> },
+  { key: 'time', label: 'Time', render: (row) => formatTime(row.created_at) },
 ];
 
-function logColumns(vehicles, onViewVehicle) {
+const VEHICLE_HISTORY_EXPORT_COLUMNS = [
+  { label: 'ID', value: (r) => r.history_id },
+  { label: 'Vehicle', value: (r) => (r.vehicle ? `${r.vehicle.vehicle_name} (${r.vehicle.plate_number})` : '') },
+  { label: 'Activity', value: (r) => r.activity_type },
+  { label: 'Related Record', value: (r) => r.related_record_id ?? '' },
+  { label: 'Updated By', value: (r) => r.updated_by?.name ?? '' },
+  { label: 'Description', value: (r) => r.description ?? '' },
+  { label: 'Date', value: (r) => r.created_at },
+];
+
+// Card-view counterpart to historyColumns — same fields, laid out for a
+// grid instead of a row.
+function HistoryCard({ row, onClick }) {
+  return (
+    <div className="history-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
+      <div className="history-card-top">
+        <VehicleCell vehicle={row.vehicle} isRowTitle={false} />
+        <span className="history-card-activity">{row.activity_type}</span>
+      </div>
+      {row.description && <p className="history-card-desc">{row.description}</p>}
+      <div className="history-card-bottom">
+        <UserAvatarName user={row.updated_by} />
+        <span className="history-card-date">
+          <DateBadge value={row.created_at} /> {formatTime(row.created_at)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// "09/16/26 - 7:05 am" — a single plain-text column combining date and time,
+// in place of the DateBadge/Time column pair every other table uses; the
+// activity log reads as a dense audit trail, not a dashboard, so the chunky
+// colored badge tile is more visual weight than the row needs.
+function formatLogDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  const time = new Intl.DateTimeFormat('en-US', { timeStyle: 'short' }).format(date).toLowerCase();
+  return `${mm}/${dd}/${yy} - ${time}`;
+}
+
+// One consistent pill color per module string, picked deterministically (a
+// hash of the name) from a fixed palette — so "Vehicle Management" is always
+// the same color everywhere it appears, without hand-maintaining a lookup
+// table for every module string the backend might ever log.
+const MODULE_BADGE_PALETTE = [
+  { bg: '#fef3c7', color: '#92400e' },
+  { bg: '#dbeafe', color: '#1d4ed8' },
+  { bg: '#dcfce7', color: '#166534' },
+  { bg: '#fce7f3', color: '#9d174d' },
+  { bg: '#ede9fe', color: '#5b21b6' },
+  { bg: '#e0f2fe', color: '#075985' },
+  { bg: '#fee2e2', color: '#991b1b' },
+  { bg: '#f1f5f9', color: '#334155' },
+];
+function moduleBadgeTone(moduleName = '') {
+  let hash = 0;
+  for (let i = 0; i < moduleName.length; i += 1) hash = (hash * 31 + moduleName.charCodeAt(i)) >>> 0;
+  return MODULE_BADGE_PALETTE[hash % MODULE_BADGE_PALETTE.length];
+}
+
+function logColumns(vehicles, onViewVehicle, onViewTicket) {
   return [
-    { label: 'ID', render: (row) => row.log_id },
-    { label: 'User', render: (row) => <UserAvatarName user={row.user} /> },
-    { label: 'Role', render: (row) => row.role ?? '-' },
-    { label: 'Action', render: (row) => row.action },
-    { label: 'Module', render: (row) => row.module },
+    { key: 'datetime', label: 'Date and Time', render: (row) => formatLogDateTime(row.created_at) },
     {
-      label: 'Record ID',
+      key: 'item',
+      label: 'Item',
       render: (row) => {
-        if (row.module !== 'Vehicle Management' || row.affected_record_id == null) {
-          return row.affected_record_id ?? '-';
+        if (row.affected_record_id == null) return <span className="muted">—</span>;
+        // Only these two modules have an affected_record_id guaranteed to be
+        // that record's own id (a vehicle_id / ticket_id) — every other
+        // module logs a mix of ids (issue/maintenance/schedule/category ids)
+        // that would need their own lookup dataset to resolve safely.
+        if (row.module === 'Vehicle Management') {
+          const vehicle = vehicles.find((v) => String(v.vehicle_id) === String(row.affected_record_id));
+          return vehicle
+            ? <button type="button" className="issue-reporter-link" onClick={() => onViewVehicle(vehicle)}>{vehicle.vehicle_name}</button>
+            : `Vehicle #${row.affected_record_id}`;
         }
-        const vehicle = vehicles.find((v) => String(v.vehicle_id) === String(row.affected_record_id));
-        return vehicle
-          ? <button type="button" className="issue-reporter-link" onClick={() => onViewVehicle(vehicle)}>{row.affected_record_id}</button>
-          : row.affected_record_id;
+        if (row.module === 'Maintenance Tickets') {
+          return <button type="button" className="issue-reporter-link" onClick={() => onViewTicket({ ticket_id: row.affected_record_id })}>Ticket #{row.affected_record_id}</button>;
+        }
+        return `#${row.affected_record_id}`;
       },
     },
-    { label: 'Details', className: 'cell-text', render: (row) => <ExpandableText text={row.details} /> },
-    { label: 'Date', render: (row) => <DateBadge value={row.created_at} /> },
-    { label: 'Time', render: (row) => formatTime(row.created_at) },
+    {
+      key: 'module',
+      label: 'Category',
+      render: (row) => {
+        const tone = moduleBadgeTone(row.module ?? '');
+        return <span className="log-category-tag" style={{ background: tone.bg, color: tone.color }}>{row.module ?? '-'}</span>;
+      },
+    },
+    { key: 'action', label: 'Action', className: 'cell-text', render: (row) => row.details || row.action },
+    {
+      key: 'user',
+      label: 'User',
+      locked: true,
+      render: (row) => (
+        <div className="log-user-cell">
+          <UserAvatarName user={row.user} />
+          {row.role && <div className="log-user-role">{row.role}</div>}
+        </div>
+      ),
+    },
   ];
 }
 
-function PaginatedTable({ columns, rows, onRowClick, onReorderColumn, emptyMessage, compact = false, pageSizeOptions = [10, 25, 50, 100], initialPageSize = 25 }) {
+// Toolbar button + popover offering a few pre-shaped CSV exports over
+// whatever activity rows are currently in view (same filtered/searched set
+// the table shows) — a raw chronological dump, and two rollups (by user, by
+// module) that are actually useful for "who's been doing what" questions a
+// raw log dump doesn't answer directly.
+function GenerateReportButton({ rows }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [open]);
+
+  const runReport = (type) => {
+    setOpen(false);
+    const stamp = new Date().toISOString().slice(0, 10);
+
+    if (type === 'timeline') {
+      exportRowsToCsv(`activity-timeline-${stamp}.csv`, [
+        { label: 'Date and Time', value: (r) => formatLogDateTime(r.created_at) },
+        { label: 'User', value: (r) => r.user?.name ?? 'System' },
+        { label: 'Role', value: (r) => r.role ?? '-' },
+        { label: 'Module', value: (r) => r.module ?? '-' },
+        { label: 'Action', value: (r) => r.action },
+        { label: 'Details', value: (r) => r.details ?? '' },
+      ], rows);
+      return;
+    }
+
+    if (type === 'user') {
+      const byUser = new Map();
+      rows.forEach((r) => {
+        const key = r.user?.name ?? 'System';
+        const entry = byUser.get(key) ?? { user: key, role: r.role ?? '-', total: 0, last: r.created_at };
+        entry.total += 1;
+        if (r.created_at && (!entry.last || new Date(r.created_at) > new Date(entry.last))) entry.last = r.created_at;
+        byUser.set(key, entry);
+      });
+      exportRowsToCsv(`activity-by-user-${stamp}.csv`, [
+        { label: 'User', value: (r) => r.user },
+        { label: 'Role', value: (r) => r.role },
+        { label: 'Total Actions', value: (r) => r.total },
+        { label: 'Last Active', value: (r) => formatLogDateTime(r.last) },
+      ], [...byUser.values()].sort((a, b) => b.total - a.total));
+      return;
+    }
+
+    if (type === 'module') {
+      const byModule = new Map();
+      rows.forEach((r) => {
+        const key = r.module ?? 'Other';
+        byModule.set(key, (byModule.get(key) ?? 0) + 1);
+      });
+      exportRowsToCsv(`activity-by-module-${stamp}.csv`, [
+        { label: 'Module', value: (r) => r.module },
+        { label: 'Total Actions', value: (r) => r.total },
+      ], [...byModule.entries()].map(([module, total]) => ({ module, total })).sort((a, b) => b.total - a.total));
+    }
+  };
+
+  return (
+    <div className="column-chooser generate-report" ref={containerRef}>
+      <button type="button" className={`primary-button generate-report-btn${open ? ' is-active' : ''}`} onClick={() => setOpen((v) => !v)}>
+        Generate Report <Icon name="chevronDown" size={13} />
+      </button>
+      {open && (
+        <div className="column-chooser-panel generate-report-panel" role="menu">
+          <button type="button" className="generate-report-option" onClick={() => runReport('timeline')}>
+            <strong>Timeline Report</strong>
+            <span>Every action, in order, exactly as shown below.</span>
+          </button>
+          <button type="button" className="generate-report-option" onClick={() => runReport('user')}>
+            <strong>User Report</strong>
+            <span>Action counts per user, most active first.</span>
+          </button>
+          <button type="button" className="generate-report-option" onClick={() => runReport('module')}>
+            <strong>Module Report</strong>
+            <span>Action counts per module, busiest first.</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Same rows as the List View table, rendered as a connected vertical
+// timeline instead — its own pagination via the same usePagination hook, so
+// switching tabs doesn't lose your place in a 14,000-row activity log.
+function ActivityTimeline({ rows }) {
+  const { page, setPage, pageSize, setPageSize, totalPages, start, end } = usePagination(rows.length, { pageSizeOptions: [10, 25, 50, 100], initialPageSize: 10 });
+
+  if (!rows.length) {
+    return <p className="empty-state">No activity yet.</p>;
+  }
+
+  const pageRows = rows.slice(start, end);
+
+  return (
+    <div className="activity-timeline-wrap">
+      <h3 className="activity-timeline-title">Recent Activities</h3>
+      <ol className="activity-timeline">
+        {pageRows.map((row) => (
+          <li key={row.log_id} className="activity-timeline-item">
+            <span className="activity-timeline-dot" aria-hidden="true">
+              <Icon name="link" size={13} />
+            </span>
+            <div className="activity-timeline-body">
+              <strong>{row.user?.name ?? 'System'} {row.action}</strong>
+              <p>{row.details}</p>
+            </div>
+            <span className="activity-timeline-time">{timeAgo(row.created_at)}</span>
+          </li>
+        ))}
+      </ol>
+      <PaginationControls page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} pageSizeOptions={[10, 25, 50, 100]} totalPages={totalPages} />
+    </div>
+  );
+}
+
+// Shared paging state for PaginatedTable/PaginatedCardGrid/any future
+// paginated view (e.g. an activity timeline) — one hook so all of them page
+// identically and reset to page 1 the same way when the row count/page size
+// changes out from under them (a filter narrowing results, etc).
+function usePagination(count, { pageSizeOptions, initialPageSize }) {
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [page, setPage] = useState(1);
 
   useEffect(() => {
     setPage(1);
-  }, [rows.length, pageSize]);
+  }, [count, pageSize]);
 
-  if (!rows?.length) {
-    return <DataTable columns={columns} rows={rows} onRowClick={onRowClick} onReorderColumn={onReorderColumn} emptyMessage={emptyMessage} compact={compact} />;
-  }
-
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
   const clampedPage = Math.min(page, totalPages);
   const start = (clampedPage - 1) * pageSize;
-  const pageRows = rows.slice(start, start + pageSize);
+  const end = Math.min(start + pageSize, count);
+
+  return { page: clampedPage, setPage, pageSize, setPageSize, pageSizeOptions, totalPages, start, end };
+}
+
+// Numbered-page pager (‹ 1 2 [3] 4 5 … N ›) + a page-size picker rendered as
+// its own row of circular buttons — replaces the old Prev/Next + dropdown
+// footer to match the reference pagination design. Windows 2 pages on each
+// side of the current one, always keeping page 1 and the last page visible
+// with a single-ellipsis gap between, since jumping straight to the last of
+// hundreds of pages is common (e.g. "578" in the activity log).
+function paginationPageList(current, total) {
+  const delta = 2;
+  const pages = [];
+  for (let i = 1; i <= total; i += 1) {
+    if (i === 1 || i === total || (i >= current - delta && i <= current + delta)) pages.push(i);
+  }
+  const withGaps = [];
+  let prev;
+  pages.forEach((p) => {
+    if (prev != null && p - prev > 1) withGaps.push('…');
+    withGaps.push(p);
+    prev = p;
+  });
+  return withGaps;
+}
+
+function PaginationControls({ page, setPage, pageSize, setPageSize, pageSizeOptions, totalPages }) {
+  if (totalPages <= 1 && pageSizeOptions.length <= 1) return null;
+  const pageList = paginationPageList(page, totalPages);
+  return (
+    <div className="table-pagination">
+      <div className="table-pagination-pages">
+        <button type="button" className="pagination-arrow" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} aria-label="Previous page">‹</button>
+        {pageList.map((p, i) => (
+          p === '…'
+            ? <span key={`gap-${i}`} className="pagination-ellipsis">…</span>
+            : <button key={p} type="button" className={`pagination-page${p === page ? ' active' : ''}`} onClick={() => setPage(p)}>{p}</button>
+        ))}
+        <button type="button" className="pagination-arrow" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} aria-label="Next page">›</button>
+      </div>
+      <div className="table-pagination-size">
+        <span className="muted">Page size:</span>
+        {pageSizeOptions.map((n) => (
+          <button key={n} type="button" className={`pagination-page${n === pageSize ? ' active' : ''}`} onClick={() => setPageSize(n)}>{n}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PaginatedTable({ columns, rows, onRowClick, onReorderColumn, emptyMessage, compact = false, pageSizeOptions = [10, 25, 50, 100], initialPageSize = 25, renderSubRow }) {
+  const { page, setPage, pageSize, setPageSize, totalPages, start, end } = usePagination(rows?.length ?? 0, { pageSizeOptions, initialPageSize });
+
+  if (!rows?.length) {
+    return <DataTable columns={columns} rows={rows} onRowClick={onRowClick} onReorderColumn={onReorderColumn} emptyMessage={emptyMessage} compact={compact} renderSubRow={renderSubRow} />;
+  }
+
+  const pageRows = rows.slice(start, end);
 
   return (
     <>
-      <DataTable columns={columns} rows={pageRows} onRowClick={onRowClick} onReorderColumn={onReorderColumn} compact={compact} />
-      <div className="table-pagination">
-        <span className="muted">Showing {start + 1}-{Math.min(start + pageSize, rows.length)} of {rows.length}</span>
-        <div className="table-pagination-controls">
-          <label>
-            Rows per page
-            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
-              {pageSizeOptions.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </label>
-          <button type="button" className="ghost-button" disabled={clampedPage <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-          <span>Page {clampedPage} of {totalPages}</span>
-          <button type="button" className="ghost-button" disabled={clampedPage >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
-        </div>
-      </div>
+      <DataTable columns={columns} rows={pageRows} onRowClick={onRowClick} onReorderColumn={onReorderColumn} compact={compact} renderSubRow={renderSubRow} />
+      <PaginationControls page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} pageSizeOptions={pageSizeOptions} totalPages={totalPages} />
     </>
   );
 }
 
-// Card-grid counterpart to PaginatedTable — same pagination footer markup,
-// same "Showing X-Y of Z" wording, same rows-per-page/Prev/Next controls, so
-// switching between List and Card view doesn't change how paging behaves.
-// Page size defaults lower than the table's: cards are much taller, so 25 of
-// them is a very long scroll.
+// Card-grid counterpart to PaginatedTable — same PaginationControls footer,
+// so switching between List and Card view doesn't change how paging looks or
+// behaves. Page size defaults lower than the table's: cards are much taller,
+// so 25 of them is a very long scroll.
 function PaginatedCardGrid({ items, renderItem, keyOf, emptyMessage, pageSizeOptions = [12, 24, 48, 96], initialPageSize = 12 }) {
-  const [pageSize, setPageSize] = useState(initialPageSize);
-  const [page, setPage] = useState(1);
-
-  // Mirrors PaginatedTable: filtering down to fewer results should put you
-  // back on page 1 rather than leaving you on a page that no longer exists.
-  useEffect(() => {
-    setPage(1);
-  }, [items.length, pageSize]);
+  const { page, setPage, pageSize, setPageSize, totalPages, start, end } = usePagination(items?.length ?? 0, { pageSizeOptions, initialPageSize });
 
   if (!items?.length) {
     return <p className="empty-state">{emptyMessage}</p>;
   }
 
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const clampedPage = Math.min(page, totalPages);
-  const start = (clampedPage - 1) * pageSize;
-  const pageItems = items.slice(start, start + pageSize);
+  const pageItems = items.slice(start, end);
 
   return (
     <>
@@ -8706,20 +9575,7 @@ function PaginatedCardGrid({ items, renderItem, keyOf, emptyMessage, pageSizeOpt
           <div key={keyOf ? keyOf(item) : i}>{renderItem(item)}</div>
         ))}
       </div>
-      <div className="table-pagination">
-        <span className="muted">Showing {start + 1}-{Math.min(start + pageSize, items.length)} of {items.length}</span>
-        <div className="table-pagination-controls">
-          <label>
-            Cards per page
-            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
-              {pageSizeOptions.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </label>
-          <button type="button" className="ghost-button" disabled={clampedPage <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-          <span>Page {clampedPage} of {totalPages}</span>
-          <button type="button" className="ghost-button" disabled={clampedPage >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
-        </div>
-      </div>
+      <PaginationControls page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} pageSizeOptions={pageSizeOptions} totalPages={totalPages} />
     </>
   );
 }
@@ -8775,35 +9631,72 @@ function StatusBadge({ value }) {
 }
 
 // Clamps long free-text table cells to a fixed number of lines so they can't
-// stretch the row/table; click to reveal the rest, click again to collapse.
+// stretch the row/table. A "Show more" chevron only appears when the text
+// actually overflows the clamp (measured via scrollHeight vs clientHeight),
+// so short text that already fits gets no dead-looking toggle affordance.
 function ExpandableText({ text, lines = 2, className = '' }) {
   const [expanded, setExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const textRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (expanded) return;
+    const el = textRef.current;
+    if (el) setIsTruncated(el.scrollHeight > el.clientHeight + 1);
+  }, [text, lines, expanded]);
 
   if (!text) return '-';
 
   const toggle = () => setExpanded((prev) => !prev);
+  const canToggle = isTruncated || expanded;
 
   return (
-    <span
-      className={`expandable-text ${expanded ? 'is-expanded' : ''} ${className}`.trim()}
-      style={{ WebkitLineClamp: expanded ? 'unset' : lines }}
-      onClick={(event) => {
-        event.stopPropagation();
-        toggle();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          event.stopPropagation();
-          toggle();
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      title={expanded ? 'Click to collapse' : 'Click to view full text'}
-    >
-      {text}
+    <span className="expandable-text-wrap">
+      <span
+        ref={textRef}
+        className={`expandable-text ${canToggle ? 'is-clickable' : ''} ${expanded ? 'is-expanded' : ''} ${className}`.trim()}
+        style={{ WebkitLineClamp: expanded ? 'unset' : lines }}
+        onClick={canToggle ? (event) => { event.stopPropagation(); toggle(); } : undefined}
+        onKeyDown={canToggle ? (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.stopPropagation();
+            toggle();
+          }
+        } : undefined}
+        role={canToggle ? 'button' : undefined}
+        tabIndex={canToggle ? 0 : undefined}
+        title={canToggle ? (expanded ? 'Click to collapse' : 'Click to view full text') : undefined}
+      >
+        {text}
+      </span>
+      {canToggle && (
+        <button
+          type="button"
+          className={`expandable-text-toggle${expanded ? ' is-expanded' : ''}`}
+          onClick={(event) => { event.stopPropagation(); toggle(); }}
+          title={expanded ? 'Collapse' : 'Show full text'}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+          <Icon name="chevronDown" size={11} />
+        </button>
+      )}
     </span>
+  );
+}
+
+// Stacks two or more long-text fields (e.g. Problem/Reason + Action Taken)
+// into one labeled multi-line block for a table's renderSubRow band,
+// skipping whichever fields aren't populated on a given row.
+function subRowFields(pairs) {
+  const present = pairs.filter(([, value]) => value);
+  if (!present.length) return null;
+  return (
+    <div className="table-subrow-lines">
+      {present.map(([label, value]) => (
+        <div key={label}><strong>{label}:</strong> {value}</div>
+      ))}
+    </div>
   );
 }
 
@@ -9254,6 +10147,15 @@ const VEHICLE_EXPORT_COLUMNS = [
   { label: 'Status', value: (r) => r.status },
   { label: 'Condition', value: (r) => r.condition },
   { label: 'Ready to Respond', value: (r) => READINESS_BADGE[r.readiness_state]?.label ?? '' },
+];
+
+const USER_EXPORT_COLUMNS = [
+  { label: 'ID', value: (r) => r.id },
+  { label: 'Name', value: (r) => r.name },
+  { label: 'Email', value: (r) => r.email },
+  { label: 'Phone', value: (r) => r.phone ?? '' },
+  { label: 'Role', value: (r) => ((Array.isArray(r.roles) && r.roles.length) ? r.roles : [r.role].filter(Boolean)).join(', ') },
+  { label: 'Status', value: (r) => (r.is_active ? 'Active' : 'Inactive') },
 ];
 
 const SCHEDULE_EXPORT_COLUMNS = [
@@ -10053,9 +10955,6 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
               )}
             </div>
             <div className="ticket-detail-subline">
-              {ticket.created_at && (
-                <span><Icon name="clipboard" size={12} /> Created {formatDate(ticket.created_at)}</span>
-              )}
               {progress.total > 0 && (
                 <span className={resolvedCount === progress.total ? 'is-complete' : undefined}>
                   <Icon name="checkCircle" size={12} /> {resolvedCount} of {progress.total} resolved{progress.deferred > 0 ? ` / ${progress.deferred} deferred` : ''}
@@ -10065,7 +10964,6 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
                 <span><Icon name="vehicle" size={12} /> {ticket.vehicle.vehicle_name}</span>
               )}
             </div>
-            <p className="ticket-process-description">{ticket.ticket_description || 'No description provided.'}</p>
           </div>
 
           <div className="ticket-process-meter" style={{ '--ticket-progress': `${resolvedPercent}%` }}>
@@ -10648,7 +11546,7 @@ function TicketProfilePage({ ticketId, role, userId, ticketLookups, onBack, onDe
 
   const loadTicket = useCallback(() => {
     setLoading(true);
-    api.get(`/tickets/${ticketId}`)
+    return api.get(`/tickets/${ticketId}`)
       .then((response) => {
         setTicket(response.data);
         setNotFound(false);
@@ -10658,6 +11556,22 @@ function TicketProfilePage({ ticketId, role, userId, ticketLookups, onBack, onDe
   }, [ticketId]);
 
   useEffect(() => { loadTicket(); }, [loadTicket]);
+
+  // Silent background refresh — same request as loadTicket, but doesn't
+  // flip the page back to the loading spinner, so it can run on an interval
+  // without being disruptive. This is what makes the board reflect a
+  // mechanic's or custodian's action on this same ticket while it's still
+  // open on screen, instead of only updating on this viewer's own actions
+  // (which already refetch via the .then(loadTicket) chains below) or the
+  // next time they happen to reopen it.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      api.get(`/tickets/${ticketId}`)
+        .then((response) => setTicket(response.data))
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [ticketId]);
 
   if (loading) return <ModuleLoader label="Loading ticket" />;
 
@@ -11221,7 +12135,10 @@ function TicketModule({
   const allSubIssues = statSourceTickets.flatMap((t) => t.sub_issues ?? []);
   const openSubIssueCount = allSubIssues.filter((s) => s.status === 'Open').length;
   const forConfirmSubIssueCount = allSubIssues.filter((s) => s.status === 'For Confirmation').length;
-  const readyToCloseCount = statSourceTickets.filter((t) => t.status === 'Active' && (t.progress?.total ?? 0) > 0 && t.progress.done === t.progress.total).length;
+  const readyToCloseTickets = useMemo(
+    () => statSourceTickets.filter((t) => t.status === 'Active' && (t.progress?.total ?? 0) > 0 && t.progress.done === t.progress.total),
+    [statSourceTickets]
+  );
 
   // Unread-updates badge per ticket card — counts this user's unread
   // notifications tied to that ticket (assignment, verification, etc.)
@@ -11248,6 +12165,9 @@ function TicketModule({
     return counts;
   }, [statSourceTickets]);
 
+  const ticketColumnDefs = useMemo(() => ticketTableColumns(unreadByTicket), [unreadByTicket]);
+  const ticketColumnChooser = useColumnChooser('vms_ticket_columns', ticketColumnDefs);
+
   return (
     <div className="module-grid">
       <DismissibleHint description="Central Ticket Ledger — create tickets, assign custodians for inspection, dispatch mechanics, and confirm closures through the 5-phase workflow." />
@@ -11260,9 +12180,11 @@ function TicketModule({
         onFilterChange={setFilterStatus}
       />
       <section className="panel module-filter-panel">
-        <FilterBar
+        <TicketFilterPanel
           categories={categories}
           vehicles={vehicles}
+          priorityLevels={ticketLookups.priorities}
+          statusOptions={ticketLookups.ticket_statuses}
           filterCategory={filterCategory}
           setFilterCategory={setFilterCategory}
           filterCapacity={filterCapacity}
@@ -11271,17 +12193,14 @@ function TicketModule({
           setFilterStatus={setFilterStatus}
           filterPriority={filterPriority}
           setFilterPriority={setFilterPriority}
-          statusOptions={ticketLookups.ticket_statuses}
-          priorityOptions={ticketLookups.priorities}
-          priorityLabel="Priority"
-          dateRange={{
-            start: filterDateStart,
-            setStart: setFilterDateStart,
-            end: filterDateEnd,
-            setEnd: setFilterDateEnd,
-          }}
+          filterDateStart={filterDateStart}
+          setFilterDateStart={setFilterDateStart}
+          filterDateEnd={filterDateEnd}
+          setFilterDateEnd={setFilterDateEnd}
         />
       </section>
+      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} />
+
       <section className="panel">
         {/* Alert banners */}
         {openSubIssueCount > 0 && (
@@ -11292,11 +12211,6 @@ function TicketModule({
         {forConfirmSubIssueCount > 0 && (
           <div className="ticket-alert-banner forconfirm">
             <Icon name="checkCircle" size={16} /> <strong>{forConfirmSubIssueCount}</strong> sub-issue{forConfirmSubIssueCount > 1 ? 's' : ''} awaiting your final confirmation.
-          </div>
-        )}
-        {readyToCloseCount > 0 && (
-          <div className="ticket-alert-banner forconfirm">
-            <Icon name="checkCircle" size={16} /> <strong>{readyToCloseCount}</strong> ticket{readyToCloseCount > 1 ? 's' : ''} fully done and ready to close.
           </div>
         )}
 
@@ -11310,6 +12224,7 @@ function TicketModule({
               placeholder="Search tickets..."
               onAdd={onCreateNew}
               addLabel="Create Ticket"
+              columnChooser={ticketViewMode === 'table' ? ticketColumnChooser : undefined}
             />
           </div>
         </div>
@@ -11319,7 +12234,7 @@ function TicketModule({
         {tickets.length === 0
           ? <p className="empty-state">No tickets yet. Create one to begin the workflow.</p>
           : ticketViewMode === 'table'
-            ? <PaginatedTable columns={ticketTableColumns(unreadByTicket)} rows={tickets} onRowClick={onViewTicket} />
+            ? <PaginatedTable columns={ticketColumnChooser.visibleColumns} onReorderColumn={ticketColumnChooser.reorderColumn} rows={tickets} onRowClick={onViewTicket} />
             : (
               <div className="ticket-card-grid">
                 {tickets.map((t) => (
@@ -11774,11 +12689,9 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
 function VehicleProfilePage({ vehicleId, lookups, allHubs, canManage = false, canManageDocuments = false, canCheckReadiness = false, setNotice, onSaved, onRequestConfirmation }) {
   const location = useLocation();
   const [editing, setEditing] = useState(new URLSearchParams(location.search).get('tab') === 'edit');
-  const [tabData, setTabData] = useState({});
   const [decommissioning, setDecommissioning] = useState(false);
   const [readiness, setReadiness] = useState(null);
   const [checkingReadiness, setCheckingReadiness] = useState(false);
-  const [reliability, setReliability] = useState(null);
   // Live-tracks the Edit form's Vehicle Type select so switching a vehicle
   // to a Water category shows Hull Material/Engine Type immediately,
   // instead of only after saving and reloading. Reset whenever a different
@@ -11795,22 +12708,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, canManage = false, ca
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicle?.vehicle_id]);
 
-  // Load every related dataset up front so the overview's analytics (donut,
-  // cost-by-record) can tally maintenance/ticket/issue counts for this
-  // vehicle. Each request degrades to [] so one failure never blanks the page.
-  useEffect(() => {
-    let cancelled = false;
-    const get = (url) => api.get(url).then((r) => r.data).catch(() => []);
-    Promise.all([
-      get('/maintenance-records'),
-      get('/tickets'),
-      get('/issues'),
-    ]).then(([maintenance, tickets, issues]) => {
-      if (!cancelled) setTabData({ maintenance, tickets, issues });
-    });
-    return () => { cancelled = true; };
-  }, [vehicleId]);
-
   // Gap A — response-readiness state.
   const loadReadiness = useCallback(() => {
     api.get(`/vehicles/${vehicleId}/readiness`).then((r) => setReadiness(r.data)).catch(() => setReadiness(null));
@@ -11819,17 +12716,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, canManage = false, ca
   useEffect(() => {
     loadReadiness();
   }, [loadReadiness]);
-
-  // Gap 3 — per-vehicle reliability lens, feeding the Analytics "Failures
-  // (6 mo)" stat (a chronically-failing vehicle is a safety signal, not
-  // just a cost one — more actionable than a raw open-issues count).
-  useEffect(() => {
-    let cancelled = false;
-    api.get(`/vehicles/${vehicleId}/reliability`)
-      .then((r) => { if (!cancelled) setReliability(r.data); })
-      .catch(() => { if (!cancelled) setReliability(null); });
-    return () => { cancelled = true; };
-  }, [vehicleId]);
 
   const handleReadinessCheck = async (payload) => {
     setNotice(null);
@@ -11909,27 +12795,9 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, canManage = false, ca
     }
   };
 
-  const numericId = Number(vehicleId);
-  const rowsFor = (key, matcher) => (tabData[key] ?? []).filter(matcher);
-
   // Derived data for the redesigned overview dashboard.
   const hub = (allHubs ?? []).find((h) => h.name === vehicle.current_location);
   const isWater = (vehicle.category?.domain ?? 'Land') === 'Water';
-  const vehMaintenance = rowsFor('maintenance', (r) => Number(r.vehicle?.vehicle_id) === numericId);
-  const vehTickets = rowsFor('tickets', (r) => Number(r.vehicle?.vehicle_id) === numericId);
-  const vehIssues = rowsFor('issues', (r) => Number(r.vehicle?.vehicle_id ?? r.vehicle_id) === numericId);
-  const openTickets = vehTickets.filter((t) => !['Done', 'Cancelled'].includes(t.status)).length;
-  const openIssues = vehIssues.filter((i) => i.status !== 'Resolved').length;
-  // Done tickets auto-copy their cost into a maintenance record, so count
-  // records + still-active tickets to include everything exactly once.
-  const activeTicketCost = vehTickets
-    .filter((t) => !['Done', 'Cancelled'].includes(t.status))
-    .reduce((sum, t) => sum + (Number(t.maintenance_cost) || 0), 0);
-  const totalCost = vehMaintenance.reduce((sum, r) => sum + (Number(r.maintenance_cost) || 0), 0) + activeTicketCost;
-  const costRows = vehMaintenance
-    .filter((r) => Number(r.maintenance_cost) > 0)
-    .slice(0, 6)
-    .map((r) => ({ label: r.maintenance_type ?? 'Repair', value: Number(r.maintenance_cost) }));
   return (
     <ModulePanel description="Full profile, maintenance, and tickets for this vehicle.">
       <div className="vehicle-profile-header">
@@ -12098,30 +12966,14 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, canManage = false, ca
             </div>
           </div>
 
-          <section className="veh-card veh-analytics">
-            <div className="veh-card-head"><Icon name="grid" size={16} /><h4>Analytics</h4></div>
-            <div className="veh-stat-grid">
-              <div className="veh-stat veh-stat-blue"><span>{vehMaintenance.length}</span><small>Maintenance Records</small></div>
-              <div className="veh-stat veh-stat-amber"><span>{openTickets + openIssues}</span><small>Open Items</small></div>
-              <div className="veh-stat veh-stat-red"><span>{reliability?.failures_6mo ?? '—'}</span><small>Failures (6 mo)</small></div>
-              <div className="veh-stat veh-stat-green"><span>₱{totalCost.toLocaleString()}</span><small>Total Maint. Cost</small></div>
+          <section className="veh-card veh-map">
+            <div className="veh-card-head"><Icon name="pin" size={16} /><h4>Current Location — {vehicle.current_location ?? 'Unknown'}</h4></div>
+            <div className="veh-map-wrap">
+              <VehicleLocationMap lat={hub?.lat} lng={hub?.lng} label={vehicle.current_location} scrollWheelZoom />
             </div>
-            {costRows.length > 0 && (
-              <>
-                <p className="veh-mini-label">Maintenance cost by record</p>
-                <HorizontalBarChart rows={costRows} />
-              </>
-            )}
           </section>
         </div>
       </div>
-
-      <section className="veh-card veh-map veh-map-wide">
-        <div className="veh-card-head"><Icon name="pin" size={16} /><h4>Current Location — {vehicle.current_location ?? 'Unknown'}</h4></div>
-        <div className="veh-map-wrap">
-          <VehicleLocationMap lat={hub?.lat} lng={hub?.lng} label={vehicle.current_location} scrollWheelZoom />
-        </div>
-      </section>
 
       {/* Print-only — kept off-screen (see .veh-print-report), shown by the
           Reports card's print button via window.print(). Portaled straight
@@ -12355,6 +13207,32 @@ function CustodianInspectionModule({
 }) {
   const isPendingView = activeFilter !== 'Inspected';
 
+  const inspectionColumnDefs = useMemo(() => [
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, render: (r) => r.ticket_id },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'title', label: 'Title', render: (r) => r.ticket_title },
+    { key: 'priority', label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
+    { key: 'result', label: 'Result', render: (r) => r.inspection_result ? <TicketStatusBadge value={r.inspection_result} /> : <span className="muted">—</span> },
+    { key: 'assigned', label: 'Assigned', render: (r) => <DateBadge value={r.assigned_at} /> },
+    { key: 'time', label: 'Time', render: (r) => formatTime(r.assigned_at) },
+    {
+      key: 'action',
+      label: 'Action',
+      locked: true,
+      // "Submitted" implied THIS Custodian already did something —
+      // false for a Pre-Diagnosed ticket, or one reassigned to
+      // them after the fact. Reusing the same stage logic the
+      // Admin's ticket cards use says honestly where the ball
+      // actually is instead (e.g. "Diagnosed — Assign a
+      // Mechanic" — informational, since assigning one isn't a
+      // Custodian action, but at least it's true).
+      render: (r) => r.status === 'Open'
+        ? <button className="btn-edit-action icon-btn" type="button" onClick={() => onOpenInspect(r)} title="Inspect" aria-label="Inspect"><Icon name="search" size={14} /></button>
+        : <TicketStageBadge ticket={r} />
+    },
+  ], [onOpenInspect]);
+  const inspectionColumnChooser = useColumnChooser('vms_custodian_inspection_columns', inspectionColumnDefs);
+
   return (
     <div className="module-grid">
       <DismissibleHint description="Phase 2 — Vehicle Evaluation. Review tickets assigned to you, submit physical inspection findings, and check back here for anything already diagnosed — either by your own inspection, or pre-diagnosed by an Admin (e.g. reassigned to you mid-repair)." />
@@ -12387,37 +13265,18 @@ function CustodianInspectionModule({
               after the fact) skips inspection entirely, so calling it
               "Already Inspected" claimed something that never happened. */}
           <h3>{isPendingView ? 'Pending Inspections' : 'Diagnosed'} <span className="count-badge">{tickets.length}</span></h3>
+          <ColumnChooserButton {...inspectionColumnChooser} />
         </div>
         <div style={{ height: '16px' }} />
         {tickets.length === 0
           ? <p className="empty-state">{isPendingView ? 'No inspection assignments pending.' : 'Nothing diagnosed yet.'}</p>
           : (
             <DataTable
-              columns={[
-                { label: 'Ticket ID', render: (r) => r.ticket_id },
-                { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
-                { label: 'Title', render: (r) => r.ticket_title },
-                { label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
-                { label: 'Description', className: 'cell-text', render: (r) => <ExpandableText text={r.ticket_description} /> },
-                { label: 'Result', render: (r) => r.inspection_result ? <TicketStatusBadge value={r.inspection_result} /> : <span className="muted">—</span> },
-                { label: 'Assigned', render: (r) => <DateBadge value={r.assigned_at} /> },
-                { label: 'Time', render: (r) => formatTime(r.assigned_at) },
-                {
-                  label: 'Action',
-                  // "Submitted" implied THIS Custodian already did something —
-                  // false for a Pre-Diagnosed ticket, or one reassigned to
-                  // them after the fact. Reusing the same stage logic the
-                  // Admin's ticket cards use says honestly where the ball
-                  // actually is instead (e.g. "Diagnosed — Assign a
-                  // Mechanic" — informational, since assigning one isn't a
-                  // Custodian action, but at least it's true).
-                  render: (r) => r.status === 'Open'
-                    ? <button className="btn-edit-action icon-btn" type="button" onClick={() => onOpenInspect(r)} title="Inspect" aria-label="Inspect"><Icon name="search" size={14} /></button>
-                    : <TicketStageBadge ticket={r} />
-                },
-              ]}
+              columns={inspectionColumnChooser.visibleColumns}
+              onReorderColumn={inspectionColumnChooser.reorderColumn}
               rows={tickets}
               onRowClick={(row) => row.vehicle && onViewVehicle(row.vehicle)}
+              renderSubRow={(row) => row.ticket_description}
             />
           )
         }
@@ -12589,6 +13448,62 @@ function CustodianVerificationModule({
 }) {
   const [viewLogsTarget, setViewLogsTarget] = useState(null);
   const isPendingView = activeFilter !== 'Verified';
+
+  const verificationColumnDefs = useMemo(() => [
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, render: (r) => r.ticket_id },
+    { key: 'ticket_title', label: 'Ticket Title', render: (r) => r.ticket_title },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'sub_issue', label: 'Sub-Issue', render: (r) => r.title },
+    { key: 'mechanic', label: 'Mechanic', render: (r) => r.assigned_mechanic?.name ?? '—' },
+    {
+      key: 'repair_log',
+      label: 'Repair Log',
+      render: (r) => r.repair_logs ? (
+        <button
+          type="button"
+          className="link-button"
+          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 500 }}
+          onClick={() => setViewLogsTarget(r)}
+        >
+          View Logs ↗
+        </button>
+      ) : '—'
+    },
+    { key: 'parts_used', label: 'Parts Used', render: (r) => <PartsTags value={r.parts_used} /> },
+    {
+      key: 'status',
+      label: 'Status',
+      render: (r) => {
+        if (r.reopened_at) {
+          return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600 }} title={`Reopened by ${r.reopened_by?.name || 'Admin'}`}>
+              <Icon name="alert" size={12} /> Reopened
+            </span>
+          );
+        }
+        return r.verification_verdict ? <TicketStatusBadge value={r.verification_verdict} /> : <span className="muted">—</span>;
+      }
+    },
+    {
+      key: 'action',
+      label: 'Action',
+      locked: true,
+      render: (r) => {
+        if (r.status === 'For Inspection') {
+          const assignedId = typeof r.verification_assigned_to === 'object' ? r.verification_assigned_to?.id : r.verification_assigned_to;
+          const isAssignedToUser = assignedId === user.id || String(assignedId) === String(user.id);
+          if (isAssignedToUser) {
+            return <button className="btn-edit-action icon-btn" type="button" onClick={() => setEditTarget(r)} title="Verify Repair" aria-label="Verify Repair"><Icon name="checkCircle" size={14} /></button>;
+          }
+          const assignedName = (typeof r.verification_assigned_to === 'object' ? r.verification_assigned_to?.name : null) || 'another custodian';
+          return <span className="muted" title={`Assigned to ${assignedName}`}>Assigned to {assignedName}</span>;
+        }
+        return <span className="muted">Submitted</span>;
+      }
+    },
+  ], [user.id, setEditTarget]);
+  const verificationColumnChooser = useColumnChooser('vms_custodian_verification_columns', verificationColumnDefs);
+
   return (
     <div className="module-grid">
       <DismissibleHint description="Phase 4 Tier 1 — Repair Integrity Verification. Review mechanic work, issue your inspection verdict before Admin confirmation, and check back here to see what you've already verified." />
@@ -12624,61 +13539,15 @@ function CustodianVerificationModule({
       <section className="panel">
         <div className="panel-header-bar">
           <h3>{isPendingView ? 'Pending Verifications' : 'Verified Repairs'} <span className="count-badge">{tickets.length}</span></h3>
+          <ColumnChooserButton {...verificationColumnChooser} />
         </div>
         <div style={{ height: '16px' }} />
         {tickets.length === 0
           ? <p className="empty-state">{isPendingView ? 'No repairs pending your verification.' : 'No repairs verified yet.'}</p>
           : (
             <DataTable
-              columns={[
-                { label: 'Ticket ID', render: (r) => r.ticket_id },
-                { label: 'Ticket Title', render: (r) => r.ticket_title },
-                { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
-                { label: 'Sub-Issue', render: (r) => r.title },
-                { label: 'Mechanic', render: (r) => r.assigned_mechanic?.name ?? '—' },
-                {
-                  label: 'Repair Log',
-                  render: (r) => r.repair_logs ? (
-                    <button
-                      type="button"
-                      className="link-button"
-                      style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', cursor: 'pointer', textDecoration: 'underline', fontWeight: 500 }}
-                      onClick={() => setViewLogsTarget(r)}
-                    >
-                      View Logs ↗
-                    </button>
-                  ) : '—'
-                },
-                { label: 'Parts Used', render: (r) => <PartsTags value={r.parts_used} /> },
-                {
-                  label: 'Status',
-                  render: (r) => {
-                    if (r.reopened_at) {
-                      return (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#fef3c7', border: '1px solid #fcd34d', color: '#92400e', borderRadius: 6, fontSize: '0.8rem', fontWeight: 600 }} title={`Reopened by ${r.reopened_by?.name || 'Admin'}`}>
-                          <Icon name="alert" size={12} /> Reopened
-                        </span>
-                      );
-                    }
-                    return r.verification_verdict ? <TicketStatusBadge value={r.verification_verdict} /> : <span className="muted">—</span>;
-                  }
-                },
-                {
-                  label: 'Action',
-                  render: (r) => {
-                    if (r.status === 'For Inspection') {
-                      const assignedId = typeof r.verification_assigned_to === 'object' ? r.verification_assigned_to?.id : r.verification_assigned_to;
-                      const isAssignedToUser = assignedId === user.id || String(assignedId) === String(user.id);
-                      if (isAssignedToUser) {
-                        return <button className="btn-edit-action icon-btn" type="button" onClick={() => setEditTarget(r)} title="Verify Repair" aria-label="Verify Repair"><Icon name="checkCircle" size={14} /></button>;
-                      }
-                      const assignedName = (typeof r.verification_assigned_to === 'object' ? r.verification_assigned_to?.name : null) || 'another custodian';
-                      return <span className="muted" title={`Assigned to ${assignedName}`}>Assigned to {assignedName}</span>;
-                    }
-                    return <span className="muted">Submitted</span>;
-                  }
-                },
-              ]}
+              columns={verificationColumnChooser.visibleColumns}
+              onReorderColumn={verificationColumnChooser.reorderColumn}
               rows={tickets}
               onRowClick={(row) => row.vehicle && onViewVehicle(row.vehicle)}
             />
@@ -12782,6 +13651,42 @@ function MechanicWorkOrderModule({
 }) {
   const isPendingView = activeFilter !== 'Submitted';
 
+  const workOrderColumnDefs = useMemo(() => [
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, render: (r) => r.ticket_id },
+    { key: 'ticket_title', label: 'Ticket Title', render: (r) => r.ticket_title },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    {
+      key: 'work_order',
+      label: 'Work Order',
+      render: (r) => (
+        <div>
+          <div style={{ fontWeight: 600 }}>{r.title}</div>
+          {r.confirmation_verdict === 'Reopened' ? (
+            <span className="status-badge rework-danger" style={{ fontSize: '0.75rem', padding: '3px 8px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Icon name="alert" size={13} /> Admin Reopened Rework
+            </span>
+          ) : r.verification_verdict === 'Rejected' ? (
+            <span className="status-badge rework-warning" style={{ fontSize: '0.75rem', padding: '3px 8px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Icon name="alert" size={13} /> Custodian Rejected Rework
+            </span>
+          ) : null}
+        </div>
+      )
+    },
+    { key: 'type', label: 'Type', render: (r) => r.maintenance_type ?? '—' },
+    { key: 'dispatched', label: 'Dispatched', render: (r) => <DateBadge value={r.mechanic_assigned_at} /> },
+    { key: 'time', label: 'Time', render: (r) => formatTime(r.mechanic_assigned_at) },
+    {
+      key: 'action',
+      label: 'Action',
+      locked: true,
+      render: (r) => r.status === 'Under Repair'
+        ? <button className="btn-edit-action icon-btn" type="button" onClick={() => onOpenLogRepairs(r)} title="Log Repairs" aria-label="Log Repairs"><Icon name="wrench" size={14} /></button>
+        : <span className="muted">Submitted</span>
+    },
+  ], [onOpenLogRepairs]);
+  const workOrderColumnChooser = useColumnChooser('vms_mechanic_work_order_columns', workOrderColumnDefs);
+
   return (
     <div className="module-grid">
       <DismissibleHint description="Phase 3 — Work Orders assigned to you. Execute vehicle repairs, submit your repair logs to send the ticket for Custodian inspection, and check back here to see what you've already logged." />
@@ -12810,50 +13715,21 @@ function MechanicWorkOrderModule({
       <section className="panel">
         <div className="panel-header-bar">
           <h3>{isPendingView ? 'Pending Work Orders' : 'Submitted Work Orders'} <span className="count-badge">{tickets.length}</span></h3>
-          <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search work orders..." />
+          <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search work orders..." columnChooser={workOrderColumnChooser} />
         </div>
         <div style={{ height: '16px' }} />
         {tickets.length === 0
           ? <p className="empty-state">{isPendingView ? 'No active work orders assigned to you.' : 'No repair logs submitted yet.'}</p>
           : (
             <DataTable
-              columns={[
-                { label: 'Ticket ID', render: (r) => r.ticket_id },
-                { label: 'Ticket Title', render: (r) => r.ticket_title },
-                { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
-                {
-                  label: 'Work Order',
-                  render: (r) => (
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{r.title}</div>
-                      {r.confirmation_verdict === 'Reopened' ? (
-                        <span className="status-badge rework-danger" style={{ fontSize: '0.75rem', padding: '3px 8px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                          <Icon name="alert" size={13} /> Admin Reopened Rework
-                        </span>
-                      ) : r.verification_verdict === 'Rejected' ? (
-                        <span className="status-badge rework-warning" style={{ fontSize: '0.75rem', padding: '3px 8px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                          <Icon name="alert" size={13} /> Custodian Rejected Rework
-                        </span>
-                      ) : null}
-                    </div>
-                  )
-                },
-                { label: 'Type', render: (r) => r.maintenance_type ?? '—' },
-                { label: 'Instructions', className: 'cell-text', render: (r) => <ExpandableText text={r.work_order_notes ?? r.ticket_description} /> },
-                ...(isPendingView ? [] : [
-                  { label: 'Repair Log', className: 'cell-text', render: (r) => <ExpandableText text={r.repair_logs ?? '—'} /> },
-                ]),
-                { label: 'Dispatched', render: (r) => <DateBadge value={r.mechanic_assigned_at} /> },
-                { label: 'Time', render: (r) => formatTime(r.mechanic_assigned_at) },
-                {
-                  label: 'Action',
-                  render: (r) => r.status === 'Under Repair'
-                    ? <button className="btn-edit-action icon-btn" type="button" onClick={() => onOpenLogRepairs(r)} title="Log Repairs" aria-label="Log Repairs"><Icon name="wrench" size={14} /></button>
-                    : <span className="muted">Submitted</span>
-                },
-              ]}
+              columns={workOrderColumnChooser.visibleColumns}
+              onReorderColumn={workOrderColumnChooser.reorderColumn}
               rows={tickets}
               onRowClick={(row) => row.vehicle && onViewVehicle(row.vehicle)}
+              renderSubRow={(row) => subRowFields([
+                ['Instructions', row.work_order_notes ?? row.ticket_description],
+                ...(isPendingView ? [] : [['Repair Log', row.repair_logs]]),
+              ])}
             />
           )
         }
@@ -13086,10 +13962,76 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 // TICKET TABLE VIEW COLUMNS (alternative to the ticket card grid)
 // =========================================================================
 
+// Collapsible highlight strip above the main ticket table — surfaces
+// tickets whose sub-issues are all done but haven't been closed yet, so
+// an Admin/Custodian can spot and act on them without hunting through the
+// full list below. Always visible (even at a count of 0) so it reads as a
+// permanent fixture of the page, not something that randomly appears.
+function readyToCloseColumns() {
+  return [
+    { key: 'ticket_id', label: 'Ticket ID', render: (r) => <span className="row-title-text">#{r.ticket_id}</span> },
+    { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> },
+    { key: 'title', label: 'Title', render: (r) => r.ticket_title },
+    { key: 'priority', label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
+    { key: 'progress', label: 'Sub-Issues', render: (r) => `${r.progress?.done ?? 0}/${r.progress?.total ?? 0} done` },
+    { key: 'created', label: 'Created', render: (r) => <DateBadge value={r.created_at} /> },
+  ];
+}
+
+function TicketsReadyToClosePanel({ tickets, onViewTicket }) {
+  const [expanded, setExpanded] = useState(false);
+  const [search, setSearch] = useState('');
+  const columns = useMemo(() => readyToCloseColumns(), []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return tickets;
+    return tickets.filter((t) => (
+      String(t.ticket_id).includes(q)
+      || t.ticket_title?.toLowerCase().includes(q)
+      || t.vehicle?.vehicle_name?.toLowerCase().includes(q)
+      || t.vehicle?.plate_number?.toLowerCase().includes(q)
+    ));
+  }, [tickets, search]);
+
+  return (
+    <div className="ready-to-close-panel">
+      <div className="ready-to-close-header">
+        <span className="count-badge">{tickets.length}</span>
+        <h3>Tickets Ready to Close</h3>
+        <div className="ready-to-close-search">
+          <LocalSearchInput value={search} onChange={setSearch} placeholder="Search ready tickets..." />
+        </div>
+        <button
+          type="button"
+          className="ready-to-close-toggle"
+          onClick={() => setExpanded((v) => !v)}
+          title={expanded ? 'Collapse' : 'Expand'}
+          aria-expanded={expanded}
+        >
+          <Icon name="chevronDown" size={16} className={expanded ? 'is-expanded' : ''} />
+        </button>
+      </div>
+      {expanded && (
+        <div className="ready-to-close-body">
+          <DataTable
+            compact
+            columns={columns}
+            rows={filtered}
+            onRowClick={onViewTicket}
+            emptyMessage={tickets.length ? 'No tickets match your search.' : 'No tickets are ready to close right now.'}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ticketTableColumns(unreadByTicket = {}) {
   return [
-    { label: 'Ticket ID', render: (r) => r.ticket_id },
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, render: (r) => r.ticket_id },
     {
+      key: 'title',
       label: 'Title',
       render: (r) => {
         const unread = unreadByTicket[r.ticket_id] ?? 0;
@@ -13112,12 +14054,12 @@ function ticketTableColumns(unreadByTicket = {}) {
         );
       },
     },
-    { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
-    { label: 'Status', render: (r) => <TicketStatusBadge value={r.status} /> },
-    { label: 'Next Step', render: (r) => <TicketStageBadge ticket={r} /> },
-    { label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
-    { label: 'Created', render: (r) => <DateBadge value={r.created_at} /> },
-    { label: 'Time', render: (r) => formatTime(r.created_at) },
+    { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { key: 'plate', label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'status', label: 'Status', render: (r) => <TicketStatusBadge value={r.status} /> },
+    { key: 'next_step', label: 'Next Step', render: (r) => <TicketStageBadge ticket={r} /> },
+    { key: 'priority', label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
+    { key: 'created', label: 'Created', render: (r) => <DateBadge value={r.created_at} /> },
+    { key: 'time', label: 'Time', render: (r) => formatTime(r.created_at) },
   ];
 }
 
@@ -13126,16 +14068,16 @@ function ticketTableColumns(unreadByTicket = {}) {
 // =========================================================================
 
 const ticketArchiveColumns = [
-  { label: 'Archive ID', render: (r) => r.archive_id },
-  { label: 'Ticket ID', render: (r) => r.ticket_id },
-  { label: 'Title', render: (r) => r.ticket_title },
-  { label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle ?? { vehicle_name: r.vehicle_name, plate_number: r.plate_number }} /> },
-  { label: 'Plate', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
-  { label: 'Expenses', render: (r) => r.maintenance_cost ? `₱${Number(r.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₱0.00' },
-  { label: 'Final Status', render: (r) => <TicketStatusBadge value={r.final_status} /> },
-  { label: 'Archived By', render: (r) => <UserAvatarName user={r.archived_by} fallback="—" /> },
-  { label: 'Archived At', render: (r) => <DateBadge value={r.archived_at} /> },
-  { label: 'Time', render: (r) => formatTime(r.archived_at) },
+  { key: 'archive_id', label: 'Archive ID', locked: true, render: (r) => r.archive_id },
+  { key: 'ticket_id', label: 'Ticket ID', render: (r) => r.ticket_id },
+  { key: 'title', label: 'Title', render: (r) => r.ticket_title },
+  { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle ?? { vehicle_name: r.vehicle_name, plate_number: r.plate_number }} /> },
+  { key: 'plate', label: 'Plate', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
+  { key: 'expenses', label: 'Expenses', render: (r) => r.maintenance_cost ? `₱${Number(r.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₱0.00' },
+  { key: 'final_status', label: 'Final Status', render: (r) => <TicketStatusBadge value={r.final_status} /> },
+  { key: 'archived_by', label: 'Archived By', render: (r) => <UserAvatarName user={r.archived_by} fallback="—" /> },
+  { key: 'archived_at', label: 'Archived At', render: (r) => <DateBadge value={r.archived_at} /> },
+  { key: 'time', label: 'Time', render: (r) => formatTime(r.archived_at) },
 ];
 
 // =========================================================================
@@ -13732,9 +14674,6 @@ function FilterBar({
   priorityLabel = "Priority",
   statusLabel = "Status",
   trailing,
-  // Advanced filter panel — opt-in (Vehicle Management only today) so every
-  // other FilterBar usage renders exactly as before.
-  showAdvanced = false,
   filterLocation,
   setFilterLocation,
   filterDomain,
@@ -13795,9 +14734,6 @@ function FilterBar({
     });
   }, [filterCategory, filterCapacity, filterStatus, filterPriority, filterLocation, filterDomain]);
 
-  const hasActiveFilters = (filterCategory?.length || filterCapacity?.length || filterStatus?.length
-    || filterPriority?.length || filterLocation?.length || filterDomain?.length
-    || extraFilters.some((f) => f.selected?.length) || (dateRange && (dateRange.start || dateRange.end))) > 0;
   const isDirty = !sameSelection(draft.category, filterCategory ?? [])
     || !sameSelection(draft.capacity, filterCapacity ?? [])
     || !sameSelection(draft.status, filterStatus ?? [])
@@ -13814,17 +14750,40 @@ function FilterBar({
     if (setFilterDomain) setFilterDomain(draft.domain);
   };
 
-  const clearFilters = () => {
-    setDraft({ category: [], capacity: [], status: [], priority: [], location: [], domain: [] });
-    setFilterCategory([]);
-    setFilterCapacity([]);
-    setFilterStatus([]);
-    if (setFilterPriority) setFilterPriority([]);
-    if (setFilterLocation) setFilterLocation([]);
-    if (setFilterDomain) setFilterDomain([]);
-    extraFilters.forEach((f) => f.setSelected([]));
-    if (dateRange) { dateRange.setStart(''); dateRange.setEnd(''); }
-  };
+  const extraFiltersJsx = extraFilters.map((f) => (
+    <MultiSelectDropdown
+      key={f.key}
+      placeholder={`All ${f.label}`}
+      options={f.options}
+      selected={f.selected}
+      onChange={f.setSelected}
+    />
+  ));
+
+  const dateRangeJsx = dateRange && (
+    <>
+      <div className="filter-date-group">
+        <span>From Date</span>
+        <input
+          type="date"
+          className="filter-select"
+          style={{ minWidth: 'auto' }}
+          value={dateRange.start}
+          onChange={(e) => dateRange.setStart(e.target.value)}
+        />
+      </div>
+      <div className="filter-date-group">
+        <span>To Date</span>
+        <input
+          type="date"
+          className="filter-select"
+          style={{ minWidth: 'auto' }}
+          value={dateRange.end}
+          onChange={(e) => dateRange.setEnd(e.target.value)}
+        />
+      </div>
+    </>
+  );
 
   return (
     <div className="filter-bar-container">
@@ -13868,60 +14827,28 @@ function FilterBar({
         />
       )}
 
-      {/* Advanced filters — merged directly into the main filter row */}
-      {showAdvanced && (
-        <>
-          <MultiSelectDropdown
-            placeholder="All Locations"
-            options={locations}
-            selected={draft.location}
-            onChange={(vals) => setDraft((d) => ({ ...d, location: vals }))}
-          />
-          <MultiSelectDropdown
-            placeholder="All Domains (Land/Water)"
-            options={domains}
-            selected={draft.domain}
-            onChange={(vals) => setDraft((d) => ({ ...d, domain: vals }))}
-          />
-        </>
-      )}
-
-      {/* Extra module-specific dropdowns — apply immediately, not staged. */}
-      {extraFilters.map((f) => (
+      {/* Location/Domain — only Vehicle Management passes their setters. */}
+      {setFilterLocation && (
         <MultiSelectDropdown
-          key={f.key}
-          placeholder={`All ${f.label}`}
-          options={f.options}
-          selected={f.selected}
-          onChange={f.setSelected}
+          placeholder="All Locations"
+          options={locations}
+          selected={draft.location}
+          onChange={(vals) => setDraft((d) => ({ ...d, location: vals }))}
         />
-      ))}
-
-      {/* Date range — also applies immediately as typed. */}
-      {dateRange && (
-        <>
-          <div className="filter-date-group">
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #64748b)', fontWeight: 'bold' }}>From:</span>
-            <input
-              type="date"
-              className="filter-select"
-              style={{ minWidth: 'auto' }}
-              value={dateRange.start}
-              onChange={(e) => dateRange.setStart(e.target.value)}
-            />
-          </div>
-          <div className="filter-date-group">
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #64748b)', fontWeight: 'bold' }}>To:</span>
-            <input
-              type="date"
-              className="filter-select"
-              style={{ minWidth: 'auto' }}
-              value={dateRange.end}
-              onChange={(e) => dateRange.setEnd(e.target.value)}
-            />
-          </div>
-        </>
       )}
+      {setFilterDomain && (
+        <MultiSelectDropdown
+          placeholder="All Domains (Land/Water)"
+          options={domains}
+          selected={draft.domain}
+          onChange={(vals) => setDraft((d) => ({ ...d, domain: vals }))}
+        />
+      )}
+
+      {/* Extra module-specific dropdowns and the date range apply
+          immediately, not staged. */}
+      {extraFiltersJsx}
+      {dateRangeJsx}
 
       {/* Apply Filter button */}
       <button
@@ -13932,17 +14859,6 @@ function FilterBar({
       >
         Filter
       </button>
-
-      {/* Clear Filters button */}
-      {(hasActiveFilters || isDirty) && (
-        <button
-          type="button"
-          className="filter-clear-btn"
-          onClick={clearFilters}
-        >
-          Clear Filters
-        </button>
-      )}
 
       {trailing && <div className="filter-bar-trailing">{trailing}</div>}
     </div>
