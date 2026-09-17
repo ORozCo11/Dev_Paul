@@ -852,28 +852,41 @@
 .module-nav-group { display: flex; flex-direction: column; gap: 4px; }
 .module-nav-group + .module-nav-group { margin-top: 12px; }
 
-/* Section header — deliberately quieter than a nav item so it reads as a
-   label, not another destination you can click into. */
+/* Section header — same visual weight as a real nav item (icon + label +
+   chevron), not a quiet label, so it reads as the clickable accordion
+   trigger it is. No group-wide highlight box when expanded — just this
+   header's own hover/color state, like every other nav row. */
 .module-nav .module-nav-section {
-  display: flex; align-items: center; gap: 6px;
-  width: 100%; padding: 4px 12px;
-  background: transparent; border: none; border-radius: 6px;
-  color: #64748b;
-  font-size: 0.68rem; font-weight: 800;
-  text-transform: uppercase; letter-spacing: 0.07em;
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; padding: 10px 12px;
+  background: transparent; border: 1px solid transparent; border-radius: 8px;
+  color: #cbd5e1;
+  font-size: 0.875rem; font-weight: 600;
+  text-transform: none; letter-spacing: normal;
   cursor: pointer; text-align: left;
-  transition: color 0.15s ease;
+  transition: all 0.15s ease;
 }
-.module-nav .module-nav-section:hover { background: transparent; color: #cbd5e1; }
+.module-nav .module-nav-section:hover { background: #1e293b; color: #f1f5f9; }
 .module-nav-section-label { flex: 1; }
 .module-nav-section-chevron { flex-shrink: 0; transition: transform 0.15s ease; }
-/* Points right when folded, down when open. */
-.module-nav-section-chevron.is-collapsed { transform: rotate(-90deg); }
+/* Points down when folded, up (flipped) when open. */
+.module-nav-section-chevron.is-expanded { transform: rotate(180deg); }
+/* A section's own rows sit indented under its header's text, not flush with
+   it, so the parent/child relationship reads at a glance. */
+.module-nav-group > button:not(.module-nav-section) {
+  padding-left: 34px;
+}
 
 /* Icon-only rail: no room for section labels, and the groups are force-open
    in JS there so every icon stays reachable. */
 .sidebar.collapsed .module-nav-section { display: none; }
 .sidebar.collapsed .module-nav-group + .module-nav-group { margin-top: 8px; }
+/* ...and no room for the sub-item indent either — every icon must stay
+   centered like a top-level one. Specificity has to beat the light-theme
+   indent override below it in the cascade, not just the base indent rule. */
+.sidebar.collapsed .module-nav-group > button:not(.module-nav-section) {
+  padding-left: 10px;
+}
 
 .module-nav button {
   display: flex; align-items: center; gap: 10px;
@@ -938,6 +951,112 @@
   background: #ef4444;
   color: #ffffff;
 }
+
+/* Activity Log — a rounded pill color tag per module/category (color picked
+   deterministically per module string, see moduleBadgeTone), the Action
+   column as the plain full sentence, and a User cell that stacks the
+   actor's role in small muted text under their name instead of a separate
+   Role column. */
+.log-category-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.log-user-cell { display: flex; flex-direction: column; gap: 2px; }
+.log-user-role {
+  padding-left: 34px;
+  font-size: 0.72rem;
+  color: var(--text-muted, #64748b);
+}
+
+/* Underline tabs (List View / Recent Activities, Card/List elsewhere) — a
+   lighter-weight alternative to the filled-pill .locations-tab-button
+   segmented control, for views that read as one page with two lenses
+   rather than a mode switch. */
+.view-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+  margin-bottom: 16px;
+}
+.view-tabs button {
+  padding: 10px 2px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.view-tabs button:hover { color: var(--text, #1f2937); }
+.view-tabs button.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+/* Generate Report dropdown */
+.generate-report-btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.generate-report-panel { width: 240px; padding: 6px; }
+.generate-report-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+.generate-report-option:hover { background: var(--surface-2, #f8fafc); }
+.generate-report-option strong { font-size: 0.82rem; color: var(--text-strong, #0f172a); }
+.generate-report-option span { font-size: 0.72rem; color: var(--text-muted, #64748b); }
+
+/* Recent Activities timeline */
+.activity-timeline-wrap { margin-top: 4px; }
+.activity-timeline-title { margin: 0 0 16px; font-size: 1rem; font-weight: 700; color: var(--text-strong, #0f172a); }
+.activity-timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+.activity-timeline::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--border, #e2e8f0);
+}
+.activity-timeline-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 0;
+}
+.activity-timeline-dot {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eff6ff;
+  color: #2563eb;
+}
+.activity-timeline-body { flex: 1; min-width: 0; }
+.activity-timeline-body strong { display: block; font-size: 0.88rem; color: var(--text-strong, #0f172a); }
+.activity-timeline-body p { margin: 2px 0 0; font-size: 0.82rem; color: var(--text-muted, #64748b); }
+.activity-timeline-time { flex-shrink: 0; font-size: 0.78rem; color: var(--text-muted, #94a3b8); white-space: nowrap; }
 
 /* SIDEBAR — collapsed state (icons only, hidden labels) */
 .sidebar-toggle-btn { flex-shrink: 0; }
@@ -1808,14 +1927,14 @@ html[data-theme="light"] .toast-notice.error {
 /* MODULE GRID — always full width; forms open as modals */
 .module-grid { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
 
-/* Issue Reports' stat cards + filter bar share a left column; the "what
-   just came in" card sits in a fixed-width right column spanning BOTH
-   rows — tall enough to run alongside the cards and the (narrow, natural-
-   width) filter row below them, instead of one flat strip per row. */
+/* Issue Reports overview row: stat cards span the full width, then a
+   "Projects"-style chart pairs with the "what just came in" activity card
+   (same row, chart on the left / activity on the right), and the filter bar
+   spans full width again below both. */
 .issue-summary-grid {
   display: grid;
   grid-template-columns: 1fr 420px;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   gap: 16px;
 }
 @media (max-width: 900px) {
@@ -1824,19 +1943,25 @@ html[data-theme="light"] .toast-notice.error {
   }
 }
 .issue-summary-stats {
-  grid-column: 1;
+  grid-column: 1 / -1;
   grid-row: 1;
   min-width: 0;
 }
 .issue-summary-stats .metric-grid {
   margin-bottom: 0 !important;
 }
-.issue-summary-filters {
+.issue-summary-chart {
   grid-column: 1;
   grid-row: 2;
   min-width: 0;
 }
+.issue-summary-filters {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-width: 0;
+}
 @media (max-width: 900px) {
+  .issue-summary-chart,
   .issue-summary-filters {
     grid-column: 1;
     grid-row: auto;
@@ -1844,7 +1969,7 @@ html[data-theme="light"] .toast-notice.error {
 }
 .latest-issue-card {
   grid-column: 2;
-  grid-row: 1 / 3;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2004,6 +2129,17 @@ html[data-theme="light"] .toast-notice.error {
 @media (max-width: 560px) {
   .dashboard-headline-grid { grid-template-columns: 1fr !important; }
 }
+/* Maintenance Schedule's 8-card row (Total + 4 urgency buckets + Completed
+   + Awaiting Verification + Cancelled) — same fixed-column fix as the
+   dashboard's headline grid, so it lands as two even rows of four instead
+   of auto-fit's ragged trailing row (7 wide columns, 1 card alone on row 2). */
+.schedule-stat-grid { grid-template-columns: repeat(4, 1fr) !important; }
+@media (max-width: 900px) {
+  .schedule-stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+@media (max-width: 560px) {
+  .schedule-stat-grid { grid-template-columns: 1fr !important; }
+}
 .full-span { grid-column: 1/-1; }
 .metric-card {
   background: linear-gradient(180deg, #ffffff, #f8fbff); border: 1px solid #d9e6f8; border-radius: 16px; padding: 22px;
@@ -2060,8 +2196,12 @@ html[data-theme="light"] .toast-notice.error {
   transform: translateY(-2px);
 }
 .metric-card-iconic .metric-card-body { display: flex; flex-direction: column; text-align: left; }
-.metric-card-iconic .metric-card-body span { margin-bottom: 4px; }
-.metric-card-iconic .metric-card-body strong { font-size: 1.5rem; }
+/* Fixed (not theme-variable) colors — .metric-card's own background is
+   hardcoded white/light regardless of app theme, so these cards need text
+   that's always readable against that, not var(--text-strong)/(--text-muted)
+   which flip to near-white in dark mode and would vanish on a white card. */
+.metric-card-iconic .metric-card-body span { margin-bottom: 4px; color: #64748b; }
+.metric-card-iconic .metric-card-body strong { font-size: 1.5rem; color: #0f172a; }
 
 /* Dashboard's top metric row specifically — a touch more compact than the
    iconic stat cards used on module pages (Vehicle Management, etc.). */
@@ -2135,11 +2275,18 @@ td.cell-text {
 }
 
 /* Click-to-expand long text: clamped to N lines by default via inline
-   -webkit-line-clamp; clicking sets it to 'unset' and shows the rest. */
+   -webkit-line-clamp; clicking sets it to 'unset' and shows the rest. The
+   wrapper stacks the clamped text above a "Show more" chevron toggle, which
+   only renders (see ExpandableText) when the text actually overflows. */
+.expandable-text-wrap {
+  display: block;
+}
 .expandable-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.expandable-text.is-clickable {
   cursor: pointer;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
@@ -2148,6 +2295,26 @@ td.cell-text {
 .expandable-text.is-expanded {
   overflow: visible;
   text-decoration: none;
+}
+.expandable-text-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary, #2563eb);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+.expandable-text-toggle svg {
+  transition: transform 0.15s ease;
+}
+.expandable-text-toggle.is-expanded svg {
+  transform: rotate(180deg);
 }
 
 /* --- Issue Reports: combined issue cell --- */
@@ -2184,18 +2351,24 @@ td.cell-text {
   line-height: 1.2;
 }
 
-/* Distinguishes a vehicle's standing condition from its older, superseded
-   check-in history so a repeated vehicle in the table never reads as
-   ambiguous about which row is actually true right now. */
-.issue-desc {
-  margin: 0;
-  font-size: 0.78rem;
-  line-height: 1.4;
-  color: var(--text-muted, #64748b);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+/* Full-width note band a table row can render right below itself (see
+   DataTable's renderSubRow) — for a long free-text field that doesn't fit a
+   narrow column, instead of clamping/truncating it. */
+.table-subrow td {
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  padding: 8px 18px;
+  border-right: none;
+}
+.table-subrow-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.table-subrow-lines strong {
+  color: #334155;
 }
 
 .issue-reporter {
@@ -2558,7 +2731,7 @@ table a:hover {
    overrides max-width/ellipsis entirely — the classic flexbox truncation bug. */
 .vcn-text {
   display: block;
-  max-width: 150px;
+  max-width: 220px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3160,62 +3333,97 @@ table button.icon-btn svg,
 .report-heading h3 { font-size: 1.2rem; font-weight: 800; }
 .report-heading p { font-size: 0.9rem; color: #64748b; margin-top: 3px; }
 
-.report-catalog { display: flex; flex-direction: column; gap: 10px; }
-.report-category {
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 10px;
-  overflow: hidden;
+/* Reports — always-visible colored columns (one per category), each report
+   expanding its generator form inline in place, instead of the old single
+   accordion + shared bottom panel. */
+.report-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
 }
-.report-category-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: var(--surface-2, #f8fafc);
-  border: none;
-  color: var(--text-strong, #0f172a);
-  font-size: 0.88rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-.report-category-header span { display: flex; align-items: center; gap: 8px; }
-.report-category-body {
-  display: flex;
-  flex-direction: column;
-  padding: 6px;
-  gap: 4px;
-}
-.report-type-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  text-align: left;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.report-type-item:hover { background: rgba(37, 99, 235, 0.06); }
-.report-type-item.active { background: rgba(37, 99, 235, 0.1); border-color: rgba(37, 99, 235, 0.28); }
-.report-type-item strong { font-size: 0.85rem; color: var(--text-strong, #0f172a); }
-.report-type-item span { font-size: 0.78rem; color: var(--text-muted, #64748b); }
-.report-generator-panel {
-  margin-top: 8px;
-  padding: 18px;
+.report-category-card {
   border: 1px solid var(--border, #e2e8f0);
   border-radius: 10px;
   background: var(--surface, #fff);
+  overflow: hidden;
 }
-.report-generator-panel h4 {
+.report-category-card-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-  margin-bottom: 14px;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+}
+.report-category-card-head h4 { margin: 0; font-size: 0.92rem; font-weight: 700; flex: 1; }
+.report-category-card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.report-category-count {
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-2, #f1f5f9);
+  color: var(--text-muted, #64748b);
+}
+.report-category-card.tone-blue .report-category-card-head h4 { color: #2563eb; }
+.report-category-card.tone-blue .report-category-card-icon,
+.report-category-card.tone-blue .report-category-count,
+.report-category-card.tone-blue .report-type-icon { background: #dbeafe; color: #2563eb; }
+.report-category-card.tone-green .report-category-card-head h4 { color: #16a34a; }
+.report-category-card.tone-green .report-category-card-icon,
+.report-category-card.tone-green .report-category-count,
+.report-category-card.tone-green .report-type-icon { background: #dcfce7; color: #16a34a; }
+.report-category-card.tone-purple .report-category-card-head h4 { color: #7c3aed; }
+.report-category-card.tone-purple .report-category-card-icon,
+.report-category-card.tone-purple .report-category-count,
+.report-category-card.tone-purple .report-type-icon { background: #ede9fe; color: #7c3aed; }
+.report-category-card.tone-amber .report-category-card-head h4 { color: #d97706; }
+.report-category-card.tone-amber .report-category-card-icon,
+.report-category-card.tone-amber .report-category-count,
+.report-category-card.tone-amber .report-type-icon { background: #fef3c7; color: #d97706; }
+
+.report-category-card-body { display: flex; flex-direction: column; }
+.report-type-row + .report-type-row { border-top: 1px solid var(--border-subtle, #eef2f7); }
+.report-type-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.report-type-item:hover { background: var(--surface-2, #f8fafc); }
+.report-type-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.report-type-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.report-type-item strong { font-size: 0.85rem; color: var(--text-strong, #0f172a); }
+.report-type-item span span { font-size: 0.76rem; color: var(--text-muted, #64748b); }
+.report-type-item svg { flex-shrink: 0; transition: transform 0.15s ease; color: var(--text-muted, #94a3b8); }
+.report-type-item svg.is-expanded { transform: rotate(180deg); }
+.report-type-row.is-open .report-type-item { background: var(--surface-2, #f8fafc); }
+.report-generator-panel {
+  padding: 4px 16px 16px;
+  background: var(--surface-2, #f8fafc);
 }
 
 /* ANIMATIONS */
@@ -3754,6 +3962,54 @@ button.wizard-step-pill:hover {
 .ticket-alert-banner.formaint { background: linear-gradient(90deg,#fffbeb,#fef3c7); border: 1px solid #fcd34d; color: #92400e; }
 .ticket-alert-banner.forconfirm { background: linear-gradient(90deg,#faf5ff,#ede9fe); border: 1px solid #c4b5fd; color: #5b21b6; }
 
+/* Collapsible "Tickets Ready to Close" highlight strip, sitting above the
+   main ticket table — a red count badge, title, its own search box, and a
+   toggle to collapse the mini-table when it's not needed. */
+.ready-to-close-panel {
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ready-to-close-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+.ready-to-close-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #065f46;
+  white-space: nowrap;
+}
+.ready-to-close-search {
+  flex: 1;
+  max-width: 320px;
+  margin-left: auto;
+}
+.ready-to-close-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: #a7f3d0;
+  color: #065f46;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.ready-to-close-toggle:hover { background: #6ee7b7; }
+.ready-to-close-toggle svg.is-expanded { transform: rotate(180deg); }
+.ready-to-close-body {
+  padding: 0 16px 16px;
+}
+.ready-to-close-body .table-shell { background: #ffffff; border-radius: 8px; }
+
 /* --- Ticket Cards Grid --- */
 .ticket-card-grid {
   display: grid;
@@ -4032,13 +4288,6 @@ button.wizard-step-pill:hover {
 html section.ticket-process-hero .ticket-detail-title { margin-bottom: 8px; color: #ffffff; }
 .ticket-process-hero .ticket-detail-subline { margin-top: 8px; color: rgba(226, 232, 240, 0.78); }
 .ticket-process-hero .ticket-meta-item { color: rgba(226, 232, 240, 0.78); }
-.ticket-process-description {
-  margin-top: 10px;
-  font-size: 0.85rem;
-  color: rgba(226, 232, 240, 0.85);
-  line-height: 1.55;
-  max-width: 60ch;
-}
 .ticket-process-cancelled { margin: 20px 28px 0; }
 
 /* Resolved-% ring — same conic-gradient technique as the dashboard's Ops
@@ -5153,35 +5402,6 @@ html section.ticket-process-hero .ticket-detail-title { margin-bottom: 8px; colo
 }
 .veh-remarks p { margin: 4px 0 0; font-size: 0.86rem; color: var(--text, #334155); }
 
-.veh-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 16px 18px 6px; }
-.veh-stat {
-  background: var(--surface-2, #f8fafc); border: 1px solid var(--border-subtle, #eef2f7);
-  border-radius: 10px; padding: 11px 13px; display: flex; flex-direction: column; gap: 2px;
-}
-.veh-stat span { font-size: 1.15rem; font-weight: 800; color: var(--primary-strong, #1d4ed8); font-variant-numeric: tabular-nums; }
-.veh-stat small { font-size: 0.68rem; font-weight: 600; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.04em; }
-/* One solid color per stat (not a pastel tint) so the four read as
-   distinct signals at a glance instead of four identical gray boxes. */
-.veh-stat-blue, .veh-stat-amber, .veh-stat-red, .veh-stat-green {
-  border-color: transparent;
-}
-.veh-stat-blue span, .veh-stat-amber span, .veh-stat-red span, .veh-stat-green span,
-.veh-stat-blue small, .veh-stat-amber small, .veh-stat-red small, .veh-stat-green small {
-  color: #fff;
-}
-.veh-stat-blue small, .veh-stat-amber small, .veh-stat-red small, .veh-stat-green small {
-  opacity: 0.85;
-}
-.veh-stat-blue { background: #2563eb; }
-.veh-stat-amber { background: #d97706; }
-.veh-stat-red { background: #dc2626; }
-.veh-stat-green { background: #16a34a; }
-.veh-mini-label {
-  margin: 8px 18px 6px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--text-muted, #64748b);
-}
-.veh-analytics .horizontal-bars, .veh-analytics .empty-state { padding: 0 18px 16px; }
-
 .veh-map-wrap, .issue-view-map-wrap { height: 300px; width: 100%; }
 .veh-map-canvas { height: 100%; width: 100%; }
 .veh-map-empty, .veh-map-wrap .veh-map-empty {
@@ -5298,11 +5518,6 @@ html section.ticket-process-hero .ticket-detail-title { margin-bottom: 8px; colo
   background: #fff; color: #2563eb; cursor: pointer; transition: background 0.15s ease;
 }
 .veh-reports-print-btn:hover { background: #eff6ff; }
-
-/* Current Location map — moved out of the narrow left column entirely so
-   it spans the full page width instead of being squeezed to ~380px. */
-.veh-map-wide { width: 100%; margin-top: 16px; }
-.veh-map-wide .veh-map-wrap { height: 360px; }
 
 /* Printable report — kept off-screen (not display:none) so the embedded
    Leaflet map inside it can actually size/mount and load tiles ahead of
@@ -5844,7 +6059,7 @@ button.file-card-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-
   margin-left: auto;
 }
 .module-filter-panel {
-  padding: 16px 22px;
+  padding: 14px 18px;
 }
 .module-filter-panel .filter-bar-container {
   margin: 0;
@@ -5875,10 +6090,173 @@ button.file-card-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-
   position: relative;
   display: inline-block;
 }
-.filter-bar-container > .filter-date-group {
+/* Not scoped to a direct child of .filter-bar-container — this also needs
+   to render correctly nested inside other filter layouts (e.g. Issue
+   Reports' bespoke panel). Label sits above the input (like the
+   reference's "From Date"/"To Date" captions) instead of beside it. */
+.filter-date-group {
   display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.filter-date-group > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+/* Roomier than a plain dropdown-style .filter-select, with a bigger, blue
+   calendar icon (the browser's native picker indicator, enlarged and
+   tinted) instead of the tiny default one. */
+.filter-date-group input[type="date"] {
+  min-width: 210px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  cursor: text;
+}
+.filter-date-group input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 3px;
+  margin-left: 6px;
+  transform: scale(1.35);
+  filter: invert(32%) sepia(93%) saturate(1352%) hue-rotate(202deg) brightness(94%) contrast(101%);
+}
+
+/* Issue Reports' bespoke filter panel (search + dropdowns + dates on top,
+   a severity range slider and colored status chips below). */
+.issue-filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.issue-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+/* Pushed to the far right of the row (margin-left: auto absorbs all the
+   leftover space), same placement as the reference's From/To Date pair. */
+.issue-filter-dates {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+.issue-filter-date-input input[type="date"] {
+  min-width: 200px;
+}
+.issue-filter-row-bottom {
+  align-items: stretch;
+}
+.issue-filter-severity-card {
+  flex: 1 1 260px;
+  min-width: 220px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.issue-filter-severity-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-strong, #0f172a);
+}
+/* Fixed-width chips (not stretched to fill leftover row space) so the
+   Filter button — not this grid — is what grows to fill the rest of the
+   row, matching the reference's proportions (a compact chip cluster next
+   to a wide, prominent button). */
+.issue-filter-status-grid {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 200px));
+  gap: 6px;
+}
+.issue-filter-status-chip {
+  display: flex;
   align-items: center;
   gap: 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.issue-filter-status-chip input { flex-shrink: 0; width: 15px; height: 15px; margin: 0; }
+.issue-filter-actions {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  min-width: 160px;
+}
+.issue-filter-apply-btn { width: 100%; height: 38px; font-size: 0.9rem; }
+
+/* Dual-handle range slider — two overlaid native range inputs share one
+   track; each input is fully transparent and click-through except its own
+   thumb, so only a thumb (not the bare track) is draggable per-input. */
+.dual-range-slider { padding: 6px 8px 0; }
+.dual-range-track {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-2, #e2e8f0);
+  margin: 14px 0;
+}
+.dual-range-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: #2563eb;
+  border-radius: 999px;
+}
+.dual-range-input {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  margin: 0;
+  transform: translateY(-50%);
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: none;
+}
+.dual-range-input::-webkit-slider-runnable-track { background: transparent; }
+.dual-range-input::-moz-range-track { background: transparent; }
+.dual-range-input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.dual-range-input::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.dual-range-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-muted, #64748b);
+  font-weight: 600;
 }
 .multi-select-trigger.filter-select {
   display: flex;
@@ -6124,44 +6502,6 @@ button.file-card-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-
   color: #dc2626;
   transform: translateY(-1px);
 }
-
-/* Advanced Filter — a collapsed bar that expands into a second row of
-   more specific criteria, instead of cramming every filter into the one
-   always-visible basic row. */
-.advanced-filter-panel {
-  width: 100%;
-  margin-top: 4px;
-  border: 1px solid #dbeafe;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #f8fafc;
-}
-.advanced-filter-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 16px;
-  background: #eef4ff;
-  border: none;
-  color: #1e293b;
-  font-size: 0.82rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.advanced-filter-toggle:hover { background: #dbeafe; }
-.advanced-filter-chevron { transition: transform 0.15s ease; }
-.advanced-filter-chevron.is-open { transform: rotate(180deg); }
-.advanced-filter-grid {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  animation: fadeSlide 0.15s ease;
-}
-.advanced-filter-grid .filter-select { min-width: 200px; }
 
 /* Condition Monitoring Checklist Filter Panel */
 .filter-popover-container {
@@ -6802,6 +7142,201 @@ table button,
   font-size: 0.72rem;
   font-weight: 700;
 }
+
+.segmented-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-2, #f1f5f9);
+  margin-bottom: 16px;
+}
+.segmented-bar span { display: block; height: 100%; }
+
+/* "Projects"-style titled chart card: a tall segmented bar with inline
+   value labels, a hover tooltip breaking every segment down at once, and a
+   plain legend row underneath. */
+.stacked-bar-chart {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  padding: 24px;
+  height: 100%;
+  box-sizing: border-box;
+}
+.stacked-bar-chart-title {
+  margin: 0 0 22px;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-strong, #0f172a);
+}
+/* The tooltip has to be a sibling of .stacked-bar, not a child — a child
+   positioned outside the bar's own box would get clipped by the bar's own
+   overflow:hidden (needed there to round the segment corners). */
+.stacked-bar-wrap { position: relative; }
+.stacked-bar {
+  display: flex;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-2, #f1f5f9);
+}
+.stacked-bar-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+.stacked-bar-tooltip {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 8%;
+  z-index: 5;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  color: var(--text, #334155);
+}
+.stacked-bar-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  white-space: nowrap;
+}
+.stacked-bar-tooltip-row span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.stacked-bar-legend {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.stacked-bar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-muted, #64748b);
+}
+.stacked-bar-legend-item span {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Users page analytics row (donut + role bar), replacing the old stat-pill
+   row for this one module — see Users module render branch. */
+.user-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 4px;
+}
+.user-analytics-card { padding: 18px; }
+.user-analytics-title { margin: 0 0 16px; font-size: 0.92rem; font-weight: 700; color: var(--text-strong, #0f172a); }
+
+.user-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.user-card:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); transform: translateY(-1px); }
+.user-card-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
+.user-card-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.user-card-name { font-size: 0.95rem; color: var(--text-strong, #0f172a); }
+.user-card-role { font-size: 0.78rem; font-style: italic; color: var(--text-muted, #64748b); }
+.user-card-underline { width: 40px; height: 3px; border-radius: 999px; background: #2563eb; margin: 8px 0; }
+.user-card-contact {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.8rem;
+  color: var(--text-muted, #64748b);
+  margin-bottom: 8px;
+  max-width: 100%;
+}
+.user-card-contact a { color: #2563eb; text-decoration: none; word-break: break-all; }
+.user-card-contact a:hover { text-decoration: underline; }
+
+.history-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.history-card:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); transform: translateY(-1px); }
+.history-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.history-card-activity {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.history-card-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted, #64748b);
+  line-height: 1.4;
+}
+.history-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, #edf1f7);
+  font-size: 0.76rem;
+  color: var(--text-muted, #64748b);
+}
+.history-card-date { display: inline-flex; align-items: center; gap: 6px; }
 
 .chart-legend {
   list-style: none;
@@ -7918,45 +8453,56 @@ table button,
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  padding: 12px 4px 0;
-  font-size: 0.8rem;
+  padding: 16px 4px 0;
+  font-size: 0.85rem;
+  color: var(--text, #334155);
+}
+.table-pagination-pages,
+.table-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.table-pagination-size { gap: 8px; }
+.table-pagination-size .muted { margin-right: 2px; font-size: 0.82rem; }
+.pagination-ellipsis {
+  padding: 0 4px;
+  color: var(--text-muted, #94a3b8);
+}
+/* Numbered page / page-size buttons — plain text until picked, then a solid
+   blue circle, matching the reference pager instead of the old boxy
+   Prev/Next + <select> footer. */
+.pagination-page,
+.pagination-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text, #334155);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pagination-page:hover:not(.active),
+.pagination-arrow:hover:not(:disabled) {
+  background: var(--surface-2, #f1f5f9);
+}
+.pagination-page.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+.pagination-arrow {
+  font-size: 1.1rem;
+  font-weight: 400;
   color: var(--text-muted, #64748b);
 }
-.table-pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.table-pagination-controls label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.78rem;
-}
-.table-pagination-controls select {
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--border, #e2e8f0);
-  background: var(--surface, #fff);
-  color: var(--text, #1f2937);
-}
-.table-pagination-controls button.ghost-button {
-  padding: 5px 12px;
-  font-size: 0.78rem;
-  height: auto;
-  color: #fff !important;
-  background: #2563eb !important;
-  border: 1px solid #2563eb !important;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.table-pagination-controls button.ghost-button:hover:not(:disabled) {
-  background: #1d4ed8 !important;
-  border-color: #1d4ed8 !important;
-  color: #fff !important;
-  transform: none;
-}
-.table-pagination-controls button.ghost-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.pagination-arrow:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* View-mode dropdown (Card View / List View) */
 .view-dropdown { position: relative; flex-shrink: 0; }
@@ -9107,6 +9653,19 @@ button.btn-view-action svg {
   font-variant-numeric: tabular-nums;
 }
 
+.hub-modal-vehicle-list {
+  margin: 10px 0 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle, #e2e8f0);
+  border-radius: 8px;
+  background: var(--surface-muted, #f8fafc);
+  font-size: 0.82rem;
+  color: var(--text);
+  max-height: 140px;
+  overflow-y: auto;
+}
+.hub-modal-vehicle-list li { padding: 2px 0; }
+
 .hub-modal-label {
   display: block;
   font-size: 0.72rem;
@@ -10114,6 +10673,13 @@ html[data-theme="light"] .module-nav button {
   padding: 9px 10px;
 }
 
+/* Re-applies the sub-item indent (see base .module-nav-group rule above) —
+   this theme's own `.module-nav button` padding shorthand just above would
+   otherwise win on specificity and flatten it back to 10px. */
+html[data-theme="light"] .module-nav-group > button:not(.module-nav-section) {
+  padding-left: 34px;
+}
+
 html[data-theme="light"] .module-nav button:hover {
   background: rgba(255, 255, 255, 0.12);
   border-color: transparent;
@@ -10131,20 +10697,21 @@ html[data-theme="light"] .module-nav button.active .nav-icon {
   stroke: #ffffff;
 }
 
-/* Section headers must stay quiet labels here too. `html[data-theme="light"]
-   .module-nav button` above is more specific than the base .module-nav-section
-   rule, so without this the header would inherit full nav-item colour, padding
-   and min-height and read as another clickable destination. */
+/* Section header carries the same weight as a real nav item here too — an
+   accordion trigger, not a quiet label — matching the base (dark) theme
+   restyle above. `html[data-theme="light"] .module-nav button` above is more
+   specific than the base .module-nav-section rule, so this still needs its
+   own declaration even though the values now largely mirror it. */
 html[data-theme="light"] .module-nav .module-nav-section {
-  color: rgba(237, 246, 255, 0.62);
-  padding: 4px 10px;
-  min-height: 0;
-  font-size: 0.68rem;
-  font-weight: 800;
+  color: #edf6ff;
+  padding: 9px 10px;
+  min-height: 38px;
+  font-size: 0.8rem;
+  font-weight: 600;
   border-radius: 0;
 }
 html[data-theme="light"] .module-nav .module-nav-section:hover {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
 }
 
@@ -10324,7 +10891,7 @@ html[data-theme="light"] .filter-bar-container {
 
 html[data-theme="light"] .module-filter-panel,
 [data-theme="light"] .module-filter-panel {
-  padding: 16px 22px;
+  padding: 14px 18px;
 }
 
 html[data-theme="light"] .module-filter-panel .filter-bar-container,
@@ -10588,7 +11155,10 @@ html[data-theme="light"] .filter-clear-btn:hover {
 
 html[data-theme="light"] .table-shell {
   background: #ffffff;
-  border: none;
+  /* Ties the table body's outline to the same blue as the panel-header-bar
+     sitting above it, instead of the plain white/gray edge that made each
+     table look disconnected from its own header. */
+  border: 1.5px solid #2563eb;
   border-radius: 10px;
   box-shadow: none;
   margin-bottom: 0;

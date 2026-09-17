@@ -346,7 +346,7 @@ class TicketController extends Controller
             $repairTypeLabels = ['in_house' => 'in-house repair', 'cannibalized' => 'cannibalized part', 'external' => 'external shop'];
             $repairTypeLabel = $repairTypeLabels[$repairType] ?? $repairType;
             $modeLabel = $preDiagnosed ? "pre-diagnosed as {$repairTypeLabel} (inspection skipped)" : 'assigned to custodian for inspection';
-            $this->log($request, 'Create Ticket', "Ticket #{$ticket->ticket_id} ({$data['ticket_title']}) created for {$vehicle->vehicle_name} — {$modeLabel}.");
+            $this->log($request, 'Create Ticket', "Ticket #{$ticket->ticket_id} ({$data['ticket_title']}) created for {$vehicle->vehicle_name} — {$modeLabel}.", $ticket->ticket_id);
 
             if ($preDiagnosed) {
                 $this->notifyAdmins(
@@ -455,7 +455,7 @@ class TicketController extends Controller
             }
 
             $count = $data['inspection_result'] === 'Needs Maintenance' ? count($data['sub_issues']) : 0;
-            $this->log($request, 'Inspection Submitted', "Ticket #{$ticket->ticket_id} inspected. Result: {$data['inspection_result']}" . ($count ? " ({$count} sub-issue(s) logged)." : '.'));
+            $this->log($request, 'Inspection Submitted', "Ticket #{$ticket->ticket_id} inspected. Result: {$data['inspection_result']}" . ($count ? " ({$count} sub-issue(s) logged)." : '.'), $ticket->ticket_id);
 
             $vehicleName = $ticket->vehicle->vehicle_name;
             $custodianName = $request->user()->name;
@@ -523,7 +523,7 @@ class TicketController extends Controller
             }
 
             $progress = $ticket->fresh()->progress;
-            $this->log($request, 'Sub-Issue Added', "Ticket #{$ticket->ticket_id} — sub-issue \"{$data['title']}\" added. Progress {$progress['done']}/{$progress['total']}.");
+            $this->log($request, 'Sub-Issue Added', "Ticket #{$ticket->ticket_id} — sub-issue \"{$data['title']}\" added. Progress {$progress['done']}/{$progress['total']}.", $ticket->ticket_id);
 
             return $subIssue;
         });
@@ -572,7 +572,7 @@ class TicketController extends Controller
 
             $this->recomputeVehicleStatus($ticket->vehicle_id);
 
-            $this->log($request, 'Mechanic Assigned', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" assigned to mechanic ID {$data['assigned_mechanic_id']}.");
+            $this->log($request, 'Mechanic Assigned', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" assigned to mechanic ID {$data['assigned_mechanic_id']}.", $ticket->ticket_id);
 
             $vehicleName = $ticket->vehicle->vehicle_name;
             $this->notifyUser(
@@ -623,7 +623,7 @@ class TicketController extends Controller
             ]);
 
             $vehicleName = $ticket->vehicle->vehicle_name;
-            $this->log($request, 'Work Order Reassigned', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" reassigned from {$previousName} to {$newMechanic->name}. Reason: {$data['reassign_reason']}");
+            $this->log($request, 'Work Order Reassigned', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" reassigned from {$previousName} to {$newMechanic->name}. Reason: {$data['reassign_reason']}", $ticket->ticket_id);
 
             // Let the new mechanic know they're now on it...
             $this->notifyUser(
@@ -713,7 +713,8 @@ class TicketController extends Controller
                 'Custodian Reassigned',
                 "Ticket #{$ticket->ticket_id} — Custodian reassigned from {$previousName} to {$newCustodian->name}."
                 . ($cascaded > 0 ? " {$cascaded} pending verification(s) moved with it." : '')
-                . " Reason: {$data['reassign_reason']}"
+                . " Reason: {$data['reassign_reason']}",
+                $ticket->ticket_id
             );
 
             $this->notifyUser(
@@ -799,7 +800,7 @@ class TicketController extends Controller
                 $ticket->vehicle->update(['estimated_return_date' => $data['estimated_return_date']]);
             }
 
-            $this->log($request, 'Repairs Logged', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" repair logs submitted.");
+            $this->log($request, 'Repairs Logged', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" repair logs submitted.", $ticket->ticket_id);
 
             $mechanicName = $request->user()->name;
             $vehicleName = $ticket->vehicle->vehicle_name;
@@ -876,7 +877,7 @@ class TicketController extends Controller
                 'test_attested'        => $request->boolean('test_attested'),
             ]);
 
-            $this->log($request, 'Repair Verified', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" verification: {$data['verification_verdict']}.");
+            $this->log($request, 'Repair Verified', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" verification: {$data['verification_verdict']}.", $ticket->ticket_id);
 
             $custodianName = $request->user()->name;
             $vehicleName = $ticket->vehicle->vehicle_name;
@@ -932,7 +933,7 @@ class TicketController extends Controller
                 $this->finalizeConfirmedSubIssue($ticket, $subIssue, $request->user()->id, $data['confirmation_notes'] ?? null);
 
                 $progress = $ticket->fresh()->progress;
-                $this->log($request, 'Sub-Issue Confirmed', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" confirmed Done. Progress {$progress['done']}/{$progress['total']}.");
+                $this->log($request, 'Sub-Issue Confirmed', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" confirmed Done. Progress {$progress['done']}/{$progress['total']}.", $ticket->ticket_id);
 
                 $this->notifyUser(
                     $ticket->assigned_custodian_id,
@@ -967,7 +968,7 @@ class TicketController extends Controller
                     'repair_completed_at'  => null,
                 ]);
 
-                $this->log($request, 'Sub-Issue Sent Back', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" sent back to Under Repair by Admin.");
+                $this->log($request, 'Sub-Issue Sent Back', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" sent back to Under Repair by Admin.", $ticket->ticket_id);
 
                 $this->notifyUser(
                     $subIssue->assigned_mechanic_id,
@@ -1020,7 +1021,7 @@ class TicketController extends Controller
                 'reopened_at'              => now(),
             ]);
 
-            $this->log($request, 'Confirmed Sub-Issue Reopened', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" reopened by Admin. Reason: {$data['reopen_reason']}");
+            $this->log($request, 'Confirmed Sub-Issue Reopened', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" reopened by Admin. Reason: {$data['reopen_reason']}", $ticket->ticket_id);
 
             $vehicleName = $ticket->vehicle->vehicle_name;
             $adminName = $request->user()->name;
@@ -1152,7 +1153,7 @@ class TicketController extends Controller
             $summary = $isDecisionClose
                 ? "Decision-close: {$progress['deferred']} sub-issue(s) deferred. Fit for service: " . ($returnToService ? 'Yes' : 'No') . '.'
                 : "Progress: {$progress['done']}/{$progress['total']}.";
-            $this->log($request, 'Ticket Closed', "Ticket #{$ticket->ticket_id} ({$vehicleName}) closed by Admin. {$summary}");
+            $this->log($request, 'Ticket Closed', "Ticket #{$ticket->ticket_id} ({$vehicleName}) closed by Admin. {$summary}", $ticket->ticket_id);
 
             $this->notifyUser(
                 $ticket->assigned_custodian_id,
@@ -1197,7 +1198,7 @@ class TicketController extends Controller
             $this->deferOneSubIssue($ticket, $subIssue, $data['deferred_reason'], $request->user()->id);
             $this->recomputeVehicleStatus($ticket->vehicle_id);
 
-            $this->log($request, 'Sub-Issue Deferred', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" deferred: {$data['deferred_reason']}");
+            $this->log($request, 'Sub-Issue Deferred', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" deferred: {$data['deferred_reason']}", $ticket->ticket_id);
 
             $this->notifyUser(
                 $ticket->assigned_custodian_id,
@@ -1244,7 +1245,7 @@ class TicketController extends Controller
             $this->resetLinkedIssueReports($ticket, 'Pending');
             $this->recomputeVehicleStatus($ticket->vehicle_id);
 
-            $this->log($request, 'Ticket Cancelled', "Ticket #{$ticket->ticket_id} was cancelled by admin.");
+            $this->log($request, 'Ticket Cancelled', "Ticket #{$ticket->ticket_id} was cancelled by admin.", $ticket->ticket_id);
         });
 
         return $ticket->fresh($this->eagerLoads());
@@ -1272,7 +1273,7 @@ class TicketController extends Controller
             $this->resetLinkedIssueReports($ticket, 'In Maintenance');
             $this->recomputeVehicleStatus($ticket->vehicle_id);
 
-            $this->log($request, 'Ticket Restored', "Ticket #{$ticket->ticket_id} was restored back to '{$restoredStatus}' by Admin.");
+            $this->log($request, 'Ticket Restored', "Ticket #{$ticket->ticket_id} was restored back to '{$restoredStatus}' by Admin.", $ticket->ticket_id);
         });
 
         return $ticket->fresh($this->eagerLoads());
@@ -1311,7 +1312,7 @@ class TicketController extends Controller
 
             $this->recomputeVehicleStatus($vehicleId);
 
-            $this->log($request, 'Delete Ticket', "Ticket #{$ticket->ticket_id} was deleted by Admin." . ($hadProgress ? ' Archived as recoverable — it had at least one completed sub-issue.' : ''));
+            $this->log($request, 'Delete Ticket', "Ticket #{$ticket->ticket_id} was deleted by Admin." . ($hadProgress ? ' Archived as recoverable — it had at least one completed sub-issue.' : ''), $ticket->ticket_id);
         });
 
         return response()->json(['message' => 'Ticket deleted successfully.'], 200);
@@ -1384,7 +1385,7 @@ class TicketController extends Controller
 
             $archive->delete();
 
-            $this->log($request, 'Ticket Reopened', "Deleted Ticket #{$snapshot['ticket_id']} was reopened by Admin as new Ticket #{$ticket->ticket_id}.");
+            $this->log($request, 'Ticket Reopened', "Deleted Ticket #{$snapshot['ticket_id']} was reopened by Admin as new Ticket #{$ticket->ticket_id}.", $ticket->ticket_id);
 
             $this->notifyUser($ticket->assigned_custodian_id, 'Ticket Reopened', "A deleted ticket for {$archive->vehicle_name} was reopened by Admin as Ticket #{$ticket->ticket_id}.", 'ticket_reopened', $ticket->ticket_id);
 
@@ -1579,13 +1580,14 @@ class TicketController extends Controller
         ];
     }
 
-    private function log(Request $request, string $action, string $details): void
+    private function log(Request $request, string $action, string $details, $affectedRecordId = null): void
     {
         ActivityLog::create([
             'user_id' => $request->user()?->id,
             'role'    => $request->user()?->role,
             'action'  => $action,
             'module'  => 'Maintenance Tickets',
+            'affected_record_id' => $affectedRecordId,
             'details' => $details,
         ]);
     }
