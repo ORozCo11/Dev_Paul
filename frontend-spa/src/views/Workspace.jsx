@@ -1190,8 +1190,10 @@ function Workspace() {
       } else {
         returnToModule('vehicles');
       }
+      return true;
     } catch (error) {
       showError(error, setNotice);
+      return false;
     }
   };
 
@@ -1249,8 +1251,10 @@ function Workspace() {
       }
       setNotice({ type: 'success', text: request.success });
       returnToModule(moduleKey);
+      return true;
     } catch (error) {
       showError(error, setNotice);
+      return false;
     }
   };
 
@@ -5704,6 +5708,38 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
 
 const EMPTY_OBJ = {};
 
+// Keeps an in-progress form's values alive across a route change and back
+// (e.g. clicking a vehicle/custodian's name to view their profile, then
+// hitting Back) — plain useState resets to its initial value on that round
+// trip because the page component fully unmounts and remounts. sessionStorage
+// survives that; it only clears itself on an explicit submit/cancel (see
+// clearDraftState) or when the tab closes, so an abandoned draft doesn't
+// resurrect the next time the same "new X" page is opened fresh.
+function useDraftState(key, initialValue) {
+  const [state, setState] = useState(() => {
+    const fallback = typeof initialValue === 'function' ? initialValue() : initialValue;
+    if (!key) return fallback;
+    try {
+      const saved = sessionStorage.getItem(key);
+      return saved != null ? JSON.parse(saved) : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+
+  useEffect(() => {
+    if (!key) return;
+    try { sessionStorage.setItem(key, JSON.stringify(state)); } catch { /* storage full/unavailable */ }
+  }, [key, state]);
+
+  return [state, setState];
+}
+
+function clearDraftState(key) {
+  if (!key) return;
+  try { sessionStorage.removeItem(key); } catch { /* ignore */ }
+}
+
 function splitQuantityValue(value, units) {
   const str = String(value ?? '').trim();
   if (!str) return { amount: '', unit: units[0] };
@@ -6881,8 +6917,14 @@ const VEHICLE_WIZARD_STEP_LABELS = ['Basic Information', 'Specs', 'Photo & Locat
 const VEHICLE_WIZARD_STEP_ICONS = ['clipboard', 'wrench', 'pin'];
 
 function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
-  const [step, setStep] = useState(1);
-  const [wizardData, setWizardData] = useState(EMPTY_OBJ);
+  // Persisted across a route change and back (e.g. adding a new Vehicle
+  // Type mid-wizard opens its own page/modal) — see useDraftState.
+  const [step, setStep] = useDraftState('draft:new-vehicle:step', 1);
+  const [wizardData, setWizardData] = useDraftState('draft:new-vehicle:data', EMPTY_OBJ);
+  const clearNewVehicleDraft = () => {
+    clearDraftState('draft:new-vehicle:step');
+    clearDraftState('draft:new-vehicle:data');
+  };
   // Live-tracks the in-progress Category pick within step 1 (before it's
   // merged into wizardData on "Next") so the Vehicle Type options can
   // filter immediately, without resetting anything else the user has
@@ -6985,7 +7027,8 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
   const handleStepSubmit = async (values) => {
     const merged = { ...wizardData, ...values };
     if (isLastStep) {
-      await onSubmit(merged);
+      const ok = await onSubmit(merged);
+      if (ok !== false) clearNewVehicleDraft();
     } else {
       setWizardData(merged);
       setStep((s) => s + 1);
@@ -7027,7 +7070,7 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
           initialValues={wizardData}
           key={step}
           cancelLabel={step === 1 ? 'Cancel' : 'Back'}
-          onCancel={step === 1 ? onBack : () => goToStep(step - 1)}
+          onCancel={step === 1 ? () => { clearNewVehicleDraft(); onBack(); } : () => goToStep(step - 1)}
           onSubmit={handleStepSubmit}
           onValuesChange={(vals) => { setDomainFilter(vals.vehicle_domain ?? ''); onDirty?.(); }}
           submitLabel={isLastStep ? 'Add Vehicle' : 'Next'}
@@ -7106,7 +7149,22 @@ function OpenItemsWarning({ kind, rows, basePath }) {
 // fields sit in a card on the right, and the left side live-previews the
 // selected vehicle (photo, info, location map) as the user picks one.
 function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty, showDomainPreview = false }) {
-  const [liveValues, setLiveValues] = useState(initialValues ?? EMPTY_OBJ);
+  // Scoped to this exact route (new-X vs. editing record #N are different
+  // paths) so a form's in-progress values survive clicking a "view" link
+  // (e.g. the selected vehicle/custodian's name) and coming Back, instead of
+  // resetting because the page component fully unmounted and remounted —
+  // see useDraftState.
+  const location = useLocation();
+  const draftKey = `draft:form:${location.pathname}`;
+  const [liveValues, setLiveValues] = useDraftState(draftKey, initialValues ?? EMPTY_OBJ);
+  // SmartForm keeps its own internal `values`, seeded once from whatever
+  // `initialValues` prop it's given — passing the plain `initialValues` prop
+  // straight through (as before) would silently discard the restored draft,
+  // since SmartForm would seed itself from the pre-draft original instead.
+  // This snapshot starts as the restored `liveValues` but, unlike liveValues,
+  // does NOT track every keystroke (only the reset effect below updates it),
+  // so it stays a stable reference SmartForm won't re-sync against mid-typing.
+  const [smartFormSeed, setSmartFormSeed] = useState(() => liveValues);
   const [warnRows, setWarnRows] = useState([]);
   // Opt-in two-step flow (Maintenance Records today): fill the fields, hit
   // Next, then review everything on its own full-width step before it
@@ -7116,8 +7174,15 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   const [step, setStep] = useState(1);
   const [confirming, setConfirming] = useState(false);
 
+  // Skips its first run (which would otherwise immediately overwrite a
+  // restored draft with the plain initialValues right after mount) — still
+  // resets on every later change, e.g. once `initialValues` itself finishes
+  // loading in from the server.
+  const skippedFirstReset = useRef(false);
   useEffect(() => {
+    if (!skippedFirstReset.current) { skippedFirstReset.current = true; return; }
     setLiveValues(initialValues ?? EMPTY_OBJ);
+    setSmartFormSeed(initialValues ?? EMPTY_OBJ);
     setStep(1);
   }, [initialValues]);
 
@@ -7146,7 +7211,8 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   const handleReviewConfirm = async () => {
     setConfirming(true);
     try {
-      await onSubmit(liveValues);
+      const ok = await onSubmit(liveValues);
+      if (ok !== false) clearDraftState(draftKey);
     } finally {
       setConfirming(false);
     }
@@ -7202,9 +7268,13 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
       {warnRender && warnRows.length > 0 ? warnRender(warnRows) : null}
       <SmartForm
         fields={resolvedFields}
-        initialValues={initialValues ?? EMPTY_OBJ}
-        onCancel={onBack}
-        onSubmit={reviewStep ? (payload) => { setLiveValues(payload); setStep(2); } : onSubmit}
+        initialValues={smartFormSeed}
+        onCancel={() => { clearDraftState(draftKey); onBack(); }}
+        onSubmit={reviewStep ? (payload) => { setLiveValues(payload); setStep(2); } : async (payload) => {
+          const ok = await onSubmit(payload);
+          if (ok !== false) clearDraftState(draftKey);
+          return ok;
+        }}
         onValuesChange={(vals) => { setLiveValues(vals); onDirty?.(); }}
         submitLabel={reviewStep ? 'Next' : submitLabel}
         title={formTitle}
@@ -11632,8 +11702,15 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
     if (base.entry_mode === 'prediagnosed') base.entry_mode = null;
     return base;
   }, [prefilledTicketData]);
-  const [liveValues, setLiveValues] = useState(initialTicketValues);
-  const [subIssueRows, setSubIssueRows] = useState(() => {
+  // Scoped to whichever Issue Report/Condition Check (if any) this ticket is
+  // being created from — a fresh "New Ticket" with no prefill, or one from a
+  // different source, gets its own key instead of resurrecting an unrelated
+  // abandoned draft. Persisted to sessionStorage (not just useState) so
+  // clicking a vehicle/custodian link to view their profile, then Back,
+  // doesn't wipe out everything already typed here — see useDraftState.
+  const draftKeyBase = `draft:new-ticket:${prefilledTicketData?.issue_report_id ?? prefilledTicketData?.condition_check_id ?? 'blank'}`;
+  const [liveValues, setLiveValues] = useDraftState(`${draftKeyBase}:values`, initialTicketValues);
+  const [subIssueRows, setSubIssueRows] = useDraftState(`${draftKeyBase}:sub-issues`, () => {
     const seeded = (prefilledTicketData?.sub_issues_text ?? '').split('\n').map((s) => s.trim()).filter(Boolean);
     return seeded.length ? seeded : [''];
   });
@@ -11647,7 +11724,12 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
   // thing again here from a parallel list would just be redundant. Still
   // fully editable — the real repair category can differ from what was
   // originally reported.
-  const [subIssueCategory, setSubIssueCategory] = useState(() => prefilledTicketData?.fault_category ?? '');
+  const [subIssueCategory, setSubIssueCategory] = useDraftState(`${draftKeyBase}:fault-category`, () => prefilledTicketData?.fault_category ?? '');
+  const clearNewTicketDraft = () => {
+    clearDraftState(`${draftKeyBase}:values`);
+    clearDraftState(`${draftKeyBase}:sub-issues`);
+    clearDraftState(`${draftKeyBase}:fault-category`);
+  };
   const [submitting, setSubmitting] = useState(false);
   const [validationLines, setValidationLines] = useState(null);
   const selectedVehicleId = liveValues.vehicle_id ?? null;
@@ -11760,7 +11842,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
         }
       }
       const created = await onCreateTicket(out);
-      if (created) onBack();
+      if (created) { clearNewTicketDraft(); onBack(); }
     } finally {
       setSubmitting(false);
     }
@@ -12075,7 +12157,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
         )}
 
         <div className="form-actions">
-          <button className="ghost-button" onClick={onBack} type="button">Cancel</button>
+          <button className="ghost-button" onClick={() => { clearNewTicketDraft(); onBack(); }} type="button">Cancel</button>
           <button className="primary-button" type="submit" disabled={submitting}>
             {submitting ? (
               <span className="btn-loading">
