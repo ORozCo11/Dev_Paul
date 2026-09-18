@@ -12422,3 +12422,140 @@ html[data-theme="dark"] .file-cabinet-dropzone:hover {
 html[data-theme="dark"] .file-cabinet-dropzone-title {
   color: var(--text-strong, #f1f5f9);
 }
+
+/* ============================================================
+   Super Admin workspace — Pending Approvals cards, and small layout
+   utilities that replace one-off inline styles across its other tabs
+   (Barangays recovery panel, Registration Codes chip, Impersonate row),
+   so every page in this portal reads as one consistently designed module.
+   ============================================================ */
+
+.approval-card-list {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.approval-card {
+  background: var(--card-bg, #101827);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.approval-card.is-first-admin {
+  border-color: #d97706;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.35);
+}
+
+.approval-card-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.approval-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: -4px;
+}
+
+.approval-card-email {
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approval-card-phone {
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.75rem;
+}
+
+.approval-card-tags {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge-first-admin {
+  background: rgba(217, 119, 6, 0.16);
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  border-radius: 999px;
+  color: #d97706;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  text-transform: uppercase;
+}
+
+.approval-card-location {
+  align-items: center;
+  color: var(--text-muted, #94a3b8);
+  display: flex;
+  font-size: 0.8rem;
+  gap: 6px;
+}
+
+.approval-card-submitted {
+  font-size: 0.74rem;
+}
+
+.approval-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.approval-card-actions .ghost-button,
+.approval-card-actions .primary-button {
+  flex: 1;
+  justify-content: center;
+}
+
+.superadmin-panel-spaced { margin-top: 16px; }
+.superadmin-inline-row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.superadmin-muted-block { margin-bottom: 12px; }
+
+.superadmin-code-chip {
+  background: rgba(37, 99, 235, 0.14);
+  border: 1.5px solid rgba(96, 165, 250, 0.4);
+  border-radius: 8px;
+  color: #93c5fd;
+  display: inline-flex;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 8px 14px;
+}
+
+.superadmin-description-cell {
+  display: block;
+  max-width: 340px;
+  white-space: normal;
+}
+
+html[data-theme="light"] .approval-card {
+  background: #ffffff;
+  border-color: #cdddf0;
+  box-shadow: 0 8px 20px rgba(31, 75, 122, 0.1);
+}
+
+html[data-theme="light"] .approval-card-email,
+html[data-theme="light"] .approval-card-phone,
+html[data-theme="light"] .approval-card-location {
+  color: #64748b;
+}
+
+html[data-theme="light"] .superadmin-code-chip {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
