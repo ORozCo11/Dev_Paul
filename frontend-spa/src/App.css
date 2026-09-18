@@ -6224,12 +6224,16 @@ button.file-card-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-/* Roomier than a plain dropdown-style .filter-select, with a bigger, blue
-   calendar icon (the browser's native picker indicator, enlarged and
-   tinted) instead of the tiny default one. */
+/* A bigger, blue calendar icon (the browser's native picker indicator,
+   enlarged and tinted) instead of the tiny default one. min-width (not a
+   fixed width) so callers that want a narrower, content-hugging box can
+   still override it inline (see FilterBar's date inputs) — but the default
+   here is now sized to just fit "mm/dd/yyyy" plus that icon; the old 210px
+   left dead space between the date text and the icon, so it no longer sat
+   flush against the field's own right edge the way the reference does. */
 .filter-date-group input[type="date"] {
-  min-width: 210px;
-  padding: 8px 10px;
+  min-width: 165px;
+  padding: 8px 8px 8px 10px;
   font-size: 0.85rem;
   cursor: text;
 }
@@ -6263,7 +6267,7 @@ button.file-card-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-
   margin-left: auto;
 }
 .issue-filter-date-input input[type="date"] {
-  min-width: 200px;
+  min-width: 165px;
 }
 .issue-filter-row-bottom {
   align-items: stretch;

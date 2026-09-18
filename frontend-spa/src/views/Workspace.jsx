@@ -469,9 +469,10 @@ function Workspace() {
     : logRepairsTicketId ? 'ticketWorkOrders'
     : inspectTicketId ? 'ticketInspections'
     : activeModule;
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
-    () => localStorage.getItem('vms_sidebar_collapsed') === '1'
-  );
+  // Always starts expanded — a collapsed sidebar should only ever be a
+  // deliberate, in-session choice (the toggle button), never the default a
+  // returning user lands on.
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [lookups, setLookups] = useState(emptyLookups);
   const [ticketLookups, setTicketLookups] = useState(emptyTicketLookups);
   const [records, setRecords] = useState({});
@@ -1827,11 +1828,7 @@ function Workspace() {
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   const toggleSidebar = () => {
-    setIsSidebarCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem('vms_sidebar_collapsed', next ? '1' : '0');
-      return next;
-    });
+    setIsSidebarCollapsed((prev) => !prev);
   };
 
   // DEV-ONLY impersonation — a fast way to switch accounts while testing,
