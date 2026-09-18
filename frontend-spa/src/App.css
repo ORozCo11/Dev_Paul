@@ -1860,6 +1860,33 @@ html[data-theme="light"] .toast-notice.error {
   flex-shrink: 0;
 }
 
+/* Centered modal loader (see SubmitLoadingOverlay) — a bigger, more
+   noticeable alternative to the in-button spinner above, for submits that
+   sit on a long scrolled form (e.g. Create Ticket) where a spinner tucked
+   inside the submit button at the bottom is easy to miss. */
+.submit-loading-overlay { z-index: 400; }
+.submit-loading-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.25);
+  animation: modalIn 0.22s ease;
+}
+.submit-loading-gear {
+  animation: loaderSpin 1s linear infinite;
+  color: #2563eb;
+}
+.submit-loading-label {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
 /* --- Full-screen session loader --- */
 .fullscreen-loader {
   position: fixed;
@@ -2497,6 +2524,45 @@ table a:hover {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Numeric "select or other" field (e.g. Repeat Every's custom recurrence
+   interval) — a dropdown plus a separate "+ Add Custom X" trigger that
+   opens a small popover, instead of a second input revealing itself below
+   the dropdown once "Custom…" is picked. */
+.select-or-add-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.select-or-add-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  width: 100%;
+  font-size: 0.82rem;
+}
+.select-or-add-trigger.is-active {
+  border-color: #2563eb;
+  color: #2563eb;
+  font-weight: 700;
+}
+.select-or-add-popover { width: min(360px, 100%); }
+.select-or-add-popover-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.select-or-add-popover-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.select-or-add-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 .field-hint {
   font-size: 0.72rem;
@@ -5174,6 +5240,58 @@ html section.ticket-process-hero .ticket-detail-title { margin-bottom: 8px; colo
 .form-grid-2col.category-form-grid {
   max-width: 640px;
   margin: 0 auto;
+}
+
+/* Inspect Ticket — Inspection Result/Notes on the left, the "Root Causes
+   Found" card on the right, instead of stacking everything one under the
+   other. Only applied once there's actually something for the right
+   column to show (Needs Maintenance picked); otherwise the left column's
+   fields stay plain full-width block children of the form. */
+.inspect-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 780px) {
+  .inspect-form-grid { grid-template-columns: 1fr; }
+}
+
+/* Root Causes — type-and-Add on the left instead of every row being a
+   permanently-editable input; the right side lists what's already been
+   added as plain text, each with its own Edit/Delete, so it's clear
+   what's confirmed vs. still being typed. */
+.root-cause-builder {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 640px) {
+  .root-cause-builder { grid-template-columns: 1fr; }
+}
+.root-cause-input-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.root-cause-list-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.root-cause-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+  color: #1e293b;
 }
 
 /* Create Ticket form — sectioned card layout instead of one long vertical
@@ -11198,6 +11316,17 @@ html[data-theme="light"] tbody td {
 
 html[data-theme="light"] tbody tr:nth-child(even) td {
   background: #f8fbff;
+}
+
+/* A long free-text sub-row (see .table-subrow above) was losing its grey
+   band here — both this file's plain-row rule and its even-row stripe rule
+   out-specify the base .table-subrow td rule (more element selectors),
+   so the same white/near-white background as every normal row was winning
+   instead. Matched at least as specifically (tbody tr.table-subrow td)
+   against both, including the even-row stripe. */
+html[data-theme="light"] tbody tr.table-subrow td {
+  background: #e2e8f0;
+  color: #475569;
 }
 
 html[data-theme="light"] tbody tr:hover,

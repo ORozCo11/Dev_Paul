@@ -3120,7 +3120,7 @@ function Workspace() {
             emptyMessage="No issues reported — the fleet has no open problems right now."
             rows={visibleRows}
             onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
-            renderSubRow={(row) => row.issue_description}
+            renderSubRow={(row) => row.issue_description && <span><strong>Note:</strong> {row.issue_description}</span>}
           />
         </ModulePanel>
       );
@@ -5778,10 +5778,85 @@ const SELECT_OR_OTHER_SENTINEL = '__other__';
 // e.g. Service Location: pick a known hub, or specify an outside repair shop.
 // Tracks "other mode" locally (not in the form's values), seeded from whether
 // the incoming value already fails to match any preset.
+// A numeric "other" value (today: a custom recurrence interval in months)
+// gets its own "+ Add Custom X" trigger that opens a small popover to type
+// the number, matching the +Add-new-item pattern CreatableSelect uses
+// elsewhere — instead of picking "Custom…" from the dropdown and having a
+// second input reveal itself below it.
+function SelectOrAddNumberField({ field, value, onChange }) {
+  const options = field.options ?? [];
+  const matchesPreset = options.some((o) => String(o?.value ?? o) === String(value ?? ''));
+  const isCustomActive = Boolean(value) && !matchesPreset;
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const openPopover = () => {
+    setDraft(isCustomActive ? String(value) : '');
+    setOpen(true);
+  };
+
+  return (
+    <div className="select-or-add-field">
+      <select
+        required={field.required && !isCustomActive}
+        value={matchesPreset ? (value ?? '') : ''}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">{' '}</option>
+        {options.map((option, i) => (
+          <option key={option?.value != null ? option.value : `opt-${i}`} value={option?.value ?? option ?? ''}>
+            {option?.label ?? option}
+          </option>
+        ))}
+      </select>
+      <button type="button" className={`ghost-button select-or-add-trigger${isCustomActive ? ' is-active' : ''}`} onClick={openPopover}>
+        <Icon name="plus" size={13} />
+        {isCustomActive ? `Custom: ${value}${field.otherSuffix ? ` ${field.otherSuffix}` : ''}` : (field.otherLabel ?? 'Add custom value')}
+      </button>
+
+      {open && createPortal(
+        <div className="modal-overlay" onMouseDown={() => setOpen(false)}>
+          <div className="modal-box select-or-add-popover" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{field.otherLabel ?? 'Custom value'}</h3>
+              <button className="modal-close-btn" onClick={() => setOpen(false)} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
+            </div>
+            <div className="modal-body select-or-add-popover-body">
+              <div className="select-or-add-popover-row">
+                <input
+                  type="number"
+                  min={field.otherMin}
+                  max={field.otherMax}
+                  placeholder={field.otherPlaceholder ?? 'Specify'}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  autoFocus
+                />
+                {field.otherSuffix && <span className="muted">{field.otherSuffix}</span>}
+              </div>
+              <div className="select-or-add-popover-actions">
+                <button type="button" className="ghost-button" onClick={() => setOpen(false)}>Cancel</button>
+                <button type="button" className="primary-button" disabled={!draft} onClick={() => { onChange(draft); setOpen(false); }}>
+                  <Icon name="plus" size={14} /> Add
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 function SelectOrOtherField({ field, value, onChange }) {
   const options = field.options ?? [];
   const matchesPreset = options.some((o) => String(o?.value ?? o) === String(value ?? ''));
   const [otherMode, setOtherMode] = useState(Boolean(value) && !matchesPreset);
+
+  if (field.otherType === 'number') {
+    return <SelectOrAddNumberField field={field} value={value} onChange={onChange} />;
+  }
 
   return (
     <>
@@ -6708,6 +6783,23 @@ function DataTable({ columns, rows, compact = false, onRowClick, onReorderColumn
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Centered modal overlay for a submit-in-progress state — used where a
+// small in-button spinner isn't noticeable enough (e.g. Create Ticket,
+// which stays on a long scrolled form while it saves). Portaled to <body>
+// like FormModal, so it sits above everything regardless of where it's
+// rendered from.
+function SubmitLoadingOverlay({ label = 'Saving…' }) {
+  return createPortal(
+    <div className="modal-overlay submit-loading-overlay" role="status" aria-live="polite">
+      <div className="submit-loading-card">
+        <Icon name="gear" size={48} className="submit-loading-gear" filled />
+        <p className="submit-loading-label">{label}</p>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -7645,7 +7737,7 @@ function scheduleFields(lookups, allHubs = [], isEdit = false) {
         { value: 6, label: '6 Months' },
         { value: 12, label: 'Year' },
       ],
-      otherLabel: 'Custom (months)…',
+      otherLabel: 'Add Custom Month',
       otherPlaceholder: 'e.g. 4',
       otherSuffix: 'months',
       otherType: 'number',
@@ -12157,17 +12249,13 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
         )}
 
         <div className="form-actions">
-          <button className="ghost-button" onClick={() => { clearNewTicketDraft(); onBack(); }} type="button">Cancel</button>
+          <button className="ghost-button" onClick={() => { clearNewTicketDraft(); onBack(); }} type="button" disabled={submitting}>Cancel</button>
           <button className="primary-button" type="submit" disabled={submitting}>
-            {submitting ? (
-              <span className="btn-loading">
-                <Icon name="gear" size={16} className="btn-gear-spinner" filled />
-                Creating…
-              </span>
-            ) : (preDiagnosed ? 'Create Ticket & Assign Mechanic' : 'Create Ticket & Assign')}
+            {preDiagnosed ? 'Create Ticket & Assign Mechanic' : 'Create Ticket & Assign'}
           </button>
         </div>
       </form>
+      {submitting && <SubmitLoadingOverlay label="Creating ticket…" />}
     </ModulePanel>
   );
 }
@@ -13371,7 +13459,15 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
   const [resultValue, setResultValue] = useState(ticket?.inspection_result ?? '');
   const [notes, setNotes] = useState(ticket?.inspection_notes ?? '');
   const [category, setCategory] = useState('');
-  const [subIssueTitles, setSubIssueTitles] = useState(['']);
+  // Root causes are "added" one at a time (type on the left, Add commits it)
+  // rather than every row being a permanently-editable input — the
+  // confirmed list on the right is plain text with its own Edit/Delete per
+  // row, so it's clear which ones are actually locked in vs. still being
+  // typed.
+  const [subIssueTitles, setSubIssueTitles] = useState([]);
+  const [newRootCause, setNewRootCause] = useState('');
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editingDraft, setEditingDraft] = useState('');
 
   if (!ticket) {
     return (
@@ -13380,15 +13476,37 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
     );
   }
 
-  const updateTitle = (index, value) => { setSubIssueTitles((rows) => rows.map((row, i) => (i === index ? value : row))); onDirty?.(); };
-  const addRow = () => setSubIssueTitles((rows) => [...rows, '']);
-  const removeRow = (index) => setSubIssueTitles((rows) => rows.filter((_, i) => i !== index));
+  const commitNewRootCause = () => {
+    const title = newRootCause.trim();
+    if (!title) return;
+    setSubIssueTitles((rows) => [...rows, title]);
+    setNewRootCause('');
+    onDirty?.();
+  };
+  const startEdit = (index) => { setEditingIndex(index); setEditingDraft(subIssueTitles[index]); };
+  const cancelEdit = () => setEditingIndex(null);
+  const saveEdit = () => {
+    const title = editingDraft.trim();
+    if (!title) return;
+    setSubIssueTitles((rows) => rows.map((row, i) => (i === editingIndex ? title : row)));
+    setEditingIndex(null);
+    onDirty?.();
+  };
+  const removeRow = (index) => {
+    setSubIssueTitles((rows) => rows.filter((_, i) => i !== index));
+    if (editingIndex === index) setEditingIndex(null);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const payload = { inspection_result: resultValue, inspection_notes: notes };
     if (resultValue === 'Needs Maintenance') {
-      payload.sub_issues = subIssueTitles
+      // A root cause still sitting in the "type a new one" box (not yet
+      // clicked Add) shouldn't be silently lost just because Submit was
+      // pressed instead.
+      const pending = newRootCause.trim();
+      const allTitles = pending ? [...subIssueTitles, pending] : subIssueTitles;
+      payload.sub_issues = allTitles
         .filter((title) => title.trim())
         .map((title) => ({ title: title.trim(), maintenance_type: category || undefined }));
     }
@@ -13435,6 +13553,8 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
       {/* One continuous form — Cancel/Submit sit at the very end, after every
           field (including Category/Root Causes), never in the middle. */}
       <form className="smart-form" onSubmit={handleSubmit} noValidate>
+        <div className={resultValue === 'Needs Maintenance' ? 'inspect-form-grid' : undefined}>
+        <div className="inspect-form-left">
         <label>
           <span>Inspection Result</span>
           <select required value={resultValue} onChange={(e) => { setResultValue(e.target.value); onDirty?.(); }}>
@@ -13447,10 +13567,11 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
           <span>Inspection Notes</span>
           <textarea required rows={3} value={notes} onChange={(e) => { setNotes(e.target.value); onDirty?.(); }} />
         </label>
+        </div>
 
         {resultValue === 'Needs Maintenance' && (
-          <div className="repair-summary-card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16, marginTop: 4, marginBottom: 16 }}>
-            <h4 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: 7 }}><Icon name="wrench" size={16} /> Root Causes Found</h4>
+          <div className="repair-summary-card" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 16 }}>
+            <h4 style={{ margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: 7, color: '#0f172a' }}><Icon name="wrench" size={16} /> Root Causes Found</h4>
             <p className="muted" style={{ marginTop: 0, marginBottom: 14 }}>All root causes here belong to the same ticket, so they share one category.</p>
 
             <label style={{ marginBottom: 16 }}>
@@ -13466,31 +13587,53 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
             </label>
 
             <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.02em' }}>Root Causes</span>
-            {subIssueTitles.map((title, index) => (
-              <div key={index} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-                <span className="muted" style={{ flex: '0 0 20px', textAlign: 'right' }}>{index + 1}.</span>
+            <div className="root-cause-builder">
+              <div className="root-cause-input-col">
                 <input
                   type="text"
-                  placeholder="Describe the root cause (e.g. low coolant level)"
-                  value={title}
-                  onChange={(e) => updateTitle(index, e.target.value)}
-                  style={{ flex: 1 }}
+                  placeholder="Describe a root cause (e.g. low coolant level)"
+                  value={newRootCause}
+                  onChange={(e) => setNewRootCause(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitNewRootCause(); } }}
                 />
-                <button
-                  type="button"
-                  className="btn-delete-action icon-btn"
-                  onClick={() => removeRow(index)}
-                  disabled={subIssueTitles.length === 1}
-                  title="Remove root cause"
-                  aria-label="Remove root cause"
-                >
-                  <Icon name="close" size={14} />
+                <button type="button" className="primary-button" onClick={commitNewRootCause} disabled={!newRootCause.trim()}>
+                  <Icon name="plus" size={14} /> Add
                 </button>
               </div>
-            ))}
-            <button type="button" className="primary-button" onClick={addRow} style={{ marginTop: 4 }}><Icon name="plus" size={14} /> Add another root cause</button>
+
+              <div className="root-cause-list-col">
+                {subIssueTitles.length === 0 ? (
+                  <p className="muted" style={{ margin: 0, fontSize: '0.82rem' }}>No root causes added yet.</p>
+                ) : subIssueTitles.map((title, index) => (
+                  <div key={index} className="root-cause-list-item">
+                    {editingIndex === index ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editingDraft}
+                          onChange={(e) => setEditingDraft(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveEdit(); } if (e.key === 'Escape') cancelEdit(); }}
+                          style={{ flex: 1 }}
+                          autoFocus
+                        />
+                        <button type="button" className="btn-confirm-action icon-btn" onClick={saveEdit} disabled={!editingDraft.trim()} title="Save" aria-label="Save"><Icon name="checkCircle" size={14} /></button>
+                        <button type="button" className="btn-delete-action icon-btn" onClick={cancelEdit} title="Cancel edit" aria-label="Cancel edit"><Icon name="close" size={14} /></button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="muted" style={{ flex: '0 0 20px', textAlign: 'right' }}>{index + 1}.</span>
+                        <span style={{ flex: 1 }}>{title}</span>
+                        <button type="button" className="btn-edit-action icon-btn" onClick={() => startEdit(index)} title="Edit root cause" aria-label="Edit root cause"><Icon name="edit" size={14} /></button>
+                        <button type="button" className="btn-delete-action icon-btn" onClick={() => removeRow(index)} title="Remove root cause" aria-label="Remove root cause"><Icon name="trash" size={14} /></button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
+        </div>
 
         <div className="form-actions">
           <button className="ghost-button" onClick={onBack} type="button">Cancel</button>
