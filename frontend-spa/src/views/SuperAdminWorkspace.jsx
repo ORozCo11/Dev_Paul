@@ -16,21 +16,57 @@ const roleRoutes = {
 
 const ROLES = ['Admin', 'Custodian', 'Maintenance Personnel'];
 
-const TABS = [
-  ['dashboard', 'Dashboard'],
-  ['barangays', 'Barangays'],
-  ['users', 'All Users'],
-  ['codes', 'Registration Codes'],
-  ['impersonate', 'Impersonate'],
-  ['concerns', 'Concern Reports'],
-  ['activity', 'Activity Log'],
+// Sectioned sidebar nav — mirrors the main Workspace's grouped module-nav
+// pattern (collapsible sections, badge counts) instead of one flat list, so
+// the two portals read as the same product. `section: null` renders with no
+// header, same convention as the main app's Dashboard entry.
+const NAV_GROUPS = [
+  { section: null, items: [['dashboard', 'Dashboard']] },
+  { section: 'Approvals', icon: 'clipboard', items: [
+    ['pending', 'Pending Approvals'],
+  ] },
+  { section: 'Accounts', icon: 'grid', items: [
+    ['barangays', 'Barangays'],
+    ['users', 'All Users'],
+    ['codes', 'Registration Codes'],
+  ] },
+  { section: 'Support', icon: 'mail', items: [
+    ['impersonate', 'Impersonate'],
+    ['concerns', 'Concern Reports'],
+  ] },
+  { section: 'System', icon: 'key', items: [
+    ['activity', 'Activity Log'],
+  ] },
 ];
+
+// Flat [key, label] list — used for the page-heading lookup and anywhere
+// else that doesn't care about grouping.
+const TABS = NAV_GROUPS.flatMap((g) => g.items);
 
 const CONCERN_TYPE_LABELS = {
   'Barangay Inactive': "Barangay seems inactive",
   'Suspected Fake Staff': "Suspected fake staff",
   'Other': 'Other',
 };
+
+// Only the notification types a Super Admin can actually receive need an
+// entry here — everything else falls back to the title-sniffing guess below,
+// same as the main Workspace's bell.
+const NOTIFICATION_STYLE_BY_TYPE = {
+  pending_admin_approval: 'warning',
+};
+
+function legacyNotificationStyleFromTitle(title) {
+  if (/confirmed|approved|completed|verified|done/i.test(title)) return 'success';
+  if (/reopened|deferred|rejected|sent back/i.test(title)) return 'warning';
+  if (/required|assigned|logged|awaiting|pending/i.test(title)) return 'info';
+  if (/failed|error/i.test(title)) return 'error';
+  return 'info';
+}
+
+function getNotificationStyle(notification) {
+  return NOTIFICATION_STYLE_BY_TYPE[notification.type] ?? legacyNotificationStyleFromTitle(notification.title);
+}
 
 function UsersIcon() {
   return (
@@ -45,6 +81,7 @@ function UsersIcon() {
 
 const TAB_ICONS = {
   dashboard: <Icon name="grid" size={18} className="nav-icon" />,
+  pending: <Icon name="clipboard" size={18} className="nav-icon" />,
   barangays: <Icon name="pin" size={18} className="nav-icon" />,
   users: <UsersIcon />,
   codes: <Icon name="key" size={18} className="nav-icon" />,
@@ -56,6 +93,16 @@ const TAB_ICONS = {
 
 function StatusBadge({ value }) {
   return <span className={`status-badge ${String(value ?? '-').toLowerCase().replaceAll(' ', '-')}`}>{value ?? '-'}</span>;
+}
+
+function UserAvatar({ name }) {
+  const initials = name ? name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : '?';
+  return (
+    <span className="user-avatar-name">
+      <span className="user-avatar-name-initials">{initials}</span>
+      <span>{name || 'Unknown'}</span>
+    </span>
+  );
 }
 
 function DataTable({ columns, rows, onRowClick, emptyMessage = 'No records found.' }) {
@@ -179,26 +226,166 @@ function ProfileMenu({ user, open, setOpen, onOpenSettings, onLogout }) {
   );
 }
 
-function DashboardTab({ barangays, users }) {
+// Mirrors DashboardSignalCard from Workspace.jsx (icon chip, chevron-when-
+// clickable, value, one-line detail, progress meter) so this portal's
+// dashboard reads as the same component family as the main app's.
+function SignalCard({ icon, label, value, detail, tone = '', meter, onClick }) {
+  const content = (
+    <>
+      <div className="dashboard-signal-card-head">
+        <span className="dashboard-signal-card-icon"><Icon name={icon} size={16} /></span>
+        <span>{label}</span>
+        {onClick && <Icon name="chevronRight" size={14} className="dashboard-signal-card-chevron" />}
+      </div>
+      <strong>{value}</strong>
+      {detail && <p>{detail}</p>}
+      {typeof meter === 'number' && (
+        <span className="dashboard-signal-meter" aria-hidden="true">
+          <span style={{ width: `${Math.min(100, Math.max(0, meter))}%` }} />
+        </span>
+      )}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" className={`dashboard-signal-card ${tone}`} onClick={onClick}>
+        {content}
+      </button>
+    );
+  }
+
+  return <article className={`dashboard-signal-card ${tone}`}>{content}</article>;
+}
+
+function DashboardTab({ barangays, users, pendingApprovals, concernReports, onNavigate }) {
   const orphaned = barangays.filter((b) => !b.has_active_admin).length;
-  const pending = users.filter((u) => !u.approved_at).length;
+  const openConcerns = concernReports.filter((r) => r.status !== 'Resolved').length;
+  const activeUsers = users.filter((u) => u.is_active).length;
+  const pendingCount = pendingApprovals.length;
+
   const cards = [
-    { key: 'barangays', label: 'Barangays', value: barangays.length, icon: 'pin', tone: '' },
-    { key: 'users', label: 'Total Users', value: users.length, icon: 'grid', tone: '' },
-    { key: 'orphaned', label: 'Orphaned Barangays', value: orphaned, icon: 'alert', tone: orphaned > 0 ? 'is-alert' : 'is-ok' },
-    { key: 'pending', label: 'Pending Registrations', value: pending, icon: 'clipboard', tone: pending > 0 ? 'is-warn' : 'is-ok' },
+    {
+      key: 'pending', label: 'Pending Approvals', value: pendingCount, icon: 'clipboard',
+      tone: pendingCount > 0 ? 'is-warn' : 'is-ok',
+      detail: pendingCount > 0 ? 'Awaiting your review' : 'All caught up',
+      meter: Math.min(100, pendingCount * 20), goto: 'pending',
+    },
+    {
+      key: 'barangays', label: 'Barangays', value: barangays.length, icon: 'pin', tone: '',
+      detail: `${barangays.length - orphaned} with an active Admin`,
+      meter: barangays.length ? ((barangays.length - orphaned) / barangays.length) * 100 : 0, goto: 'barangays',
+    },
+    {
+      key: 'orphaned', label: 'Orphaned Barangays', value: orphaned, icon: 'alert',
+      tone: orphaned > 0 ? 'is-alert' : 'is-ok',
+      detail: orphaned > 0 ? 'No active Admin — needs recovery' : 'Every barangay is covered',
+      meter: barangays.length ? (orphaned / barangays.length) * 100 : 0, goto: 'barangays',
+    },
+    {
+      key: 'users', label: 'Total Users', value: users.length, icon: 'grid', tone: '',
+      detail: `${activeUsers} active`,
+      meter: users.length ? (activeUsers / users.length) * 100 : 0, goto: 'users',
+    },
+    {
+      key: 'concerns', label: 'Open Concern Reports', value: openConcerns, icon: 'mail',
+      tone: openConcerns > 0 ? 'is-warn' : 'is-ok',
+      detail: openConcerns > 0 ? 'Needs a look' : 'Inbox clear',
+      meter: Math.min(100, openConcerns * 20), goto: 'concerns',
+    },
   ];
+
   return (
     <div className="dashboard-signal-grid">
       {cards.map((c) => (
-        <div key={c.key} className={`dashboard-signal-card ${c.tone}`}>
-          <div className="dashboard-signal-card-head">
-            <span className="dashboard-signal-card-icon"><Icon name={c.icon} size={15} /></span>
-            <span>{c.label}</span>
-          </div>
-          <strong>{c.value}</strong>
-        </div>
+        <SignalCard
+          key={c.key}
+          icon={c.icon}
+          label={c.label}
+          value={c.value}
+          detail={c.detail}
+          tone={c.tone}
+          meter={c.meter}
+          onClick={() => onNavigate(c.goto)}
+        />
       ))}
+    </div>
+  );
+}
+
+// The screen this whole role exists to guard: every account still waiting on
+// approval. A first-time Admin for an otherwise-orphaned barangay is flagged
+// distinctly — approving that specific case is what closes the registration
+// hole (see AuthController::register()).
+function PendingApprovalsTab({ approvals, barangays, onApprove, onReject, onRequestConfirmation }) {
+  const [search, setSearch] = useState('');
+
+  const isFirstAdmin = useCallback((a) => {
+    if (a.role !== 'Admin') return false;
+    const b = barangays.find((x) => x.id === a.barangay_id);
+    return !b || !b.has_active_admin;
+  }, [barangays]);
+
+  const visible = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const rows = !q ? approvals : approvals.filter((a) =>
+      [a.name, a.email, a.barangay_name].filter(Boolean).some((v) => v.toLowerCase().includes(q))
+    );
+    // First-Admin cases float to the top — they're the ones closing a
+    // registration gap, not just a routine staff sign-up.
+    return [...rows].sort((a, b) => (isFirstAdmin(b) ? 1 : 0) - (isFirstAdmin(a) ? 1 : 0));
+  }, [approvals, search, isFirstAdmin]);
+
+  const requestReject = (a) => {
+    onRequestConfirmation({
+      title: 'Reject Registration',
+      message: `Reject ${a.name}'s registration for ${a.barangay_name ?? 'their barangay'}? Their account is permanently deleted — this cannot be undone.`,
+      confirmLabel: 'Reject & Delete',
+      variant: 'danger',
+      onConfirm: () => onReject(a),
+    });
+  };
+
+  return (
+    <div>
+      <div className="panel-header-bar">
+        <h3>Pending Approvals <span className="count-badge">{visible.length}</span></h3>
+        {approvals.length > 0 && <LocalSearchInput value={search} onChange={setSearch} placeholder="Search name, email, or barangay..." />}
+      </div>
+      <p className="muted superadmin-muted-block">
+        Every account waiting on approval, newest first. A barangay's first Admin is flagged — approving them is what lets that barangay actually be used.
+      </p>
+
+      {!approvals.length ? (
+        <p className="empty-state">No accounts are waiting on approval right now.</p>
+      ) : (
+        <div className="approval-card-list">
+          {visible.map((a) => (
+            <article key={a.id} className={`approval-card${isFirstAdmin(a) ? ' is-first-admin' : ''}`}>
+              <div className="approval-card-main">
+                <UserAvatar name={a.name} />
+              </div>
+              <div className="approval-card-meta">
+                <span className="approval-card-email">{a.email}</span>
+                {a.phone && <span className="approval-card-phone">{a.phone}</span>}
+              </div>
+              <div className="approval-card-tags">
+                <StatusBadge value={a.role} />
+                {isFirstAdmin(a) && <span className="badge-first-admin">First Admin</span>}
+              </div>
+              <div className="approval-card-location">
+                <Icon name="pin" size={14} />
+                <span>{[a.barangay_name, a.city_name, a.province_name].filter(Boolean).join(', ') || 'Unassigned'}</span>
+              </div>
+              <div className="approval-card-submitted muted">Submitted {formatDate(a.created_at)}</div>
+              <div className="approval-card-actions">
+                <button type="button" className="ghost-button" onClick={() => requestReject(a)}>Reject</button>
+                <button type="button" className="primary-button" onClick={() => onApprove(a)}>Approve</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -208,7 +395,9 @@ function BarangaysTab({ barangays, users, onPromote }) {
   const [pickedUserId, setPickedUserId] = useState('');
 
   const columns = [
-    { label: 'Barangay', render: (b) => b.name },
+    { label: 'Barangay', render: (b) => (
+      <span className="approval-card-location"><Icon name="pin" size={14} /><span>{b.name}</span></span>
+    ) },
     { label: 'City / Province', render: (b) => `${b.city_name ?? '-'} · ${b.province_name ?? '-'}` },
     { label: 'Staff', render: (b) => b.staff_count },
     { label: 'Admin Status', render: (b) => (
@@ -238,16 +427,16 @@ function BarangaysTab({ barangays, users, onPromote }) {
       <PaginatedTable columns={columns} rows={barangays} emptyMessage="No barangays registered yet." />
 
       {recoveryBarangay && (
-        <div className="location-form-panel" style={{ marginTop: 16 }}>
+        <div className="location-form-panel superadmin-panel-spaced">
           <h3>Recover {recoveryBarangay.name}</h3>
           {candidateUsers.length === 0 ? (
             <p className="muted">No staff registered here yet — there's nobody to promote.</p>
           ) : (
             <>
-              <p className="muted" style={{ marginBottom: 10 }}>
+              <p className="muted superadmin-muted-block">
                 Pick an existing user in {recoveryBarangay.name} to promote to Admin. If their account is inactive, it will also be activated.
               </p>
-              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div className="superadmin-inline-row">
                 <select value={pickedUserId} onChange={(e) => setPickedUserId(e.target.value)}>
                   <option value="">Select a user</option>
                   {candidateUsers.map((u) => (
@@ -291,8 +480,8 @@ function UsersTab({ users, onChangeRole, onToggleActive }) {
   const columns = [
     { label: 'Name', render: (u) => (
       <div>
-        <div>{u.name}</div>
-        <div className="muted" style={{ fontSize: '0.76rem' }}>{u.email}</div>
+        <UserAvatar name={u.name} />
+        <div className="muted" style={{ fontSize: '0.76rem', marginTop: 2 }}>{u.email}</div>
       </div>
     ) },
     { label: 'Role', render: (u) => (
@@ -390,12 +579,12 @@ function RegistrationCodesTab({ barangays, onRequestConfirmation, setNotice }) {
         </label>
 
         {barangayId && (
-          <div style={{ marginTop: 16 }}>
+          <div className="superadmin-panel-spaced">
             {loadingCode ? (
               <p className="muted">Loading…</p>
             ) : code ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span className="badge" style={{ fontSize: '1.1rem', fontWeight: 800, letterSpacing: '0.08em', padding: '8px 14px' }}>{code}</span>
+              <div className="superadmin-inline-row">
+                <span className="superadmin-code-chip">{code}</span>
                 <button type="button" className="ghost-button" onClick={regenerate}>Regenerate</button>
               </div>
             ) : (
@@ -435,10 +624,10 @@ function ImpersonateTab({ candidates, onImpersonate }) {
         <h3>Impersonate</h3>
       </div>
       <div className="location-form-panel">
-        <p className="muted" style={{ marginBottom: 12 }}>
+        <p className="muted superadmin-muted-block">
           Pick a province, barangay, and staff account to jump into their session for support or testing. This is logged.
         </p>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <div className="superadmin-inline-row">
           <select value={provinceKey} onChange={(e) => { setProvinceKey(e.target.value); setBarangayKey(''); setUserId(''); }}>
             <option value="">Province</option>
             {Array.from(groups.keys()).map((p) => <option key={p} value={p}>{p}</option>)}
@@ -480,7 +669,7 @@ function ConcernReportsTab({ reports, onResolve, onReopen, onDelete, onRequestCo
     { label: 'Type', render: (r) => CONCERN_TYPE_LABELS[r.concern_type] ?? r.concern_type },
     { label: 'Barangay', render: (r) => r.barangay_name || '-' },
     { label: 'Description', render: (r) => (
-      <span style={{ display: 'block', maxWidth: 340, whiteSpace: 'normal' }}>{r.description}</span>
+      <span className="superadmin-description-cell">{r.description}</span>
     ) },
     { label: 'Reported By', render: (r) => (
       <div>
@@ -491,7 +680,7 @@ function ConcernReportsTab({ reports, onResolve, onReopen, onDelete, onRequestCo
     { label: 'Submitted', render: (r) => formatDate(r.created_at) },
     { label: 'Status', render: (r) => <StatusBadge value={r.status} /> },
     { label: 'Action', render: (r) => (
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div className="superadmin-inline-row">
         {r.status === 'Resolved' ? (
           <button type="button" className="ghost-button" onClick={() => onReopen(r)}>Reopen</button>
         ) : (
@@ -512,7 +701,7 @@ function ConcernReportsTab({ reports, onResolve, onReopen, onDelete, onRequestCo
           <Icon name="grid" size={16} /> All Reports
         </button>
       </div>
-      <div className="panel-header-bar">
+      <div className="panel-header-bar inline">
         <h3>Concern Reports <span className="count-badge">{visible.length}</span></h3>
       </div>
       <PaginatedTable
@@ -545,7 +734,7 @@ function ActivityLogTab({ entries }) {
           <Icon name="key" size={16} /> Super Admin Actions Only
         </button>
       </div>
-      <div className="panel-header-bar">
+      <div className="panel-header-bar inline">
         <h3>Activity Log <span className="count-badge">{visible.length}</span></h3>
       </div>
       <PaginatedTable
@@ -615,6 +804,10 @@ export default function SuperAdminWorkspace() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
     () => localStorage.getItem('vms_sidebar_collapsed') === '1'
   );
+  const [collapsedNavGroups, setCollapsedNavGroups] = useState([]);
+  const toggleNavGroup = (section) => {
+    setCollapsedNavGroups((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]));
+  };
   const [theme, setTheme] = useState(() => {
     try { return localStorage.getItem('theme') || 'light'; } catch { return 'light'; }
   });
@@ -637,10 +830,16 @@ export default function SuperAdminWorkspace() {
 
   const [barangays, setBarangays] = useState([]);
   const [users, setUsers] = useState([]);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [concernReports, setConcernReports] = useState([]);
   const [activityLog, setActivityLog] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const notificationsRef = useRef(null);
+  const profileMenuRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -660,15 +859,17 @@ export default function SuperAdminWorkspace() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [b, u, c, r, a] = await Promise.all([
+      const [b, u, p, c, r, a] = await Promise.all([
         api.get('/superadmin/barangays'),
         api.get('/superadmin/users'),
+        api.get('/superadmin/pending-approvals'),
         api.get('/impersonate/candidates'),
         api.get('/superadmin/concern-reports'),
         api.get('/superadmin/activity-log'),
       ]);
       setBarangays(b.data);
       setUsers(u.data);
+      setPendingApprovals(p.data);
       setCandidates(c.data);
       setConcernReports(r.data);
       setActivityLog(a.data);
@@ -680,6 +881,57 @@ export default function SuperAdminWorkspace() {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const res = await api.get('/notifications');
+      setNotifications(res.data);
+    } catch { /* ignore — bell just stays empty until the next poll */ }
+  }, []);
+
+  const markNotificationAsRead = async (id) => {
+    try {
+      await api.put(`/notifications/${id}/read`);
+      await loadNotifications();
+    } catch { /* ignore */ }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    try {
+      await api.put('/notifications/read-all');
+      await loadNotifications();
+    } catch { /* ignore */ }
+  };
+
+  const deleteNotification = async (id) => {
+    try {
+      await api.delete(`/notifications/${id}`);
+      await loadNotifications();
+    } catch { /* ignore */ }
+  };
+
+  useEffect(() => {
+    loadNotifications().catch(() => {});
+    const interval = setInterval(() => {
+      loadNotifications().catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setShowNotifications(false);
+      }
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   // Computed once here and handed to both DashboardTab and UsersTab so the
   // "Total Users"/"Pending Registrations" counts on the dashboard can never
@@ -719,6 +971,26 @@ export default function SuperAdminWorkspace() {
       await loadAll();
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that account.' });
+    }
+  };
+
+  const approvePending = async (approval) => {
+    try {
+      await api.put(`/superadmin/users/${approval.id}/activate`);
+      setNotice({ type: 'success', text: `${approval.name} is approved and can now sign in.` });
+      await loadAll();
+    } catch (error) {
+      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not approve this account.' });
+    }
+  };
+
+  const rejectPending = async (approval) => {
+    try {
+      await api.delete(`/superadmin/users/${approval.id}/reject`);
+      setNotice({ type: 'success', text: `${approval.name}'s registration was rejected.` });
+      await loadAll();
+    } catch (error) {
+      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not reject this account.' });
     }
   };
 
@@ -790,6 +1062,75 @@ export default function SuperAdminWorkspace() {
         </div>
 
         <div className="topbar-right">
+          <div className="notifications-dropdown-container" ref={notificationsRef}>
+            <button
+              className="icon-btn notification-btn"
+              title="Notifications"
+              type="button"
+              onClick={() => setShowNotifications((v) => !v)}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+              {unreadCount > 0 && (
+                <span className="notification-indicator">{unreadCount}</span>
+              )}
+            </button>
+
+            {showNotifications && (
+              <div className="notifications-dropdown">
+                <div className="notifications-header">
+                  <h4>Notifications</h4>
+                  {unreadCount > 0 && (
+                    <button type="button" onClick={markAllNotificationsAsRead}>Mark all as read</button>
+                  )}
+                </div>
+                <div className="notifications-list">
+                  {notifications.length === 0 ? (
+                    <div className="notifications-empty">
+                      <span style={{ display: 'inline-flex', opacity: 0.6 }}><Icon name="bell" size={26} /></span>
+                      <span>No notifications yet.</span>
+                    </div>
+                  ) : (
+                    notifications.map((n) => {
+                      const notificationType = getNotificationStyle(n);
+                      return (
+                        <div
+                          key={n.notification_id}
+                          className={`notification-item notification-${notificationType} ${!n.read_at ? 'unread' : ''}`}
+                          onClick={async () => {
+                            await markNotificationAsRead(n.notification_id);
+                            if (n.type === 'pending_admin_approval') {
+                              setActiveTab('pending');
+                            }
+                            setShowNotifications(false);
+                          }}
+                        >
+                          <div className="notification-content">
+                            <span className="notification-title">{n.title}</span>
+                            <span className="notification-msg">{n.message}</span>
+                            <span className="notification-time">{formatDate(n.created_at)}</span>
+                          </div>
+                          <div className="notification-actions" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              className="notification-close-btn"
+                              type="button"
+                              title="Delete notification"
+                              onClick={() => deleteNotification(n.notification_id)}
+                            >
+                              <Icon name="close" size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             className="icon-btn theme-toggle-btn"
             type="button"
@@ -808,7 +1149,7 @@ export default function SuperAdminWorkspace() {
               </svg>
             )}
           </button>
-          <div className="profile-menu-container">
+          <div className="profile-menu-container" ref={profileMenuRef}>
             <ProfileMenu
               user={user}
               open={showProfileMenu}
@@ -823,20 +1164,48 @@ export default function SuperAdminWorkspace() {
       <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`}>
           <nav className="module-nav" aria-label="Super Admin modules">
-            <div className="module-nav-group">
-              {TABS.map(([key, label]) => (
-                <button
-                  key={key}
-                  className={key === activeTab ? 'active' : ''}
-                  onClick={() => setActiveTab(key)}
-                  title={isSidebarCollapsed ? label : undefined}
-                  type="button"
-                >
-                  {TAB_ICONS[key]}
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
+            {NAV_GROUPS.map(({ section, icon, items }) => {
+              const renderItem = ([key, label]) => {
+                const badgeCount = key === 'pending' ? pendingApprovals.length : 0;
+                return (
+                  <button
+                    key={key}
+                    className={key === activeTab ? 'active' : ''}
+                    onClick={() => setActiveTab(key)}
+                    title={isSidebarCollapsed ? label : undefined}
+                    type="button"
+                  >
+                    {TAB_ICONS[key]}
+                    <span>{label}</span>
+                    {badgeCount > 0 && <span className="module-nav-badge">{badgeCount}</span>}
+                  </button>
+                );
+              };
+
+              // Ungrouped (Dashboard) — no header, always visible.
+              if (!section) return <div key="__top" className="module-nav-group">{items.map(renderItem)}</div>;
+
+              const groupBadge = items.reduce((sum, [key]) => sum + (key === 'pending' ? pendingApprovals.length : 0), 0);
+              const holdsActive = items.some(([key]) => key === activeTab);
+              const expanded = isSidebarCollapsed || holdsActive || !collapsedNavGroups.includes(section);
+
+              return (
+                <div key={section} className="module-nav-group">
+                  <button
+                    type="button"
+                    className="module-nav-section"
+                    onClick={() => toggleNavGroup(section)}
+                    aria-expanded={expanded}
+                  >
+                    {icon && <Icon name={icon} size={16} className="nav-icon" />}
+                    <span className="module-nav-section-label">{section}</span>
+                    {!expanded && groupBadge > 0 && <span className="module-nav-badge">{groupBadge}</span>}
+                    <Icon name="chevronDown" size={14} className={`module-nav-section-chevron${expanded ? ' is-expanded' : ''}`} />
+                  </button>
+                  {expanded && items.map(renderItem)}
+                </div>
+              );
+            })}
           </nav>
         </aside>
 
@@ -864,7 +1233,21 @@ export default function SuperAdminWorkspace() {
             {loading ? (
               <p className="muted">Loading…</p>
             ) : activeTab === 'dashboard' ? (
-              <DashboardTab barangays={barangays} users={visibleUsers} />
+              <DashboardTab
+                barangays={barangays}
+                users={visibleUsers}
+                pendingApprovals={pendingApprovals}
+                concernReports={concernReports}
+                onNavigate={setActiveTab}
+              />
+            ) : activeTab === 'pending' ? (
+              <PendingApprovalsTab
+                approvals={pendingApprovals}
+                barangays={barangays}
+                onApprove={approvePending}
+                onReject={rejectPending}
+                onRequestConfirmation={setConfirmDialog}
+              />
             ) : activeTab === 'barangays' ? (
               <BarangaysTab barangays={barangays} users={users} onPromote={promoteToAdmin} />
             ) : activeTab === 'users' ? (

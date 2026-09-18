@@ -133,8 +133,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
     */
     Route::get('/superadmin/barangays', [SuperAdminController::class, 'barangays']);
     Route::get('/superadmin/users', [SuperAdminController::class, 'users']);
+    Route::get('/superadmin/pending-approvals', [SuperAdminController::class, 'pendingApprovals']);
     Route::put('/superadmin/users/{user}/activate', [SuperAdminController::class, 'activateUser']);
     Route::put('/superadmin/users/{user}/deactivate', [SuperAdminController::class, 'deactivateUser']);
+    Route::delete('/superadmin/users/{user}/reject', [SuperAdminController::class, 'rejectUser']);
     Route::put('/superadmin/users/{user}/role', [SuperAdminController::class, 'updateUserRole']);
     Route::get('/superadmin/barangays/{barangay}/registration-code', [SuperAdminController::class, 'registrationCode']);
     Route::post('/superadmin/barangays/{barangay}/registration-code/regenerate', [SuperAdminController::class, 'regenerateRegistrationCode']);

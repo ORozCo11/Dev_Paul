@@ -130,6 +130,56 @@ class SuperAdminController extends Controller
     }
 
     /**
+     * Rejects a registration that was never approved — deletes the account
+     * outright rather than just deactivating it, since a rejected signup
+     * (e.g. someone who wasn't actually the barangay's real first Admin)
+     * has no legitimate record worth keeping around in an inactive state.
+     * Deliberately refuses to touch anyone who was EVER approved (even if
+     * later deactivated) — that path only goes through deactivateUser().
+     */
+    public function rejectUser(Request $request, User $user)
+    {
+        $this->requireSuperAdmin($request);
+        abort_if($user->approved_at !== null, 422, 'This account was already approved at some point — deactivate it instead of rejecting.');
+
+        $name = $user->name;
+        $email = $user->email;
+        $user->delete();
+        $this->log($request, 'Delete', "Rejected pending registration for {$name} ({$email}).");
+
+        return response()->json(['message' => 'Registration rejected.']);
+    }
+
+    /**
+     * The specific queue this role exists to guard: every account still
+     * waiting on approval, newest first. Not just first-for-barangay Admins
+     * (an Admin can, in principle, sit unapproved if a barangay's own Admin
+     * never got around to reviewing them) — but Super Admin approving a
+     * pending Admin is the case that closes the registration hole.
+     */
+    public function pendingApprovals(Request $request)
+    {
+        $this->requireSuperAdmin($request);
+
+        return User::with('barangay.city.province')
+            ->whereNull('approved_at')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'role' => $u->role,
+                'phone' => $u->phone,
+                'created_at' => $u->created_at,
+                'barangay_id' => $u->barangay_id,
+                'barangay_name' => $u->barangay?->name ?? $u->barangay_name,
+                'city_name' => $u->barangay?->city?->name,
+                'province_name' => $u->barangay?->city?->province?->name,
+            ]);
+    }
+
+    /**
      * Change a user's role — also how an orphaned barangay gets recovered:
      * pick an existing user there and set their role to Admin.
      */

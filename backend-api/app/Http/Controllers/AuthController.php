@@ -119,6 +119,15 @@ class AuthController extends Controller
 
             $role = $isFirstForBarangay ? 'Admin' : $roleData['requested_role'];
 
+            // Was: `is_active: $isFirstForBarangay` — the first person to
+            // register for a barangay went live instantly, with nobody ever
+            // reviewing them. The shared staff code only proves "someone
+            // handed me a code for this barangay," not "I'm the legitimate
+            // first Admin" — anyone holding that code could win the race.
+            // Every registrant, first-for-barangay or not, now starts
+            // inactive and waits for a human: Super Admin approves the
+            // first Admin per barangay (see SuperAdminController::
+            // pendingAdmins()); an existing Admin approves everyone after.
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -130,16 +139,25 @@ class AuthController extends Controller
                 'barangay_name' => $data['barangay_name'] ?? null,
                 'role' => $role,
                 'roles' => [$role],
-                'is_active' => $isFirstForBarangay,
-                'approved_at' => $isFirstForBarangay ? now() : null,
+                'is_active' => false,
+                'approved_at' => null,
             ]);
 
             return [$user, $isFirstForBarangay];
         });
 
+        if ($isFirstForBarangay) {
+            $barangayLabel = $user->barangay_name ?? $user->barangay?->name ?? 'their barangay';
+            $this->notifySuperAdmins(
+                'New barangay Admin awaiting approval',
+                "{$user->name} registered as the first Admin for {$barangayLabel}. Review and approve before they can sign in.",
+                'pending_admin_approval'
+            );
+        }
+
         return response()->json([
             'message' => $isFirstForBarangay
-                ? 'Admin account created for your barangay. You can sign in now.'
+                ? 'Registration submitted. A Super Admin must approve your account (as the first Admin for your barangay) before you can sign in.'
                 : 'Registration submitted. An administrator must approve your account before you can sign in.',
             'user' => [
                 'id' => $user->id,
@@ -147,6 +165,23 @@ class AuthController extends Controller
                 'email' => $user->email,
             ],
         ], 201);
+    }
+
+    // Mirrors FleetController::notifyAdmins() — Super Admin is unscoped by
+    // barangay, so this reaches every Super Admin account platform-wide,
+    // not just one barangay's.
+    private function notifySuperAdmins(string $title, string $message, string $type): void
+    {
+        $superAdmins = User::havingRole('Super Admin')->get();
+        foreach ($superAdmins as $superAdmin) {
+            \App\Models\Notification::create([
+                'user_id' => $superAdmin->id,
+                'title' => $title,
+                'message' => $message,
+                'type' => $type,
+                'ticket_id' => null,
+            ]);
+        }
     }
 
     /**
@@ -199,15 +234,27 @@ class AuthController extends Controller
         }
 
         if (!$user->is_active) {
-            // approved_at is only ever set the moment an Admin first approves
-            // an account (UserController::activate) — a still-NULL value
-            // means this account has never been approved yet at all (a
-            // brand-new registrant waiting in the queue), which reads very
-            // differently from an account an Admin actively deactivated
-            // after it was already in use.
-            $message = $user->approved_at === null
-                ? 'Your account is still awaiting approval from your barangay\'s Admin.'
-                : 'This account has been deactivated. Contact an administrator.';
+            // approved_at is only ever set the moment an Admin (or, for a
+            // barangay's first-ever Admin, a Super Admin) first approves an
+            // account (UserController::activate / SuperAdminController::
+            // activateUser) — a still-NULL value means this account has
+            // never been approved yet at all (a brand-new registrant waiting
+            // in the queue), which reads very differently from an account an
+            // Admin actively deactivated after it was already in use. A
+            // pending Admin with no other active Admin in their barangay is
+            // specifically the case a Super Admin approves, not their own
+            // (nonexistent) barangay Admin — the message reflects who they're
+            // actually waiting on.
+            $awaitsSuperAdmin = $user->approved_at === null
+                && $user->role === 'Admin'
+                && !User::where('barangay_id', $user->barangay_id)->where('id', '!=', $user->id)
+                    ->havingRole('Admin')->where('is_active', true)->exists();
+
+            $message = $user->approved_at !== null
+                ? 'This account has been deactivated. Contact an administrator.'
+                : ($awaitsSuperAdmin
+                    ? 'Your account is still awaiting approval from a Super Admin, as the first Admin for your barangay.'
+                    : 'Your account is still awaiting approval from your barangay\'s Admin.');
 
             return response()->json(['message' => $message], 403);
         }
