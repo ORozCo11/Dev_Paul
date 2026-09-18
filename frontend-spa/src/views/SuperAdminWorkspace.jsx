@@ -801,9 +801,10 @@ function SettingsTab({ setNotice }) {
 export default function SuperAdminWorkspace() {
   const { user, logout } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
-    () => localStorage.getItem('vms_sidebar_collapsed') === '1'
-  );
+  // Always starts expanded — a collapsed sidebar should only ever be a
+  // deliberate, in-session choice (the toggle button), never the default a
+  // returning user lands on.
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [collapsedNavGroups, setCollapsedNavGroups] = useState([]);
   const toggleNavGroup = (section) => {
     setCollapsedNavGroups((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]));
@@ -845,10 +846,6 @@ export default function SuperAdminWorkspace() {
     document.documentElement.setAttribute('data-theme', theme);
     try { localStorage.setItem('theme', theme); } catch { /* ignore */ }
   }, [theme]);
-
-  useEffect(() => {
-    try { localStorage.setItem('vms_sidebar_collapsed', isSidebarCollapsed ? '1' : '0'); } catch { /* ignore */ }
-  }, [isSidebarCollapsed]);
 
   useEffect(() => {
     if (!notice) return;
