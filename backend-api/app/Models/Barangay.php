@@ -26,6 +26,11 @@ class Barangay extends Model
         return $this->hasMany(User::class);
     }
 
+    public function registrationSetting()
+    {
+        return $this->hasOne(RegistrationSetting::class);
+    }
+
     /**
      * Used wherever a barangay's boundary is labeled for a viewer (e.g. the
      * Vehicle Location map) — several barangay names repeat across

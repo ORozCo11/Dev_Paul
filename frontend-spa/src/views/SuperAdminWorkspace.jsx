@@ -3,6 +3,7 @@ import api from '../api/axios';
 import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { DonutChart, HorizontalBarChart } from '../components/charts';
 import { AuthContext } from '../context/AuthContextObject';
 
 // Kept separate from every other role's landing route — a Super Admin never
@@ -25,13 +26,16 @@ const NAV_GROUPS = [
   { section: 'Approvals', icon: 'clipboard', items: [
     ['pending', 'Pending Approvals'],
   ] },
+  // Barangays folded into Dashboard (the full table, Add, and Recover all
+  // live there now — see DashboardTab) rather than a separate stop.
   { section: 'Accounts', icon: 'grid', items: [
-    ['barangays', 'Barangays'],
     ['users', 'All Users'],
     ['codes', 'Registration Codes'],
   ] },
+  // Impersonate moved out of here into the topbar (next to the "vms"
+  // wordmark) — it's a quick support action reached from any tab, not a
+  // page you navigate to and stay on like the rest of this nav.
   { section: 'Support', icon: 'mail', items: [
-    ['impersonate', 'Impersonate'],
     ['concerns', 'Concern Reports'],
   ] },
   { section: 'System', icon: 'key', items: [
@@ -82,10 +86,8 @@ function UsersIcon() {
 const TAB_ICONS = {
   dashboard: <Icon name="grid" size={18} className="nav-icon" />,
   pending: <Icon name="clipboard" size={18} className="nav-icon" />,
-  barangays: <Icon name="pin" size={18} className="nav-icon" />,
   users: <UsersIcon />,
   codes: <Icon name="key" size={18} className="nav-icon" />,
-  impersonate: <Icon name="link" size={18} className="nav-icon" />,
   concerns: <Icon name="mail" size={18} className="nav-icon" />,
   activity: <Icon name="clipboard" size={18} className="nav-icon" />,
   settings: <Icon name="key" size={18} className="nav-icon" />,
@@ -111,7 +113,7 @@ function DataTable({ columns, rows, onRowClick, emptyMessage = 'No records found
     <div className="table-shell">
       <table>
         <thead>
-          <tr>{columns.map((c) => <th key={c.label}>{c.label}</th>)}</tr>
+          <tr>{columns.map((c) => <th key={c.label} className={c.className}>{c.label}</th>)}</tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
@@ -120,11 +122,57 @@ function DataTable({ columns, rows, onRowClick, emptyMessage = 'No records found
               className={onRowClick ? 'is-clickable' : undefined}
               onClick={onRowClick ? (e) => { if (!e.target.closest('button, a, select')) onRowClick(row); } : undefined}
             >
-              {columns.map((c) => <td key={c.label}>{c.render ? c.render(row) : (row[c.key] ?? '-')}</td>)}
+              {columns.map((c) => <td key={c.label} className={c.className}>{c.render ? c.render(row) : (row[c.key] ?? '-')}</td>)}
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Numbered-page pager (‹ 1 2 [3] 4 5 … N ›) + a page-size picker as its own
+// row of circular buttons — the same PaginationControls footer the main
+// Workspace uses everywhere (Vehicle Management, Tickets, etc.), copied
+// here rather than imported since this file keeps its own local copies of
+// every shared table primitive (DataTable, StatusBadge, ...) instead of
+// cross-importing from Workspace.jsx.
+function paginationPageList(current, total) {
+  const delta = 2;
+  const pages = [];
+  for (let i = 1; i <= total; i += 1) {
+    if (i === 1 || i === total || (i >= current - delta && i <= current + delta)) pages.push(i);
+  }
+  const withGaps = [];
+  let prev;
+  pages.forEach((p) => {
+    if (prev != null && p - prev > 1) withGaps.push('…');
+    withGaps.push(p);
+    prev = p;
+  });
+  return withGaps;
+}
+
+function PaginationControls({ page, setPage, pageSize, setPageSize, pageSizeOptions, totalPages }) {
+  if (totalPages <= 1 && pageSizeOptions.length <= 1) return null;
+  const pageList = paginationPageList(page, totalPages);
+  return (
+    <div className="table-pagination">
+      <div className="table-pagination-pages">
+        <button type="button" className="pagination-arrow" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} aria-label="Previous page">‹</button>
+        {pageList.map((p, i) => (
+          p === '…'
+            ? <span key={`gap-${i}`} className="pagination-ellipsis">…</span>
+            : <button key={p} type="button" className={`pagination-page${p === page ? ' active' : ''}`} onClick={() => setPage(p)}>{p}</button>
+        ))}
+        <button type="button" className="pagination-arrow" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} aria-label="Next page">›</button>
+      </div>
+      <div className="table-pagination-size">
+        <span className="muted">Page size:</span>
+        {pageSizeOptions.map((n) => (
+          <button key={n} type="button" className={`pagination-page${n === pageSize ? ' active' : ''}`} onClick={() => setPageSize(n)}>{n}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -149,20 +197,7 @@ function PaginatedTable({ columns, rows, onRowClick, emptyMessage, pageSizeOptio
   return (
     <>
       <DataTable columns={columns} rows={pageRows} onRowClick={onRowClick} />
-      <div className="table-pagination">
-        <span className="muted">Showing {start + 1}-{Math.min(start + pageSize, rows.length)} of {rows.length}</span>
-        <div className="table-pagination-controls">
-          <label>
-            Rows per page
-            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>
-              {pageSizeOptions.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </label>
-          <button type="button" className="ghost-button" disabled={clampedPage <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
-          <span>Page {clampedPage} of {totalPages}</span>
-          <button type="button" className="ghost-button" disabled={clampedPage >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
-        </div>
-      </div>
+      <PaginationControls page={clampedPage} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} pageSizeOptions={pageSizeOptions} totalPages={totalPages} />
     </>
   );
 }
@@ -258,8 +293,14 @@ function SignalCard({ icon, label, value, detail, tone = '', meter, onClick }) {
   return <article className={`dashboard-signal-card ${tone}`}>{content}</article>;
 }
 
-function DashboardTab({ barangays, users, pendingApprovals, concernReports, onNavigate }) {
-  const orphaned = barangays.filter((b) => !b.has_active_admin).length;
+// The Super Admin landing page — barangay-centric by design (see the
+// removed standalone Barangays tab, folded in here): stat cards, a
+// snapshot of two charts that follow the same filters as the grid below,
+// clickable filter-tabs, a search/filter row, and the full barangay table
+// with Add/Recover — one page, same shape as a "records in the market"
+// overview page rather than scattered across separate tabs.
+function DashboardTab({ barangays, users, pendingApprovals, concernReports, onPromote, onAddedBarangay, onNavigate }) {
+  const orphaned = barangays.filter((b) => !b.has_active_admin);
   const openConcerns = concernReports.filter((r) => r.status !== 'Resolved').length;
   const activeUsers = users.filter((u) => u.is_active).length;
   const pendingCount = pendingApprovals.length;
@@ -273,14 +314,14 @@ function DashboardTab({ barangays, users, pendingApprovals, concernReports, onNa
     },
     {
       key: 'barangays', label: 'Barangays', value: barangays.length, icon: 'pin', tone: '',
-      detail: `${barangays.length - orphaned} with an active Admin`,
-      meter: barangays.length ? ((barangays.length - orphaned) / barangays.length) * 100 : 0, goto: 'barangays',
+      detail: `${barangays.length - orphaned.length} with an active Admin`,
+      meter: barangays.length ? ((barangays.length - orphaned.length) / barangays.length) * 100 : 0,
     },
     {
-      key: 'orphaned', label: 'Orphaned Barangays', value: orphaned, icon: 'alert',
-      tone: orphaned > 0 ? 'is-alert' : 'is-ok',
-      detail: orphaned > 0 ? 'No active Admin — needs recovery' : 'Every barangay is covered',
-      meter: barangays.length ? (orphaned / barangays.length) * 100 : 0, goto: 'barangays',
+      key: 'orphaned', label: 'Orphaned Barangays', value: orphaned.length, icon: 'alert',
+      tone: orphaned.length > 0 ? 'is-alert' : 'is-ok',
+      detail: orphaned.length > 0 ? 'No active Admin — needs recovery' : 'Every barangay is covered',
+      meter: barangays.length ? (orphaned.length / barangays.length) * 100 : 0,
     },
     {
       key: 'users', label: 'Total Users', value: users.length, icon: 'grid', tone: '',
@@ -295,104 +336,50 @@ function DashboardTab({ barangays, users, pendingApprovals, concernReports, onNa
     },
   ];
 
-  return (
-    <div className="dashboard-signal-grid">
-      {cards.map((c) => (
-        <SignalCard
-          key={c.key}
-          icon={c.icon}
-          label={c.label}
-          value={c.value}
-          detail={c.detail}
-          tone={c.tone}
-          meter={c.meter}
-          onClick={() => onNavigate(c.goto)}
-        />
-      ))}
-    </div>
-  );
-}
-
-// The screen this whole role exists to guard: every account still waiting on
-// approval. A first-time Admin for an otherwise-orphaned barangay is flagged
-// distinctly — approving that specific case is what closes the registration
-// hole (see AuthController::register()).
-function PendingApprovalsTab({ approvals, barangays, onApprove, onReject, onRequestConfirmation }) {
+  // Filter-tabs + search/province filter — the grid's own filters, which
+  // (like the reference page) the two snapshot charts above also follow.
+  // Defaults to "Active Admin" — most barangays should be in this state day
+  // to day, and Recover is an exception-handling action, not something that
+  // needs to dominate the page. Orphaned barangays are still one click away
+  // via the tab below.
+  const [activeFilter, setActiveFilter] = useState('active');
   const [search, setSearch] = useState('');
-
-  const isFirstAdmin = useCallback((a) => {
-    if (a.role !== 'Admin') return false;
-    const b = barangays.find((x) => x.id === a.barangay_id);
-    return !b || !b.has_active_admin;
-  }, [barangays]);
-
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const rows = !q ? approvals : approvals.filter((a) =>
-      [a.name, a.email, a.barangay_name].filter(Boolean).some((v) => v.toLowerCase().includes(q))
-    );
-    // First-Admin cases float to the top — they're the ones closing a
-    // registration gap, not just a routine staff sign-up.
-    return [...rows].sort((a, b) => (isFirstAdmin(b) ? 1 : 0) - (isFirstAdmin(a) ? 1 : 0));
-  }, [approvals, search, isFirstAdmin]);
-
-  const requestReject = (a) => {
-    onRequestConfirmation({
-      title: 'Reject Registration',
-      message: `Reject ${a.name}'s registration for ${a.barangay_name ?? 'their barangay'}? Their account is permanently deleted — this cannot be undone.`,
-      confirmLabel: 'Reject & Delete',
-      variant: 'danger',
-      onConfirm: () => onReject(a),
-    });
-  };
-
-  return (
-    <div>
-      <div className="panel-header-bar">
-        <h3>Pending Approvals <span className="count-badge">{visible.length}</span></h3>
-        {approvals.length > 0 && <LocalSearchInput value={search} onChange={setSearch} placeholder="Search name, email, or barangay..." />}
-      </div>
-      <p className="muted superadmin-muted-block">
-        Every account waiting on approval, newest first. A barangay's first Admin is flagged — approving them is what lets that barangay actually be used.
-      </p>
-
-      {!approvals.length ? (
-        <p className="empty-state">No accounts are waiting on approval right now.</p>
-      ) : (
-        <div className="approval-card-list">
-          {visible.map((a) => (
-            <article key={a.id} className={`approval-card${isFirstAdmin(a) ? ' is-first-admin' : ''}`}>
-              <div className="approval-card-main">
-                <UserAvatar name={a.name} />
-              </div>
-              <div className="approval-card-meta">
-                <span className="approval-card-email">{a.email}</span>
-                {a.phone && <span className="approval-card-phone">{a.phone}</span>}
-              </div>
-              <div className="approval-card-tags">
-                <StatusBadge value={a.role} />
-                {isFirstAdmin(a) && <span className="badge-first-admin">First Admin</span>}
-              </div>
-              <div className="approval-card-location">
-                <Icon name="pin" size={14} />
-                <span>{[a.barangay_name, a.city_name, a.province_name].filter(Boolean).join(', ') || 'Unassigned'}</span>
-              </div>
-              <div className="approval-card-submitted muted">Submitted {formatDate(a.created_at)}</div>
-              <div className="approval-card-actions">
-                <button type="button" className="ghost-button" onClick={() => requestReject(a)}>Reject</button>
-                <button type="button" className="primary-button" onClick={() => onApprove(a)}>Approve</button>
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BarangaysTab({ barangays, users, onPromote }) {
+  const [provinceFilter, setProvinceFilter] = useState('');
   const [recoveryId, setRecoveryId] = useState(null);
   const [pickedUserId, setPickedUserId] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  const provinceOptions = useMemo(
+    () => Array.from(new Set(barangays.map((b) => b.province_name).filter(Boolean))).sort(),
+    [barangays],
+  );
+
+  const filteredBarangays = useMemo(() => {
+    let rows = barangays;
+    if (activeFilter === 'active') rows = rows.filter((b) => b.has_active_admin);
+    if (activeFilter === 'orphaned') rows = rows.filter((b) => !b.has_active_admin);
+    if (provinceFilter) rows = rows.filter((b) => b.province_name === provinceFilter);
+    const q = search.trim().toLowerCase();
+    if (q) rows = rows.filter((b) => [b.name, b.city_name, b.province_name].filter(Boolean).some((v) => v.toLowerCase().includes(q)));
+    return rows;
+  }, [barangays, activeFilter, provinceFilter, search]);
+
+  const provinceRows = useMemo(() => {
+    const byProvince = new Map();
+    filteredBarangays.forEach((b) => {
+      const key = b.province_name ?? 'Unassigned';
+      byProvince.set(key, (byProvince.get(key) ?? 0) + 1);
+    });
+    return Array.from(byProvince.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [filteredBarangays]);
+
+  const filteredOrphaned = filteredBarangays.filter((b) => !b.has_active_admin).length;
+  const coverageSegments = [
+    { label: 'Active Admin', value: filteredBarangays.length - filteredOrphaned, color: '#16a34a' },
+    { label: 'Orphaned', value: filteredOrphaned, color: '#dc2626' },
+  ];
 
   const columns = [
     { label: 'Barangay', render: (b) => (
@@ -402,6 +389,20 @@ function BarangaysTab({ barangays, users, onPromote }) {
     { label: 'Staff', render: (b) => b.staff_count },
     { label: 'Admin Status', render: (b) => (
       <StatusBadge value={b.has_active_admin ? 'Active Admin' : 'Orphaned'} />
+    ) },
+    // Reg. Code / Boundary — the two other things that make a barangay
+    // fully usable (staff can't register at all without a code; the
+    // Vehicle Location map can't draw it without a boundary) but neither
+    // is visible anywhere else on this page.
+    { label: 'Reg. Code', className: 'cell-center', render: (b) => (
+      b.has_registration_code
+        ? <span className="status-badge good" title="A staff registration code has been generated."><Icon name="key" size={11} /> On file</span>
+        : <span className="muted">Not yet</span>
+    ) },
+    { label: 'Boundary', className: 'cell-center', render: (b) => (
+      b.has_boundary
+        ? <span className="status-badge good" title="A map boundary polygon is on file."><Icon name="pin" size={11} /> On file</span>
+        : <span className="muted">Not set</span>
     ) },
     { label: 'Action', render: (b) => (
       !b.has_active_admin ? (
@@ -420,11 +421,81 @@ function BarangaysTab({ barangays, users, onPromote }) {
   const candidateUsers = recoveryBarangay ? users.filter((u) => u.barangay_id === recoveryBarangay.id) : [];
 
   return (
-    <div>
-      <div className="panel-header-bar">
-        <h3>Barangays <span className="count-badge">{barangays.length}</span></h3>
+    <div className="superadmin-dashboard">
+      <div className="dashboard-signal-grid">
+        {cards.map((c) => (
+          <SignalCard
+            key={c.key}
+            icon={c.icon}
+            label={c.label}
+            value={c.value}
+            detail={c.detail}
+            tone={c.tone}
+            meter={c.meter}
+            onClick={c.goto ? () => onNavigate(c.goto) : undefined}
+          />
+        ))}
       </div>
-      <PaginatedTable columns={columns} rows={barangays} emptyMessage="No barangays registered yet." />
+
+      <div className="superadmin-snapshot-head">
+        <h3>Barangay snapshot</h3>
+        <span className="muted">{filteredBarangays.length} matching barangays · Charts follow the filters below</span>
+      </div>
+      <div className="superadmin-dashboard-row">
+        <div className="superadmin-dashboard-panel">
+          <h4>Barangays by Province</h4>
+          <p className="superadmin-panel-subtitle">Number of barangays</p>
+          <HorizontalBarChart rows={provinceRows} />
+        </div>
+        <div className="superadmin-dashboard-panel">
+          <h4>Admin Coverage</h4>
+          <p className="superadmin-panel-subtitle">Share of barangays by Admin status</p>
+          <div className="superadmin-dashboard-donut-row">
+            <DonutChart segments={coverageSegments} centerLabel={filteredBarangays.length} centerSubLabel="barangays" />
+            <ul className="chart-legend">
+              {coverageSegments.map((s) => (
+                <li key={s.label}>
+                  <span style={{ '--legend-color': s.color }}></span>
+                  <small>{s.label}</small>
+                  <strong>{s.value}</strong>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="superadmin-filter-tabs">
+        <button type="button" className={activeFilter === 'all' ? 'active' : ''} onClick={() => setActiveFilter('all')}>
+          All Barangays <span>{barangays.length}</span>
+        </button>
+        <button type="button" className={activeFilter === 'active' ? 'active' : ''} onClick={() => setActiveFilter('active')}>
+          Active Admin <span>{barangays.length - orphaned.length}</span>
+        </button>
+        <button type="button" className={activeFilter === 'orphaned' ? 'active' : ''} onClick={() => setActiveFilter('orphaned')}>
+          Orphaned <span>{orphaned.length}</span>
+        </button>
+      </div>
+
+      <div className="superadmin-grid-toolbar">
+        <LocalSearchInput value={search} onChange={setSearch} placeholder="Search barangay, city, or province..." />
+        <select value={provinceFilter} onChange={(e) => setProvinceFilter(e.target.value)} aria-label="Filter by province">
+          <option value="">All Provinces</option>
+          {provinceOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <button type="button" className="primary-button" onClick={() => setShowAddForm((v) => !v)}>
+          <Icon name="plus" size={14} /> {showAddForm ? 'Cancel' : 'Add Barangay'}
+        </button>
+      </div>
+
+      {showAddForm && (
+        <AddBarangayForm
+          onAdded={(created) => { onAddedBarangay(created); setShowAddForm(false); }}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
+
+      <PaginatedTable columns={columns} rows={filteredBarangays} emptyMessage="No barangays match these filters." />
 
       {recoveryBarangay && (
         <div className="location-form-panel superadmin-panel-spaced">
@@ -464,6 +535,237 @@ function BarangaysTab({ barangays, users, onPromote }) {
   );
 }
 
+// The screen this whole role exists to guard: every account still waiting on
+// approval. A first-time Admin for an otherwise-orphaned barangay is flagged
+// distinctly — approving that specific case is what closes the registration
+// hole (see AuthController::register()).
+function PendingApprovalsTab({ approvals, barangays, onApprove, onReject, onRequestConfirmation }) {
+  const [search, setSearch] = useState('');
+  // Which barangay group is drilled into — null means "show the grouped
+  // overview". Cleared whenever the underlying approvals list changes size
+  // (e.g. the group you were looking at just got approved/rejected down to
+  // zero), so you're never left staring at an empty drill-down.
+  const [openBarangayKey, setOpenBarangayKey] = useState(null);
+
+  const isFirstAdmin = useCallback((a) => {
+    if (a.role !== 'Admin') return false;
+    const b = barangays.find((x) => x.id === a.barangay_id);
+    return !b || !b.has_active_admin;
+  }, [barangays]);
+
+  const sortByFirstAdmin = (rows) => [...rows].sort((a, b) => (isFirstAdmin(b) ? 1 : 0) - (isFirstAdmin(a) ? 1 : 0));
+
+  // Grouped-by-barangay overview — the default view. One card per barangay
+  // with at least one account waiting, not one card per account: a Super
+  // Admin approving 6 accounts for the same barangay used to mean scrolling
+  // past 6 near-identical cards to find the ones for a DIFFERENT barangay.
+  const groups = useMemo(() => {
+    const byKey = new Map();
+    approvals.forEach((a) => {
+      const key = a.barangay_id ?? `unassigned-${a.barangay_name ?? 'none'}`;
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          key,
+          barangay_name: a.barangay_name,
+          city_name: a.city_name,
+          province_name: a.province_name,
+          accounts: [],
+        });
+      }
+      byKey.get(key).accounts.push(a);
+    });
+    // Groups with a pending first-Admin float to the top — same priority
+    // the old flat list gave individual first-Admin cards.
+    return Array.from(byKey.values()).sort((a, b) => {
+      const aFirst = a.accounts.some(isFirstAdmin) ? 1 : 0;
+      const bFirst = b.accounts.some(isFirstAdmin) ? 1 : 0;
+      return bFirst - aFirst || b.accounts.length - a.accounts.length;
+    });
+  }, [approvals, isFirstAdmin]);
+
+  const visibleGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return groups;
+    return groups
+      .map((g) => ({
+        ...g,
+        accounts: g.accounts.filter((a) =>
+          [a.name, a.email, a.barangay_name].filter(Boolean).some((v) => v.toLowerCase().includes(q))
+        ),
+      }))
+      .filter((g) => g.accounts.length > 0);
+  }, [groups, search]);
+
+  const openGroup = visibleGroups.find((g) => g.key === openBarangayKey) ?? null;
+  useEffect(() => {
+    if (openBarangayKey && !groups.some((g) => g.key === openBarangayKey)) setOpenBarangayKey(null);
+  }, [groups, openBarangayKey]);
+
+  const requestReject = (a) => {
+    onRequestConfirmation({
+      title: 'Reject Registration',
+      message: `Reject ${a.name}'s registration for ${a.barangay_name ?? 'their barangay'}? Their account is permanently deleted — this cannot be undone.`,
+      confirmLabel: 'Reject & Delete',
+      variant: 'danger',
+      onConfirm: () => onReject(a),
+    });
+  };
+
+  const renderAccountCard = (a) => (
+    <article key={a.id} className={`approval-card${isFirstAdmin(a) ? ' is-first-admin' : ''}`}>
+      <div className="approval-card-main">
+        <UserAvatar name={a.name} />
+      </div>
+      <div className="approval-card-meta">
+        <span className="approval-card-email">{a.email}</span>
+        {a.phone && <span className="approval-card-phone">{a.phone}</span>}
+      </div>
+      <div className="approval-card-tags">
+        <StatusBadge value={a.role} />
+        {isFirstAdmin(a) && <span className="badge-first-admin">First Admin</span>}
+      </div>
+      <div className="approval-card-submitted muted">Submitted {formatDate(a.created_at)}</div>
+      <div className="approval-card-actions">
+        <button type="button" className="ghost-button" onClick={() => requestReject(a)}>Reject</button>
+        <button type="button" className="primary-button" onClick={() => onApprove(a)}>Approve</button>
+      </div>
+    </article>
+  );
+
+  return (
+    <div>
+      <div className="panel-header-bar">
+        <h3>
+          {openGroup && (
+            <button type="button" className="approval-group-back" onClick={() => setOpenBarangayKey(null)} aria-label="Back to barangays">
+              <Icon name="arrowLeft" size={16} />
+            </button>
+          )}
+          {openGroup ? (openGroup.barangay_name ?? 'Unassigned') : 'Pending Approvals'}{' '}
+          <span className="count-badge">{openGroup ? openGroup.accounts.length : approvals.length}</span>
+        </h3>
+        {approvals.length > 0 && <LocalSearchInput value={search} onChange={setSearch} placeholder="Search name, email, or barangay..." />}
+      </div>
+      <p className="muted superadmin-muted-block">
+        {openGroup
+          ? `Accounts waiting on approval for ${[openGroup.barangay_name, openGroup.city_name, openGroup.province_name].filter(Boolean).join(', ') || 'this barangay'}.`
+          : 'Every barangay with an account waiting on approval. A barangay whose first Admin is pending is flagged and floats to the top — approving them is what lets that barangay actually be used.'}
+      </p>
+
+      {!approvals.length ? (
+        <p className="empty-state">No accounts are waiting on approval right now.</p>
+      ) : openGroup ? (
+        <div className="approval-card-list">
+          {sortByFirstAdmin(openGroup.accounts).map(renderAccountCard)}
+        </div>
+      ) : (
+        <div className="approval-group-list">
+          {visibleGroups.map((g) => {
+            const groupIsFirstAdmin = g.accounts.some(isFirstAdmin);
+            return (
+              <button
+                key={g.key}
+                type="button"
+                className={`approval-group-card${groupIsFirstAdmin ? ' is-first-admin' : ''}`}
+                onClick={() => setOpenBarangayKey(g.key)}
+              >
+                <div className="approval-group-card-location">
+                  <Icon name="pin" size={16} />
+                  <div>
+                    <strong>{g.barangay_name ?? 'Unassigned'}</strong>
+                    <span className="muted">{[g.city_name, g.province_name].filter(Boolean).join(', ') || '—'}</span>
+                  </div>
+                </div>
+                <div className="approval-group-card-tags">
+                  {groupIsFirstAdmin && <span className="badge-first-admin">First Admin pending</span>}
+                  <span className="count-badge">{g.accounts.length} waiting</span>
+                </div>
+                <Icon name="chevronRight" size={18} className="approval-group-card-chevron" />
+              </button>
+            );
+          })}
+          {visibleGroups.length === 0 && <p className="empty-state">No matches.</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Province -> City -> name — lets a Super Admin add a barangay for ANY LGU
+// up front, not just the ones with a seeded list, so a registration code
+// can be generated and handed out before that barangay's first resident
+// ever registers (RegistrationSetting::for() auto-creates the code the
+// first time it's looked up — see SuperAdminController::storeBarangay).
+// /provinces and /cities?province_id= are the same public, unscoped
+// nationwide lists — not the registration form's narrower
+// /provinces/with-barangays, which only lists provinces that already have
+// real barangay data.
+function AddBarangayForm({ onAdded, onCancel }) {
+  const [provinces, setProvinces] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [provinceId, setProvinceId] = useState('');
+  const [cityId, setCityId] = useState('');
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    api.get('/provinces').then((res) => setProvinces(res.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!provinceId) { setCities([]); setCityId(''); return; }
+    api.get('/cities', { params: { province_id: provinceId } }).then((res) => setCities(res.data)).catch(() => setCities([]));
+  }, [provinceId]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!cityId || !name.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.post('/superadmin/barangays', { city_id: cityId, name: name.trim() });
+      onAdded(res.data);
+    } catch (err) {
+      setError(err.response?.data?.message ?? 'Something went wrong — please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form className="location-form-panel superadmin-panel-spaced" onSubmit={submit}>
+      <h3>Add Barangay</h3>
+      <p className="muted superadmin-muted-block">
+        Creates the barangay immediately — a registration code can be generated for it right after, from Registration Codes.
+      </p>
+      {error && <p className="muted" style={{ color: '#dc2626' }}>{error}</p>}
+      <div className="superadmin-inline-row">
+        <select value={provinceId} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); }} required>
+          <option value="">Province</option>
+          {provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <select value={cityId} onChange={(e) => setCityId(e.target.value)} disabled={!provinceId} required>
+          <option value="">City / Municipality</option>
+          {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Barangay name"
+          disabled={!cityId}
+          required
+        />
+        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="primary-button" disabled={saving || !cityId || !name.trim()}>
+          {saving ? 'Adding…' : 'Add'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function UsersTab({ users, onChangeRole, onToggleActive }) {
   const [search, setSearch] = useState('');
 
@@ -477,6 +779,33 @@ function UsersTab({ users, onChangeRole, onToggleActive }) {
     return users.filter((u) => [u.name, u.email, u.barangay_name].filter(Boolean).some((v) => v.toLowerCase().includes(q)));
   }, [users, search]);
 
+  // Province -> Barangay -> users. A flat table of every account across
+  // every barangay got unusable the moment more than one LGU had real
+  // staff (which barangay a name belongs to stopped being scannable) —
+  // grouped the same way Impersonate's own province/barangay picker
+  // already does, just rendered as collapsible sections instead of
+  // cascading <select>s.
+  const provinceGroups = useMemo(() => {
+    const byProvince = new Map();
+    visible.forEach((u) => {
+      const pKey = u.province_name ?? 'Unassigned';
+      const bKey = u.barangay_name ?? 'Unassigned';
+      if (!byProvince.has(pKey)) byProvince.set(pKey, new Map());
+      const byBarangay = byProvince.get(pKey);
+      if (!byBarangay.has(bKey)) byBarangay.set(bKey, []);
+      byBarangay.get(bKey).push(u);
+    });
+    return Array.from(byProvince.entries())
+      .map(([province, byBarangay]) => ({
+        province,
+        barangayGroups: Array.from(byBarangay.entries())
+          .map(([barangay, rows]) => ({ barangay, rows }))
+          .sort((a, b) => a.barangay.localeCompare(b.barangay)),
+        total: Array.from(byBarangay.values()).reduce((sum, rows) => sum + rows.length, 0),
+      }))
+      .sort((a, b) => a.province.localeCompare(b.province));
+  }, [visible]);
+
   const columns = [
     { label: 'Name', render: (u) => (
       <div>
@@ -489,7 +818,6 @@ function UsersTab({ users, onChangeRole, onToggleActive }) {
         {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
       </select>
     ) },
-    { label: 'Barangay', render: (u) => u.barangay_name ? `${u.barangay_name}, ${u.province_name ?? ''}` : '-' },
     { label: 'Status', render: (u) => (
       <StatusBadge value={!u.approved_at ? 'Pending' : (u.is_active ? 'Active' : 'Inactive')} />
     ) },
@@ -506,15 +834,65 @@ function UsersTab({ users, onChangeRole, onToggleActive }) {
         <h3>All Users <span className="count-badge">{visible.length}</span></h3>
         <LocalSearchInput value={search} onChange={setSearch} placeholder="Search name, email, or barangay..." />
       </div>
-      <PaginatedTable columns={columns} rows={visible} emptyMessage="No users found." />
+
+      {!visible.length ? (
+        <p className="empty-state">No users found.</p>
+      ) : (
+        <div className="users-province-groups">
+          {provinceGroups.map((pg) => (
+            <details key={pg.province} className="users-province-group" open>
+              <summary>
+                <Icon name="grid" size={15} />
+                <span>{pg.province}</span>
+                <span className="count-badge">{pg.total}</span>
+              </summary>
+              {pg.barangayGroups.map((bg) => (
+                <details key={bg.barangay} className="users-barangay-group" open>
+                  <summary>
+                    <Icon name="pin" size={13} />
+                    <span>{bg.barangay}</span>
+                    <span className="count-badge">{bg.rows.length}</span>
+                  </summary>
+                  <PaginatedTable columns={columns} rows={bg.rows} initialPageSize={10} pageSizeOptions={[10, 25, 50]} />
+                </details>
+              ))}
+            </details>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function RegistrationCodesTab({ barangays, onRequestConfirmation, setNotice }) {
+function RegistrationCodesTab({ barangays, onAddedBarangay, onRequestConfirmation, setNotice }) {
+  // Province -> City -> Barangay cascade. Province/City are the full
+  // nationwide PSGC lists (same /provinces + /cities?province_id= as
+  // AddBarangayForm) — NOT derived from `barangays`, which only has
+  // whichever province/city a barangay already exists in. Without this, a
+  // Super Admin could never reach a new area to hand out its very first
+  // code: barangays only ever get created via "Add new" below or the
+  // Dashboard's Add Barangay, so a brand-new city always starts with zero.
+  const [provinces, setProvinces] = useState([]);
+  const [cities, setCities] = useState([]);
+  const [provinceId, setProvinceId] = useState('');
+  const [cityId, setCityId] = useState('');
+  // Barangay is a typed field (with suggestions), not a closed <select> —
+  // this doubles as both "pick an existing one" and "name a new one" in a
+  // single box, instead of two separate widgets for the same field.
+  const [barangayText, setBarangayText] = useState('');
   const [barangayId, setBarangayId] = useState('');
+  const [creatingBarangay, setCreatingBarangay] = useState(false);
   const [code, setCode] = useState(null);
   const [loadingCode, setLoadingCode] = useState(false);
+
+  useEffect(() => {
+    api.get('/provinces').then((res) => setProvinces(res.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!provinceId) { setCities([]); setCityId(''); return; }
+    api.get('/cities', { params: { province_id: provinceId } }).then((res) => setCities(res.data)).catch(() => setCities([]));
+  }, [provinceId]);
   // Guards against out-of-order responses: switching barangays quickly can
   // leave an earlier, slower request resolving after a later one — this
   // tracks which barangay is the CURRENT request so a stale response (for a
@@ -559,24 +937,108 @@ function RegistrationCodesTab({ barangays, onRequestConfirmation, setNotice }) {
     });
   };
 
+  const selectedCity = cities.find((c) => String(c.id) === String(cityId));
+  // `barangays` only carries city_name/province_name (no city_id — see
+  // SuperAdminController::barangays()), so matching a fetched city back to
+  // the ones that already have a real row here has to go by name, same as
+  // the cascade above it did before this rewrite.
+  const barangayOptions = useMemo(
+    () => selectedCity
+      ? barangays.filter((b) => b.city_name === selectedCity.name).sort((a, b) => a.name.localeCompare(b.name))
+      : [],
+    [barangays, selectedCity],
+  );
+  // Does what's currently typed already exist in this city? Drives whether
+  // typing resolves an existing barangay's code, or offers to create a new
+  // one — the same box does both, no separate "pick" vs "add new" widgets.
+  const matchedBarangay = barangayOptions.find((b) => b.name.toLowerCase() === barangayText.trim().toLowerCase());
+
+  const handleBarangayTextChange = (value) => {
+    setBarangayText(value);
+    const match = barangayOptions.find((b) => b.name.toLowerCase() === value.trim().toLowerCase());
+    if (match) {
+      setBarangayId(String(match.id));
+      loadCode(match.id);
+    } else {
+      setBarangayId('');
+      setCode(null);
+    }
+  };
+
+  const createBarangay = async () => {
+    const name = barangayText.trim();
+    if (!name || !cityId || matchedBarangay) return;
+    setCreatingBarangay(true);
+    try {
+      const res = await api.post('/superadmin/barangays', { city_id: cityId, name });
+      onAddedBarangay?.(res.data);
+      setBarangayId(String(res.data.id));
+      loadCode(res.data.id);
+    } catch (error) {
+      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not add that barangay.' });
+    } finally {
+      setCreatingBarangay(false);
+    }
+  };
+
   return (
     <div>
       <div className="panel-header-bar">
         <h3>Registration Codes</h3>
       </div>
       <div className="location-form-panel">
-        <label className="auth-field" style={{ maxWidth: 360 }}>
-          <span>Barangay</span>
-          <select
-            value={barangayId}
-            onChange={(e) => { setBarangayId(e.target.value); loadCode(e.target.value); }}
-          >
-            <option value="">Select a barangay</option>
-            {barangays.map((b) => (
-              <option key={b.id} value={b.id}>{b.name} · {b.province_name}</option>
-            ))}
-          </select>
-        </label>
+        <div className="superadmin-inline-row">
+          <label className="auth-field" style={{ maxWidth: 220 }}>
+            <span>Province</span>
+            <select
+              value={provinceId}
+              onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayText(''); setBarangayId(''); setCode(null); }}
+            >
+              <option value="">Select a province</option>
+              {provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+          <label className="auth-field" style={{ maxWidth: 220 }}>
+            <span>City / Municipality</span>
+            <select
+              value={cityId}
+              disabled={!provinceId}
+              onChange={(e) => { setCityId(e.target.value); setBarangayText(''); setBarangayId(''); setCode(null); }}
+            >
+              <option value="">{provinceId ? 'Select a city' : 'Select a province first'}</option>
+              {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </label>
+          <label className="auth-field" style={{ maxWidth: 220 }}>
+            <span>Barangay</span>
+            {/* A typed field, not a closed <select> — the datalist offers
+                existing barangays in this city as suggestions while typing,
+                but any other name typed here is treated as a NEW barangay
+                to add (see the "Add" button below), not an invalid choice. */}
+            <input
+              type="text"
+              list="registration-barangay-suggestions"
+              value={barangayText}
+              disabled={!cityId}
+              onChange={(e) => handleBarangayTextChange(e.target.value)}
+              placeholder={cityId ? 'Type a barangay name' : 'Select a city first'}
+            />
+            <datalist id="registration-barangay-suggestions">
+              {barangayOptions.map((b) => <option key={b.id} value={b.name} />)}
+            </datalist>
+          </label>
+          {cityId && barangayText.trim() && !matchedBarangay && (
+            <button
+              type="button"
+              className="primary-button"
+              disabled={creatingBarangay}
+              onClick={createBarangay}
+              style={{ alignSelf: 'end' }}
+            >
+              <Icon name="plus" size={13} /> {creatingBarangay ? 'Adding…' : `Add "${barangayText.trim()}"`}
+            </button>
+          )}
+        </div>
 
         {barangayId && (
           <div className="superadmin-panel-spaced">
@@ -597,7 +1059,14 @@ function RegistrationCodesTab({ barangays, onRequestConfirmation, setNotice }) {
   );
 }
 
-function ImpersonateTab({ candidates, onImpersonate }) {
+// Was its own full-page sidebar tab; now inline in the topbar, right beside
+// the "vms" wordmark — three plain cascading <select>s (Province, Barangay,
+// Staff) + a button, same visual language and layout as the main Workspace's
+// own topbar picker (map-boundary-selector + dev-impersonate — see
+// Workspace.jsx), just always-on here instead of DEV-gated, since
+// impersonation is a real Super Admin feature, not a debug tool. Deliberately
+// NOT a click-to-open popover — always visible, matching that reference.
+function ImpersonateInline({ candidates, onImpersonate }) {
   const [provinceKey, setProvinceKey] = useState('');
   const [barangayKey, setBarangayKey] = useState('');
   const [userId, setUserId] = useState('');
@@ -619,35 +1088,41 @@ function ImpersonateTab({ candidates, onImpersonate }) {
   const staffOptions = (provinceKey && barangayKey) ? (groups.get(provinceKey)?.get(barangayKey) ?? []) : [];
 
   return (
-    <div>
-      <div className="panel-header-bar">
-        <h3>Impersonate</h3>
+    <>
+      <div className="map-boundary-selector" title="Pick a province and barangay to see its staff.">
+        <select
+          aria-label="Impersonate province"
+          value={provinceKey}
+          onChange={(e) => { setProvinceKey(e.target.value); setBarangayKey(''); setUserId(''); }}
+        >
+          <option value="">Province</option>
+          {Array.from(groups.keys()).map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select
+          aria-label="Impersonate barangay"
+          value={barangayKey}
+          disabled={!provinceKey}
+          onChange={(e) => { setBarangayKey(e.target.value); setUserId(''); }}
+        >
+          <option value="">Barangay</option>
+          {barangayOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+        </select>
       </div>
-      <div className="location-form-panel">
-        <p className="muted superadmin-muted-block">
-          Pick a province, barangay, and staff account to jump into their session for support or testing. This is logged.
-        </p>
-        <div className="superadmin-inline-row">
-          <select value={provinceKey} onChange={(e) => { setProvinceKey(e.target.value); setBarangayKey(''); setUserId(''); }}>
-            <option value="">Province</option>
-            {Array.from(groups.keys()).map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-          <select value={barangayKey} disabled={!provinceKey} onChange={(e) => { setBarangayKey(e.target.value); setUserId(''); }}>
-            <option value="">Barangay</option>
-            {barangayOptions.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-          <select value={userId} disabled={!barangayKey} onChange={(e) => setUserId(e.target.value)}>
-            <option value="">Staff</option>
-            {staffOptions.map((u) => (
-              <option key={u.id} value={u.id} disabled={!u.is_active}>{u.name} · {u.role}{u.is_active ? '' : ' (inactive)'}</option>
-            ))}
-          </select>
-          <button type="button" className="primary-button" disabled={!userId} onClick={() => onImpersonate(userId)}>
-            Impersonate
-          </button>
-        </div>
+      <div className="dev-impersonate" title="Impersonate a staff account for support or testing. This is logged.">
+        <select
+          aria-label="Impersonate staff"
+          value={userId}
+          disabled={!barangayKey}
+          onChange={(e) => setUserId(e.target.value)}
+        >
+          <option value="">Staff</option>
+          {staffOptions.map((u) => (
+            <option key={u.id} value={u.id} disabled={!u.is_active}>{u.name} · {u.role}{u.is_active ? '' : ' (inactive)'}</option>
+          ))}
+        </select>
+        <button type="button" disabled={!userId} onClick={() => onImpersonate(userId)}>Impersonate</button>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -853,8 +1328,14 @@ export default function SuperAdminWorkspace() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
+  // `silent` skips the `loading` flip — every tab's content-body unmounts
+  // while loading is true (see the ternary below), which wipes any local
+  // form state a tab was mid-filling-out (province/city/barangay picks,
+  // search text, ...). Fine for the very first mount, where there's nothing
+  // to lose yet; wrong for a post-mutation refresh, which should update the
+  // data in place without blanking whatever the Super Admin was doing.
+  const loadAll = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [b, u, p, c, r, a] = await Promise.all([
         api.get('/superadmin/barangays'),
@@ -873,7 +1354,7 @@ export default function SuperAdminWorkspace() {
     } catch {
       setNotice({ type: 'error', text: 'Could not load Super Admin data.' });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -944,10 +1425,18 @@ export default function SuperAdminWorkspace() {
         await api.put(`/superadmin/users/${target.id}/activate`);
       }
       setNotice({ type: 'success', text: `${target.name} is now this barangay's Admin.` });
-      await loadAll();
+      await loadAll(true);
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not promote this user.' });
     }
+  };
+
+  // AddBarangayForm already POSTs and hands back the created row itself —
+  // this just refreshes the shared datasets (same loadAll() convention
+  // every other mutation here uses) and surfaces the success notice.
+  const addBarangay = async (created) => {
+    setNotice({ type: 'success', text: `${created.name} (${created.city_name}) added.` });
+    await loadAll(true);
   };
 
   const changeRole = async (targetUser, role) => {
@@ -955,7 +1444,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/users/${targetUser.id}/role`, { role });
       setNotice({ type: 'success', text: `${targetUser.name}'s role is now ${role}.` });
-      await loadAll();
+      await loadAll(true);
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not change that role.' });
     }
@@ -965,7 +1454,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/users/${targetUser.id}/${targetUser.is_active ? 'deactivate' : 'activate'}`);
       setNotice({ type: 'success', text: `${targetUser.name} is now ${targetUser.is_active ? 'inactive' : 'active'}.` });
-      await loadAll();
+      await loadAll(true);
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that account.' });
     }
@@ -975,7 +1464,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/users/${approval.id}/activate`);
       setNotice({ type: 'success', text: `${approval.name} is approved and can now sign in.` });
-      await loadAll();
+      await loadAll(true);
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not approve this account.' });
     }
@@ -985,7 +1474,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.delete(`/superadmin/users/${approval.id}/reject`);
       setNotice({ type: 'success', text: `${approval.name}'s registration was rejected.` });
-      await loadAll();
+      await loadAll(true);
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not reject this account.' });
     }
@@ -995,7 +1484,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/concern-reports/${report.id}/resolve`);
       setNotice({ type: 'success', text: 'Concern report marked resolved.' });
-      await loadAll();
+      await loadAll(true);
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that report.' });
     }
@@ -1005,7 +1494,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/concern-reports/${report.id}/reopen`);
       setNotice({ type: 'success', text: 'Concern report reopened.' });
-      await loadAll();
+      await loadAll(true);
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that report.' });
     }
@@ -1026,7 +1515,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.delete(`/superadmin/concern-reports/${report.id}`);
       setNotice({ type: 'success', text: 'Concern report deleted.' });
-      await loadAll();
+      await loadAll(true);
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not delete that report.' });
     }
@@ -1040,7 +1529,12 @@ export default function SuperAdminWorkspace() {
   if (!user) return null;
 
   return (
-    <>
+    // Scopes the modern <select> styling below (superadmin-shell select) to
+    // just this portal — the main Workspace.jsx shell uses the same
+    // "workspace" class name on its own <main>, so a bare Fragment here
+    // couldn't be targeted on its own without also restyling every select
+    // in the fleet-facing app.
+    <div className="superadmin-shell">
       <header className="topbar">
         <div className="topbar-left">
           <div className="topbar-brand-cluster">
@@ -1055,6 +1549,7 @@ export default function SuperAdminWorkspace() {
             </button>
             <Icon name="gear" size={28} className="topbar-gear-icon" filled />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
+            <ImpersonateInline candidates={candidates} onImpersonate={doImpersonate} />
           </div>
         </div>
 
@@ -1235,6 +1730,8 @@ export default function SuperAdminWorkspace() {
                 users={visibleUsers}
                 pendingApprovals={pendingApprovals}
                 concernReports={concernReports}
+                onPromote={promoteToAdmin}
+                onAddedBarangay={addBarangay}
                 onNavigate={setActiveTab}
               />
             ) : activeTab === 'pending' ? (
@@ -1245,14 +1742,10 @@ export default function SuperAdminWorkspace() {
                 onReject={rejectPending}
                 onRequestConfirmation={setConfirmDialog}
               />
-            ) : activeTab === 'barangays' ? (
-              <BarangaysTab barangays={barangays} users={users} onPromote={promoteToAdmin} />
             ) : activeTab === 'users' ? (
               <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} />
             ) : activeTab === 'codes' ? (
-              <RegistrationCodesTab barangays={barangays} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
-            ) : activeTab === 'impersonate' ? (
-              <ImpersonateTab candidates={candidates} onImpersonate={doImpersonate} />
+              <RegistrationCodesTab barangays={barangays} onAddedBarangay={addBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
             ) : activeTab === 'concerns' ? (
               <ConcernReportsTab reports={concernReports} onResolve={resolveConcern} onReopen={reopenConcern} onDelete={deleteConcern} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'activity' ? (
@@ -1271,6 +1764,6 @@ export default function SuperAdminWorkspace() {
         onCancel={() => setConfirmDialog(null)}
         onConfirm={handleConfirmDialog}
       />
-    </>
+    </div>
   );
 }
