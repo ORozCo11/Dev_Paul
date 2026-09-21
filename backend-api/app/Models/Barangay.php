@@ -27,6 +27,18 @@ class Barangay extends Model
     }
 
     /**
+     * Used wherever a barangay's boundary is labeled for a viewer (e.g. the
+     * Vehicle Location map) — several barangay names repeat across
+     * neighboring cities (Banilad, Basak, ...), so the bare name alone is
+     * ambiguous. Relies on `city` being eager-loaded; falls back to null
+     * rather than lazy-loading it on every row.
+     */
+    public function getCityNameAttribute(): ?string
+    {
+        return $this->relationLoaded('city') ? $this->city?->name : null;
+    }
+
+    /**
      * Look up a barangay by name within a city (case-insensitive, trimmed),
      * creating it if it doesn't exist yet. Lets a registrant's free-typed
      * barangay name (used whenever a city has no seeded dropdown list)
