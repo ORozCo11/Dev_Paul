@@ -1,8 +1,6 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Chart as ChartJS, ArcElement, BarElement, CategoryScale, LinearScale, Tooltip as ChartTooltip, Legend as ChartLegendPlugin } from 'chart.js';
-import { Doughnut, Pie, Bar } from 'react-chartjs-2';
 import api from '../api/axios';
 import LocationDensityMap from '../components/LocationDensityMap';
 import VehicleLocationMap from '../components/VehicleLocationMap';
@@ -15,8 +13,6 @@ import { AuthContext } from '../context/AuthContextObject';
 import { groupLocationRowsByHub, PAKNAAN_POLYGON } from '../data/paknaanLocationDensity';
 import { geoJsonToRings, isPointWithinBoundaryRings } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
-
-ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, ChartTooltip, ChartLegendPlugin);
 
 const FormNoticeContext = createContext(null);
 // Lets shared table cells (VehicleCell, UserAvatarName) open the right detail
@@ -4903,84 +4899,34 @@ function dashboardMetricValue(metrics, label) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-// Chart.js needs literal color values (it paints to a <canvas>, so CSS custom
-// properties/var() are invisible to it) — this reads the app's current theme
-// colors once, then re-reads on every data-theme flip (light/dark toggle) via
-// a MutationObserver, so every Chart.js-based graph below stays in sync with
-// the rest of the UI without each one wiring up its own theme listener.
-function readChartColors() {
-  if (typeof window === 'undefined') return {};
-  const style = getComputedStyle(document.documentElement);
-  const v = (name, fallback) => style.getPropertyValue(name)?.trim() || fallback;
-  return {
-    text: v('--text', '#334155'),
-    textMuted: v('--text-muted', '#64748b'),
-    textStrong: v('--text-strong', '#0f172a'),
-    border: v('--border', '#e2e8f0'),
-    surface: v('--surface', '#ffffff'),
-  };
-}
-
-function useChartColors() {
-  const [colors, setColors] = useState(readChartColors);
-  useEffect(() => {
-    const update = () => setColors(readChartColors());
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => observer.disconnect();
-  }, []);
-  return colors;
-}
-
-// Shared Chart.js tooltip styling so every graph's hover popup looks the
-// same (and matches the app's own card chrome) instead of Chart.js's plain
-// default black box.
-function chartTooltipOptions(colors) {
-  return {
-    backgroundColor: colors.surface,
-    titleColor: colors.textStrong,
-    bodyColor: colors.text,
-    borderColor: colors.border,
-    borderWidth: 1,
-    padding: 10,
-    cornerRadius: 8,
-    titleFont: { weight: 700 },
-    boxPadding: 4,
-  };
-}
-
 function DonutChart({ segments, centerLabel, centerSubLabel }) {
-  const colors = useChartColors();
   const total = segments.reduce((sum, segment) => sum + segment.value, 0);
-
-  const data = {
-    labels: segments.map((s) => s.label),
-    datasets: [{
-      data: segments.map((s) => s.value),
-      backgroundColor: segments.map((s) => s.color),
-      borderWidth: 0,
-      hoverOffset: 4,
-    }],
-  };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: true,
-    cutout: '72%',
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        ...chartTooltipOptions(colors),
-        callbacks: {
-          label: (ctx) => `${ctx.label}: ${ctx.formattedValue}${total ? ` (${Math.round((ctx.parsed / total) * 100)}%)` : ''}`,
-        },
-      },
-    },
-  };
+  const radius = 42;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
 
   return (
     <div className="donut-chart">
-      <Doughnut data={data} options={options} aria-label={`${centerLabel} total vehicles`} />
+      <svg viewBox="0 0 120 120" role="img" aria-label={`${centerLabel} total vehicles`}>
+        <circle className="donut-track" cx="60" cy="60" r={radius} />
+        {segments.map((segment) => {
+          const length = total ? (segment.value / total) * circumference : 0;
+          const dashOffset = -offset;
+          offset += length;
+          return (
+            <circle
+              className="donut-segment"
+              cx="60"
+              cy="60"
+              key={segment.label}
+              r={radius}
+              stroke={segment.color}
+              strokeDasharray={`${length} ${circumference - length}`}
+              strokeDashoffset={dashOffset}
+            />
+          );
+        })}
+      </svg>
       <div className="donut-center">
         <strong>{centerLabel}</strong>
         <span>{centerSubLabel}</span>
@@ -5054,47 +5000,32 @@ function SegmentedBar({ segments }) {
 // the plainer SegmentedBar (no title/tooltip/card chrome, used inline in a
 // smaller stat widget like Users by Role).
 function StackedBarChart({ title, segments }) {
-  const colors = useChartColors();
+  const [hovered, setHovered] = useState(false);
   const total = segments.reduce((sum, s) => sum + (Number(s.value) || 0), 0);
   const visible = segments.filter((s) => s.value > 0);
-
-  const data = {
-    labels: [''],
-    datasets: visible.map((s) => ({
-      label: s.label,
-      data: [s.value],
-      backgroundColor: s.color,
-      borderRadius: 6,
-      maxBarThickness: 48,
-    })),
-  };
-  const options = {
-    indexAxis: 'y',
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      x: { display: false, stacked: true },
-      y: { display: false, stacked: true },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        ...chartTooltipOptions(colors),
-        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.x}` },
-      },
-    },
-  };
 
   return (
     <div className="stacked-bar-chart">
       {title && <h3 className="stacked-bar-chart-title">{title}</h3>}
-      <div className="stacked-bar-wrap" style={{ height: 48 }}>
-        {total === 0 ? (
-          <div className="stacked-bar">
+      <div className="stacked-bar-wrap" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+        <div className="stacked-bar">
+          {total === 0 ? (
             <span className="stacked-bar-segment" style={{ width: '100%', background: 'var(--surface-2, #f1f5f9)' }} />
+          ) : visible.map((s) => (
+            <span key={s.label} className="stacked-bar-segment" style={{ width: `${(s.value / total) * 100}%`, background: s.color }}>
+              {s.value}
+            </span>
+          ))}
+        </div>
+        {hovered && visible.length > 0 && (
+          <div className="stacked-bar-tooltip">
+            {visible.map((s) => (
+              <div key={s.label} className="stacked-bar-tooltip-row">
+                <span style={{ background: s.color }} />
+                {s.label} : {s.value}
+              </div>
+            ))}
           </div>
-        ) : (
-          <Bar data={data} options={options} />
         )}
       </div>
       <div className="stacked-bar-legend">
@@ -5129,40 +5060,36 @@ function ChartLegend({ rows }) {
 // look just comes from drawing a half-radius circle with a full-radius stroke
 // so it fills all the way to the center, instead of leaving a hole.
 function SolidPieChart({ segments, size = 170 }) {
-  const colors = useChartColors();
   const total = segments.reduce((sum, s) => sum + s.value, 0);
-  const visible = segments.filter((s) => s.value > 0);
-
-  const data = {
-    labels: visible.map((s) => s.label),
-    datasets: [{
-      data: visible.map((s) => s.value),
-      backgroundColor: visible.map((s) => s.color),
-      borderWidth: 0,
-      hoverOffset: 4,
-    }],
-  };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: true,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        ...chartTooltipOptions(colors),
-        callbacks: {
-          label: (ctx) => `${ctx.label}: ${ctx.formattedValue}${total ? ` (${Math.round((ctx.parsed / total) * 100)}%)` : ''}`,
-        },
-      },
-    },
-  };
+  const outerRadius = 42;
+  const innerRadius = outerRadius / 2;
+  const circumference = 2 * Math.PI * innerRadius;
+  let offset = 0;
 
   return (
     <div className="solid-pie-chart" style={{ width: size, maxWidth: '100%' }}>
-      {total === 0 ? (
-        <div style={{ width: '100%', aspectRatio: '1', borderRadius: '999px', background: 'rgba(148, 163, 184, 0.25)' }} />
-      ) : (
-        <Pie data={data} options={options} aria-label="Breakdown chart" />
-      )}
+      <svg viewBox="0 0 120 120" role="img" aria-label="Breakdown chart">
+        {total === 0 ? (
+          <circle cx="60" cy="60" r={innerRadius} fill="none" stroke="rgba(148, 163, 184, 0.25)" strokeWidth={outerRadius} />
+        ) : segments.filter((s) => s.value > 0).map((segment) => {
+          const length = (segment.value / total) * circumference;
+          const dashOffset = -offset;
+          offset += length;
+          return (
+            <circle
+              className="solid-pie-segment"
+              cx="60"
+              cy="60"
+              key={segment.label}
+              r={innerRadius}
+              stroke={segment.color}
+              strokeWidth={outerRadius}
+              strokeDasharray={`${length} ${circumference - length}`}
+              strokeDashoffset={dashOffset}
+            />
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -5189,74 +5116,52 @@ function SolidPieLegend({ segments, total }) {
 const BAR_CHART_PALETTE = ['#2563eb', '#f97316', '#22c55e', '#a855f7', '#ec4899', '#06b6d4', '#eab308', '#ef4444'];
 
 function HorizontalBarChart({ rows = [] }) {
-  const colors = useChartColors();
+  const maxValue = Math.max(1, ...rows.map((row) => Number(row.value) || 0));
 
   if (!rows.length) {
     return <p className="empty-state">No graph data yet.</p>;
   }
 
-  const data = {
-    labels: rows.map((row) => row.label || 'Unassigned'),
-    datasets: [{
-      data: rows.map((row) => Number(row.value) || 0),
-      backgroundColor: rows.map((row, i) => row.color || BAR_CHART_PALETTE[i % BAR_CHART_PALETTE.length]),
-      borderRadius: 6,
-      maxBarThickness: 22,
-    }],
-  };
-  const options = {
-    indexAxis: 'y',
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      x: { display: false, grid: { display: false } },
-      y: { grid: { display: false }, border: { display: false }, ticks: { color: colors.textMuted, font: { size: 12, weight: 600 } } },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: chartTooltipOptions(colors),
-    },
-  };
-
   return (
-    <div className="horizontal-bars" style={{ height: Math.max(120, rows.length * 34) }}>
-      <Bar data={data} options={options} />
+    <div className="horizontal-bars">
+      {rows.map((row, i) => {
+        const value = Number(row.value) || 0;
+        const percent = Math.round((value / maxValue) * 100);
+        const color = row.color || BAR_CHART_PALETTE[i % BAR_CHART_PALETTE.length];
+        return (
+          <div className="bar-row" key={row.label || 'Unassigned'}>
+            <div className="bar-row-label">
+              <span>{row.label || 'Unassigned'}</span>
+              <strong>{value}</strong>
+            </div>
+            <div className="bar-track">
+              <span style={{ width: `${percent}%`, background: color }}></span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 function ColumnChart({ rows = [] }) {
-  const colors = useChartColors();
-
-  if (!rows.length) {
-    return <p className="empty-state">No graph data yet.</p>;
-  }
-
-  const data = {
-    labels: rows.map((row) => row.label),
-    datasets: [{
-      data: rows.map((row) => Number(row.value) || 0),
-      backgroundColor: rows.map((row, i) => row.color || BAR_CHART_PALETTE[i % BAR_CHART_PALETTE.length]),
-      borderRadius: 6,
-      maxBarThickness: 46,
-    }],
-  };
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      y: { display: false, grid: { display: false } },
-      x: { grid: { display: false }, border: { display: false }, ticks: { color: colors.textMuted, font: { size: 12, weight: 700 } } },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: chartTooltipOptions(colors),
-    },
-  };
+  const maxValue = Math.max(1, ...rows.map((row) => Number(row.value) || 0));
 
   return (
-    <div className="column-chart" style={{ display: 'block' }}>
-      <Bar data={data} options={options} />
+    <div className="column-chart">
+      {rows.map((row) => {
+        const value = Number(row.value) || 0;
+        const height = Math.max(8, Math.round((value / maxValue) * 100));
+        return (
+          <div className="column-bar" key={row.label}>
+            <div className="column-track">
+              <span style={{ height: `${height}%`, background: row.color }}></span>
+            </div>
+            <strong>{value}</strong>
+            <small>{row.label}</small>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -14320,7 +14225,7 @@ function TicketsReadyToClosePanel({ tickets, onViewTicket }) {
     <div className="ready-to-close-panel">
       <div className="ready-to-close-header">
         <span className="count-badge">{tickets.length}</span>
-        <h3>Tickets Ready for Closing</h3>
+        <h3>Tickets Ready to Close</h3>
         <div className="ready-to-close-search">
           <LocalSearchInput value={search} onChange={setSearch} placeholder="Search ready tickets..." />
         </div>
