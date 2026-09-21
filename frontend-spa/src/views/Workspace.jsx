@@ -4962,6 +4962,12 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           max={lastIndex}
           step={1}
           value={minIndex}
+          // Stacked on top of the max thumb once they meet at the same stop
+          // (e.g. narrowing the filter down to "Medium" only) — otherwise,
+          // since it's first in the DOM, the max thumb always paints over it
+          // and permanently swallows the drag, leaving the min thumb stuck
+          // and the range impossible to widen back out.
+          style={{ zIndex: minIndex >= maxIndex ? 2 : 1 }}
           onChange={(e) => onChange(Math.min(Number(e.target.value), maxIndex), maxIndex)}
         />
         <input
@@ -4971,6 +4977,7 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           max={lastIndex}
           step={1}
           value={maxIndex}
+          style={{ zIndex: minIndex >= maxIndex ? 1 : 2 }}
           onChange={(e) => onChange(minIndex, Math.max(Number(e.target.value), minIndex))}
         />
       </div>

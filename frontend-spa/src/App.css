@@ -12054,6 +12054,207 @@ button.dashboard-signal-card:hover {
   height: 100%;
 }
 
+/* Super Admin dashboard — real content below the signal-card KPI row
+   (coverage chart, role breakdown, orphaned barangays, recent approvals),
+   not just counts. Panels reuse .dashboard-smart-panel's card language. */
+.superadmin-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.superadmin-dashboard-row {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+.superadmin-dashboard-panel {
+  background: var(--card-bg, linear-gradient(180deg, rgba(22, 23, 27, 0.98), rgba(14, 15, 18, 0.98)));
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
+  padding: 18px;
+}
+.superadmin-dashboard-panel h4 {
+  color: var(--text-strong, #0f172a);
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin: 0 0 14px;
+}
+.superadmin-dashboard-panel h4:has(+ .superadmin-panel-subtitle) {
+  margin-bottom: 2px;
+}
+.superadmin-panel-subtitle {
+  color: var(--text-muted, #64748b);
+  font-size: 0.76rem;
+  margin: 0 0 14px;
+}
+/* "Barangay snapshot" section header, above the two charts — bold title
+   left, small filter-state caption right, same idea as the reference's
+   "54 matching requirements · Charts follow all grid filters". */
+.superadmin-snapshot-head {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 2px;
+}
+.superadmin-snapshot-head h3 {
+  color: var(--text-strong, #0f172a);
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+.superadmin-snapshot-head .muted { font-size: 0.78rem; }
+
+/* Clickable filter-tabs above the barangay grid — plain text links with a
+   count, the active one bold/underlined in the brand blue. */
+.superadmin-filter-tabs {
+  border-bottom: 1px solid var(--border-subtle, #e2e8f0);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0;
+}
+.superadmin-filter-tabs button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted, #64748b);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 600;
+  padding: 10px 6px 8px;
+}
+.superadmin-filter-tabs button span {
+  color: inherit;
+  font-weight: 700;
+  margin-left: 4px;
+}
+.superadmin-filter-tabs button:hover { color: #2563eb; }
+.superadmin-filter-tabs button.active {
+  border-bottom-color: #2563eb;
+  color: #2563eb;
+}
+
+/* Search + province filter + Reset + Add Barangay, above the grid — plain
+   white toolbar row, deliberately NOT .panel-header-bar (that's a blue
+   title banner, wrong look for a row of form controls). */
+.superadmin-grid-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+.superadmin-grid-toolbar .primary-button { margin-left: auto; }
+
+/* Modern <select> styling for the whole Super Admin portal — every plain
+   dropdown here (topbar Impersonate, Registration Codes, the Users role
+   picker, Recover, the grid toolbar, Add Barangay's cascade, ...), not just
+   the ones in a .smart-form. Same look .smart-form select already uses
+   elsewhere in the app (custom chevron via appearance:none + an inline SVG,
+   rounded border, focus ring) instead of the bare OS-native dropdown. */
+.superadmin-shell select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9px;
+  color: #1e293b;
+  cursor: pointer;
+  font-size: 0.85rem;
+  outline: none;
+  padding: 8px 32px 8px 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.superadmin-shell select:hover { border-color: #94a3b8; }
+.superadmin-shell select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+.superadmin-shell select:disabled {
+  background-color: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+/* The topbar's own three selects (Province/Barangay/Staff — .map-boundary-
+   selector, .dev-impersonate) already carry this exact look from their own
+   rules; this file loads after theirs, so re-declare their sizing here to
+   avoid the wider default padding/border crowding that compact topbar row. */
+.superadmin-shell .map-boundary-selector select,
+.superadmin-shell .dev-impersonate select {
+  border-radius: 6px;
+  padding: 4px 28px 4px 10px;
+  font-size: 0.78rem;
+}
+
+.superadmin-dashboard-panel-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.superadmin-dashboard-panel-head h4 { margin: 0; }
+.superadmin-dashboard-donut-row {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+}
+.superadmin-dashboard-donut-row .chart-legend { flex: 1; }
+.superadmin-dashboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.superadmin-dashboard-list li {
+  align-items: center;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 8px 6px;
+}
+.superadmin-dashboard-list li:hover {
+  background: rgba(148, 163, 184, 0.1);
+}
+.superadmin-dashboard-list li > span:first-of-type {
+  flex: 1;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.superadmin-dashboard-list-more {
+  cursor: default;
+  font-size: 0.8rem;
+  justify-content: center;
+}
+.superadmin-dashboard-list-more:hover { background: none; }
+.link-button {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0;
+}
+.link-button:hover { color: #1d4ed8; text-decoration: underline; }
+
+html[data-theme="light"] .superadmin-dashboard-panel {
+  background: #ffffff;
+  border-color: #cdddf0;
+}
+
 .dashboard-intelligence-grid {
   display: grid;
   gap: 14px;
@@ -12524,6 +12725,153 @@ html[data-theme="dark"] .file-cabinet-dropzone-title {
   justify-content: center;
 }
 
+/* Pending Approvals' grouped-by-barangay overview — one clickable card per
+   barangay (not per account), drilling into the same .approval-card-list
+   used before this redesign. */
+.approval-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.approval-group-card {
+  align-items: center;
+  background: var(--card-bg, #101827);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+  cursor: pointer;
+  display: flex;
+  gap: 14px;
+  padding: 14px 16px;
+  text-align: left;
+  transition: border-color 0.15s, transform 0.1s;
+  width: 100%;
+}
+.approval-group-card:hover {
+  border-color: #2563eb;
+  transform: translateY(-1px);
+}
+.approval-group-card.is-first-admin {
+  border-color: #d97706;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.35);
+}
+.approval-group-card-location {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+}
+.approval-group-card-location > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.approval-group-card-location strong {
+  font-size: 0.94rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.approval-group-card-location .muted {
+  font-size: 0.78rem;
+}
+.approval-group-card-tags {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+}
+.approval-group-card-chevron {
+  color: var(--text-muted, #94a3b8);
+  flex-shrink: 0;
+}
+.approval-group-back {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  margin-right: 4px;
+  padding: 2px;
+  vertical-align: middle;
+}
+
+/* All Users — grouped Province -> Barangay via nested <details>, native
+   collapse/expand instead of hand-rolled toggle state. Both levels render
+   open by default (a constant `open` attribute — React only touches the
+   DOM when the prop VALUE changes between renders, so this never fights a
+   user's own manual collapse click). */
+.users-province-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.users-province-group {
+  background: var(--card-bg, #101827);
+  border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.2));
+  border-radius: 10px;
+  overflow: hidden;
+}
+.users-province-group > summary {
+  align-items: center;
+  background: rgba(37, 99, 235, 0.1);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.95rem;
+  font-weight: 700;
+  gap: 10px;
+  list-style: none;
+  padding: 12px 16px;
+}
+.users-province-group > summary::-webkit-details-marker { display: none; }
+.users-province-group > summary::before {
+  content: '';
+  border-style: solid;
+  border-width: 5px 4px 0 4px;
+  border-color: currentColor transparent transparent transparent;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.users-province-group[open] > summary::before { transform: rotate(-90deg); }
+.users-province-group > summary span:first-of-type { flex: 1; }
+.users-barangay-group {
+  border-top: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.15));
+  padding: 10px 16px 14px 16px;
+}
+.users-barangay-group > summary {
+  align-items: center;
+  color: var(--text-muted, #94a3b8);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.84rem;
+  font-weight: 600;
+  gap: 8px;
+  list-style: none;
+  padding: 6px 0;
+}
+.users-barangay-group > summary::-webkit-details-marker { display: none; }
+.users-barangay-group > summary::before {
+  content: '';
+  border-style: solid;
+  border-width: 4px 3.5px 0 3.5px;
+  border-color: currentColor transparent transparent transparent;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.users-barangay-group[open] > summary::before { transform: rotate(-90deg); }
+.users-barangay-group > summary span:first-of-type { flex: 1; color: var(--text, #e2e8f0); }
+.users-barangay-group .table-shell { margin-top: 6px; }
+
+html[data-theme="light"] .users-province-group {
+  background: #ffffff;
+  border-color: #cdddf0;
+}
+html[data-theme="light"] .users-barangay-group > summary span:first-of-type {
+  color: #1e293b;
+}
+
 .superadmin-panel-spaced { margin-top: 16px; }
 .superadmin-inline-row { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
 .superadmin-muted-block { margin-bottom: 12px; }
@@ -12546,7 +12894,8 @@ html[data-theme="dark"] .file-cabinet-dropzone-title {
   white-space: normal;
 }
 
-html[data-theme="light"] .approval-card {
+html[data-theme="light"] .approval-card,
+html[data-theme="light"] .approval-group-card {
   background: #ffffff;
   border-color: #cdddf0;
   box-shadow: 0 8px 20px rgba(31, 75, 122, 0.1);

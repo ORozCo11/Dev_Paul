@@ -8,6 +8,8 @@ use App\Models\ConcernReport;
 use App\Models\RegistrationSetting;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 /**
@@ -63,7 +65,7 @@ class SuperAdminController extends Controller
     {
         $this->requireSuperAdmin($request);
 
-        return Barangay::with('city.province')
+        return Barangay::with(['city.province', 'registrationSetting'])
             ->withCount('users')
             ->orderBy('name')
             ->get()
@@ -74,7 +76,113 @@ class SuperAdminController extends Controller
                 'province_name' => $b->city?->province?->name,
                 'staff_count' => $b->users_count,
                 'has_active_admin' => $b->users()->havingRole('Admin')->where('is_active', true)->exists(),
+                // Both one-line, already-loaded checks — no extra queries per
+                // row. A barangay can exist with neither yet: freshly added
+                // via storeBarangay() below, nobody's registered there, and
+                // no boundary polygon has been matched/drawn for it.
+                'has_registration_code' => $b->registrationSetting !== null,
+                'has_boundary' => $b->boundary !== null,
             ]);
+    }
+
+    /**
+     * Lets a Super Admin add a barangay for ANY province/city up front —
+     * not just Mandaue's seeded 27 — so a registration code can be
+     * generated and handed to that barangay's office before its first
+     * resident ever registers (registrationCode()/RegistrationSetting::for()
+     * auto-creates the code the first time it's looked up, so nothing
+     * further is needed here to make one available).
+     */
+    public function storeBarangay(Request $request)
+    {
+        $this->requireSuperAdmin($request);
+
+        $data = $request->validate([
+            'city_id' => ['required', 'exists:cities,id'],
+            'name' => [
+                'required', 'string', 'max:150',
+                Rule::unique('barangays')->where('city_id', $request->city_id),
+            ],
+        ]);
+
+        $barangay = Barangay::create($data);
+        $barangay->load('city.province');
+
+        // Best-effort — the 27 Mandaue barangays came with a real PSA
+        // boundary file, but nothing does for a barangay added here for
+        // some other city. Rather than always leaving it unset, ask a
+        // public geocoder for one; if it can't find a match (or the
+        // lookup fails/times out) the barangay is still created, just
+        // without a boundary, exactly as before this existed.
+        $boundary = $this->lookupBoundary($barangay->name, $barangay->city?->name);
+        if ($boundary) {
+            $barangay->update(['boundary' => $boundary]);
+        }
+
+        $this->log($request, 'Add', "Added barangay {$barangay->name} ({$barangay->city?->name}).");
+
+        return response()->json([
+            'id' => $barangay->id,
+            'name' => $barangay->name,
+            'city_name' => $barangay->city?->name,
+            'province_name' => $barangay->city?->province?->name,
+            'staff_count' => 0,
+            'has_active_admin' => false,
+            'has_registration_code' => false,
+            'has_boundary' => $boundary !== null,
+        ], 201);
+    }
+
+    /**
+     * Asks OpenStreetMap's public Nominatim geocoder for a boundary polygon
+     * matching "<barangay>, <city>, Philippines" — free, no API key, but
+     * rate-limited to ~1 req/sec and requires an identifying User-Agent per
+     * its usage policy (https://operations.osmfoundation.org/policies/nominatim/).
+     * Fine for this: one lookup per barangay actually added, never a bulk
+     * operation. Coverage isn't guaranteed for every barangay in the
+     * country — returns null (silently — this must never block a barangay
+     * from being created) whenever nothing usable comes back.
+     */
+    private function lookupBoundary(string $barangayName, ?string $cityName): ?array
+    {
+        if (!$cityName) {
+            return null;
+        }
+
+        try {
+            $response = Http::withHeaders(['User-Agent' => 'BarangayVMS/1.0 (https://github.com/ORozCo11/Dev_Paul)'])
+                ->timeout(6)
+                ->get('https://nominatim.openstreetmap.org/search', [
+                    'format' => 'json',
+                    'polygon_geojson' => 1,
+                    'limit' => 5,
+                    'q' => "{$barangayName}, {$cityName}, Philippines",
+                ]);
+
+            if (!$response->successful()) {
+                return null;
+            }
+
+            foreach ($response->json() ?? [] as $result) {
+                // Only trust an actual administrative boundary relation — anything
+                // else (a barangay hall, a health center, a POI) can still carry a
+                // Polygon/MultiPolygon geojson but it's the shape of a building, not
+                // the barangay's territory, and would draw the wrong line on the map.
+                if (($result['class'] ?? null) !== 'boundary' || ($result['type'] ?? null) !== 'administrative') {
+                    continue;
+                }
+
+                $geojson = $result['geojson'] ?? null;
+                if (in_array($geojson['type'] ?? null, ['Polygon', 'MultiPolygon'], true)) {
+                    return $geojson;
+                }
+            }
+
+            return null;
+        } catch (\Throwable $e) {
+            Log::warning("Boundary lookup failed for {$barangayName}, {$cityName}: {$e->getMessage()}");
+            return null;
+        }
     }
 
     /**

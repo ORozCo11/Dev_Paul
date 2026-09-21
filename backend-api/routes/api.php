@@ -132,6 +132,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
     |--------------------------------------------------------------------------
     */
     Route::get('/superadmin/barangays', [SuperAdminController::class, 'barangays']);
+    Route::post('/superadmin/barangays', [SuperAdminController::class, 'storeBarangay']);
     Route::get('/superadmin/users', [SuperAdminController::class, 'users']);
     Route::get('/superadmin/pending-approvals', [SuperAdminController::class, 'pendingApprovals']);
     Route::put('/superadmin/users/{user}/activate', [SuperAdminController::class, 'activateUser']);
