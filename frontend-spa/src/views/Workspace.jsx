@@ -1976,7 +1976,12 @@ function Workspace() {
       // boundary polygon on file (only Mandaue City barangays do today) —
       // otherwise the map silently falls back to Paknaan's shape AND label,
       // which reads as "the dropdown did nothing" instead of "no data yet".
-      setMapBoundaryOverride({ geometry: res.data.boundary ?? null, label: res.data.name });
+      // Qualified with the city name whenever we have one — several
+      // barangay names repeat across neighboring cities (e.g. "Banilad"
+      // exists in both Mandaue City and Cebu City), so a bare name on the
+      // map reads as ambiguous, or worse, as the wrong city's barangay.
+      const label = res.data.city_name ? `${res.data.name}, ${res.data.city_name}` : res.data.name;
+      setMapBoundaryOverride({ geometry: res.data.boundary ?? null, label });
     } catch {
       setMapBoundaryOverride(null);
     }
