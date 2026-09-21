@@ -1,42 +1,19 @@
-import { useId } from 'react';
-
 // Lightweight inline SVG icon set (stroke = currentColor so icons inherit text
 // color). Replaces emoji usage across the app with professional line icons.
+const GEAR_TEETH_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
 
-// The VMS brand mark (source: src/assets/vms-gear-blue.svg) — a fixed blue
-// gradient gear, not a themeable currentColor glyph like the rest of this
-// file, since every call site (topbar, footer, auth header, loading
-// spinners) uses it as-is. Needs its own <linearGradient> id per render (via
-// useId) so two gears on screen at once don't collide on one shared id.
-// Rotates around its default center (no transform-origin override) — this
-// shape's true center already matches its viewBox center, verified by
-// measuring its rendered bounding box across a full rotation; adding an
-// origin override here previously caused visible wobble.
-function GearLogo({ size, className, style }) {
-  const gradientId = useId();
+// Rendered identically to the favicon (src/assets/gear-favicon.svg): an 8-tooth
+// gear with a white ring outline in the center. The ring color is themeable via
+// --gear-ring so it stays visible on a white gear (e.g. the blue footer).
+function GearGlyph() {
   return (
-    <svg
-      className={className}
-      style={style}
-      width={size}
-      height={size}
-      viewBox="0 0 560 560"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#0D73F6" />
-          <stop offset="55%" stopColor="#0868E8" />
-          <stop offset="100%" stopColor="#045DD6" />
-        </linearGradient>
-      </defs>
-      <path
-        fill={`url(#${gradientId})`}
-        fillRule="evenodd"
-        d="M241 31 Q236 31 232 34 Q228 37 226 43 L215 96 Q188 103 165 115 L120 82 Q115 78 109 79 Q103 80 99 84 L72 111 Q68 115 67 121 Q66 127 70 132 L103 177 Q91 200 84 227 L31 238 Q25 240 22 244 Q19 248 19 254 L19 292 Q19 298 22 302 Q25 306 31 308 L84 319 Q91 346 103 369 L70 414 Q66 419 67 425 Q68 431 72 435 L99 462 Q103 466 109 467 Q115 468 120 464 L165 431 Q188 443 215 450 L226 503 Q228 509 232 512 Q236 515 241 515 L279 515 Q285 515 289 512 Q293 509 295 503 L306 450 Q333 443 356 431 L401 464 Q406 468 412 467 Q418 466 422 462 L449 435 Q453 431 454 425 Q455 419 451 414 L418 369 Q430 346 437 319 L490 308 Q496 306 499 302 Q502 298 502 292 L502 254 Q502 248 499 244 Q496 240 490 238 L437 227 Q430 200 418 177 L451 132 Q455 127 454 121 Q453 115 449 111 L422 84 Q418 80 412 79 Q406 78 401 82 L356 115 Q333 103 306 96 L295 43 Q293 37 289 34 Q285 31 279 31 Z M260 153 C190 153 133 210 133 280 C133 350 190 407 260 407 C330 407 387 350 387 280 C387 210 330 153 260 153 Z"
-      />
-      <circle cx="260" cy="280" r="109" fill={`url(#${gradientId})`} />
-    </svg>
+    <>
+      <circle cx="12" cy="12" r="7.6" />
+      {GEAR_TEETH_ANGLES.map((angle) => (
+        <rect key={angle} x="9.5" y="0.4" width="5" height="6.6" rx="2" transform={`rotate(${angle} 12 12)`} />
+      ))}
+      <circle cx="12" cy="12" r="4.3" fill="none" stroke="var(--gear-ring, #ffffff)" strokeWidth="1.8" />
+    </>
   );
 }
 
@@ -301,11 +278,7 @@ const PATHS = {
 };
 
 export default function Icon({ name, size = 16, strokeWidth = 2, className, style, filled = false }) {
-  // Its own fixed-viewBox, fixed-color SVG (see GearLogo above) — doesn't fit
-  // the generic 24x24/currentColor wrapper every other icon shares.
-  if (name === 'gear') return <GearLogo size={size} className={className} style={style} />;
-
-  const content = PATHS[name];
+  const content = name === 'gear' ? <GearGlyph /> : PATHS[name];
   if (!content) return null;
   return (
     <svg

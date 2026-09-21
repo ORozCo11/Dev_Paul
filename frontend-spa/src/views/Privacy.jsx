@@ -13,7 +13,7 @@ export default function Privacy() {
       <section className="auth-card policy-card" style={{ maxWidth: 680, width: '100%', textAlign: 'left', gap: '1rem' }}>
 
         <div className="policy-card-logo">
-          <Icon name="gear" size={32} className="topbar-gear-icon" filled />
+          <Icon name="gear" size={28} className="topbar-gear-icon" filled />
           <span className="vms-wordmark vms-wordmark-sm policy-card-logo-wordmark">vms</span>
         </div>
 

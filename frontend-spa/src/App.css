@@ -10463,13 +10463,6 @@ button.btn-view-action svg {
   animation: vms-gear-spin 4s linear infinite;
   flex-shrink: 0;
 }
-/* Pulls "vms" closer to the gear specifically — .topbar-brand-cluster's own
-   `gap` is shared by every child (toggle button, gear, wordmark), so a
-   negative margin here is what narrows just this one gap without also
-   crowding the sidebar toggle button next to it. */
-.topbar-brand-cluster .topbar-gear-icon {
-  margin-right: -4px;
-}
 
 /* Page heading card — rendered once, above every module/page, so this one
    spot controls the "icon chip + bold title" heading treatment app-wide. */

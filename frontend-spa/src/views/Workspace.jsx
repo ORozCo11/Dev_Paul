@@ -2093,7 +2093,7 @@ function Workspace() {
             >
               <Icon name="menu" size={24} />
             </button>
-            <Icon name="gear" size={32} className="topbar-gear-icon" filled />
+            <Icon name="gear" size={28} className="topbar-gear-icon" filled />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
           <div className="map-boundary-selector" title="Choose which registered barangay outline the Vehicle Location map draws.">
