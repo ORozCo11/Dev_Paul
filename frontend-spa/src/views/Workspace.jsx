@@ -1860,6 +1860,7 @@ function Workspace() {
       key: 'actions',
       label: 'Actions',
       locked: true,
+      className: 'cell-center',
       render: (row) => {
         if (row.final_status === 'Deleted') {
           return (
@@ -3092,24 +3093,18 @@ function Workspace() {
               {/* From Date */}
               <div className="filter-date-group">
                 <span>From Date</span>
-                <input
-                  type="date"
-                  className="filter-select"
-                  style={{ minWidth: 'auto' }}
+                <DateFilterInput
                   value={condDraft.start || '2026-01-01'}
-                  onChange={(e) => setCondDraft((d) => ({ ...d, start: e.target.value }))}
+                  onChange={(val) => setCondDraft((d) => ({ ...d, start: val }))}
                 />
               </div>
 
               {/* To Date */}
               <div className="filter-date-group">
                 <span>To Date</span>
-                <input
-                  type="date"
-                  className="filter-select"
-                  style={{ minWidth: 'auto' }}
+                <DateFilterInput
                   value={condDraft.end || '2026-12-31'}
-                  onChange={(e) => setCondDraft((d) => ({ ...d, end: e.target.value }))}
+                  onChange={(val) => setCondDraft((d) => ({ ...d, end: val }))}
                 />
               </div>
 
@@ -3588,22 +3583,16 @@ function Workspace() {
               </div>
               <div className="filter-date-group">
                 <span>From Date</span>
-                <input
-                  type="date"
-                  className="filter-select"
-                  style={{ minWidth: 'auto' }}
+                <DateFilterInput
                   value={filterDateStart || '2026-01-01'}
-                  onChange={(e) => setFilterDateStart(e.target.value)}
+                  onChange={setFilterDateStart}
                 />
               </div>
               <div className="filter-date-group">
                 <span>To Date</span>
-                <input
-                  type="date"
-                  className="filter-select"
-                  style={{ minWidth: 'auto' }}
+                <DateFilterInput
                   value={filterDateEnd || '2026-12-31'}
-                  onChange={(e) => setFilterDateEnd(e.target.value)}
+                  onChange={setFilterDateEnd}
                 />
               </div>
             </div>
@@ -3882,22 +3871,16 @@ function Workspace() {
               {/* Custom date range */}
               <div className="filter-date-group">
                 <span>From Date</span>
-                <input
-                  type="date"
-                  className="filter-select"
-                  style={{ minWidth: 'auto' }}
+                <DateFilterInput
                   value={archiveDraft.start || '2026-01-01'}
-                  onChange={(e) => setArchiveDraft((d) => ({ ...d, start: e.target.value, quick: '' }))}
+                  onChange={(val) => setArchiveDraft((d) => ({ ...d, start: val, quick: '' }))}
                 />
               </div>
               <div className="filter-date-group">
                 <span>To Date</span>
-                <input
-                  type="date"
-                  className="filter-select"
-                  style={{ minWidth: 'auto' }}
+                <DateFilterInput
                   value={archiveDraft.end || '2026-12-31'}
-                  onChange={(e) => setArchiveDraft((d) => ({ ...d, end: e.target.value, quick: '' }))}
+                  onChange={(val) => setArchiveDraft((d) => ({ ...d, end: val, quick: '' }))}
                 />
               </div>
 
@@ -6876,6 +6859,7 @@ function DataTable({ columns, rows, compact = false, onRowClick, onReorderColumn
                 <th
                   key={column.label}
                   className={[
+                    column.className,
                     draggable ? 'is-draggable-column' : null,
                     isDropTarget ? `is-drop-${dropIndicator.side}` : null,
                   ].filter(Boolean).join(' ') || undefined}
@@ -8188,7 +8172,7 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFil
 
 function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus, onViewTicket) {
   const columns = [
-    { key: 'id', label: 'ID', locked: true, render: (row) => row.vehicle_id },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.vehicle_id },
     {
       key: 'vehicle',
       label: 'Vehicle',
@@ -8200,16 +8184,22 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
         </div>
       ),
     },
-    { key: 'plate', label: 'Plate', render: (row) => row.plate_number },
+    { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.plate_number },
     { key: 'type', label: 'Type', render: (row) => row.category?.category_name ?? 'Unassigned' },
     { key: 'brand_model', label: 'Brand / Model', render: (row) => `${row.brand} ${row.model}` },
-    { key: 'capacity', label: 'Capacity', render: (row) => row.capacity },
+    { key: 'capacity', label: 'Capacity', className: 'cell-center', render: (row) => row.capacity },
     { key: 'location', label: 'Location', render: (row) => row.current_location },
     {
       key: 'status',
       label: 'Status',
+      className: 'cell-center',
       render: (row) => (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+        // centered (not flex-start) so it lines up with every other badge
+        // column — a plain <StatusBadge> centers on its own (see
+        // `tbody td:has(> .status-badge)` in App.css), but wrapping it in
+        // this div to stack the optional second badge below it opts back
+        // out of that automatic centering, so it's set explicitly here.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
           <StatusBadge value={row.status} />
           {/* "Under Maintenance" alone doesn't say whether a mechanic is
               still actively working on it, or the ticket has nothing left
@@ -8228,10 +8218,14 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
         </div>
       ),
     },
-    { key: 'condition', label: 'Condition', render: (row) => <StatusBadge value={row.condition} /> },
+    { key: 'condition', label: 'Condition', className: 'cell-center', render: (row) => <StatusBadge value={row.condition} /> },
     {
       key: 'ready',
       label: 'Ready to Respond',
+      // A custom-styled pill, not <StatusBadge>, so it misses the
+      // `tbody td:has(> .status-badge)` auto-centering — centered
+      // explicitly instead.
+      className: 'cell-center',
       render: (row) => {
         const badge = READINESS_BADGE[row.readiness_state];
         if (!badge) return <span className="muted">—</span>;
@@ -8249,8 +8243,8 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
 
   if (filterStatus?.includes?.('Inactive')) {
     columns.push(
-      { key: 'archived_at', label: 'Archived At', render: (row) => <DateBadge value={row.archived_at} /> },
-      { key: 'archived_by', label: 'Archived By', render: (row) => <UserAvatarName user={row.archived_by} fallback="—" /> },
+      { key: 'archived_at', label: 'Archived At', className: 'cell-center', render: (row) => <DateBadge value={row.archived_at} /> },
+      { key: 'archived_by', label: 'Archived By', className: 'cell-center', render: (row) => <UserAvatarName user={row.archived_by} fallback="—" /> },
     );
   }
 
@@ -8259,6 +8253,7 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
       key: 'action',
       label: 'Action',
       locked: true,
+      className: 'cell-center',
       render: (row) => (
         <div className="row-actions">
           {/* Jumps straight to whatever ticket is keeping this vehicle
@@ -8287,16 +8282,17 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
 
 function categoryColumns(onEdit, deleteRecord) {
   return [
-    { key: 'id', label: 'ID', width: '6%', locked: true, render: (row) => row.category_id },
+    { key: 'id', label: 'ID', width: '6%', locked: true, className: 'cell-center', render: (row) => row.category_id },
     { key: 'category', label: 'Vehicle Type', width: '18%', render: (row) => row.category_name },
-    { key: 'domain', label: 'Domain', width: '10%', render: (row) => <StatusBadge value={row.domain ?? 'Land'} /> },
-    { key: 'vehicles', label: 'Vehicles', width: '9%', render: (row) => row.vehicles_count ?? 0 },
+    { key: 'domain', label: 'Domain', width: '10%', className: 'cell-center', render: (row) => <StatusBadge value={row.domain ?? 'Land'} /> },
+    { key: 'vehicles', label: 'Vehicles', width: '9%', className: 'cell-center', render: (row) => row.vehicles_count ?? 0 },
     { key: 'description', label: 'Description', width: '49%', render: (row) => row.description ?? '-' },
     {
       key: 'action',
       label: 'Action',
       width: '8%',
       locked: true,
+      className: 'cell-center',
       render: (row) => (
         <div className="row-actions">
           <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
@@ -8309,11 +8305,11 @@ function categoryColumns(onEdit, deleteRecord) {
 
 function userColumns(onEdit, onToggleActive, currentUserId) {
   return [
-    { key: 'id', label: 'ID', locked: true, render: (row) => row.id },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.id },
     { key: 'user', label: 'User', locked: true, render: (row) => <UserAvatarName user={row} /> },
     { key: 'email', label: 'Email', render: (row) => row.email },
-    { key: 'phone', label: 'Phone', render: (row) => row.phone ?? '-' },
-    { key: 'role', label: 'Role', render: (row) => {
+    { key: 'phone', label: 'Phone', className: 'cell-center', render: (row) => row.phone ?? '-' },
+    { key: 'role', label: 'Role', className: 'cell-center', render: (row) => {
       const roles = (Array.isArray(row.roles) && row.roles.length) ? row.roles : [row.role].filter(Boolean);
       return (
         <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
@@ -8321,11 +8317,12 @@ function userColumns(onEdit, onToggleActive, currentUserId) {
         </span>
       );
     } },
-    { key: 'status', label: 'Status', render: (row) => <StatusBadge value={row.is_active ? 'Active' : 'Inactive'} /> },
+    { key: 'status', label: 'Status', className: 'cell-center', render: (row) => <StatusBadge value={row.is_active ? 'Active' : 'Inactive'} /> },
     {
       key: 'action',
       label: 'Action',
       locked: true,
+      className: 'cell-center',
       render: (row) => (
         <div className="row-actions">
           <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
@@ -8368,22 +8365,24 @@ function UserCard({ user: person, onClick }) {
 
 function locationColumns(currentUser, onViewOnMap, onEdit) {
   return [
-  { key: 'id', label: 'ID', locked: true, render: (row) => row.location_record_id ?? 'Current' },
-  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-  { key: 'status', label: 'Status', render: (row) => <StatusBadge value={row.vehicle?.status ?? '-'} /> },
+  { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.location_record_id ?? 'Current' },
+  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+  { key: 'status', label: 'Status', className: 'cell-center', render: (row) => <StatusBadge value={row.vehicle?.status ?? '-'} /> },
   { key: 'current_location', label: 'Current Location', render: (row) => row.current_location ?? '-' },
   { key: 'address_area', label: 'Address / Area', render: (row) => row.address_area ?? '-' },
   {
     key: 'updated_by',
     label: 'Updated By',
+    className: 'cell-center',
     render: (row) => <UserAvatarName user={row.is_current_snapshot ? currentUser : row.updated_by} />,
   },
-  { key: 'date_updated', label: 'Date Updated', render: (row) => <DateBadge value={row.updated_at} /> },
-  { key: 'time', label: 'Time', render: (row) => formatTime(row.updated_at) },
+  { key: 'date_updated', label: 'Date Updated', className: 'cell-center', render: (row) => <DateBadge value={row.updated_at} /> },
+  { key: 'time', label: 'Time', className: 'cell-center', render: (row) => formatTime(row.updated_at) },
   {
     key: 'action',
     label: 'Action',
     locked: true,
+    className: 'cell-center',
     render: (row) => (
       <div className="row-actions">
         {hasRole(currentUser, 'Admin') && (
@@ -8417,12 +8416,12 @@ function locationColumns(currentUser, onViewOnMap, onEdit) {
 
 function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onAddCondition) {
   const columns = [
-    { key: 'id', label: 'ID', locked: true, render: (row) => row.condition_check_id ?? '-' },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { key: 'result', label: 'Result', render: (row) => <StatusBadge value={row.condition_result} /> },
-    { key: 'checked_by', label: 'Checked By', render: (row) => <UserAvatarName user={row.checked_by} /> },
-    { key: 'date', label: 'Date', render: (row) => <DateBadge value={row.created_at} /> },
-    { key: 'time', label: 'Time', render: (row) => formatTime(row.created_at) },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.condition_check_id ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'result', label: 'Result', className: 'cell-center', render: (row) => <StatusBadge value={row.condition_result} /> },
+    { key: 'checked_by', label: 'Checked By', className: 'cell-center', render: (row) => <UserAvatarName user={row.checked_by} /> },
+    { key: 'date', label: 'Date', className: 'cell-center', render: (row) => <DateBadge value={row.created_at} /> },
+    { key: 'time', label: 'Time', className: 'cell-center', render: (row) => formatTime(row.created_at) },
   ];
 
   if (['Custodian', 'Admin'].includes(role)) {
@@ -8430,6 +8429,7 @@ function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromConditio
       key: 'action',
       label: 'Action',
       locked: true,
+      className: 'cell-center',
       render: (row) => (
         // A synthesized "Not Checked" row has no condition_check_id — there's
         // no record yet to create a ticket from, suggest a schedule against,
@@ -8698,11 +8698,11 @@ function IssueFilterPanel({
       <div className="issue-filter-dates">
         <div className="filter-date-group issue-filter-date-input">
           <span>From Date</span>
-          <input type="date" className="filter-select" value={draft.dateStart} onChange={(e) => setDraft((d) => ({ ...d, dateStart: e.target.value }))} />
+          <DateFilterInput value={draft.dateStart} onChange={(val) => setDraft((d) => ({ ...d, dateStart: val }))} />
         </div>
         <div className="filter-date-group issue-filter-date-input">
           <span>To Date</span>
-          <input type="date" className="filter-select" value={draft.dateEnd} onChange={(e) => setDraft((d) => ({ ...d, dateEnd: e.target.value }))} />
+          <DateFilterInput value={draft.dateEnd} onChange={(val) => setDraft((d) => ({ ...d, dateEnd: val }))} />
         </div>
       </div>
 
@@ -8904,11 +8904,11 @@ function TicketFilterPanel({
       <div className="issue-filter-dates">
         <div className="filter-date-group issue-filter-date-input">
           <span>From Date</span>
-          <input type="date" className="filter-select" value={draft.dateStart} onChange={(e) => setDraft((d) => ({ ...d, dateStart: e.target.value }))} />
+          <DateFilterInput value={draft.dateStart} onChange={(val) => setDraft((d) => ({ ...d, dateStart: val }))} />
         </div>
         <div className="filter-date-group issue-filter-date-input">
           <span>To Date</span>
-          <input type="date" className="filter-select" value={draft.dateEnd} onChange={(e) => setDraft((d) => ({ ...d, dateEnd: e.target.value }))} />
+          <DateFilterInput value={draft.dateEnd} onChange={(val) => setDraft((d) => ({ ...d, dateEnd: val }))} />
         </div>
       </div>
 
@@ -8940,7 +8940,7 @@ function TicketFilterPanel({
 
 function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, onView, deleteRecord) {
   const columns = [
-    { key: 'id', label: 'ID', width: '5%', locked: true, render: (row) => row.issue_report_id },
+    { key: 'id', label: 'ID', width: '5%', locked: true, className: 'cell-center', render: (row) => row.issue_report_id },
     {
       key: 'issue',
       label: 'Issue',
@@ -8954,20 +8954,21 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
       ),
     },
     { key: 'vehicle', label: 'Vehicle', width: '28%', render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { key: 'plate', label: 'Plate', width: '7%', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { key: 'severity', label: 'Severity', width: '9%', render: (row) => <TicketStatusBadge value={row.severity_level} /> },
-    { key: 'status', label: 'Status', width: '9%', render: (row) => <StatusBadge value={row.status} /> },
+    { key: 'plate', label: 'Plate', width: '7%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'severity', label: 'Severity', width: '9%', className: 'cell-center', render: (row) => <TicketStatusBadge value={row.severity_level} /> },
+    { key: 'status', label: 'Status', width: '9%', className: 'cell-center', render: (row) => <StatusBadge value={row.status} /> },
     {
       key: 'reported_by',
       label: 'Reported By',
       width: '12%',
+      className: 'cell-center',
       render: (row) => (
         row.reported_by
           ? <UserAvatarName user={row.reported_by} />
           : <span className="issue-reporter">-</span>
       ),
     },
-    { key: 'date', label: 'Date', width: '9%', render: (row) => <DateBadge value={row.created_at} /> },
+    { key: 'date', label: 'Date', width: '9%', className: 'cell-center', render: (row) => <DateBadge value={row.created_at} /> },
   ];
 
   if (['Admin', 'Maintenance Personnel'].includes(role)) {
@@ -8976,6 +8977,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
       label: 'Action',
       width: '10%',
       locked: true,
+      className: 'cell-center',
       render: (row) => (
         <div className="row-actions" style={{ flexWrap: 'nowrap' }}>
           <button className="btn-view-action icon-btn" onClick={() => onView(row)} type="button" title="View" aria-label="View"><Icon name="eye" size={14} /></button>
@@ -8992,6 +8994,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
     columns.push({
       label: 'Action',
       width: '10%',
+      className: 'cell-center',
       render: (row) => (
         <div className="row-actions" style={{ flexWrap: 'nowrap' }}>
           <button className="btn-view-action icon-btn" onClick={() => onView(row)} type="button" title="View" aria-label="View"><Icon name="eye" size={14} /></button>
@@ -9011,9 +9014,9 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
 
 function maintenanceColumns(role, setEditTarget, updateRecord, onViewRecord) {
   const columns = [
-    { key: 'id', label: 'ID', width: '4%', locked: true, render: (row) => row.maintenance_id },
+    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => row.maintenance_id },
     { key: 'vehicle', label: 'Vehicle', width: '15%', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { key: 'plate', label: 'Plate', width: '8%', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'plate', label: 'Plate', width: '8%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     {
       key: 'type',
       label: 'Type',
@@ -9041,17 +9044,18 @@ function maintenanceColumns(role, setEditTarget, updateRecord, onViewRecord) {
         </div>
       ),
     },
-    { key: 'source', label: 'Source', width: '9%', render: (row) => <StatusBadge value={row.source} /> },
-    { key: 'personnel', label: 'Personnel', width: '10%', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
-    { key: 'progress', label: 'Progress', width: '8%', render: (row) => <StatusBadge value={row.progress_status} /> },
-    { key: 'verification', label: 'Verification', width: '8%', render: (row) => row.verification_result ? <StatusBadge value={row.verification_result} /> : '-' },
-    { key: 'date_started', label: 'Date Started', width: '5%', render: (row) => <DateBadge value={row.date_started} /> },
-    { key: 'date_completed', label: 'Date Completed', width: '5%', render: (row) => <DateBadge value={row.date_completed} /> },
+    { key: 'source', label: 'Source', width: '9%', className: 'cell-center', render: (row) => <StatusBadge value={row.source} /> },
+    { key: 'personnel', label: 'Personnel', width: '10%', className: 'cell-center', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
+    { key: 'progress', label: 'Progress', width: '8%', className: 'cell-center', render: (row) => <StatusBadge value={row.progress_status} /> },
+    { key: 'verification', label: 'Verification', width: '8%', className: 'cell-center', render: (row) => row.verification_result ? <StatusBadge value={row.verification_result} /> : '-' },
+    { key: 'date_started', label: 'Date Started', width: '5%', className: 'cell-center', render: (row) => <DateBadge value={row.date_started} /> },
+    { key: 'date_completed', label: 'Date Completed', width: '5%', className: 'cell-center', render: (row) => <DateBadge value={row.date_completed} /> },
     {
       key: 'action',
       label: 'Action',
       width: '8%',
       locked: true,
+      className: 'cell-center',
       render: (row) => (
         <div className="row-actions" style={{ flexWrap: 'wrap' }}>
           {onViewRecord && (
@@ -9391,16 +9395,17 @@ function MaintenanceRecordProfilePage({ maintenanceId, onConfirm, onReopen, onDe
 
 function maintenanceStatusColumns(setEditTarget, currentUserId) {
   return [
-    { key: 'id', label: 'ID', locked: true, render: (row) => row.maintenance_id },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { key: 'type', label: 'Type', render: (row) => row.maintenance_type },
-    { key: 'source', label: 'Source', render: (row) => <StatusBadge value={row.source} /> },
-    { key: 'personnel', label: 'Personnel', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
-    { key: 'progress', label: 'Progress', render: (row) => <StatusBadge value={row.progress_status} /> },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.maintenance_id },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'type', label: 'Type', className: 'cell-center', render: (row) => row.maintenance_type },
+    { key: 'source', label: 'Source', className: 'cell-center', render: (row) => <StatusBadge value={row.source} /> },
+    { key: 'personnel', label: 'Personnel', className: 'cell-center', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
+    { key: 'progress', label: 'Progress', className: 'cell-center', render: (row) => <StatusBadge value={row.progress_status} /> },
     {
       key: 'action',
       label: 'Action',
       locked: true,
+      className: 'cell-center',
       render: (row) => {
         // The backend blocks a Custodian from verifying their own repair
         // (dual-role Custodian/mechanic accounts can log one) — matching
@@ -9419,12 +9424,13 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
   const isAdmin = hasRole(currentUser, 'Admin');
   const currentUserId = currentUser?.id;
   return [
-    { key: 'id', label: 'ID', locked: true, render: (row) => row.schedule_id },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { key: 'type', label: 'Type', render: (row) => row.maintenance_type },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.schedule_id },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'type', label: 'Type', className: 'cell-center', render: (row) => row.maintenance_type },
     {
       key: 'assigned_to',
       label: 'Assigned To',
+      className: 'cell-center',
       render: (row) => {
         const name = row.assigned_to_user?.name;
         if (!name) return <span className="muted">Unassigned</span>;
@@ -9437,13 +9443,21 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
         );
       },
     },
-    { key: 'date', label: 'Date', render: (row) => <DateBadge value={row.scheduled_date} /> },
-    { key: 'time', label: 'Time', render: (row) => row.scheduled_time ?? '-' },
-    { key: 'repeat', label: 'Repeat', render: (row) => row.recurrence_months ? <StatusBadge value={RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`} /> : <span className="muted">One-time</span> },
+    { key: 'date', label: 'Date', className: 'cell-center', render: (row) => <DateBadge value={row.scheduled_date} /> },
+    { key: 'time', label: 'Time', className: 'cell-center', render: (row) => row.scheduled_time ?? '-' },
+    // "One-time" (plain text, no badge) needs the same explicit centering the
+    // recurring branch gets for free from <StatusBadge> — otherwise it'd
+    // sit flush left while every other row in this column is centered.
+    { key: 'repeat', label: 'Repeat', className: 'cell-center', render: (row) => row.recurrence_months ? <StatusBadge value={RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`} /> : <span className="muted">One-time</span> },
     { key: 'location', label: 'Location', render: (row) => row.service_location ?? '-' },
     {
       key: 'status',
       label: 'Status',
+      // Wrapping <StatusBadge> to add the optional OVERDUE/Done tags beside
+      // it opts out of the `tbody td:has(> .status-badge)` auto-centering
+      // (the badge is no longer a direct child of the <td>) — centered
+      // explicitly instead.
+      className: 'cell-center',
       render: (row) => (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <StatusBadge value={row.status} />
@@ -9482,6 +9496,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
       key: 'action',
       label: 'Action',
       locked: true,
+      className: 'cell-center',
       render: (row) => (
         <div className="row-actions" style={{ flexWrap: 'wrap' }}>
           {row.status === 'Scheduled' && onComplete && (isAdmin || (currentUserId != null && String(row.assigned_to) === String(currentUserId))) && (
@@ -9490,14 +9505,25 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
           {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && (
             <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label="View Maintenance Record"><Icon name="wrench" size={14} /></button>
           )}
-          <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
-          {/* Cancelling a schedule is a soft cancel — the row survives — so a
-              cancelled one gets Restore instead of a Delete that would do
-              nothing. Same swap vehicleColumns makes for archived vehicles. */}
-          {row.status === 'Cancelled' && restoreRecord ? (
-            <button className="btn-confirm-action icon-btn" onClick={() => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored.', 'Restore this cancelled schedule back to Scheduled?')} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /></button>
-          ) : (
-            <button className="btn-delete-action icon-btn" onClick={() => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.')} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /></button>
+          {/* Editing/cancelling a schedule (what to do, when, who it's for) is
+              a planning decision — reserved for Admin. A Maintenance Personnel
+              assigned to it only ever gets to act on it via Mark as Done
+              above; giving them Edit too let them quietly self-assign an
+              unassigned schedule to unlock that button, which just made the
+              backend's "ask an Admin to assign it" message a lie. Matches
+              the backend, which never allowed Custodian here either. */}
+          {isAdmin && (
+            <>
+              <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
+              {/* Cancelling a schedule is a soft cancel — the row survives — so a
+                  cancelled one gets Restore instead of a Delete that would do
+                  nothing. Same swap vehicleColumns makes for archived vehicles. */}
+              {row.status === 'Cancelled' && restoreRecord ? (
+                <button className="btn-confirm-action icon-btn" onClick={() => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored.', 'Restore this cancelled schedule back to Scheduled?')} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /></button>
+              ) : (
+                <button className="btn-delete-action icon-btn" onClick={() => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.')} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /></button>
+              )}
+            </>
           )}
         </div>
       ),
@@ -9621,13 +9647,18 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
         {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && (
           <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label="View Maintenance Record"><Icon name="wrench" size={14} /></button>
         )}
-        <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
-        {/* Same swap as the table: a cancelled schedule offers Restore, not a
-            Delete that would just re-cancel something already cancelled. */}
-        {row.status === 'Cancelled' && onRestore ? (
-          <button className="btn-confirm-action icon-btn" onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /></button>
-        ) : (
-          <button className="btn-delete-action icon-btn" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /></button>
+        {/* Admin-only — see scheduleColumns' matching Action column for why. */}
+        {isAdmin && (
+          <>
+            <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
+            {/* Same swap as the table: a cancelled schedule offers Restore, not a
+                Delete that would just re-cancel something already cancelled. */}
+            {row.status === 'Cancelled' && onRestore ? (
+              <button className="btn-confirm-action icon-btn" onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /></button>
+            ) : (
+              <button className="btn-delete-action icon-btn" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /></button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -9721,7 +9752,7 @@ function moduleBadgeTone(moduleName = '') {
 
 function logColumns(vehicles, onViewVehicle, onViewTicket) {
   return [
-    { key: 'datetime', label: 'Date and Time', render: (row) => formatLogDateTime(row.created_at) },
+    { key: 'datetime', label: 'Date and Time', className: 'cell-center', render: (row) => formatLogDateTime(row.created_at) },
     {
       key: 'item',
       label: 'Item',
@@ -9746,6 +9777,7 @@ function logColumns(vehicles, onViewVehicle, onViewTicket) {
     {
       key: 'module',
       label: 'Category',
+      className: 'cell-center',
       render: (row) => {
         const tone = moduleBadgeTone(row.module ?? '');
         return <span className="log-category-tag" style={{ background: tone.bg, color: tone.color }}>{row.module ?? '-'}</span>;
@@ -9756,6 +9788,7 @@ function logColumns(vehicles, onViewVehicle, onViewTicket) {
       key: 'user',
       label: 'User',
       locked: true,
+      className: 'cell-center',
       render: (row) => (
         <div className="log-user-cell">
           <UserAvatarName user={row.user} />
@@ -13648,17 +13681,18 @@ function CustodianInspectionModule({
   const isPendingView = activeFilter !== 'Inspected';
 
   const inspectionColumnDefs = useMemo(() => [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, render: (r) => r.ticket_id },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
     { key: 'title', label: 'Title', render: (r) => r.ticket_title },
-    { key: 'priority', label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
-    { key: 'result', label: 'Result', render: (r) => r.inspection_result ? <TicketStatusBadge value={r.inspection_result} /> : <span className="muted">—</span> },
-    { key: 'assigned', label: 'Assigned', render: (r) => <DateBadge value={r.assigned_at} /> },
-    { key: 'time', label: 'Time', render: (r) => formatTime(r.assigned_at) },
+    { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
+    { key: 'result', label: 'Result', className: 'cell-center', render: (r) => r.inspection_result ? <TicketStatusBadge value={r.inspection_result} /> : <span className="muted">—</span> },
+    { key: 'assigned', label: 'Assigned', className: 'cell-center', render: (r) => <DateBadge value={r.assigned_at} /> },
+    { key: 'time', label: 'Time', className: 'cell-center', render: (r) => formatTime(r.assigned_at) },
     {
       key: 'action',
       label: 'Action',
       locked: true,
+      className: 'cell-center',
       // "Submitted" implied THIS Custodian already did something —
       // false for a Pre-Diagnosed ticket, or one reassigned to
       // them after the fact. Reusing the same stage logic the
@@ -13945,11 +13979,11 @@ function CustodianVerificationModule({
   const isPendingView = activeFilter !== 'Verified';
 
   const verificationColumnDefs = useMemo(() => [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, render: (r) => r.ticket_id },
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
     { key: 'ticket_title', label: 'Ticket Title', render: (r) => r.ticket_title },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
     { key: 'sub_issue', label: 'Sub-Issue', render: (r) => r.title },
-    { key: 'mechanic', label: 'Mechanic', render: (r) => r.assigned_mechanic?.name ?? '—' },
+    { key: 'mechanic', label: 'Mechanic', className: 'cell-center', render: (r) => r.assigned_mechanic?.name ?? '—' },
     {
       key: 'repair_log',
       label: 'Repair Log',
@@ -13968,6 +14002,7 @@ function CustodianVerificationModule({
     {
       key: 'status',
       label: 'Status',
+      className: 'cell-center',
       render: (r) => {
         if (r.reopened_at) {
           return (
@@ -14147,9 +14182,9 @@ function MechanicWorkOrderModule({
   const isPendingView = activeFilter !== 'Submitted';
 
   const workOrderColumnDefs = useMemo(() => [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, render: (r) => r.ticket_id },
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
     { key: 'ticket_title', label: 'Ticket Title', render: (r) => r.ticket_title },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
     {
       key: 'work_order',
       label: 'Work Order',
@@ -14168,13 +14203,14 @@ function MechanicWorkOrderModule({
         </div>
       )
     },
-    { key: 'type', label: 'Type', render: (r) => r.maintenance_type ?? '—' },
-    { key: 'dispatched', label: 'Dispatched', render: (r) => <DateBadge value={r.mechanic_assigned_at} /> },
-    { key: 'time', label: 'Time', render: (r) => formatTime(r.mechanic_assigned_at) },
+    { key: 'type', label: 'Type', className: 'cell-center', render: (r) => r.maintenance_type ?? '—' },
+    { key: 'dispatched', label: 'Dispatched', className: 'cell-center', render: (r) => <DateBadge value={r.mechanic_assigned_at} /> },
+    { key: 'time', label: 'Time', className: 'cell-center', render: (r) => formatTime(r.mechanic_assigned_at) },
     {
       key: 'action',
       label: 'Action',
       locked: true,
+      className: 'cell-center',
       render: (r) => r.status === 'Under Repair'
         ? <button className="btn-edit-action icon-btn" type="button" onClick={() => onOpenLogRepairs(r)} title="Log Repairs" aria-label="Log Repairs"><Icon name="wrench" size={14} /></button>
         : <span className="muted">Submitted</span>
@@ -14464,12 +14500,12 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 // permanent fixture of the page, not something that randomly appears.
 function readyToCloseColumns() {
   return [
-    { key: 'ticket_id', label: 'Ticket ID', render: (r) => <span className="row-title-text">#{r.ticket_id}</span> },
+    { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => <span className="row-title-text">#{r.ticket_id}</span> },
     { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> },
     { key: 'title', label: 'Title', render: (r) => r.ticket_title },
-    { key: 'priority', label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
-    { key: 'progress', label: 'Sub-Issues', render: (r) => `${r.progress?.done ?? 0}/${r.progress?.total ?? 0} done` },
-    { key: 'created', label: 'Created', render: (r) => <DateBadge value={r.created_at} /> },
+    { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
+    { key: 'progress', label: 'Sub-Issues', className: 'cell-center', render: (r) => `${r.progress?.done ?? 0}/${r.progress?.total ?? 0} done` },
+    { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
   ];
 }
 
@@ -14524,7 +14560,7 @@ function TicketsReadyToClosePanel({ tickets, onViewTicket }) {
 
 function ticketTableColumns(unreadByTicket = {}) {
   return [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, render: (r) => r.ticket_id },
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
     {
       key: 'title',
       label: 'Title',
@@ -14549,12 +14585,12 @@ function ticketTableColumns(unreadByTicket = {}) {
         );
       },
     },
-    { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { key: 'plate', label: 'Plate', render: (r) => r.vehicle?.plate_number ?? '-' },
-    { key: 'status', label: 'Status', render: (r) => <TicketStatusBadge value={r.status} /> },
-    { key: 'next_step', label: 'Next Step', render: (r) => <TicketStageBadge ticket={r} /> },
-    { key: 'priority', label: 'Priority', render: (r) => <TicketStatusBadge value={r.priority} /> },
-    { key: 'created', label: 'Created', render: (r) => <DateBadge value={r.created_at} /> },
-    { key: 'time', label: 'Time', render: (r) => formatTime(r.created_at) },
+    { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.status} /> },
+    { key: 'next_step', label: 'Next Step', className: 'cell-center', render: (r) => <TicketStageBadge ticket={r} /> },
+    { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
+    { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
+    { key: 'time', label: 'Time', className: 'cell-center', render: (r) => formatTime(r.created_at) },
   ];
 }
 
@@ -14563,16 +14599,16 @@ function ticketTableColumns(unreadByTicket = {}) {
 // =========================================================================
 
 const ticketArchiveColumns = [
-  { key: 'archive_id', label: 'Archive ID', locked: true, render: (r) => r.archive_id },
-  { key: 'ticket_id', label: 'Ticket ID', render: (r) => r.ticket_id },
+  { key: 'archive_id', label: 'Archive ID', locked: true, className: 'cell-center', render: (r) => r.archive_id },
+  { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => r.ticket_id },
   { key: 'title', label: 'Title', render: (r) => r.ticket_title },
   { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle ?? { vehicle_name: r.vehicle_name, plate_number: r.plate_number }} /> },
-  { key: 'plate', label: 'Plate', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
-  { key: 'expenses', label: 'Expenses', render: (r) => r.maintenance_cost ? `₱${Number(r.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₱0.00' },
-  { key: 'final_status', label: 'Final Status', render: (r) => <TicketStatusBadge value={r.final_status} /> },
-  { key: 'archived_by', label: 'Archived By', render: (r) => <UserAvatarName user={r.archived_by} fallback="—" /> },
-  { key: 'archived_at', label: 'Archived At', render: (r) => <DateBadge value={r.archived_at} /> },
-  { key: 'time', label: 'Time', render: (r) => formatTime(r.archived_at) },
+  { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
+  { key: 'expenses', label: 'Expenses', className: 'cell-center', render: (r) => r.maintenance_cost ? `₱${Number(r.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₱0.00' },
+  { key: 'final_status', label: 'Final Status', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.final_status} /> },
+  { key: 'archived_by', label: 'Archived By', className: 'cell-center', render: (r) => <UserAvatarName user={r.archived_by} fallback="—" /> },
+  { key: 'archived_at', label: 'Archived At', className: 'cell-center', render: (r) => <DateBadge value={r.archived_at} /> },
+  { key: 'time', label: 'Time', className: 'cell-center', render: (r) => formatTime(r.archived_at) },
 ];
 
 // =========================================================================
@@ -14607,6 +14643,73 @@ const pluralizeLabel = (label) => {
   if (label.endsWith('s')) return `${label}es`;
   return `${label}s`;
 };
+
+function isoDateToDisplay(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return '';
+  return `${m}/${d}/${y}`;
+}
+
+function displayDateToIso(display) {
+  const match = display.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const [, m, d, y] = match;
+  return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+}
+
+// A native <input type="date">'s displayed text always follows the
+// visitor's own OS region setting (day-first, month-first, whatever it is)
+// — nothing on the page, not even the `lang` attribute, can override just
+// that display. This wraps a hidden native date input (kept only for its
+// calendar picker, launched via showPicker()) behind a visible text field
+// that is always typed and displayed as MM/DD/YYYY, so the format is
+// guaranteed regardless of the browser/OS locale.
+function DateFilterInput({ value, onChange, placeholder = 'mm/dd/yyyy' }) {
+  const hiddenRef = useRef(null);
+  const [text, setText] = useState(() => isoDateToDisplay(value));
+
+  useEffect(() => {
+    setText(isoDateToDisplay(value));
+  }, [value]);
+
+  const openPicker = () => {
+    try { hiddenRef.current?.showPicker?.(); } catch { /* unsupported browser — text entry still works */ }
+  };
+
+  const commit = (raw) => {
+    if (!raw.trim()) { onChange(''); return; }
+    const iso = displayDateToIso(raw);
+    if (iso) onChange(iso);
+    else setText(isoDateToDisplay(value));
+  };
+
+  return (
+    <div className="date-filter-input">
+      <input
+        type="text"
+        className="filter-select"
+        placeholder={placeholder}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      />
+      <button type="button" className="date-filter-input-icon" onClick={openPicker} aria-label="Open calendar">
+        <Icon name="calendar" size={14} />
+      </button>
+      <input
+        ref={hiddenRef}
+        type="date"
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="date-filter-input-hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+    </div>
+  );
+}
 
 // Checkbox multi-select dropdown — lets a filter row pick zero, one, or many
 // values instead of forcing a single native <select> choice.
@@ -15261,23 +15364,11 @@ function FilterBar({
     <>
       <div className="filter-date-group">
         <span>From Date</span>
-        <input
-          type="date"
-          className="filter-select"
-          style={{ minWidth: 'auto' }}
-          value={dateRange.start || '2026-01-01'}
-          onChange={(e) => dateRange.setStart(e.target.value)}
-        />
+        <DateFilterInput value={dateRange.start || '2026-01-01'} onChange={dateRange.setStart} />
       </div>
       <div className="filter-date-group">
         <span>To Date</span>
-        <input
-          type="date"
-          className="filter-select"
-          style={{ minWidth: 'auto' }}
-          value={dateRange.end || '2026-12-31'}
-          onChange={(e) => dateRange.setEnd(e.target.value)}
-        />
+        <DateFilterInput value={dateRange.end || '2026-12-31'} onChange={dateRange.setEnd} />
       </div>
     </>
   );
