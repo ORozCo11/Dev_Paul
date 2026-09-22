@@ -9,6 +9,7 @@ import Icon from '../components/Icon';
 import TextType from '../components/TextType';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { DonutChart, SolidPieChart, HorizontalBarChart, ColumnChart, StackedBarChart } from '../components/charts';
 import { AuthContext } from '../context/AuthContextObject';
 import { groupLocationRowsByHub, PAKNAAN_POLYGON } from '../data/paknaanLocationDensity';
 import { geoJsonToRings, isPointWithinBoundaryRings } from '../utils/boundary';
@@ -618,6 +619,9 @@ function Workspace() {
   const [filterVerdict, setFilterVerdict] = useState([]); // ticketVerifications
   const [filterCheckedBy, setFilterCheckedBy] = useState([]); // conditions
   const [filterActivityType, setFilterActivityType] = useState([]); // histories
+  const [filterVehicle, setFilterVehicle] = useState([]); // tickets
+  const [filterMechanic, setFilterMechanic] = useState([]); // tickets — any sub-issue assigned to
+  const [filterCustodian, setFilterCustodian] = useState([]); // tickets
   const [filterDateStart, setFilterDateStart] = useState(''); // issues/maintenance/tickets/histories
   const [filterDateEnd, setFilterDateEnd] = useState('');
 
@@ -807,6 +811,9 @@ function Workspace() {
      setFilterVerdict([]);
      setFilterCheckedBy([]);
      setFilterActivityType([]);
+     setFilterVehicle([]);
+     setFilterMechanic([]);
+     setFilterCustodian([]);
      setFilterDateStart('');
      setFilterDateEnd('');
      setCondFilterStartDate('');
@@ -1392,6 +1399,21 @@ function Workspace() {
       result = result.filter((row) => filterAssignedTo.includes(row.assigned_to_user?.name));
     }
 
+    if (activeModule === 'tickets' && filterVehicle.length) {
+      result = result.filter((row) => filterVehicle.includes(String(row.vehicle?.vehicle_id)));
+    }
+
+    // A ticket has no single mechanic of its own — it's assigned per
+    // sub-issue — so this matches any ticket with at least one sub-issue
+    // assigned to the selected mechanic(s).
+    if (activeModule === 'tickets' && filterMechanic.length) {
+      result = result.filter((row) => (row.sub_issues ?? []).some((si) => filterMechanic.includes(si.assigned_mechanic?.name)));
+    }
+
+    if (activeModule === 'tickets' && filterCustodian.length) {
+      result = result.filter((row) => filterCustodian.includes(row.assigned_custodian?.name));
+    }
+
     if (activeModule === 'issues' && filterIssueType.length) {
       result = result.filter((row) => filterIssueType.includes(row.issue_type));
     }
@@ -1555,7 +1577,7 @@ function Workspace() {
     }
 
     return result;
-  }, [rawRows, searchQuery, filterCategory, filterCapacity, filterLocation, filterDomain, filterStatus, filterPriority, filterReadiness, filterIssueType, filterMaintType, filterSource, filterActive, filterAssignedTo, filterVerdict, filterCheckedBy, filterActivityType, filterDateStart, filterDateEnd, activeModule, condFilterStartDate, condFilterEndDate, archiveStart, archiveEnd, archiveStatusFilter]);
+  }, [rawRows, searchQuery, filterCategory, filterCapacity, filterLocation, filterDomain, filterStatus, filterPriority, filterReadiness, filterIssueType, filterMaintType, filterSource, filterActive, filterAssignedTo, filterVerdict, filterCheckedBy, filterActivityType, filterVehicle, filterMechanic, filterCustodian, filterDateStart, filterDateEnd, activeModule, condFilterStartDate, condFilterEndDate, archiveStart, archiveEnd, archiveStatusFilter]);
 
   // Status breakdown for the Vehicle Management stat cards — counted from the
   // full unfiltered fetch so the cards stay accurate regardless of the active
@@ -1601,9 +1623,21 @@ function Workspace() {
     return { ...base, ...urgency, AwaitingVerification: awaitingVerification, MyAssigned: myAssigned };
   }, [records.schedules, user.id]);
 
+  // A vehicle with no check on file yet is its own bucket ("Not Checked"),
+  // not just an absence from the list — so the stat cards (and the list
+  // below) reflect the whole fleet's coverage, not only vehicles someone
+  // has gotten around to inspecting.
+  const conditionRowsForStats = useMemo(() => {
+    const vehiclesWithRecord = new Set((records.conditions ?? []).map((r) => r.vehicle_id));
+    const uncheckedRows = (lookups.vehicles ?? [])
+      .filter((vehicle) => !vehiclesWithRecord.has(vehicle.vehicle_id))
+      .map(() => ({ condition_result: 'Not Checked' }));
+    return [...(records.conditions ?? []), ...uncheckedRows];
+  }, [records.conditions, lookups.vehicles]);
+
   const conditionStats = useMemo(
-    () => countByValues(records.conditions ?? [], (r) => r.condition_result, ['Good', 'Needs Inspection', 'Needs Repair']),
-    [records.conditions]
+    () => countByValues(conditionRowsForStats, (r) => r.condition_result, ['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']),
+    [conditionRowsForStats]
   );
 
   const maintenanceRecordStats = useMemo(
@@ -1689,6 +1723,51 @@ function Workspace() {
     return [...visibleRows, ...syntheticRows];
   }, [activeModule, visibleRows, lookups.vehicles, searchQuery]);
 
+  // Same reasoning as locationRows above: Condition Monitoring should mirror
+  // the whole fleet, not just vehicles that happen to have a check on file.
+  // Merge the (already-filtered) check records with a synthesized "Not
+  // Checked" row for every vehicle missing one — subject to the same active
+  // filters, so a vehicle only appears here when it'd also match a real row.
+  const conditionRows = useMemo(() => {
+    if (activeModule !== 'conditions') {
+      return visibleRows;
+    }
+
+    // A synthetic row has no checker or date to filter on, so it only
+    // belongs in the merged list when none of those filters are narrowing
+    // the results — otherwise "checked by Juan" or a date range would be
+    // showing vehicles that were never checked at all.
+    if (filterCheckedBy.length || condFilterStartDate || condFilterEndDate) {
+      return visibleRows;
+    }
+    if (filterStatus.length && !filterStatus.includes('Not Checked')) {
+      return visibleRows;
+    }
+
+    const vehiclesWithRecord = new Set((records.conditions ?? []).map((r) => r.vehicle_id));
+    const query = searchQuery.toLowerCase().trim();
+
+    const syntheticRows = (lookups.vehicles ?? [])
+      .filter((vehicle) => !vehiclesWithRecord.has(vehicle.vehicle_id))
+      .filter((vehicle) => !filterCategory.length || filterCategory.includes(String(vehicle.category_id)))
+      .filter((vehicle) => !filterCapacity.length || filterCapacity.includes(vehicle.capacity))
+      .filter((vehicle) => {
+        if (!query) return true;
+        return [vehicle.vehicle_name, vehicle.plate_number].some((val) => val && String(val).toLowerCase().includes(query));
+      })
+      .map((vehicle) => ({
+        condition_check_id: null,
+        vehicle_id: vehicle.vehicle_id,
+        vehicle,
+        condition_result: 'Not Checked',
+        checked_by: null,
+        observations: null,
+        created_at: null,
+      }));
+
+    return [...visibleRows, ...syntheticRows];
+  }, [activeModule, visibleRows, records.conditions, lookups.vehicles, searchQuery, filterCategory, filterCapacity, filterCheckedBy, filterStatus, condFilterStartDate, condFilterEndDate]);
+
   const viewVehicleOnMap = useCallback((row) => {
     const vehicleId = row.vehicle_id ?? row.vehicle?.vehicle_id;
     if (!vehicleId) return;
@@ -1730,7 +1809,14 @@ function Workspace() {
   const locationColumnChooser = useColumnChooser('vms_location_columns', locationTableColumns);
 
   const conditionColumnDefs = useMemo(
-    () => conditionColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/conditions/${row.condition_check_id}/edit`), deleteRecord, handleCreateTicketFromCondition, handleSuggestScheduleFromCondition),
+    () => conditionColumns(
+      user.role,
+      (row) => navigate(`${roleRoutes[user.role]}/conditions/${row.condition_check_id}/edit`),
+      deleteRecord,
+      handleCreateTicketFromCondition,
+      handleSuggestScheduleFromCondition,
+      () => navigate(`${roleRoutes[user.role]}/conditions/new`),
+    ),
     [user.role, navigate, deleteRecord, handleCreateTicketFromCondition, handleSuggestScheduleFromCondition],
   );
   const conditionColumnChooser = useColumnChooser('vms_condition_columns', conditionColumnDefs);
@@ -2686,12 +2772,15 @@ function Workspace() {
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
-              <MultiSelectDropdown
-                placeholder="All Domains (Land/Water)"
-                options={['Land', 'Water']}
-                selected={filterDomain}
-                onChange={setFilterDomain}
-              />
+              <div className="filter-date-group">
+                <span>Domain</span>
+                <MultiSelectDropdown
+                  placeholder="All Domains (Land/Water)"
+                  options={['Land', 'Water']}
+                  selected={filterDomain}
+                  onChange={setFilterDomain}
+                />
+              </div>
             </div>
           }
         >
@@ -2745,18 +2834,24 @@ function Workspace() {
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
-              <MultiSelectDropdown
-                placeholder="All Roles"
-                options={['Admin', 'Custodian', 'Maintenance Personnel']}
-                selected={filterStatus}
-                onChange={setFilterStatus}
-              />
-              <MultiSelectDropdown
-                placeholder="All Statuses"
-                options={['Active', 'Inactive']}
-                selected={filterActive}
-                onChange={setFilterActive}
-              />
+              <div className="filter-date-group">
+                <span>Role</span>
+                <MultiSelectDropdown
+                  placeholder="All Roles"
+                  options={['Admin', 'Custodian', 'Maintenance Personnel']}
+                  selected={filterStatus}
+                  onChange={setFilterStatus}
+                />
+              </div>
+              <div className="filter-date-group">
+                <span>Status</span>
+                <MultiSelectDropdown
+                  placeholder="All Statuses"
+                  options={['Active', 'Inactive']}
+                  selected={filterActive}
+                  onChange={setFilterActive}
+                />
+              </div>
             </div>
           }
         >
@@ -2864,18 +2959,24 @@ function Workspace() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div className="filter-bar-container">
                   <div className="filter-label"><span>Filters:</span></div>
-                  <MultiSelectDropdown
-                    placeholder="All Statuses"
-                    options={lookups.vehicle_statuses ?? []}
-                    selected={filterStatus}
-                    onChange={setFilterStatus}
-                  />
-                  <MultiSelectDropdown
-                    placeholder="All Locations"
-                    options={[...new Set((lookups.vehicles ?? []).map((v) => v.current_location).filter(Boolean))]}
-                    selected={filterLocation}
-                    onChange={setFilterLocation}
-                  />
+                  <div className="filter-date-group">
+                    <span>Status</span>
+                    <MultiSelectDropdown
+                      placeholder="All Statuses"
+                      options={lookups.vehicle_statuses ?? []}
+                      selected={filterStatus}
+                      onChange={setFilterStatus}
+                    />
+                  </div>
+                  <div className="filter-date-group">
+                    <span>Location</span>
+                    <MultiSelectDropdown
+                      placeholder="All Locations"
+                      options={[...new Set((lookups.vehicles ?? []).map((v) => v.current_location).filter(Boolean))]}
+                      selected={filterLocation}
+                      onChange={setFilterLocation}
+                    />
+                  </div>
                 </div>
                 <div className="panel-header-bar">
                   <h3>Location Records <span className="count-badge">{locationRows.length}</span></h3>
@@ -2927,7 +3028,7 @@ function Workspace() {
           }
         >
             <div className="panel-header-bar">
-              <h3>Condition Records <span className="count-badge">{visibleRows.length}</span></h3>
+              <h3>Condition Records <span className="count-badge">{conditionRows.length}</span></h3>
               <LocalSearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
@@ -2944,58 +3045,70 @@ function Workspace() {
               </div>
               
               {/* Category Dropdown */}
-              <MultiSelectDropdown
-                placeholder="All Categories"
-                options={(lookups.categories ?? []).map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
-                selected={condDraft.category}
-                onChange={(vals) => setCondDraft((d) => ({ ...d, category: vals }))}
-              />
+              <div className="filter-date-group">
+                <span>Category</span>
+                <MultiSelectDropdown
+                  placeholder="All Categories"
+                  options={(lookups.categories ?? []).map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
+                  selected={condDraft.category}
+                  onChange={(vals) => setCondDraft((d) => ({ ...d, category: vals }))}
+                />
+              </div>
 
               {/* Condition Dropdown */}
-              <MultiSelectDropdown
-                placeholder="All Conditions"
-                options={['Good', 'Needs Inspection', 'Needs Repair']}
-                selected={condDraft.status}
-                onChange={(vals) => setCondDraft((d) => ({ ...d, status: vals }))}
-              />
+              <div className="filter-date-group">
+                <span>Condition</span>
+                <MultiSelectDropdown
+                  placeholder="All Conditions"
+                  options={['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']}
+                  selected={condDraft.status}
+                  onChange={(vals) => setCondDraft((d) => ({ ...d, status: vals }))}
+                />
+              </div>
 
               {/* Capacity Dropdown */}
-              <MultiSelectDropdown
-                placeholder="All Capacities"
-                options={[...new Set((lookups.vehicles ?? []).map((v) => v.capacity).filter(Boolean))]}
-                selected={condDraft.capacity}
-                onChange={(vals) => setCondDraft((d) => ({ ...d, capacity: vals }))}
-              />
+              <div className="filter-date-group">
+                <span>Capacity</span>
+                <MultiSelectDropdown
+                  placeholder="All Capacities"
+                  options={[...new Set((lookups.vehicles ?? []).map((v) => v.capacity).filter(Boolean))]}
+                  selected={condDraft.capacity}
+                  onChange={(vals) => setCondDraft((d) => ({ ...d, capacity: vals }))}
+                />
+              </div>
 
               {/* Checked By Dropdown — derived from who's actually logged a
                   check, not a fixed lookup. */}
-              <MultiSelectDropdown
-                placeholder="All Checked By"
-                options={[...new Set((records.conditions ?? []).map((r) => r.checked_by?.name).filter(Boolean))]}
-                selected={condDraft.checkedBy}
-                onChange={(vals) => setCondDraft((d) => ({ ...d, checkedBy: vals }))}
-              />
+              <div className="filter-date-group">
+                <span>Checked By</span>
+                <MultiSelectDropdown
+                  placeholder="All Checked By"
+                  options={[...new Set((records.conditions ?? []).map((r) => r.checked_by?.name).filter(Boolean))]}
+                  selected={condDraft.checkedBy}
+                  onChange={(vals) => setCondDraft((d) => ({ ...d, checkedBy: vals }))}
+                />
+              </div>
 
               {/* From Date */}
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #64748b)', fontWeight: 'bold' }}>From:</span>
+              <div className="filter-date-group">
+                <span>From Date</span>
                 <input
                   type="date"
                   className="filter-select"
                   style={{ minWidth: 'auto' }}
-                  value={condDraft.start}
+                  value={condDraft.start || '2026-01-01'}
                   onChange={(e) => setCondDraft((d) => ({ ...d, start: e.target.value }))}
                 />
               </div>
 
               {/* To Date */}
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #64748b)', fontWeight: 'bold' }}>To:</span>
+              <div className="filter-date-group">
+                <span>To Date</span>
                 <input
                   type="date"
                   className="filter-select"
                   style={{ minWidth: 'auto' }}
-                  value={condDraft.end}
+                  value={condDraft.end || '2026-12-31'}
                   onChange={(e) => setCondDraft((d) => ({ ...d, end: e.target.value }))}
                 />
               </div>
@@ -3030,7 +3143,7 @@ function Workspace() {
               columns={conditionColumnChooser.visibleColumns}
               onReorderColumn={conditionColumnChooser.reorderColumn}
               emptyMessage="No condition checks logged yet — click the + button to record one."
-              rows={visibleRows}
+              rows={conditionRows}
               onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
               renderSubRow={(row) => row.observations}
             />
@@ -3464,29 +3577,32 @@ function Workspace() {
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
-              <MultiSelectDropdown
-                placeholder="All Activity Types"
-                options={historyActivityTypeOptions}
-                selected={filterActivityType}
-                onChange={setFilterActivityType}
-              />
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.65 }}>From:</span>
+              <div className="filter-date-group">
+                <span>Activity Type</span>
+                <MultiSelectDropdown
+                  placeholder="All Activity Types"
+                  options={historyActivityTypeOptions}
+                  selected={filterActivityType}
+                  onChange={setFilterActivityType}
+                />
+              </div>
+              <div className="filter-date-group">
+                <span>From Date</span>
                 <input
                   type="date"
                   className="filter-select"
                   style={{ minWidth: 'auto' }}
-                  value={filterDateStart}
+                  value={filterDateStart || '2026-01-01'}
                   onChange={(e) => setFilterDateStart(e.target.value)}
                 />
               </div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.65 }}>To:</span>
+              <div className="filter-date-group">
+                <span>To Date</span>
                 <input
                   type="date"
                   className="filter-select"
                   style={{ minWidth: 'auto' }}
-                  value={filterDateEnd}
+                  value={filterDateEnd || '2026-12-31'}
                   onChange={(e) => setFilterDateEnd(e.target.value)}
                 />
               </div>
@@ -3619,6 +3735,12 @@ function Workspace() {
           setFilterCategory={setFilterCategory}
           filterCapacity={filterCapacity}
           setFilterCapacity={setFilterCapacity}
+          filterVehicle={filterVehicle}
+          setFilterVehicle={setFilterVehicle}
+          filterMechanic={filterMechanic}
+          setFilterMechanic={setFilterMechanic}
+          filterCustodian={filterCustodian}
+          setFilterCustodian={setFilterCustodian}
           filterStatus={filterStatus}
           setFilterStatus={setFilterStatus}
           filterPriority={filterPriority}
@@ -3699,86 +3821,101 @@ function Workspace() {
           filterBar={
             <div className="filter-bar-container" style={{ flexWrap: 'wrap', gap: '8px 12px', alignItems: 'center' }}>
               <div className="filter-label"><span>Vehicle:</span></div>
-              <MultiSelectDropdown
-                placeholder="All Categories"
-                options={(lookups.categories ?? []).map((c) => ({ value: String(c.category_id), label: c.category_name }))}
-                selected={filterCategory}
-                onChange={setFilterCategory}
-              />
-              <MultiSelectDropdown
-                placeholder="All Capacities"
-                options={[...new Set((lookups.vehicles ?? []).map((v) => v.capacity).filter(Boolean))]}
-                selected={filterCapacity}
-                onChange={setFilterCapacity}
-              />
+              <div className="filter-date-group">
+                <span>Category</span>
+                <MultiSelectDropdown
+                  placeholder="All Categories"
+                  options={(lookups.categories ?? []).map((c) => ({ value: String(c.category_id), label: c.category_name }))}
+                  selected={filterCategory}
+                  onChange={setFilterCategory}
+                />
+              </div>
+              <div className="filter-date-group">
+                <span>Capacity</span>
+                <MultiSelectDropdown
+                  placeholder="All Capacities"
+                  options={[...new Set((lookups.vehicles ?? []).map((v) => v.capacity).filter(Boolean))]}
+                  selected={filterCapacity}
+                  onChange={setFilterCapacity}
+                />
+              </div>
 
               <div style={{ width: 1, height: 22, background: 'var(--border, #334155)', flexShrink: 0 }} />
 
               <div className="filter-label"><span>DATE FILTER:</span></div>
 
               {/* Quick relative filters — dropdown */}
-              <select
-                className="filter-select"
-                value={archiveDraft.quick}
-                onChange={(e) => applyQuickFilter(e.target.value)}
-              >
-                <option value="">Quick Filter</option>
-                <option value="this_year">This Year</option>
-                <option value="last_year">Last Year</option>
-                <option value="over_1yr">Older than 1 Year</option>
-                <option value="over_3yr">Older than 3 Years</option>
-              </select>
+              <div className="filter-date-group">
+                <span>Quick Filter</span>
+                <select
+                  className="filter-select"
+                  value={archiveDraft.quick}
+                  onChange={(e) => applyQuickFilter(e.target.value)}
+                >
+                  <option value="">Quick Filter</option>
+                  <option value="this_year">This Year</option>
+                  <option value="last_year">Last Year</option>
+                  <option value="over_1yr">Older than 1 Year</option>
+                  <option value="over_3yr">Older than 3 Years</option>
+                </select>
+              </div>
 
               <div style={{ width: 1, height: 22, background: 'var(--border, #334155)', flexShrink: 0 }} />
 
               {/* Year dropdown — only years that actually have archived tickets */}
-              <select
-                className="filter-select"
-                value={selectedYear}
-                onChange={(e) => applyYearFilter(e.target.value)}
-              >
-                <option value="">All Years</option>
-                {archiveYears.map((yr) => (
-                  <option key={yr} value={yr}>
-                    {yr} — {yearCounts[yr]} {yearCounts[yr] === 1 ? 'ticket' : 'tickets'}
-                  </option>
-                ))}
-              </select>
+              <div className="filter-date-group">
+                <span>Year</span>
+                <select
+                  className="filter-select"
+                  value={selectedYear}
+                  onChange={(e) => applyYearFilter(e.target.value)}
+                >
+                  <option value="">All Years</option>
+                  {archiveYears.map((yr) => (
+                    <option key={yr} value={yr}>
+                      {yr} — {yearCounts[yr]} {yearCounts[yr] === 1 ? 'ticket' : 'tickets'}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {/* Custom date range */}
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.65 }}>From:</span>
+              <div className="filter-date-group">
+                <span>From Date</span>
                 <input
                   type="date"
                   className="filter-select"
                   style={{ minWidth: 'auto' }}
-                  value={archiveDraft.start}
+                  value={archiveDraft.start || '2026-01-01'}
                   onChange={(e) => setArchiveDraft((d) => ({ ...d, start: e.target.value, quick: '' }))}
                 />
               </div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 600, opacity: 0.65 }}>To:</span>
+              <div className="filter-date-group">
+                <span>To Date</span>
                 <input
                   type="date"
                   className="filter-select"
                   style={{ minWidth: 'auto' }}
-                  value={archiveDraft.end}
+                  value={archiveDraft.end || '2026-12-31'}
                   onChange={(e) => setArchiveDraft((d) => ({ ...d, end: e.target.value, quick: '' }))}
                 />
               </div>
 
               {/* Final status filter */}
               {archiveFinalStatuses.length > 0 && (
-                <select
-                  className="filter-select"
-                  value={archiveDraft.status}
-                  onChange={(e) => setArchiveDraft((d) => ({ ...d, status: e.target.value }))}
-                >
-                  <option value="">All Statuses</option>
-                  {archiveFinalStatuses.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                <div className="filter-date-group">
+                  <span>Status</span>
+                  <select
+                    className="filter-select"
+                    value={archiveDraft.status}
+                    onChange={(e) => setArchiveDraft((d) => ({ ...d, status: e.target.value }))}
+                  >
+                    <option value="">All Statuses</option>
+                    {archiveFinalStatuses.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
               )}
 
               {/* Apply — only shown when draft differs from applied */}
@@ -7947,6 +8084,7 @@ const CONDITION_STAT_CARDS = [
   { key: 'Good', label: 'Good', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
   { key: 'Needs Inspection', label: 'Needs Inspection', icon: 'search', bg: '#e0f2fe', color: '#0284c7' },
   { key: 'Needs Repair', label: 'Needs Repair', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
+  { key: 'Not Checked', label: 'Not Checked', icon: 'eyeOff', bg: '#f1f5f9', color: '#64748b' },
 ];
 
 const MAINTENANCE_RECORD_STAT_CARDS = [
@@ -8277,9 +8415,9 @@ function locationColumns(currentUser, onViewOnMap, onEdit) {
   ];
 }
 
-function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition) {
+function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onAddCondition) {
   const columns = [
-    { key: 'id', label: 'ID', locked: true, render: (row) => row.condition_check_id },
+    { key: 'id', label: 'ID', locked: true, render: (row) => row.condition_check_id ?? '-' },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'result', label: 'Result', render: (row) => <StatusBadge value={row.condition_result} /> },
     { key: 'checked_by', label: 'Checked By', render: (row) => <UserAvatarName user={row.checked_by} /> },
@@ -8293,6 +8431,16 @@ function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromConditio
       label: 'Action',
       locked: true,
       render: (row) => (
+        // A synthesized "Not Checked" row has no condition_check_id — there's
+        // no record yet to create a ticket from, suggest a schedule against,
+        // edit, or delete. Its only real action is filing the first check.
+        !row.condition_check_id ? (
+          <div className="row-actions">
+            {onAddCondition && (
+              <button className="btn-confirm-action icon-btn" onClick={onAddCondition} type="button" title="Record Condition" aria-label="Record Condition"><Icon name="plus" size={14} /></button>
+            )}
+          </div>
+        ) : (
         <div className="row-actions">
           {/* #2 — Admin can turn a problem-finding condition check (Needs
               Repair OR Needs Inspection — anything short of Good) into a
@@ -8327,6 +8475,7 @@ function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromConditio
           <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
           <button className="btn-delete-action icon-btn" onClick={() => deleteRecord(`/conditions/${row.condition_check_id}`, 'Condition check deleted.')} type="button" title="Delete" aria-label="Delete"><Icon name="trash" size={14} /></button>
         </div>
+        )
       ),
     });
   }
@@ -8447,9 +8596,15 @@ function IssueFilterPanel({
     return Array.from(caps).sort();
   }, [vehicles]);
 
-  // Pre-filled on first load only (not on every resync below — otherwise
-  // clicking "Clear Filters" would immediately un-clear the dates right
-  // back to these defaults, since that also flows through applied state).
+  const statusKeys = useMemo(
+    () => ISSUE_STAT_CARDS.filter((c) => statusOptions.includes(c.key)).map((c) => c.key),
+    [statusOptions],
+  );
+
+  // Same default window every time the applied filter is unset — both on
+  // first mount AND after "Clear Filters" resets filterDateStart/End back
+  // to '' — instead of only seeding it once and then collapsing to a blank
+  // "dd/mm/yyyy" the moment this effect's first resync runs.
   const [draft, setDraft] = useState({
     category: filterCategory ?? [],
     capacity: filterCapacity ?? [],
@@ -8467,17 +8622,24 @@ function IssueFilterPanel({
       issueType: filterIssueType ?? [],
       status: filterStatus ?? [],
       severityRange: severityRangeFromSelection(filterPriority, severityLevels),
-      dateStart: filterDateStart ?? '',
-      dateEnd: filterDateEnd ?? '',
+      dateStart: filterDateStart || '2026-01-01',
+      dateEnd: filterDateEnd || '2026-12-31',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCategory, filterCapacity, filterIssueType, filterStatus, filterPriority, filterDateStart, filterDateEnd]);
 
+  // An empty draft.status means "no filter" — every chip should read as
+  // checked, the same "everything's included" state the Total/All stat
+  // card represents. Unchecking one FROM that implicit-all state has to
+  // expand it into an explicit "every status except this one" list first —
+  // otherwise toggling off a single chip would (wrongly) read as toggling
+  // it on, since d.status.includes(key) is false for all of them.
   const toggleDraftStatus = (key) => {
-    setDraft((d) => ({
-      ...d,
-      status: d.status.includes(key) ? d.status.filter((s) => s !== key) : [...d.status, key],
-    }));
+    setDraft((d) => {
+      const current = d.status.length === 0 ? statusKeys : d.status;
+      const next = current.includes(key) ? current.filter((s) => s !== key) : [...current, key];
+      return { ...d, status: next.length === statusKeys.length ? [] : next };
+    });
   };
 
   const applyFilters = () => {
@@ -8496,56 +8658,72 @@ function IssueFilterPanel({
     || !sameSelection(draft.issueType, filterIssueType ?? [])
     || !sameSelection(draft.status, filterStatus ?? [])
     || !isFullSeverityRange && !sameSelection(severityLevels.slice(draft.severityRange[0], draft.severityRange[1] + 1), filterPriority ?? [])
-    || draft.dateStart !== (filterDateStart ?? '')
-    || draft.dateEnd !== (filterDateEnd ?? '');
+    || draft.dateStart !== (filterDateStart || '2026-01-01')
+    || draft.dateEnd !== (filterDateEnd || '2026-12-31');
 
   return (
     <div className="issue-filter-panel">
       <div className="issue-filter-row">
-        <MultiSelectDropdown
-          placeholder="All Categories"
-          options={categories.map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
-          selected={draft.category}
-          onChange={(vals) => setDraft((d) => ({ ...d, category: vals }))}
-        />
-        <MultiSelectDropdown
-          placeholder="All Capacities"
-          options={capacities}
-          selected={draft.capacity}
-          onChange={(vals) => setDraft((d) => ({ ...d, capacity: vals }))}
-        />
-        <MultiSelectDropdown
-          placeholder="All Issue Types"
-          options={issueTypes}
-          selected={draft.issueType}
-          onChange={(vals) => setDraft((d) => ({ ...d, issueType: vals }))}
-        />
-        <div className="issue-filter-dates">
-          <div className="filter-date-group issue-filter-date-input">
-            <span>From Date</span>
-            <input type="date" className="filter-select" value={draft.dateStart} onChange={(e) => setDraft((d) => ({ ...d, dateStart: e.target.value }))} />
-          </div>
-          <div className="filter-date-group issue-filter-date-input">
-            <span>To Date</span>
-            <input type="date" className="filter-select" value={draft.dateEnd} onChange={(e) => setDraft((d) => ({ ...d, dateEnd: e.target.value }))} />
-          </div>
+        <div className="filter-date-group">
+          <span>Category</span>
+          <MultiSelectDropdown
+            placeholder="All Categories"
+            options={categories.map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
+            selected={draft.category}
+            onChange={(vals) => setDraft((d) => ({ ...d, category: vals }))}
+          />
+        </div>
+        <div className="filter-date-group">
+          <span>Capacity</span>
+          <MultiSelectDropdown
+            placeholder="All Capacities"
+            options={capacities}
+            selected={draft.capacity}
+            onChange={(vals) => setDraft((d) => ({ ...d, capacity: vals }))}
+          />
+        </div>
+        <div className="filter-date-group">
+          <span>Issue Type</span>
+          <MultiSelectDropdown
+            placeholder="All Issue Types"
+            options={issueTypes}
+            selected={draft.issueType}
+            onChange={(vals) => setDraft((d) => ({ ...d, issueType: vals }))}
+          />
+        </div>
+      </div>
+      {/* Second grid column of the TOP row — same track as the status
+          chips + Filter button below it, so the two rows' right edges
+          line up instead of the dates sitting narrower than that cluster. */}
+      <div className="issue-filter-dates">
+        <div className="filter-date-group issue-filter-date-input">
+          <span>From Date</span>
+          <input type="date" className="filter-select" value={draft.dateStart} onChange={(e) => setDraft((d) => ({ ...d, dateStart: e.target.value }))} />
+        </div>
+        <div className="filter-date-group issue-filter-date-input">
+          <span>To Date</span>
+          <input type="date" className="filter-select" value={draft.dateEnd} onChange={(e) => setDraft((d) => ({ ...d, dateEnd: e.target.value }))} />
         </div>
       </div>
 
-      <div className="issue-filter-row issue-filter-row-bottom">
-        <div className="issue-filter-severity-card">
-          <span className="issue-filter-severity-label">Severity</span>
-          <DualRangeSlider
-            labels={severityLevels}
-            minIndex={draft.severityRange[0]}
-            maxIndex={draft.severityRange[1]}
-            onChange={(min, max) => setDraft((d) => ({ ...d, severityRange: [min, max] }))}
-          />
-        </div>
+      <div className="issue-filter-severity-card">
+        <span className="issue-filter-severity-label">Severity</span>
+        <DualRangeSlider
+          labels={severityLevels}
+          minIndex={draft.severityRange[0]}
+          maxIndex={draft.severityRange[1]}
+          onChange={(min, max) => setDraft((d) => ({ ...d, severityRange: [min, max] }))}
+        />
+      </div>
+      {/* Second grid column of the BOTTOM row — chips + button grouped into
+          one cell so together they size to the same grid track as the
+          dates above, instead of the button flexing out to fill the whole
+          row on its own. */}
+      <div className="issue-filter-right-cluster">
         <div className="issue-filter-status-grid">
           {ISSUE_STAT_CARDS.filter((c) => statusOptions.includes(c.key)).map((c) => (
             <label key={c.key} className="issue-filter-status-chip" style={{ background: c.bg }}>
-              <input type="checkbox" checked={draft.status.includes(c.key)} onChange={() => toggleDraftStatus(c.key)} />
+              <input type="checkbox" checked={draft.status.length === 0 || draft.status.includes(c.key)} onChange={() => toggleDraftStatus(c.key)} />
               <span style={{ color: c.color }}>{c.label}</span>
             </label>
           ))}
@@ -8566,12 +8744,20 @@ function IssueFilterPanel({
 function TicketFilterPanel({
   categories = [],
   vehicles = [],
+  custodians = [],
+  maintenancePersonnelRoster = [],
   priorityLevels = [],
   statusOptions = [],
   filterCategory,
   setFilterCategory,
   filterCapacity,
   setFilterCapacity,
+  filterVehicle,
+  setFilterVehicle,
+  filterMechanic,
+  setFilterMechanic,
+  filterCustodian,
+  setFilterCustodian,
   filterStatus,
   setFilterStatus,
   filterPriority,
@@ -8587,12 +8773,27 @@ function TicketFilterPanel({
     return Array.from(caps).sort();
   }, [vehicles]);
 
-  // Pre-filled on first load only (not on every resync below — otherwise
-  // clicking "Clear Filters" would immediately un-clear the dates right
-  // back to these defaults, since that also flows through applied state).
+  const maintenancePersonnelNames = useMemo(
+    () => maintenancePersonnelRoster.map((p) => p.name).sort(),
+    [maintenancePersonnelRoster],
+  );
+  const custodianNames = useMemo(() => custodians.map((c) => c.name).sort(), [custodians]);
+
+  const statusKeys = useMemo(
+    () => TICKET_STAT_CARDS.filter((c) => statusOptions.includes(c.key)).map((c) => c.key),
+    [statusOptions],
+  );
+
+  // Same default window every time the applied filter is unset — both on
+  // first mount AND after "Clear Filters" resets filterDateStart/End back
+  // to '' — instead of only seeding it once and then collapsing to a blank
+  // "dd/mm/yyyy" the moment this effect's first resync runs.
   const [draft, setDraft] = useState({
     category: filterCategory ?? [],
     capacity: filterCapacity ?? [],
+    vehicle: filterVehicle ?? [],
+    mechanic: filterMechanic ?? [],
+    custodian: filterCustodian ?? [],
     status: filterStatus ?? [],
     priorityRange: severityRangeFromSelection(filterPriority, priorityLevels),
     dateStart: filterDateStart || '2026-01-01',
@@ -8603,24 +8804,37 @@ function TicketFilterPanel({
     setDraft({
       category: filterCategory ?? [],
       capacity: filterCapacity ?? [],
+      vehicle: filterVehicle ?? [],
+      mechanic: filterMechanic ?? [],
+      custodian: filterCustodian ?? [],
       status: filterStatus ?? [],
       priorityRange: severityRangeFromSelection(filterPriority, priorityLevels),
-      dateStart: filterDateStart ?? '',
-      dateEnd: filterDateEnd ?? '',
+      dateStart: filterDateStart || '2026-01-01',
+      dateEnd: filterDateEnd || '2026-12-31',
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterCategory, filterCapacity, filterStatus, filterPriority, filterDateStart, filterDateEnd]);
+  }, [filterCategory, filterCapacity, filterVehicle, filterMechanic, filterCustodian, filterStatus, filterPriority, filterDateStart, filterDateEnd]);
 
+  // An empty draft.status means "no filter" — every chip should read as
+  // checked, the same "everything's included" state the Total/All stat
+  // card represents. Unchecking one FROM that implicit-all state has to
+  // expand it into an explicit "every status except this one" list first —
+  // otherwise toggling off a single chip would (wrongly) read as toggling
+  // it on, since d.status.includes(key) is false for all of them.
   const toggleDraftStatus = (key) => {
-    setDraft((d) => ({
-      ...d,
-      status: d.status.includes(key) ? d.status.filter((s) => s !== key) : [...d.status, key],
-    }));
+    setDraft((d) => {
+      const current = d.status.length === 0 ? statusKeys : d.status;
+      const next = current.includes(key) ? current.filter((s) => s !== key) : [...current, key];
+      return { ...d, status: next.length === statusKeys.length ? [] : next };
+    });
   };
 
   const applyFilters = () => {
     setFilterCategory(draft.category);
     setFilterCapacity(draft.capacity);
+    setFilterVehicle(draft.vehicle);
+    setFilterMechanic(draft.mechanic);
+    setFilterCustodian(draft.custodian);
     setFilterStatus(draft.status);
     setFilterPriority(priorityLevels.slice(draft.priorityRange[0], draft.priorityRange[1] + 1));
     setFilterDateStart(draft.dateStart);
@@ -8630,52 +8844,88 @@ function TicketFilterPanel({
   const isFullPriorityRange = draft.priorityRange[0] === 0 && draft.priorityRange[1] === priorityLevels.length - 1;
   const isDirty = !sameSelection(draft.category, filterCategory ?? [])
     || !sameSelection(draft.capacity, filterCapacity ?? [])
+    || !sameSelection(draft.vehicle, filterVehicle ?? [])
+    || !sameSelection(draft.mechanic, filterMechanic ?? [])
+    || !sameSelection(draft.custodian, filterCustodian ?? [])
     || !sameSelection(draft.status, filterStatus ?? [])
     || !isFullPriorityRange && !sameSelection(priorityLevels.slice(draft.priorityRange[0], draft.priorityRange[1] + 1), filterPriority ?? [])
-    || draft.dateStart !== (filterDateStart ?? '')
-    || draft.dateEnd !== (filterDateEnd ?? '');
+    || draft.dateStart !== (filterDateStart || '2026-01-01')
+    || draft.dateEnd !== (filterDateEnd || '2026-12-31');
 
   return (
     <div className="issue-filter-panel">
       <div className="issue-filter-row">
-        <MultiSelectDropdown
-          placeholder="All Categories"
-          options={categories.map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
-          selected={draft.category}
-          onChange={(vals) => setDraft((d) => ({ ...d, category: vals }))}
-        />
-        <MultiSelectDropdown
-          placeholder="All Capacities"
-          options={capacities}
-          selected={draft.capacity}
-          onChange={(vals) => setDraft((d) => ({ ...d, capacity: vals }))}
-        />
-        <div className="issue-filter-dates">
-          <div className="filter-date-group issue-filter-date-input">
-            <span>From Date</span>
-            <input type="date" className="filter-select" value={draft.dateStart} onChange={(e) => setDraft((d) => ({ ...d, dateStart: e.target.value }))} />
-          </div>
-          <div className="filter-date-group issue-filter-date-input">
-            <span>To Date</span>
-            <input type="date" className="filter-select" value={draft.dateEnd} onChange={(e) => setDraft((d) => ({ ...d, dateEnd: e.target.value }))} />
-          </div>
+        <div className="filter-date-group">
+          <span>Category</span>
+          <MultiSelectDropdown
+            placeholder="All Categories"
+            options={categories.map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
+            selected={draft.category}
+            onChange={(vals) => setDraft((d) => ({ ...d, category: vals }))}
+          />
+        </div>
+        <div className="filter-date-group">
+          <span>Capacity</span>
+          <MultiSelectDropdown
+            placeholder="All Capacities"
+            options={capacities}
+            selected={draft.capacity}
+            onChange={(vals) => setDraft((d) => ({ ...d, capacity: vals }))}
+          />
+        </div>
+        <div className="filter-date-group">
+          <span>Vehicle</span>
+          <MultiSelectDropdown
+            placeholder="All Vehicles"
+            options={vehicles.map((v) => ({ value: String(v.vehicle_id), label: `${v.vehicle_name} · ${v.plate_number}` }))}
+            selected={draft.vehicle}
+            onChange={(vals) => setDraft((d) => ({ ...d, vehicle: vals }))}
+          />
+        </div>
+        <div className="filter-date-group">
+          <span>Maintenance Personnel</span>
+          <MultiSelectDropdown
+            placeholder="All Maintenance Personnel"
+            options={maintenancePersonnelNames}
+            selected={draft.mechanic}
+            onChange={(vals) => setDraft((d) => ({ ...d, mechanic: vals }))}
+          />
+        </div>
+        <div className="filter-date-group">
+          <span>Custodian</span>
+          <MultiSelectDropdown
+            placeholder="All Custodians"
+            options={custodianNames}
+            selected={draft.custodian}
+            onChange={(vals) => setDraft((d) => ({ ...d, custodian: vals }))}
+          />
+        </div>
+      </div>
+      <div className="issue-filter-dates">
+        <div className="filter-date-group issue-filter-date-input">
+          <span>From Date</span>
+          <input type="date" className="filter-select" value={draft.dateStart} onChange={(e) => setDraft((d) => ({ ...d, dateStart: e.target.value }))} />
+        </div>
+        <div className="filter-date-group issue-filter-date-input">
+          <span>To Date</span>
+          <input type="date" className="filter-select" value={draft.dateEnd} onChange={(e) => setDraft((d) => ({ ...d, dateEnd: e.target.value }))} />
         </div>
       </div>
 
-      <div className="issue-filter-row issue-filter-row-bottom">
-        <div className="issue-filter-severity-card">
-          <span className="issue-filter-severity-label">Priority</span>
-          <DualRangeSlider
-            labels={priorityLevels}
-            minIndex={draft.priorityRange[0]}
-            maxIndex={draft.priorityRange[1]}
-            onChange={(min, max) => setDraft((d) => ({ ...d, priorityRange: [min, max] }))}
-          />
-        </div>
+      <div className="issue-filter-severity-card">
+        <span className="issue-filter-severity-label">Priority</span>
+        <DualRangeSlider
+          labels={priorityLevels}
+          minIndex={draft.priorityRange[0]}
+          maxIndex={draft.priorityRange[1]}
+          onChange={(min, max) => setDraft((d) => ({ ...d, priorityRange: [min, max] }))}
+        />
+      </div>
+      <div className="issue-filter-right-cluster">
         <div className="issue-filter-status-grid">
           {TICKET_STAT_CARDS.filter((c) => statusOptions.includes(c.key)).map((c) => (
             <label key={c.key} className="issue-filter-status-chip" style={{ background: c.bg }}>
-              <input type="checkbox" checked={draft.status.includes(c.key)} onChange={() => toggleDraftStatus(c.key)} />
+              <input type="checkbox" checked={draft.status.length === 0 || draft.status.includes(c.key)} onChange={() => toggleDraftStatus(c.key)} />
               <span style={{ color: c.color }}>{c.label}</span>
             </label>
           ))}
@@ -12285,6 +12535,12 @@ function TicketModule({
   setFilterCategory,
   filterCapacity,
   setFilterCapacity,
+  filterVehicle,
+  setFilterVehicle,
+  filterMechanic,
+  setFilterMechanic,
+  filterCustodian,
+  setFilterCustodian,
   filterStatus,
   setFilterStatus,
   filterPriority,
@@ -12359,12 +12615,20 @@ function TicketModule({
         <TicketFilterPanel
           categories={categories}
           vehicles={vehicles}
+          custodians={ticketLookups.custodians}
+          maintenancePersonnelRoster={ticketLookups.maintenance_personnel}
           priorityLevels={ticketLookups.priorities}
           statusOptions={ticketLookups.ticket_statuses}
           filterCategory={filterCategory}
           setFilterCategory={setFilterCategory}
           filterCapacity={filterCapacity}
           setFilterCapacity={setFilterCapacity}
+          filterVehicle={filterVehicle}
+          setFilterVehicle={setFilterVehicle}
+          filterMechanic={filterMechanic}
+          setFilterMechanic={setFilterMechanic}
+          filterCustodian={filterCustodian}
+          setFilterCustodian={setFilterCustodian}
           filterStatus={filterStatus}
           setFilterStatus={setFilterStatus}
           filterPriority={filterPriority}
@@ -14982,13 +15246,15 @@ function FilterBar({
   };
 
   const extraFiltersJsx = extraFilters.map((f) => (
-    <MultiSelectDropdown
-      key={f.key}
-      placeholder={`All ${f.label}`}
-      options={f.options}
-      selected={f.selected}
-      onChange={f.setSelected}
-    />
+    <div className="filter-date-group" key={f.key}>
+      <span>{f.label}</span>
+      <MultiSelectDropdown
+        placeholder={`All ${f.label}`}
+        options={f.options}
+        selected={f.selected}
+        onChange={f.setSelected}
+      />
+    </div>
   ));
 
   const dateRangeJsx = dateRange && (
@@ -14999,7 +15265,7 @@ function FilterBar({
           type="date"
           className="filter-select"
           style={{ minWidth: 'auto' }}
-          value={dateRange.start}
+          value={dateRange.start || '2026-01-01'}
           onChange={(e) => dateRange.setStart(e.target.value)}
         />
       </div>
@@ -15009,7 +15275,7 @@ function FilterBar({
           type="date"
           className="filter-select"
           style={{ minWidth: 'auto' }}
-          value={dateRange.end}
+          value={dateRange.end || '2026-12-31'}
           onChange={(e) => dateRange.setEnd(e.target.value)}
         />
       </div>
@@ -15023,57 +15289,75 @@ function FilterBar({
       </div>
 
       {/* Category Dropdown */}
-      <MultiSelectDropdown
-        placeholder="All Categories"
-        options={categories.map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
-        selected={draft.category}
-        onChange={(vals) => setDraft((d) => ({ ...d, category: vals }))}
-      />
+      <div className="filter-date-group">
+        <span>Category</span>
+        <MultiSelectDropdown
+          placeholder="All Categories"
+          options={categories.map((cat) => ({ value: String(cat.category_id), label: cat.category_name }))}
+          selected={draft.category}
+          onChange={(vals) => setDraft((d) => ({ ...d, category: vals }))}
+        />
+      </div>
 
       {/* Capacity Dropdown */}
-      <MultiSelectDropdown
-        placeholder="All Capacities"
-        options={capacities}
-        selected={draft.capacity}
-        onChange={(vals) => setDraft((d) => ({ ...d, capacity: vals }))}
-      />
+      <div className="filter-date-group">
+        <span>Capacity</span>
+        <MultiSelectDropdown
+          placeholder="All Capacities"
+          options={capacities}
+          selected={draft.capacity}
+          onChange={(vals) => setDraft((d) => ({ ...d, capacity: vals }))}
+        />
+      </div>
 
       {/* Status Dropdown */}
       {statusOptions && statusOptions.length > 0 && (
-        <MultiSelectDropdown
-          placeholder={`All ${pluralizeLabel(statusLabel)}`}
-          options={statusOptions}
-          selected={draft.status}
-          onChange={(vals) => setDraft((d) => ({ ...d, status: vals }))}
-        />
+        <div className="filter-date-group">
+          <span>{statusLabel}</span>
+          <MultiSelectDropdown
+            placeholder={`All ${pluralizeLabel(statusLabel)}`}
+            options={statusOptions}
+            selected={draft.status}
+            onChange={(vals) => setDraft((d) => ({ ...d, status: vals }))}
+          />
+        </div>
       )}
 
       {/* Priority / Severity / Condition Dropdown */}
       {priorityOptions && priorityOptions.length > 0 && (
-        <MultiSelectDropdown
-          placeholder={`All ${pluralizeLabel(priorityLabel)}`}
-          options={priorityOptions}
-          selected={draft.priority}
-          onChange={(vals) => setDraft((d) => ({ ...d, priority: vals }))}
-        />
+        <div className="filter-date-group">
+          <span>{priorityLabel}</span>
+          <MultiSelectDropdown
+            placeholder={`All ${pluralizeLabel(priorityLabel)}`}
+            options={priorityOptions}
+            selected={draft.priority}
+            onChange={(vals) => setDraft((d) => ({ ...d, priority: vals }))}
+          />
+        </div>
       )}
 
       {/* Location/Domain — only Vehicle Management passes their setters. */}
       {setFilterLocation && (
-        <MultiSelectDropdown
-          placeholder="All Locations"
-          options={locations}
-          selected={draft.location}
-          onChange={(vals) => setDraft((d) => ({ ...d, location: vals }))}
-        />
+        <div className="filter-date-group">
+          <span>Location</span>
+          <MultiSelectDropdown
+            placeholder="All Locations"
+            options={locations}
+            selected={draft.location}
+            onChange={(vals) => setDraft((d) => ({ ...d, location: vals }))}
+          />
+        </div>
       )}
       {setFilterDomain && (
-        <MultiSelectDropdown
-          placeholder="All Domains (Land/Water)"
-          options={domains}
-          selected={draft.domain}
-          onChange={(vals) => setDraft((d) => ({ ...d, domain: vals }))}
-        />
+        <div className="filter-date-group">
+          <span>Domain</span>
+          <MultiSelectDropdown
+            placeholder="All Domains (Land/Water)"
+            options={domains}
+            selected={draft.domain}
+            onChange={(vals) => setDraft((d) => ({ ...d, domain: vals }))}
+          />
+        </div>
       )}
 
       {/* Extra module-specific dropdowns and the date range apply
