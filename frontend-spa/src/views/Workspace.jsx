@@ -87,17 +87,14 @@ const modulesByRole = {
       ['issues', 'Issue Reports'],
       ['tickets', 'Maintenance Tickets'],
       ['ticketArchives', 'Ticket Archives'],
+      ['conditions', 'Condition Monitoring'],
+      ['schedules', 'Maintenance Schedule'],
+      ['maintenance', 'Maintenance Records'],
     ] },
     { section: 'Fleet & Assets', icon: 'vehicle', items: [
       ['vehicles', 'Vehicle Management'],
       ['categories', 'Vehicle Types'],
       ['locations', 'Vehicle Location'],
-      ['histories', 'Vehicle History'],
-    ] },
-    { section: 'Monitoring & Schedules', icon: 'calendar', items: [
-      ['conditions', 'Condition Monitoring'],
-      ['schedules', 'Maintenance Schedule'],
-      ['maintenance', 'Maintenance Records'],
     ] },
     { section: 'Administration', icon: 'key', items: [
       ['users', 'Users'],
