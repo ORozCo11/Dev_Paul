@@ -3901,10 +3901,38 @@ button.wizard-step-pill:hover {
   /* Matches .panel's actual padding (14px 16px) exactly, so this bleeds
      flush to the panel's own edge instead of overshooting past its rounded
      corner (which left a sliver of the panel's white background showing
-     through at each top corner). */
-  margin: -14px -16px 16px -16px;
+     through at each top corner). Bottom margin dropped to 0 (was 16px) so
+     the table sitting right below it reads as one continuous card instead
+     of two separately-bordered boxes with a gap between them. */
+  margin: -14px -16px 0 -16px;
   border-bottom: none;
   border-radius: 6px 6px 0 0;
+}
+/* The blue border belongs to the whole card this bar sits on top of — not
+   just an inner table immediately below it. A panel can have a filter row
+   (category/date dropdowns, its own "FILTERS:" label) sitting between the
+   bar and the actual table, which broke a border scoped to "table directly
+   after the bar": the filter row had no border of its own, so the card's
+   blue outline just stopped at the bottom of the bar and picked up again,
+   inset and disconnected, at the table further down. Bordering the whole
+   panel instead means the bar, the filters, and the table all sit inside
+   one continuous blue-outlined block regardless of what's between them. */
+/* `.module-grid` added purely to out-specificity the later, equally-targeted
+   `html[data-theme="light"] .module-grid .panel` border rule further down
+   this file (same specificity tier otherwise, and that one wins on source
+   order alone) — every `.panel-header-bar` panel lives inside a
+   `.module-grid` anyway, so this never excludes a real case. */
+html[data-theme="light"] .module-grid .panel:has(> .panel-header-bar) {
+  border: 3px solid #2563eb;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+}
+/* The panel above now owns the border — an inner table's own border would
+   just double it up, so it goes borderless and blends into the panel's
+   white background instead. */
+html[data-theme="light"] .panel:has(> .panel-header-bar) .table-shell {
+  border: none;
+  border-radius: 0;
 }
 /* Use when the bar isn't the first element in the panel (e.g. below a tab
    row) — same look, but doesn't bleed into whatever sits above it. */
@@ -11374,6 +11402,7 @@ html[data-theme="light"] .table-shell table {
 html[data-theme="light"] thead th {
   background: #ffffff;
   border-bottom: 2px solid #e2e8f0;
+  border-right: none;
   color: #0f172a;
   font-size: 0.85rem;
   font-weight: 700;
@@ -11384,9 +11413,13 @@ html[data-theme="light"] thead th {
   white-space: normal;
 }
 
+/* No inside grid lines — rows read off the alternating tint below plus a
+   hover highlight, not ruled-off cells; only the table's own outer border
+   (below) separates it from the rest of the page. */
 html[data-theme="light"] tbody td {
   background: #ffffff;
-  border-bottom: 1px solid #edf1f7;
+  border-bottom: none;
+  border-right: none;
   color: #17243a;
   font-size: 0.72rem;
   font-weight: 500;
