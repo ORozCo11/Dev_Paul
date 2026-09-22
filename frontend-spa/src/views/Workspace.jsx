@@ -2350,13 +2350,15 @@ function Workspace() {
               // sum of its children's badges so a folded group still shows
               // there's something inside needing attention.
               const groupBadge = items.reduce((sum, [key]) => sum + (dashboard?.badge_counts?.[key] ?? 0), 0);
-              // Two things force a group open regardless of stored state: the
-              // icon-only rail (no room for headers, and hiding icons there
-              // would leave no way to reach them), and the group containing
-              // whatever module is currently active — so notification jumps
-              // and deep links never land on a hidden item.
-              const holdsActive = items.some(([key]) => key === breadcrumbModule);
-              const expanded = isSidebarCollapsed || holdsActive || !collapsedNavGroups.includes(section);
+              // The icon-only rail forces every group open (no room for
+              // headers there, and hiding icons would leave no way to reach
+              // them). Otherwise this is a plain accordion — a group holding
+              // the active module used to also force itself open, which made
+              // clicking that group's own header look broken (the click
+              // toggled the stored state, but this override kept rendering
+              // it expanded regardless) — the user's explicit collapse now
+              // always wins.
+              const expanded = isSidebarCollapsed || !collapsedNavGroups.includes(section);
 
               return (
                 <div key={section} className="module-nav-group">
