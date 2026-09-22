@@ -3029,24 +3029,12 @@ function Workspace() {
               onFilterChange={setFilterStatus}
             />
           }
-        >
-            <div className="panel-header-bar">
-              <h3>Condition Records <span className="count-badge">{conditionRows.length}</span></h3>
-              <LocalSearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder="Search conditions..."
-                columnChooser={conditionColumnChooser}
-                onAdd={hasRole(user, 'Custodian') ? () => navigate(`${roleRoutes[user.role]}/conditions/new`) : undefined}
-                addLabel="Add Condition Check"
-              />
-            </div>
-
+          filterBar={
             <div className="filter-bar-container">
               <div className="filter-label">
                 <span>FILTERS:</span>
               </div>
-              
+
               {/* Category Dropdown */}
               <div className="filter-date-group">
                 <span>Category</span>
@@ -3133,7 +3121,19 @@ function Workspace() {
               >
                 Filter
               </button>
-
+            </div>
+          }
+        >
+            <div className="panel-header-bar">
+              <h3>Condition Records <span className="count-badge">{conditionRows.length}</span></h3>
+              <LocalSearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search conditions..."
+                columnChooser={conditionColumnChooser}
+                onAdd={hasRole(user, 'Custodian') ? () => navigate(`${roleRoutes[user.role]}/conditions/new`) : undefined}
+                addLabel="Add Condition Check"
+              />
             </div>
 
             <DataTable
