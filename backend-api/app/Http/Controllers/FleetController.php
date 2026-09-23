@@ -2217,7 +2217,11 @@ class FleetController extends Controller
 
     public function updateSchedule(Request $request, VehicleMaintenanceSchedule $schedule)
     {
-        $this->requireRole($request, ['Admin', 'Maintenance Personnel']);
+        // Admin-only — editing what/when/who is a planning decision, not
+        // something the assigned mechanic should be able to do just to
+        // unlock completeSchedule()'s "assigned to me" check below. Their
+        // only action on an existing schedule is completeSchedule() itself.
+        $this->requireRole($request, ['Admin']);
 
         $data = $request->validate([
             'vehicle_id' => ['sometimes', 'exists:vehicles,vehicle_id'],
@@ -2459,7 +2463,9 @@ class FleetController extends Controller
 
     public function deleteSchedule(Request $request, VehicleMaintenanceSchedule $schedule)
     {
-        $this->requireRole($request, ['Admin', 'Maintenance Personnel']);
+        // Admin-only — cancelling a plan is a planning decision, same as
+        // updateSchedule() above.
+        $this->requireRole($request, ['Admin']);
 
         $schedule->update(['status' => 'Cancelled']);
         $this->history($schedule->vehicle, 'Maintenance Schedule Cancelled', "Maintenance schedule #{$schedule->schedule_id} was cancelled.", 'vehicle_maintenance_schedules', $schedule->schedule_id, $request);
@@ -2476,7 +2482,8 @@ class FleetController extends Controller
      */
     public function restoreSchedule(Request $request, VehicleMaintenanceSchedule $schedule)
     {
-        $this->requireRole($request, ['Admin', 'Maintenance Personnel']);
+        // Admin-only — same reasoning as deleteSchedule()/updateSchedule().
+        $this->requireRole($request, ['Admin']);
 
         abort_unless(
             $schedule->status === 'Cancelled',
