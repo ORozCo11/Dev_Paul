@@ -1241,6 +1241,25 @@
 .breadcrumb-path { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
 .topbar h2 { font-size: 1.4rem; font-weight: 800; color: #0f172a; margin-top: 2px; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
+/* Only shows up while the current session was reached via Impersonate —
+   amber/warning-toned on purpose, so it reads as "you're not really this
+   account" rather than blending in as an ordinary nav button. */
+.return-impersonator-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1.5px solid #f59e0b;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.return-impersonator-btn:hover { background: rgba(245, 158, 11, 0.22); }
 .topbar-search {
   display: flex; align-items: center; position: relative;
   background: #f8fafc; border: 1px solid #e2e8f0;
@@ -2533,44 +2552,6 @@ table a:hover {
   gap: 4px;
 }
 
-/* Numeric "select or other" field (e.g. Repeat Every's custom recurrence
-   interval) — a dropdown plus a separate "+ Add Custom X" trigger that
-   opens a small popover, instead of a second input revealing itself below
-   the dropdown once "Custom…" is picked. */
-.select-or-add-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.select-or-add-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  justify-content: center;
-  width: 100%;
-  font-size: 0.82rem;
-}
-.select-or-add-trigger.is-active {
-  border-color: #2563eb;
-  color: #2563eb;
-  font-weight: 700;
-}
-.select-or-add-popover { width: min(360px, 100%); }
-.select-or-add-popover-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.select-or-add-popover-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.select-or-add-popover-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
 .field-hint {
   font-size: 0.72rem;
   font-weight: 400;
@@ -2912,7 +2893,7 @@ button.vehicle-cell-name.cell-link { font-weight: 600; }
   border: 2px solid var(--primary, #2563eb);
   display: block;
 }
-.form-context-map { height: 220px; }
+.form-context-map { height: 420px; }
 .form-context-empty {
   align-items: center;
   justify-content: center;
@@ -4632,6 +4613,30 @@ html section.ticket-process-hero .ticket-detail-title { margin-bottom: 8px; colo
   padding: 20px 28px; border-top: 1px solid #e2e8f0; background: #f8fbff;
 }
 .ticket-inline-form h4 { font-size: 0.9rem; font-weight: 800; color: #0f172a; margin-bottom: 14px; }
+
+.subissue-bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  margin-bottom: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.subissue-bulk-actions button {
+  height: 30px;
+  padding: 0 10px;
+  font-size: 0.74rem;
+  border-radius: 6px;
+  gap: 5px;
+  box-shadow: none;
+}
+.subissue-bulk-actions button svg {
+  width: 12px;
+  height: 12px;
+}
 .notice.warning { background: linear-gradient(90deg,#fffbeb,#fef3c7); border: 1px solid #fcd34d; color: #92400e; }
 
 .muted { color: #64748b; font-size: 0.82rem; }
@@ -4852,6 +4857,121 @@ html section.ticket-process-hero .ticket-detail-title { margin-bottom: 8px; colo
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* Operations board — Work Tracker and Work Orders share one deliberate
+   scanning pattern: context first, then a calm actionable queue. */
+.operations-board {
+  overflow: hidden;
+  border: 1px solid #d7e3f5;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 26px rgba(30, 64, 175, 0.06);
+}
+.operations-board-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #e7eef8;
+  background: linear-gradient(120deg, #f8fbff 0%, #fff 58%);
+}
+.operations-kicker { display: block; margin-bottom: 5px; color: #2563eb; font-size: .68rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.operations-board-head h3 { margin: 0; color: #102a56; font-size: 1.08rem; }
+.operations-board-head p { margin: 6px 0 0; max-width: 650px; color: #64748b; font-size: .82rem; line-height: 1.45; }
+.operations-board-head .local-search { min-width: 250px; margin-top: 8px; }
+.operations-board-note { display: flex; align-items: center; gap: 8px; margin: 16px 24px 0; padding: 10px 12px; border-radius: 8px; background: #f8fafc; color: #52657f; font-size: .78rem; }
+.operations-board-note svg { color: #2563eb; }
+.operations-card-grid { padding: 16px 24px 24px; }
+.work-tracker-grid.operations-card-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.operations-card-grid .work-tracker-card { position: relative; min-height: 112px; align-items: flex-start; padding: 15px; border: 1px solid #dbe5f1; border-left: 3px solid #cbd5e1; border-radius: 12px; box-shadow: none; }
+.operations-card-grid .work-tracker-card:hover { border-color: #93c5fd; border-left-color: #2563eb; background: #f8fbff; box-shadow: 0 7px 16px rgba(37, 99, 235, .08); transform: translateY(-1px); }
+.operations-card-grid .work-tracker-card.needs-action { border-left-color: #f59e0b; background: linear-gradient(90deg, #fffdf6, #fff); }
+.operations-card-grid .work-tracker-thumb { width: 42px; height: 42px; border-radius: 10px; background: #edf4ff; }
+.operations-card-grid .work-tracker-card-heading { gap: 4px; }
+.work-tracker-card-label { color: #2563eb; font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.operations-card-grid .work-tracker-card-title-row { font-size: .9rem; color: #172b4d; }
+.operations-card-grid .work-tracker-card-sub { color: #475569; font-size: .8rem; }
+.operations-card-grid .work-tracker-card-summary { margin-top: 3px; color: #718096; }
+.operations-card-grid .work-tracker-card-chevron { align-self: center; color: #2563eb; }
+
+/* Maintenance record — turn a scattered detail view into a concise service
+   report with a clear identity line, progress sequence, and readable facts. */
+.maintenance-record-detail { display: flex; flex-direction: column; gap: 22px; padding: 4px; }
+.maintenance-record-hero { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 16px 18px; border: 1px solid #dce8f8; border-radius: 12px; background: linear-gradient(115deg, #f6f9ff, #fff); }
+.maintenance-record-hero .vehicle-cell { padding-right: 12px; border-right: 1px solid #dbe5f1; }
+.maintenance-progress { display: flex; align-items: flex-start; max-width: 600px; padding: 18px 14px 6px; border-bottom: 1px solid #e5edf7; }
+.maintenance-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; max-width: 940px; overflow: hidden; border: 1px solid #e0e8f3; border-radius: 12px; background: #e0e8f3; font-size: .86rem; }
+.maintenance-detail-grid > div { min-height: 88px; padding: 15px 16px; background: #fff; color: #1e293b; line-height: 1.45; }
+.maintenance-detail-label { display: block; margin-bottom: 7px; color: #64748b; font-size: .67rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+
+/* Vehicle edit becomes a composed form surface rather than a full-width field
+   dump. The media input anchors the first column while form fields retain
+   their practical two-column rhythm. */
+.veh-edit-card { border-radius: 16px; box-shadow: 0 10px 28px rgba(15, 23, 42, .08); }
+.veh-edit-card .veh-card-head { padding: 18px 22px; background: linear-gradient(110deg, #f6f9ff, #fff); }
+.veh-edit-card .veh-card-head h4 { font-size: 1rem; }
+.veh-edit-body { padding: 26px; background: #fbfdff; }
+.veh-edit-body .smart-form { gap: 18px 22px; }
+.veh-edit-body .smart-form label { padding: 8px 10px 10px; border: 1px solid transparent; border-radius: 10px; background: #fff; }
+.veh-edit-body .smart-form label:focus-within { border-color: #93c5fd; box-shadow: 0 0 0 3px rgba(59, 130, 246, .10); }
+.veh-edit-body .smart-form input:not([type="file"]), .veh-edit-body .smart-form select, .veh-edit-body .smart-form textarea { max-width: none; }
+.veh-edit-body .photo-box { border-radius: 12px; border-color: #bfdbfe; background: #f8fbff; }
+.veh-edit-body .smart-form .form-actions { padding-top: 16px; border-top: 1px solid #dce8f5; }
+
+/* Edit vehicle information is intentionally grouped as a small workspace:
+   identify the unit first, then keep its image beside its specifications.
+   This removes the tall, empty cells created by mixing a photo upload into
+   the general two-column form grid. */
+.form-grid-2col.veh-edit-body .smart-form {
+  grid-template-columns: minmax(280px, 330px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.veh-edit-body .smart-form > .form-group {
+  margin: 0;
+  padding: 18px;
+  border: 1px solid #dce7f4;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(15, 23, 42, .025);
+}
+.veh-edit-body .smart-form > .form-group:nth-of-type(1),
+.veh-edit-body .smart-form > .form-group:nth-of-type(4),
+.veh-edit-body .smart-form > .form-actions {
+  grid-column: 1 / -1;
+}
+.veh-edit-body .smart-form > .form-group:nth-of-type(2) { grid-column: 1; }
+.veh-edit-body .smart-form > .form-group:nth-of-type(3) { grid-column: 2; }
+.veh-edit-body .form-group-title {
+  margin: 0 0 16px;
+  padding: 0 0 10px;
+  color: #183b70;
+  font-size: .78rem;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+.veh-edit-body .form-group-body {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+.veh-edit-body .smart-form > .form-group:nth-of-type(2) .form-group-body { grid-template-columns: 1fr; }
+.veh-edit-body .smart-form > .form-group:nth-of-type(3) .form-group-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.veh-edit-body .form-group-body label { min-width: 0; padding: 0; }
+.veh-edit-body .form-group-body label:has(input[type="file"]) { grid-column: auto; }
+.veh-edit-body .form-group-body .photo-box { max-width: none; min-height: 230px; }
+.veh-edit-body .form-group-body .photo-box img { max-height: 220px; object-fit: cover; }
+.veh-edit-body .field-extra { margin-top: 12px; }
+
+@media (max-width: 720px) {
+  .operations-board-head { flex-direction: column; padding: 18px; }
+  .operations-board-head .local-search { width: 100%; min-width: 0; }
+  .operations-board-note { margin-left: 18px; margin-right: 18px; }
+  .operations-card-grid { padding: 14px 18px 18px; }
+  .maintenance-detail-grid { grid-template-columns: 1fr; }
+  .maintenance-record-hero .vehicle-cell { width: 100%; padding: 0 0 12px; border: 0; border-bottom: 1px solid #dbe5f1; }
+  .veh-edit-body { padding: 16px; }
 }
 
 /* Account avatar dropdown (topbar, replaces the old sidebar profile panel) */
@@ -5405,27 +5525,37 @@ html section.ticket-process-hero .ticket-detail-title { margin-bottom: 8px; colo
   font-size: 1.15rem;
 }
 
-.btn-reassign-custodian {
-  background: #d97706;
-  border: 1.5px solid #d97706;
+/* Shared "reassign someone" action — Custodian or Mechanic, same color and
+   same compact size, so the two read as one consistent action everywhere
+   they appear (inline on the ticket page, or in the bulk toolbar). */
+.btn-reassign-action {
+  background: #2563eb;
+  border: 1.5px solid #2563eb;
   color: #ffffff;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 0.74rem;
+  border-radius: 6px;
+  gap: 5px;
+  box-shadow: none;
 }
-.btn-reassign-custodian:hover {
-  background: #b45309;
-  border-color: #b45309;
+.btn-reassign-action:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+.btn-reassign-action svg {
+  width: 12px;
+  height: 12px;
 }
 
-/* Defer is a lighter-weight, non-committal action (not a fix, not a
-   reassignment) — an amber outline instead of a solid fill, but still
-   sized/shaped exactly like every other .ghost-button on the page. */
 .btn-defer-action {
-  background: none;
-  border: 1.5px solid #f59e0b;
-  color: #b45309;
+  background: #eab308;
+  border: 1.5px solid #eab308;
+  color: #422006;
 }
 .btn-defer-action:hover {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: #d97706;
+  background: #ca8a04;
+  border-color: #ca8a04;
 }
 
 .sub-issue-rows {
@@ -6678,6 +6808,26 @@ button.file-card-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-
   padding-top: 7px;
   padding-bottom: 8px;
 }
+/* The inline "custom interval" row (SelectOrAddNumberField) reuses
+   .creatable-select-add-pinned for its layout/border, but holds a real
+   input + button instead of being one clickable label — reset the
+   inherited link-style color/weight so only the icon and "Add" button
+   keep it, not the number the person is typing, and drop the whole-row
+   hover tint that only makes sense on a single clickable label. Scoped to
+   rows that actually contain the custom-number input, so the plain
+   "+ Add New X" pinned row elsewhere keeps its own hover feedback. */
+.creatable-select-add-pinned:has(.creatable-select-custom-input):hover { background: none; }
+.creatable-select-custom-input {
+  flex: 1;
+  min-width: 0;
+  color: #1e293b;
+  font-weight: 500;
+}
+.creatable-select-add-pinned .ghost-button {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+}
 .filter-label {
   font-size: 0.78rem;
   font-weight: 800;
@@ -7318,29 +7468,6 @@ table button,
   place-items: center;
 }
 
-.donut-chart svg {
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-.donut-track,
-.donut-segment {
-  fill: none;
-  stroke-linecap: round;
-  stroke-width: 12;
-  transform: rotate(-90deg);
-  transform-origin: 60px 60px;
-}
-
-.donut-track {
-  stroke: rgba(255, 255, 255, 0.06);
-}
-
-.donut-segment {
-  transition: stroke-dasharray 0.24s ease;
-}
-
 .donut-center {
   position: absolute;
   inset: 26%;
@@ -7378,7 +7505,8 @@ table button,
 
 /* "Projects"-style titled chart card: a tall segmented bar with inline
    value labels, a hover tooltip breaking every segment down at once, and a
-   plain legend row underneath. */
+   plain legend row underneath. Rendered with Recharts (see components/charts.jsx);
+   this card just supplies the title/legend chrome and the bar's rounded frame. */
 .stacked-bar-chart {
   background: var(--surface, #fff);
   border: 1px solid var(--border, #e2e8f0);
@@ -7394,50 +7522,11 @@ table button,
   font-weight: 700;
   color: var(--text-strong, #0f172a);
 }
-/* The tooltip has to be a sibling of .stacked-bar, not a child — a child
-   positioned outside the bar's own box would get clipped by the bar's own
-   overflow:hidden (needed there to round the segment corners). */
-.stacked-bar-wrap { position: relative; }
 .stacked-bar {
-  display: flex;
   height: 48px;
   border-radius: 8px;
   overflow: hidden;
   background: var(--surface-2, #f1f5f9);
-}
-.stacked-bar-segment {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 0.92rem;
-}
-.stacked-bar-tooltip {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 8%;
-  z-index: 5;
-  background: var(--surface, #fff);
-  border: 1px solid var(--border, #e2e8f0);
-  border-radius: 8px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
-  padding: 10px 14px;
-  font-size: 0.82rem;
-  color: var(--text, #334155);
-}
-.stacked-bar-tooltip-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-  white-space: nowrap;
-}
-.stacked-bar-tooltip-row span {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  flex-shrink: 0;
 }
 .stacked-bar-legend {
   display: flex;
@@ -7584,15 +7673,13 @@ table button,
   box-shadow: 0 0 12px color-mix(in srgb, var(--legend-color) 48%, transparent);
 }
 
-.chart-legend small,
-.column-bar small {
+.chart-legend small {
   color: var(--text-muted);
   font-size: 0.72rem;
   font-weight: 700;
 }
 
-.chart-legend strong,
-.column-bar strong {
+.chart-legend strong {
   color: var(--text-strong);
   font-size: 0.88rem;
 }
@@ -7611,13 +7698,6 @@ table button,
   margin: 4px auto 16px;
   display: grid;
   place-items: center;
-}
-.solid-pie-chart svg { width: 100%; height: 100%; overflow: visible; }
-.solid-pie-segment {
-  fill: none;
-  transition: stroke-dasharray 0.24s ease;
-  transform: rotate(-90deg);
-  transform-origin: 60px 60px;
 }
 .solid-pie-legend {
   display: flex;
@@ -7651,89 +7731,45 @@ table button,
 }
 
 .horizontal-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
   margin-top: 4px;
 }
 
-.bar-row {
-  display: grid;
-  gap: 7px;
-}
-
-.bar-row-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--text);
-}
-
-.bar-row-label span {
-  color: var(--text);
-  font-size: 0.83rem;
-  font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bar-row-label strong {
-  color: var(--primary-strong);
-  font-size: 0.86rem;
-}
-
-.bar-track {
-  height: 9px;
-  background: rgba(255, 255, 255, 0.055);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.bar-track span {
-  display: block;
-  height: 100%;
-  min-width: 10px;
-  background: linear-gradient(90deg, #2563eb, #60a5fa);
-  border-radius: inherit;
-}
-
 .column-chart {
-  min-height: 185px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  align-items: end;
+  height: 240px;
   padding-top: 8px;
 }
 
-.column-bar {
-  min-width: 0;
-  display: grid;
-  grid-template-rows: 138px auto auto;
-  gap: 7px;
-  justify-items: center;
+/* Recharts tooltip replacement — themed to match the app's dark/light card
+   styling instead of the library's default white box. */
+.chart-tooltip-card {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.24);
+  padding: 8px 12px;
+  font-size: 0.82rem;
 }
 
-.column-track {
-  width: 100%;
-  max-width: 54px;
-  height: 138px;
-  background: rgba(255, 255, 255, 0.055);
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px 999px 7px 7px;
+.chart-tooltip-row {
   display: flex;
-  align-items: flex-end;
-  overflow: hidden;
-  padding: 4px;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
-.column-track span {
-  width: 100%;
-  min-height: 8px;
-  border-radius: inherit;
-  box-shadow: 0 0 18px rgba(37, 99, 235, 0.16);
+.chart-tooltip-row span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.chart-tooltip-label {
+  color: var(--text-muted, #64748b);
+}
+
+.chart-tooltip-row strong {
+  color: var(--text-strong, #0f172a);
 }
 
 .graph-footnote {
@@ -11262,7 +11298,7 @@ html[data-theme="light"] .filter-apply-btn:hover:not(:disabled) {
 
 /* Was border-radius: 3px here — nearly square, while the base (dark-theme)
    rule above and every solid-color modifier class layered on top of
-   .ghost-button (.btn-reassign-custodian, .btn-defer-action, the confirm
+   .ghost-button (.btn-reassign-action, .btn-defer-action, the confirm
    dialog's Cancel button, etc.) keep their own ~9-10px rounding. That
    mismatch is what made action rows read as "different buttons" instead
    of one consistent button style with different colors. */
@@ -11296,23 +11332,23 @@ html[data-theme="light"] .filter-clear-btn,
 html[data-theme="light"] .filter-clear-all-btn {
   font-size: 0.74rem;
 }
-html[data-theme="light"] .btn-reassign-custodian {
-  background: #d97706;
-  border: 1.5px solid #d97706;
+html[data-theme="light"] .btn-reassign-action {
+  background: #2563eb !important;
+  border: 1.5px solid #2563eb !important;
   color: #ffffff !important;
 }
-html[data-theme="light"] .btn-reassign-custodian:hover {
-  background: #b45309;
-  border-color: #b45309;
+html[data-theme="light"] .btn-reassign-action:hover {
+  background: #1d4ed8 !important;
+  border-color: #1d4ed8 !important;
 }
 html[data-theme="light"] .btn-defer-action {
-  background: none !important;
-  border: 1.5px solid #f59e0b !important;
-  color: #b45309 !important;
+  background: #eab308 !important;
+  border: 1.5px solid #eab308 !important;
+  color: #422006 !important;
 }
 html[data-theme="light"] .btn-defer-action:hover {
-  background: rgba(245, 158, 11, 0.1) !important;
-  border-color: #d97706 !important;
+  background: #ca8a04 !important;
+  border-color: #ca8a04 !important;
 }
 /* Cell links stay plain hyperlinks in light theme too (beats the rule above). */
 html[data-theme="light"] table button.cell-link,
@@ -11909,58 +11945,69 @@ html[data-theme="light"] .issue-id-badge {
   border-color: rgba(255, 255, 255, 0.32);
 }
 
-.dashboard-hologram-core {
+.dashboard-ready-split {
   align-self: center;
+  display: grid;
+  justify-content: center;
+  justify-self: center;
+}
+
+.dashboard-ready-stat {
   aspect-ratio: 1;
   background:
     radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.94) 0 43%, transparent 44%),
-    conic-gradient(var(--core) var(--score), rgba(148, 163, 184, 0.2) 0),
-    radial-gradient(circle, var(--core-soft), transparent 68%);
+    conic-gradient(#22c55e 0 var(--ready-pct, 100%), #ef4444 var(--ready-pct, 100%) 100%),
+    radial-gradient(circle, rgba(34, 197, 94, 0.2), transparent 68%);
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 50%;
   box-shadow:
-    0 0 38px var(--core-soft),
-    inset 0 0 30px rgba(255, 255, 255, 0.06);
+    0 0 32px rgba(34, 197, 94, 0.2),
+    inset 0 0 26px rgba(255, 255, 255, 0.06);
   display: grid;
-  justify-self: center;
-  max-width: 230px;
-  min-width: 190px;
   place-items: center;
   position: relative;
-  width: 100%;
+  width: 190px;
 }
 
-.dashboard-hologram-inner {
+.dashboard-ready-stat-inner {
   align-content: center;
   background: rgba(2, 6, 23, 0.78);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 50%;
   display: grid;
-  height: 57%;
+  gap: 4px;
+  height: 68%;
   justify-items: center;
-  padding: 14px;
+  padding: 10px;
   text-align: center;
-  width: 57%;
+  width: 68%;
 }
 
-.dashboard-hologram-inner span {
-  color: #bae6fd;
-  font-size: 0.66rem;
-  font-weight: 900;
-  text-transform: uppercase;
+.dashboard-ready-row {
+  display: grid;
+  justify-items: center;
+  line-height: 1;
 }
 
-.dashboard-hologram-inner strong {
+.dashboard-ready-row strong {
   color: #ffffff;
-  font-size: 3rem;
+  font-size: 1.5rem;
   font-weight: 900;
   line-height: 0.95;
 }
 
-.dashboard-hologram-inner small {
-  color: rgba(226, 232, 240, 0.88);
-  font-size: 0.7rem;
-  font-weight: 800;
+.dashboard-ready-row span {
+  font-size: 0.58rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.dashboard-ready-row.is-ready span {
+  color: #86efac;
+}
+
+.dashboard-ready-row.is-not-ready span {
+  color: #fca5a5;
 }
 
 .dashboard-hologram-scan {
@@ -11971,6 +12018,17 @@ html[data-theme="light"] .issue-id-badge {
   inset: 8%;
   opacity: 0.42;
   position: absolute;
+}
+
+@keyframes dashboardScan {
+  from { transform: translateY(-9px); }
+  to { transform: translateY(9px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-hologram-scan {
+    animation: none;
+  }
 }
 
 .dashboard-command-side {
@@ -12366,6 +12424,238 @@ html[data-theme="light"] .superadmin-dashboard-panel {
   border-color: #cdddf0;
 }
 
+/* ============================================================
+   Super Admin console — a unified workspace for platform-wide tasks
+   ============================================================ */
+.superadmin-shell .content-area {
+  background: linear-gradient(135deg, #f4f8ff 0%, #f8fafc 48%, #eef5ff 100%);
+}
+.superadmin-shell .content-body { max-width: 1500px; margin: 0 auto; }
+.superadmin-shell .page-heading-row {
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 20px 24px;
+  border: 1px solid #d8e5f6;
+  border-radius: 16px;
+  background: linear-gradient(110deg, #ffffff, #f1f6ff);
+  box-shadow: 0 8px 24px rgba(30, 64, 175, .055);
+}
+.superadmin-shell .page-heading-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #dbeafe, #e8f0ff);
+  color: #2563eb;
+}
+.superadmin-page-kicker { display: block; margin-bottom: 3px; color: #2563eb; font-size: .66rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.superadmin-shell .page-heading-text h2 { margin: 0; color: #102a56; font-size: 1.25rem; }
+.superadmin-shell .page-heading-text p { margin: 4px 0 0; color: #64748b; font-size: .82rem; line-height: 1.4; }
+.superadmin-tab { display: flex; flex-direction: column; gap: 16px; }
+.superadmin-tab > .panel-header-bar,
+.superadmin-tab > .panel-header-bar.inline {
+  min-height: 68px;
+  padding: 16px 20px;
+  border: 1px solid #d9e5f5;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .04);
+}
+.superadmin-tab > .panel-header-bar h3 { color: #173664; font-size: 1rem; }
+.superadmin-tab .table-shell {
+  overflow: auto;
+  border: 1px solid #d9e5f5;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .04);
+}
+.superadmin-tab .table-shell table { min-width: 720px; }
+.superadmin-tab .table-shell th { padding: 13px 16px; background: #f4f8fe; color: #526b91; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; }
+.superadmin-tab .table-shell td { padding: 13px 16px; border-color: #e7eef8; }
+.superadmin-tab .table-shell tbody tr:hover { background: #f8fbff; }
+.superadmin-tab .table-pagination { padding: 2px 4px 0; }
+.superadmin-dashboard { gap: 20px; }
+.superadmin-dashboard .dashboard-signal-grid { gap: 14px; }
+.superadmin-dashboard-panel { border-radius: 14px; padding: 20px; box-shadow: 0 7px 20px rgba(15, 23, 42, .045); }
+.superadmin-snapshot-head { margin: 4px 2px 0; padding-top: 4px; }
+.superadmin-snapshot-head h3 { color: #173664; font-size: 1.06rem; }
+.superadmin-filter-tabs { gap: 8px; padding: 6px; border: 1px solid #d9e5f5; border-radius: 12px; background: #fff; }
+.superadmin-filter-tabs button { padding: 8px 12px; border: 0; border-radius: 8px; }
+.superadmin-filter-tabs button.active { background: #e8f0ff; color: #1d4ed8; }
+.superadmin-grid-toolbar { margin: 0; padding: 14px; border: 1px solid #d9e5f5; border-radius: 12px; background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, .035); }
+.superadmin-grid-toolbar .local-search-bar { flex: 1 1 300px; }
+.superadmin-tab .location-form-panel,
+.superadmin-tab .superadmin-panel-spaced { border: 1px solid #d9e5f5; border-radius: 14px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .04); }
+.superadmin-tab .location-form-panel { padding: 22px; }
+.superadmin-tab .locations-tab-bar { align-self: flex-start; margin: 0; padding: 5px; border: 1px solid #d9e5f5; border-radius: 11px; background: #fff; }
+.superadmin-tab .locations-tab-button { border-radius: 8px; }
+.superadmin-tab .locations-tab-button.active { background: #e8f0ff; }
+.superadmin-pending-tab .approval-groups,
+.superadmin-users-tab .users-province-groups { display: flex; flex-direction: column; gap: 12px; }
+.superadmin-tab .users-province-group,
+.superadmin-tab .users-barangay-group { overflow: hidden; border: 1px solid #d9e5f5; border-radius: 13px; background: #fff; box-shadow: 0 4px 12px rgba(15, 23, 42, .035); }
+.superadmin-tab .users-province-group > summary { padding: 14px 16px; background: #f7faff; color: #173664; }
+.superadmin-tab .users-barangay-group { margin: 10px 12px 12px; }
+.superadmin-tab .users-barangay-group > summary { padding: 11px 13px; background: #fbfdff; }
+.superadmin-settings-tab .smart-form { padding: 22px; border: 1px solid #d9e5f5; border-radius: 14px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .04); }
+html[data-theme="dark"] .superadmin-shell .content-area { background: linear-gradient(135deg, #0b1220, #101827); }
+html[data-theme="dark"] .superadmin-shell .page-heading-row,
+html[data-theme="dark"] .superadmin-tab > .panel-header-bar,
+html[data-theme="dark"] .superadmin-tab .table-shell,
+html[data-theme="dark"] .superadmin-grid-toolbar,
+html[data-theme="dark"] .superadmin-tab .location-form-panel,
+html[data-theme="dark"] .superadmin-tab .users-province-group,
+html[data-theme="dark"] .superadmin-tab .users-barangay-group,
+html[data-theme="dark"] .superadmin-settings-tab .smart-form { background: #111827; border-color: #26354c; }
+html[data-theme="dark"] .superadmin-tab .table-shell th,
+html[data-theme="dark"] .superadmin-tab .users-province-group > summary { background: #172235; }
+
+/* Super Admin surface treatment — matches the reference's restrained panels:
+   white cards float above the canvas with neutral grey elevation rather than
+   conspicuous blue outlines. Blue is reserved for interactive states only. */
+html[data-theme="light"] .superadmin-shell .content-area {
+  background: #edf3fa;
+}
+html[data-theme="light"] .superadmin-shell .page-heading-row {
+  border-color: #e6ebf1;
+  background: #f7f9fc;
+  box-shadow: none;
+}
+html[data-theme="light"] .superadmin-shell .page-heading-icon {
+  background: #eef4ff;
+  box-shadow: inset 0 0 0 1px #dce6f6;
+}
+html[data-theme="light"] .superadmin-tab > .panel-header-bar,
+html[data-theme="light"] .superadmin-tab .table-shell,
+html[data-theme="light"] .superadmin-dashboard-panel,
+html[data-theme="light"] .superadmin-grid-toolbar,
+html[data-theme="light"] .superadmin-tab .location-form-panel,
+html[data-theme="light"] .superadmin-tab .superadmin-panel-spaced,
+html[data-theme="light"] .superadmin-tab .users-province-group,
+html[data-theme="light"] .superadmin-tab .users-barangay-group,
+html[data-theme="light"] .superadmin-settings-tab .smart-form {
+  border: 1px solid #e4e8ed;
+  background: #ffffff;
+  box-shadow: 0 3px 10px rgba(55, 65, 81, .16), 0 1px 2px rgba(55, 65, 81, .08);
+}
+html[data-theme="light"] .superadmin-tab .table-shell { border-radius: 8px; }
+html[data-theme="light"] .superadmin-tab > .panel-header-bar,
+html[data-theme="light"] .superadmin-dashboard-panel,
+html[data-theme="light"] .superadmin-grid-toolbar,
+html[data-theme="light"] .superadmin-tab .location-form-panel,
+html[data-theme="light"] .superadmin-settings-tab .smart-form { border-radius: 7px; }
+html[data-theme="light"] .superadmin-tab .table-shell th {
+  background: #fafbfd;
+  border-bottom: 1px solid #e3e7ec;
+  color: #64748b;
+}
+html[data-theme="light"] .superadmin-tab .table-shell td { border-color: #edf0f3; }
+html[data-theme="light"] .superadmin-tab .table-shell tbody tr:hover { background: #fafcff; }
+html[data-theme="light"] .superadmin-filter-tabs,
+html[data-theme="light"] .superadmin-tab .locations-tab-bar {
+  border-color: #e3e7ec;
+  background: #ffffff;
+  box-shadow: 0 2px 7px rgba(55, 65, 81, .11);
+}
+html[data-theme="light"] .superadmin-filter-tabs button.active,
+html[data-theme="light"] .superadmin-tab .locations-tab-button.active { background: #edf4ff; }
+html[data-theme="light"] .superadmin-tab .users-province-group > summary,
+html[data-theme="light"] .superadmin-tab .users-barangay-group > summary { background: #fbfcfe; }
+
+/* A Super Admin works across the platform, so this is a full operational
+   canvas — not a centered, marketing-style column. */
+.superadmin-shell .content-body {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.superadmin-shell .page-heading-row {
+  min-height: 72px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+  border-radius: 7px;
+}
+.superadmin-shell .page-heading-icon { width: 40px; height: 40px; border-radius: 8px; }
+.superadmin-shell .page-heading-text h2 { font-size: 1.1rem; }
+.superadmin-tab { width: 100%; gap: 14px; }
+.superadmin-dashboard-row { grid-template-columns: minmax(0, 1.45fr) minmax(340px, .85fr); }
+.superadmin-dashboard-panel { min-height: 250px; }
+.superadmin-tab .table-shell,
+.superadmin-tab .location-form-panel,
+.superadmin-tab > .panel-header-bar { width: 100%; }
+@media (max-width: 980px) {
+  .superadmin-dashboard-row { grid-template-columns: 1fr; }
+}
+
+/* Table-first console composition. KPI values read as one compact strip,
+   while the queue and data tables receive the visual weight. */
+html[data-theme="light"] .superadmin-dashboard .dashboard-signal-grid {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #e1e6eb;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(55, 65, 81, .14);
+}
+html[data-theme="light"] .superadmin-dashboard .dashboard-signal-card {
+  min-height: 108px;
+  padding: 16px 18px;
+  border: 0;
+  border-right: 1px solid #e8ecf0;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: none;
+}
+html[data-theme="light"] .superadmin-dashboard .dashboard-signal-card:last-child { border-right: 0; }
+html[data-theme="light"] .superadmin-dashboard button.dashboard-signal-card:hover { background: #f8fbff; transform: none; }
+html[data-theme="light"] .superadmin-dashboard .dashboard-signal-card-head { color: #64748b; font-size: .7rem; letter-spacing: .045em; text-transform: uppercase; }
+html[data-theme="light"] .superadmin-dashboard .dashboard-signal-card strong { color: #1e293b; font-size: 1.35rem; }
+html[data-theme="light"] .superadmin-dashboard .dashboard-signal-meter { display: none; }
+html[data-theme="light"] .superadmin-dashboard-panel { padding: 18px; }
+html[data-theme="light"] .superadmin-dashboard-panel h4 { padding-bottom: 11px; border-bottom: 1px solid #e7ebef; }
+.superadmin-pending-tab .superadmin-muted-block { margin: -5px 2px 0; font-size: .8rem; }
+html[data-theme="light"] .superadmin-pending-tab .approval-group-list { gap: 6px; }
+html[data-theme="light"] .superadmin-pending-tab .approval-group-card {
+  min-height: 72px;
+  border: 1px solid #e3e7eb;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(55, 65, 81, .11);
+}
+html[data-theme="light"] .superadmin-pending-tab .approval-group-card:hover { background: #fafcff; transform: none; }
+html[data-theme="light"] .superadmin-pending-tab .approval-card-list { grid-template-columns: 1fr; gap: 7px; }
+html[data-theme="light"] .superadmin-pending-tab .approval-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.15fr) minmax(220px, 1.2fr) auto auto minmax(200px, .75fr);
+  align-items: center;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid #e3e7eb;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(55, 65, 81, .11);
+}
+html[data-theme="light"] .superadmin-pending-tab .approval-card.is-first-admin { border-left: 3px solid #d97706; box-shadow: 0 2px 7px rgba(55, 65, 81, .11); }
+html[data-theme="light"] .superadmin-pending-tab .approval-card-actions { margin: 0; }
+@media (max-width: 900px) {
+  html[data-theme="light"] .superadmin-dashboard .dashboard-signal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-theme="light"] .superadmin-dashboard .dashboard-signal-card:nth-child(2) { border-right: 0; }
+  html[data-theme="light"] .superadmin-dashboard .dashboard-signal-card:nth-child(-n+2) { border-bottom: 1px solid #e8ecf0; }
+  html[data-theme="light"] .superadmin-pending-tab .approval-card { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  html[data-theme="light"] .superadmin-dashboard .dashboard-signal-grid { grid-template-columns: 1fr; }
+  html[data-theme="light"] .superadmin-dashboard .dashboard-signal-card { border-right: 0; border-bottom: 1px solid #e8ecf0; }
+  html[data-theme="light"] .superadmin-dashboard .dashboard-signal-card:last-child { border-bottom: 0; }
+  html[data-theme="light"] .superadmin-pending-tab .approval-card { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .superadmin-shell .page-heading-row { align-items: flex-start; padding: 16px; }
+  .superadmin-shell .page-heading-text p { max-width: 290px; }
+  .superadmin-tab > .panel-header-bar { align-items: flex-start; flex-direction: column; }
+  .superadmin-grid-toolbar .primary-button { width: 100%; margin-left: 0; }
+  .superadmin-dashboard-donut-row { align-items: flex-start; flex-direction: column; }
+}
+
 .dashboard-intelligence-grid {
   display: grid;
   gap: 14px;
@@ -12496,16 +12786,7 @@ html[data-theme="light"] .superadmin-dashboard-panel {
 }
 
 .dashboard-operations-matrix .column-chart {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  min-height: 142px;
-}
-
-.dashboard-operations-matrix .column-bar {
-  grid-template-rows: 96px auto auto;
-}
-
-.dashboard-operations-matrix .column-track {
-  height: 96px;
+  height: 200px;
 }
 
 .dashboard-panel-note {
@@ -12537,26 +12818,6 @@ html[data-theme="light"] .superadmin-dashboard-panel {
   text-transform: uppercase;
 }
 
-.dashboard-grid-smart .horizontal-bars {
-  gap: 10px;
-}
-
-.dashboard-grid-smart .bar-track {
-  background: rgba(148, 163, 184, 0.18);
-  height: 7px;
-}
-
-@keyframes dashboardScan {
-  from { transform: translateY(-9px); }
-  to { transform: translateY(9px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dashboard-hologram-scan {
-    animation: none;
-  }
-}
-
 html[data-theme="light"] .dashboard-command-center {
   background:
     linear-gradient(135deg, #0b1f4d 0%, #1d4ed8 55%, #2563eb 100%);
@@ -12585,20 +12846,20 @@ html[data-theme="light"] .dashboard-smart-panel-head > strong {
   color: #071a35;
 }
 
-html[data-theme="light"] .dashboard-hologram-inner {
+html[data-theme="light"] .dashboard-ready-stat-inner {
   background: rgba(248, 250, 252, 0.88);
 }
 
-html[data-theme="light"] .dashboard-hologram-inner strong {
+html[data-theme="light"] .dashboard-ready-row strong {
   color: #071a35;
 }
 
-html[data-theme="light"] .dashboard-hologram-inner span {
+html[data-theme="light"] .dashboard-ready-row.is-ready span {
   color: #0f766e;
 }
 
-html[data-theme="light"] .dashboard-hologram-inner small {
-  color: #475569;
+html[data-theme="light"] .dashboard-ready-row.is-not-ready span {
+  color: #b91c1c;
 }
 
 @media (max-width: 1180px) {
@@ -12628,8 +12889,8 @@ html[data-theme="light"] .dashboard-hologram-inner small {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-hologram-core {
-    max-width: 220px;
+  .dashboard-ready-stat {
+    width: 160px;
   }
 
   .dashboard-readiness-matrix,
@@ -12653,8 +12914,8 @@ html[data-theme="light"] .dashboard-hologram-inner small {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-hologram-inner strong {
-    font-size: 2.35rem;
+  .dashboard-ready-row strong {
+    font-size: 1.2rem;
   }
 
   .dashboard-signal-card p {

@@ -47,6 +47,16 @@ const NAV_GROUPS = [
 // else that doesn't care about grouping.
 const TABS = NAV_GROUPS.flatMap((g) => g.items);
 
+const TAB_DESCRIPTIONS = {
+  dashboard: 'Platform health, barangay coverage, and registration readiness at a glance.',
+  pending: 'Review account requests and keep every barangay properly staffed.',
+  users: 'Manage platform users, roles, and account availability by location.',
+  codes: 'Create or refresh the staff registration code for each barangay.',
+  concerns: 'Track and resolve reports that need platform-level attention.',
+  activity: 'A chronological record of platform and Super Admin activity.',
+  settings: 'Manage your Super Admin account settings and security.',
+};
+
 const CONCERN_TYPE_LABELS = {
   'Barangay Inactive': "Barangay seems inactive",
   'Suspected Fake Staff': "Suspected fake staff",
@@ -421,7 +431,7 @@ function DashboardTab({ barangays, users, pendingApprovals, concernReports, onPr
   const candidateUsers = recoveryBarangay ? users.filter((u) => u.barangay_id === recoveryBarangay.id) : [];
 
   return (
-    <div className="superadmin-dashboard">
+    <div className="superadmin-tab superadmin-dashboard">
       <div className="dashboard-signal-grid">
         {cards.map((c) => (
           <SignalCard
@@ -633,7 +643,7 @@ function PendingApprovalsTab({ approvals, barangays, onApprove, onReject, onRequ
   );
 
   return (
-    <div>
+    <div className="superadmin-tab superadmin-pending-tab">
       <div className="panel-header-bar">
         <h3>
           {openGroup && (
@@ -829,7 +839,7 @@ function UsersTab({ users, onChangeRole, onToggleActive }) {
   ];
 
   return (
-    <div>
+    <div className="superadmin-tab superadmin-users-tab">
       <div className="panel-header-bar">
         <h3>All Users <span className="count-badge">{visible.length}</span></h3>
         <LocalSearchInput value={search} onChange={setSearch} placeholder="Search name, email, or barangay..." />
@@ -864,7 +874,7 @@ function UsersTab({ users, onChangeRole, onToggleActive }) {
   );
 }
 
-function RegistrationCodesTab({ barangays, onAddedBarangay, onRequestConfirmation, setNotice }) {
+function RegistrationCodesTab({ barangays, onRequestConfirmation, setNotice }) {
   // Province -> City -> Barangay cascade. Province/City are the full
   // nationwide PSGC lists (same /provinces + /cities?province_id= as
   // AddBarangayForm) — NOT derived from `barangays`, which only has
@@ -879,9 +889,7 @@ function RegistrationCodesTab({ barangays, onAddedBarangay, onRequestConfirmatio
   // Barangay is a typed field (with suggestions), not a closed <select> —
   // this doubles as both "pick an existing one" and "name a new one" in a
   // single box, instead of two separate widgets for the same field.
-  const [barangayText, setBarangayText] = useState('');
   const [barangayId, setBarangayId] = useState('');
-  const [creatingBarangay, setCreatingBarangay] = useState(false);
   const [code, setCode] = useState(null);
   const [loadingCode, setLoadingCode] = useState(false);
 
@@ -951,38 +959,8 @@ function RegistrationCodesTab({ barangays, onAddedBarangay, onRequestConfirmatio
   // Does what's currently typed already exist in this city? Drives whether
   // typing resolves an existing barangay's code, or offers to create a new
   // one — the same box does both, no separate "pick" vs "add new" widgets.
-  const matchedBarangay = barangayOptions.find((b) => b.name.toLowerCase() === barangayText.trim().toLowerCase());
-
-  const handleBarangayTextChange = (value) => {
-    setBarangayText(value);
-    const match = barangayOptions.find((b) => b.name.toLowerCase() === value.trim().toLowerCase());
-    if (match) {
-      setBarangayId(String(match.id));
-      loadCode(match.id);
-    } else {
-      setBarangayId('');
-      setCode(null);
-    }
-  };
-
-  const createBarangay = async () => {
-    const name = barangayText.trim();
-    if (!name || !cityId || matchedBarangay) return;
-    setCreatingBarangay(true);
-    try {
-      const res = await api.post('/superadmin/barangays', { city_id: cityId, name });
-      onAddedBarangay?.(res.data);
-      setBarangayId(String(res.data.id));
-      loadCode(res.data.id);
-    } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not add that barangay.' });
-    } finally {
-      setCreatingBarangay(false);
-    }
-  };
-
   return (
-    <div>
+    <div className="superadmin-tab superadmin-codes-tab">
       <div className="panel-header-bar">
         <h3>Registration Codes</h3>
       </div>
@@ -992,7 +970,7 @@ function RegistrationCodesTab({ barangays, onAddedBarangay, onRequestConfirmatio
             <span>Province</span>
             <select
               value={provinceId}
-              onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayText(''); setBarangayId(''); setCode(null); }}
+              onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayId(''); setCode(null); }}
             >
               <option value="">Select a province</option>
               {provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1003,7 +981,7 @@ function RegistrationCodesTab({ barangays, onAddedBarangay, onRequestConfirmatio
             <select
               value={cityId}
               disabled={!provinceId}
-              onChange={(e) => { setCityId(e.target.value); setBarangayText(''); setBarangayId(''); setCode(null); }}
+              onChange={(e) => { setCityId(e.target.value); setBarangayId(''); setCode(null); }}
             >
               <option value="">{provinceId ? 'Select a city' : 'Select a province first'}</option>
               {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1015,29 +993,19 @@ function RegistrationCodesTab({ barangays, onAddedBarangay, onRequestConfirmatio
                 existing barangays in this city as suggestions while typing,
                 but any other name typed here is treated as a NEW barangay
                 to add (see the "Add" button below), not an invalid choice. */}
-            <input
-              type="text"
-              list="registration-barangay-suggestions"
-              value={barangayText}
+            <select
+              value={barangayId}
               disabled={!cityId}
-              onChange={(e) => handleBarangayTextChange(e.target.value)}
-              placeholder={cityId ? 'Type a barangay name' : 'Select a city first'}
-            />
-            <datalist id="registration-barangay-suggestions">
-              {barangayOptions.map((b) => <option key={b.id} value={b.name} />)}
-            </datalist>
-          </label>
-          {cityId && barangayText.trim() && !matchedBarangay && (
-            <button
-              type="button"
-              className="primary-button"
-              disabled={creatingBarangay}
-              onClick={createBarangay}
-              style={{ alignSelf: 'end' }}
+              onChange={(e) => {
+                const id = e.target.value;
+                setBarangayId(id);
+                loadCode(id);
+              }}
             >
-              <Icon name="plus" size={13} /> {creatingBarangay ? 'Adding…' : `Add "${barangayText.trim()}"`}
-            </button>
-          )}
+              <option value="">{cityId ? 'Select a barangay' : 'Select a city first'}</option>
+              {barangayOptions.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </label>
         </div>
 
         {barangayId && (
@@ -1167,7 +1135,7 @@ function ConcernReportsTab({ reports, onResolve, onReopen, onDelete, onRequestCo
   ];
 
   return (
-    <div>
+    <div className="superadmin-tab superadmin-concerns-tab">
       <div className="locations-tab-bar">
         <button className={`locations-tab-button ${scope === 'open' ? 'active' : ''}`} onClick={() => setScope('open')} type="button">
           <Icon name="alert" size={16} /> Open
@@ -1200,7 +1168,7 @@ function ActivityLogTab({ entries }) {
   const visible = scope === 'mine' ? entries.filter((e) => e.module === 'Super Admin') : entries;
 
   return (
-    <div>
+    <div className="superadmin-tab superadmin-activity-tab">
       <div className="locations-tab-bar">
         <button className={`locations-tab-button ${scope === 'all' ? 'active' : ''}`} onClick={() => setScope('all')} type="button">
           <Icon name="grid" size={16} /> Full Platform Log
@@ -1248,7 +1216,7 @@ function SettingsTab({ setNotice }) {
   };
 
   return (
-    <div>
+    <div className="superadmin-tab superadmin-settings-tab">
       <div className="panel-header-bar">
         <h3>My Settings</h3>
       </div>
@@ -1503,6 +1471,17 @@ export default function SuperAdminWorkspace() {
   const doImpersonate = async (userId) => {
     try {
       const res = await api.post(`/impersonate/${userId}`);
+      // Stash the Super Admin's own token before it's overwritten below —
+      // otherwise there was no way back into it short of logging out and
+      // back in. Workspace.jsx's topbar reads these same keys to show a
+      // "Return to..." control on whichever dashboard the impersonated
+      // account lands on.
+      const ownToken = localStorage.getItem('token');
+      if (ownToken) {
+        localStorage.setItem('impersonator_token', ownToken);
+        localStorage.setItem('impersonator_name', user.name);
+        localStorage.setItem('impersonator_role', user.role);
+      }
       localStorage.setItem('token', res.data.access_token);
       sessionStorage.removeItem('token');
       window.location.assign(roleRoutes[res.data.user?.role] ?? '/admin');
@@ -1705,7 +1684,9 @@ export default function SuperAdminWorkspace() {
           <div className="page-heading-row">
             <span className="page-heading-icon">{TAB_ICONS[activeTab]}</span>
             <div className="page-heading-text">
+              <span className="superadmin-page-kicker">Super Admin Console</span>
               <h2>{TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h2>
+              <p>{TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
             </div>
           </div>
 
@@ -1745,7 +1726,7 @@ export default function SuperAdminWorkspace() {
             ) : activeTab === 'users' ? (
               <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} />
             ) : activeTab === 'codes' ? (
-              <RegistrationCodesTab barangays={barangays} onAddedBarangay={addBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
+              <RegistrationCodesTab barangays={barangays} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
             ) : activeTab === 'concerns' ? (
               <ConcernReportsTab reports={concernReports} onResolve={resolveConcern} onReopen={reopenConcern} onDelete={deleteConcern} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'activity' ? (

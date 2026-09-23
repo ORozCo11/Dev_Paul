@@ -106,13 +106,11 @@ const modulesByRole = {
   Custodian: [
     { section: null, items: [['dashboard', 'Dashboard']] },
     { section: 'Daily Tasks', icon: 'checkCircle', items: [
+      ['vehicles', 'View Vehicles'],
       ['issues', 'Report Vehicle Issue'],
       ['ticketInspections', 'Assigned Inspections'],
       ['ticketVerifications', 'Repair Verifications'],
       ['workTracker', 'Work Tracker'],
-    ] },
-    { section: 'Fleet & Assets', icon: 'vehicle', items: [
-      ['vehicles', 'View Vehicles'],
     ] },
     { section: 'Monitoring & Schedules', icon: 'calendar', items: [
       ['conditions', 'Condition Monitoring'],
@@ -130,7 +128,6 @@ const modulesByRole = {
       ['schedules', 'Maintenance Schedule'],
     ] },
     { section: 'Monitoring & Schedules', icon: 'calendar', items: [
-      ['maintenanceHistory', 'Maintenance History'],
       ['maintenance', 'Maintenance Records'],
     ] },
   ],
@@ -202,7 +199,6 @@ const moduleEndpoints = {
   issues: '/issues',
   maintenance: '/maintenance-records',
   maintenanceStatus: '/maintenance-records',
-  maintenanceHistory: '/maintenance-records',
   schedules: '/maintenance-schedules',
   histories: '/histories',
   logs: '/logs',
@@ -273,14 +269,6 @@ const moduleIcons = {
       <line x1="16" y1="2" x2="16" y2="6" />
       <line x1="8" y1="2" x2="8" y2="6" />
       <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  ),
-  maintenanceHistory: (
-    <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <polyline points="3 3 3 8 8 8" />
-      <line x1="12" y1="7" x2="12" y2="12" />
-      <line x1="12" y1="12" x2="16" y2="14" />
     </svg>
   ),
   tickets: (
@@ -426,7 +414,28 @@ function Workspace() {
   const { user, logout, refreshUser } = useContext(AuthContext);
   const moduleGroups = useMemo(() => resolveModuleGroups(user), [user.role, user.roles]);
   const modules = useMemo(() => moduleGroups.flatMap((g) => g.items), [moduleGroups]);
-  const [activeModule, setActiveModule] = useState(modules[0]?.[0] ?? 'dashboard');
+  // A fresh mount (hard refresh, a bookmarked/shared link, opening a new tab)
+  // always used to default this to the first sidebar module — losing which
+  // ticket/record the URL actually pointed at, since these special sub-pages
+  // read their record out of `records[activeModule]`, which is only fetched
+  // once loadModule(activeModule) runs. Seeding activeModule from the URL
+  // itself (instead of always modules[0]) means that fetch fires for the
+  // right module on the very first render, so the page renders instead of
+  // sitting blank until the user happens to click the matching sidebar item.
+  const [activeModule, setActiveModule] = useState(() => {
+    if (ticketProfileId || isNewTicketPage) return user.role === 'Admin' ? 'tickets' : 'workTracker';
+    if (maintenanceProfileId || isNewMaintenancePage || editMaintenanceId) return 'maintenance';
+    if (isNewVehiclePage || vehicleProfileId) return 'vehicles';
+    if (isNewCategoryPage || editCategoryId) return 'categories';
+    if (isNewSchedulePage || editScheduleId) return 'schedules';
+    if (isNewIssuePage || editIssueId || viewIssueId) return 'issues';
+    if (isNewConditionPage || editConditionId) return 'conditions';
+    if (isNewUserPage || editUserId || viewUserId) return 'users';
+    if (isNewLocationPage || editLocationVehicleId) return 'locations';
+    if (logRepairsTicketId) return 'ticketWorkOrders';
+    if (inspectTicketId) return 'ticketInspections';
+    return modules[0]?.[0] ?? 'dashboard';
+  });
   // Which sidebar sections the user has folded away, remembered per browser.
   // Stored as the collapsed set. Unlike a brand-new section defaulting open,
   // a first-ever visit (nothing in localStorage yet) starts every section
@@ -732,16 +741,8 @@ function Workspace() {
       params.mine = 1;
     }
 
-    if (key === 'maintenance' && hasRole(user, 'Maintenance Personnel') && !hasRole(user, 'Admin')) {
-      params.mine = 1;
-    }
-
     if (key === 'maintenanceStatus') {
       params.for_verification = 1;
-    }
-
-    if (key === 'maintenanceHistory') {
-      params.history = 1;
     }
 
     // Ticket workflow — role-scoped status filters
@@ -773,6 +774,20 @@ function Workspace() {
     }, 10000); // Poll every 10 seconds
     return () => clearInterval(interval);
   }, [loadNotifications]);
+
+  // Sidebar badge counts (dashboard.badge_counts) are visible on every module,
+  // but were only ever fetched by loadModule('dashboard') — which only runs
+  // when the Dashboard module itself is the active one. Anyone who lands on
+  // (or navigates to) a different module first saw stale/zeroed badges until
+  // they happened to visit Dashboard. Poll them independently so they reflect
+  // live counts no matter what module is currently open.
+  useEffect(() => {
+    loadModule('dashboard').catch(() => {});
+    const interval = setInterval(() => {
+      loadModule('dashboard').catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [loadModule]);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -1845,7 +1860,6 @@ function Workspace() {
   );
   const scheduleColumnChooser = useColumnChooser('vms_schedule_columns', scheduleColumnDefs);
 
-  const maintenanceHistoryColumnChooser = useColumnChooser('vms_maintenance_history_columns', maintenanceHistoryColumns);
   const vehicleHistoryColumnChooser = useColumnChooser('vms_vehicle_history_columns', historyColumns);
 
   const logColumnDefs = useMemo(
@@ -1949,6 +1963,16 @@ function Workspace() {
     if (!impersonateId) return;
     try {
       const res = await api.post(`/impersonate/${impersonateId}`);
+      // Stash the acting account's own token before it's overwritten below —
+      // otherwise there was no way back into it short of logging out and back
+      // in. Keyed off role so "Return to..." can route straight to the right
+      // dashboard without an extra round-trip to figure out who they were.
+      const ownToken = localStorage.getItem('token');
+      if (ownToken) {
+        localStorage.setItem('impersonator_token', ownToken);
+        localStorage.setItem('impersonator_name', user.name);
+        localStorage.setItem('impersonator_role', user.role);
+      }
       localStorage.setItem('token', res.data.access_token);
       sessionStorage.removeItem('token');
       // Full reload → axios picks up the new token and AuthContext reloads the
@@ -1957,6 +1981,29 @@ function Workspace() {
     } catch {
       setNotice({ type: 'error', text: 'Could not impersonate that account.' });
     }
+  };
+  // Present whenever the current session was reached via Impersonate —
+  // regardless of which role is being impersonated, or whether Impersonate
+  // itself is even reachable from here (e.g. a Custodian account has no
+  // impersonate control of its own, but still needs a way back to whoever
+  // put them here).
+  const impersonatorToken = localStorage.getItem('impersonator_token');
+  const impersonatorName = localStorage.getItem('impersonator_name');
+  const impersonatorRole = localStorage.getItem('impersonator_role');
+  // Real impersonation only exists in production for a Super Admin (an
+  // Admin's own impersonate control is dev-only — see AuthController's
+  // assertImpersonationEnabled) — so the "Return to..." control only makes
+  // sense, and only appears, when it was a Super Admin who impersonated in.
+  const showReturnButton = !!impersonatorToken && impersonatorRole === 'Super Admin';
+  const stopImpersonating = () => {
+    if (!impersonatorToken) return;
+    const originalRole = localStorage.getItem('impersonator_role');
+    localStorage.setItem('token', impersonatorToken);
+    localStorage.removeItem('impersonator_token');
+    localStorage.removeItem('impersonator_name');
+    localStorage.removeItem('impersonator_role');
+    sessionStorage.removeItem('token');
+    window.location.assign(roleRoutes[originalRole] ?? '/admin');
   };
 
   // Vehicle Location map boundary selector — lets an Admin swap which
@@ -2216,6 +2263,16 @@ function Workspace() {
         </div>
 
         <div className="topbar-right">
+          {showReturnButton && (
+            <button
+              type="button"
+              className="return-impersonator-btn"
+              onClick={stopImpersonating}
+              title={`Stop impersonating and return to ${impersonatorName || 'your account'}`}
+            >
+              <Icon name="undo" size={14} /> Return to {impersonatorName || 'your account'}
+            </button>
+          )}
           <div className="notifications-dropdown-container" ref={notificationsRef}>
             <button
               className="icon-btn notification-btn"
@@ -3136,7 +3193,7 @@ function Workspace() {
               />
             </div>
 
-            <DataTable
+            <PaginatedTable
               columns={conditionColumnChooser.visibleColumns}
               onReorderColumn={conditionColumnChooser.reorderColumn}
               emptyMessage="No condition checks logged yet — click the + button to record one."
@@ -3543,25 +3600,6 @@ function Workspace() {
               </>
             )}
           </FormModal>
-        </ModulePanel>
-      );
-    }
-
-    if (activeModule === 'maintenanceHistory') {
-      return (
-        <ModulePanel description="Completed repair and service records are listed here automatically.">
-          <div className="panel-header-bar">
-            <h3>Completed Maintenance <span className="count-badge">{visibleRows.length}</span></h3>
-            <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search records..." columnChooser={maintenanceHistoryColumnChooser} />
-          </div>
-          <DataTable
-            columns={maintenanceHistoryColumnChooser.visibleColumns}
-            onReorderColumn={maintenanceHistoryColumnChooser.reorderColumn}
-            emptyMessage="No completed maintenance yet — finished work will appear here."
-            rows={visibleRows}
-            onRowClick={(row) => row.vehicle && openVehicleProfile(row.vehicle)}
-            renderSubRow={(row) => subRowFields([['Problem / Reason', row.problem_reason], ['Action Taken', row.action_taken]])}
-          />
         </ModulePanel>
       );
     }
@@ -4015,6 +4053,7 @@ function Workspace() {
       return (
         <MechanicWorkOrderModule
           tickets={visibleRows}
+          allRows={rawRows}
           onOpenLogRepairs={(row) => navigate(`${roleRoutes[user.role]}/work-orders/${row.ticket_id}/${row.sub_issue_id}/log-repairs`)}
           categories={lookups.categories}
           vehicles={lookups.vehicles}
@@ -4381,11 +4420,9 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
   const operationalTotal = fleetSummary?.operational_total ?? totalVehicles;
   const verifiedReady = fleetSummary?.verified_ready ?? Math.max(0, availableVehicles - readinessWatch.length);
   const readinessRate = operationalTotal ? clampPercent((verifiedReady / operationalTotal) * 100) : 0;
-  const availabilityRate = totalVehicles ? clampPercent((availableVehicles / totalVehicles) * 100) : 0;
   const atRiskCount = noCoverage.length + readinessWatch.length + fragility.length + forecastOut.length + preventiveWatch.length + overdueMaintenanceCount;
-  const riskPenalty = Math.min(35, (noCoverage.length * 10) + (overdueMaintenanceCount * 6) + (criticalActionCount * 5) + (readinessWatch.length * 3) + (reportedIssues * 2));
-  const opsScore = clampPercent((readinessRate * 0.42) + (goodConditionRate * 0.28) + (availabilityRate * 0.3) - riskPenalty);
-  const opsTone = opsScore >= 75 ? 'ok' : opsScore >= 45 ? 'warn' : 'alert';
+  const notReadyVehicles = Math.max(0, totalVehicles - availableVehicles);
+  const opsTone = notReadyVehicles === 0 ? 'ok' : availableVehicles === 0 ? 'alert' : 'warn';
   const maintenanceLoad = underMaintenanceVehicles + upcomingMaintenance + overdueMaintenanceCount;
   const statusSegments = [
     { label: 'Available', value: availableVehicles, color: '#16a34a' },
@@ -4442,12 +4479,19 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
           </div>
         </div>
 
-        <div className="dashboard-hologram-core" style={{ '--score': `${opsScore}%`, '--readiness': `${readinessRate}%` }}>
-          <span className="dashboard-hologram-scan" />
-          <div className="dashboard-hologram-inner">
-            <span>Ops Score</span>
-            <strong>{opsScore}</strong>
-            <small>{verifiedReady}/{operationalTotal} verified ready</small>
+        <div className="dashboard-ready-split">
+          <div className="dashboard-ready-stat" style={{ '--ready-pct': `${totalVehicles ? (availableVehicles / totalVehicles) * 100 : 0}%` }}>
+            <span className="dashboard-hologram-scan" />
+            <div className="dashboard-ready-stat-inner">
+              <div className="dashboard-ready-row is-ready">
+                <strong>{availableVehicles}</strong>
+                <span>Ready</span>
+              </div>
+              <div className="dashboard-ready-row is-not-ready">
+                <strong>{notReadyVehicles}</strong>
+                <span>Not Ready</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -5018,42 +5062,6 @@ function dashboardMetricValue(metrics, label) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function DonutChart({ segments, centerLabel, centerSubLabel }) {
-  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
-  const radius = 42;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
-
-  return (
-    <div className="donut-chart">
-      <svg viewBox="0 0 120 120" role="img" aria-label={`${centerLabel} total vehicles`}>
-        <circle className="donut-track" cx="60" cy="60" r={radius} />
-        {segments.map((segment) => {
-          const length = total ? (segment.value / total) * circumference : 0;
-          const dashOffset = -offset;
-          offset += length;
-          return (
-            <circle
-              className="donut-segment"
-              cx="60"
-              cy="60"
-              key={segment.label}
-              r={radius}
-              stroke={segment.color}
-              strokeDasharray={`${length} ${circumference - length}`}
-              strokeDashoffset={dashOffset}
-            />
-          );
-        })}
-      </svg>
-      <div className="donut-center">
-        <strong>{centerLabel}</strong>
-        <span>{centerSubLabel}</span>
-      </div>
-    </div>
-  );
-}
-
 // One filled horizontal bar split proportionally into colored segments (e.g.
 // role breakdown) — paired with ChartLegend below it for the label/count per
 // segment, rather than HorizontalBarChart's stack of separate per-row bars.
@@ -5120,52 +5128,6 @@ function SegmentedBar({ segments }) {
   );
 }
 
-// A titled card wrapping a tall segmented bar (each segment showing its own
-// count), a hover tooltip breaking down every segment at once, and a plain
-// color+label legend underneath — the "Projects"-style chart. Distinct from
-// the plainer SegmentedBar (no title/tooltip/card chrome, used inline in a
-// smaller stat widget like Users by Role).
-function StackedBarChart({ title, segments }) {
-  const [hovered, setHovered] = useState(false);
-  const total = segments.reduce((sum, s) => sum + (Number(s.value) || 0), 0);
-  const visible = segments.filter((s) => s.value > 0);
-
-  return (
-    <div className="stacked-bar-chart">
-      {title && <h3 className="stacked-bar-chart-title">{title}</h3>}
-      <div className="stacked-bar-wrap" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
-        <div className="stacked-bar">
-          {total === 0 ? (
-            <span className="stacked-bar-segment" style={{ width: '100%', background: 'var(--surface-2, #f1f5f9)' }} />
-          ) : visible.map((s) => (
-            <span key={s.label} className="stacked-bar-segment" style={{ width: `${(s.value / total) * 100}%`, background: s.color }}>
-              {s.value}
-            </span>
-          ))}
-        </div>
-        {hovered && visible.length > 0 && (
-          <div className="stacked-bar-tooltip">
-            {visible.map((s) => (
-              <div key={s.label} className="stacked-bar-tooltip-row">
-                <span style={{ background: s.color }} />
-                {s.label} : {s.value}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="stacked-bar-legend">
-        {segments.map((s) => (
-          <span key={s.label} className="stacked-bar-legend-item">
-            <span style={{ background: s.color }} />
-            {s.label}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function ChartLegend({ rows }) {
   return (
     <ul className="chart-legend">
@@ -5177,46 +5139,6 @@ function ChartLegend({ rows }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-// A fully-filled pie (not a hollow donut) with a legend row ABOVE it showing
-// each slice's label, percentage, and count — e.g. the "Current Obligation"
-// widget style. Reuses the donut's stroke-dasharray segment math; the "solid"
-// look just comes from drawing a half-radius circle with a full-radius stroke
-// so it fills all the way to the center, instead of leaving a hole.
-function SolidPieChart({ segments, size = 170 }) {
-  const total = segments.reduce((sum, s) => sum + s.value, 0);
-  const outerRadius = 42;
-  const innerRadius = outerRadius / 2;
-  const circumference = 2 * Math.PI * innerRadius;
-  let offset = 0;
-
-  return (
-    <div className="solid-pie-chart" style={{ width: size, maxWidth: '100%' }}>
-      <svg viewBox="0 0 120 120" role="img" aria-label="Breakdown chart">
-        {total === 0 ? (
-          <circle cx="60" cy="60" r={innerRadius} fill="none" stroke="rgba(148, 163, 184, 0.25)" strokeWidth={outerRadius} />
-        ) : segments.filter((s) => s.value > 0).map((segment) => {
-          const length = (segment.value / total) * circumference;
-          const dashOffset = -offset;
-          offset += length;
-          return (
-            <circle
-              className="solid-pie-segment"
-              cx="60"
-              cy="60"
-              key={segment.label}
-              r={innerRadius}
-              stroke={segment.color}
-              strokeWidth={outerRadius}
-              strokeDasharray={`${length} ${circumference - length}`}
-              strokeDashoffset={dashOffset}
-            />
-          );
-        })}
-      </svg>
-    </div>
   );
 }
 
@@ -5235,59 +5157,6 @@ function SolidPieLegend({ segments, total }) {
           </div>
         </div>
       ))}
-    </div>
-  );
-}
-
-const BAR_CHART_PALETTE = ['#2563eb', '#f97316', '#22c55e', '#a855f7', '#ec4899', '#06b6d4', '#eab308', '#ef4444'];
-
-function HorizontalBarChart({ rows = [] }) {
-  const maxValue = Math.max(1, ...rows.map((row) => Number(row.value) || 0));
-
-  if (!rows.length) {
-    return <p className="empty-state">No graph data yet.</p>;
-  }
-
-  return (
-    <div className="horizontal-bars">
-      {rows.map((row, i) => {
-        const value = Number(row.value) || 0;
-        const percent = Math.round((value / maxValue) * 100);
-        const color = row.color || BAR_CHART_PALETTE[i % BAR_CHART_PALETTE.length];
-        return (
-          <div className="bar-row" key={row.label || 'Unassigned'}>
-            <div className="bar-row-label">
-              <span>{row.label || 'Unassigned'}</span>
-              <strong>{value}</strong>
-            </div>
-            <div className="bar-track">
-              <span style={{ width: `${percent}%`, background: color }}></span>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ColumnChart({ rows = [] }) {
-  const maxValue = Math.max(1, ...rows.map((row) => Number(row.value) || 0));
-
-  return (
-    <div className="column-chart">
-      {rows.map((row) => {
-        const value = Number(row.value) || 0;
-        const height = Math.max(8, Math.round((value / maxValue) * 100));
-        return (
-          <div className="column-bar" key={row.label}>
-            <div className="column-track">
-              <span style={{ height: `${height}%`, background: row.color }}></span>
-            </div>
-            <strong>{value}</strong>
-            <small>{row.label}</small>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -5906,72 +5775,86 @@ const SELECT_OR_OTHER_SENTINEL = '__other__';
 // e.g. Service Location: pick a known hub, or specify an outside repair shop.
 // Tracks "other mode" locally (not in the form's values), seeded from whether
 // the incoming value already fails to match any preset.
-// A numeric "other" value (today: a custom recurrence interval in months)
-// gets its own "+ Add Custom X" trigger that opens a small popover to type
-// the number, matching the +Add-new-item pattern CreatableSelect uses
-// elsewhere — instead of picking "Custom…" from the dropdown and having a
-// second input reveal itself below it.
+// Same look/interaction as CreatableSelect's combobox (single bordered
+// input that opens a dropdown panel with a pinned "add new" row) — but for
+// a small fixed set of preset numeric options (e.g. recurrence intervals)
+// with an inline custom-number row instead of a full catalog: there's
+// nothing to persist/rename/delete here, just a value on this one record.
 function SelectOrAddNumberField({ field, value, onChange }) {
   const options = field.options ?? [];
   const matchesPreset = options.some((o) => String(o?.value ?? o) === String(value ?? ''));
   const isCustomActive = Boolean(value) && !matchesPreset;
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState('');
+  const [customDraft, setCustomDraft] = useState('');
+  const containerRef = useRef(null);
 
-  const openPopover = () => {
-    setDraft(isCustomActive ? String(value) : '');
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleOutsideClick = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [open]);
+
+  const selectedLabel = matchesPreset
+    ? (options.find((o) => String(o?.value ?? o) === String(value ?? ''))?.label ?? '')
+    : (isCustomActive ? `${value}${field.otherSuffix ? ` ${field.otherSuffix}` : ''}` : '');
+
+  const openPanel = () => {
+    setCustomDraft(isCustomActive ? String(value) : '');
     setOpen(true);
+  };
+  const pick = (option) => {
+    onChange(String(option?.value ?? option ?? ''));
+    setOpen(false);
+  };
+  const applyCustom = () => {
+    if (!customDraft) return;
+    onChange(customDraft);
+    setOpen(false);
   };
 
   return (
-    <div className="select-or-add-field">
-      <select
-        required={field.required && !isCustomActive}
-        value={matchesPreset ? (value ?? '') : ''}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">{' '}</option>
-        {options.map((option, i) => (
-          <option key={option?.value != null ? option.value : `opt-${i}`} value={option?.value ?? option ?? ''}>
-            {option?.label ?? option}
-          </option>
-        ))}
-      </select>
-      <button type="button" className={`ghost-button select-or-add-trigger${isCustomActive ? ' is-active' : ''}`} onClick={openPopover}>
-        <Icon name="plus" size={13} />
-        {isCustomActive ? `Custom: ${value}${field.otherSuffix ? ` ${field.otherSuffix}` : ''}` : (field.otherLabel ?? 'Add custom value')}
-      </button>
-
-      {open && createPortal(
-        <div className="modal-overlay" onMouseDown={() => setOpen(false)}>
-          <div className="modal-box select-or-add-popover" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{field.otherLabel ?? 'Custom value'}</h3>
-              <button className="modal-close-btn" onClick={() => setOpen(false)} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
-            </div>
-            <div className="modal-body select-or-add-popover-body">
-              <div className="select-or-add-popover-row">
-                <input
-                  type="number"
-                  min={field.otherMin}
-                  max={field.otherMax}
-                  placeholder={field.otherPlaceholder ?? 'Specify'}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  autoFocus
-                />
-                {field.otherSuffix && <span className="muted">{field.otherSuffix}</span>}
-              </div>
-              <div className="select-or-add-popover-actions">
-                <button type="button" className="ghost-button" onClick={() => setOpen(false)}>Cancel</button>
-                <button type="button" className="primary-button" disabled={!draft} onClick={() => { onChange(draft); setOpen(false); }}>
-                  <Icon name="plus" size={14} /> Add
+    <div className="creatable-select" ref={containerRef}>
+      <input
+        type="text"
+        readOnly
+        value={selectedLabel}
+        placeholder={field.placeholder ?? 'Select or add a custom interval'}
+        required={field.required}
+        onFocus={openPanel}
+        onClick={openPanel}
+      />
+      {open && (
+        <div className="creatable-select-panel">
+          <div className="creatable-select-add creatable-select-add-pinned" onMouseDown={(e) => e.preventDefault()}>
+            <Icon name="plus" size={13} />
+            <input
+              type={field.otherType ?? 'number'}
+              className="creatable-select-custom-input"
+              min={field.otherMin}
+              max={field.otherMax}
+              placeholder={field.otherPlaceholder ?? 'Specify'}
+              value={customDraft}
+              onChange={(e) => setCustomDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCustom(); } }}
+            />
+            {field.otherSuffix && <span className="muted">{field.otherSuffix}</span>}
+            <button type="button" className="ghost-button" disabled={!customDraft} onClick={applyCustom}>
+              {field.otherLabel ?? 'Add'}
+            </button>
+          </div>
+          <div className="creatable-select-option-list">
+            {options.map((option, i) => (
+              <div key={option?.value != null ? option.value : `opt-${i}`} className="creatable-select-option-row">
+                <button type="button" className="creatable-select-option" onClick={() => pick(option)}>
+                  {option?.label ?? option}
                 </button>
               </div>
-            </div>
+            ))}
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );
@@ -7537,15 +7420,7 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
                 </dl>
               </section>
             ) : vehicle ? (
-              <>
-                {vehicleInfoCard}
-                <section className="veh-card">
-                  <div className="veh-card-head"><Icon name="pin" size={16} /><h4>{vehicle.current_location ?? 'Location unknown'}</h4></div>
-                  <div className="veh-map-wrap form-context-map">
-                    <VehicleLocationMap lat={hub?.lat} lng={hub?.lng} label={vehicle.current_location} />
-                  </div>
-                </section>
-              </>
+              vehicleInfoCard
             ) : (
               <section className="veh-card form-context-empty">
                 <Icon name="vehicle" size={30} />
@@ -7553,20 +7428,34 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
               </section>
             )}
 
-            <section className="veh-card">
-              <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>Entry Summary</h4></div>
-              <dl className="veh-kv">
-                {resolvedFields.filter((f) => f.name !== 'vehicle_id' && f.type !== 'file').map((f) => {
-                  const val = formSummaryValue(f, liveValues?.[f.name]);
-                  return (
-                    <div key={f.name}>
-                      <dt>{f.label}</dt>
-                      <dd className={val ? 'summary-val' : 'summary-empty'}>{val ?? '—'}</dd>
-                    </div>
-                  );
-                })}
-              </dl>
-            </section>
+            {vehicle && !showDomainPreview && (
+              <section className="veh-card">
+                <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>Entry Summary</h4></div>
+                <dl className="veh-kv">
+                  {resolvedFields.filter((f) => f.name !== 'vehicle_id' && f.type !== 'file').map((f) => {
+                    const val = formSummaryValue(f, liveValues?.[f.name]);
+                    return (
+                      <div key={f.name}>
+                        <dt>{f.label}</dt>
+                        <dd className={val ? 'summary-val' : 'summary-empty'}>{val ?? '—'}</dd>
+                      </div>
+                    );
+                  })}
+                </dl>
+              </section>
+            )}
+
+            {/* Last in the column (not squeezed above Entry Summary) and
+                given real height — a location map cropped to 220px read as
+                barely more than a thumbnail. */}
+            {vehicle && !showDomainPreview && (
+              <section className="veh-card">
+                <div className="veh-card-head"><Icon name="pin" size={16} /><h4>{vehicle.current_location ?? 'Location unknown'}</h4></div>
+                <div className="veh-map-wrap form-context-map">
+                  <VehicleLocationMap lat={hub?.lat} lng={hub?.lng} label={vehicle.current_location} />
+                </div>
+              </section>
+            )}
           </div>
           <div className={`form-grid-2col form-context-form${wrapperClassName ? ` ${wrapperClassName}` : ''}`}>{form}</div>
         </div>
@@ -7581,25 +7470,24 @@ function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl 
   const hubOptions = allHubs.map((hub) => ({ value: hub.name, label: hub.name }));
 
   return [
-    { label: 'Vehicle Name', name: 'vehicle_name', required: true, type: 'text' },
-    { label: plateFieldLabel(domain), name: 'plate_number', required: true, type: 'text', maxLength: 10 },
-    { label: 'Vehicle Photo', name: 'photo', accept: 'image/*', type: 'file', existingUrl: existingPhotoUrl },
-    {
-      label: 'Vehicle Type', name: 'category_id', options: lookups.categories ?? [], required: true, type: 'creatable-select',
+    { label: 'Vehicle Name', name: 'vehicle_name', required: true, type: 'text', group: 'Vehicle identity' },
+    { label: plateFieldLabel(domain), name: 'plate_number', required: true, type: 'text', maxLength: 10, group: 'Vehicle identity' },
+    { label: 'Vehicle Type', name: 'category_id', options: lookups.categories ?? [], required: true, type: 'creatable-select', group: 'Vehicle identity',
       newItemLabel: 'vehicle type', catalogEndpoint: '/categories', idField: 'category_id', nameField: 'category_name', valueIsId: true,
       extraFields: [{ name: 'domain', label: 'Domain', options: ['Land', 'Water'], required: true, default: domain }],
     },
-    { label: 'Brand', name: 'brand', required: true, type: 'text' },
-    { label: 'Model', name: 'model', required: true, type: 'text' },
-    { label: 'Year Model', name: 'year_model', required: true, type: 'number' },
-    { label: 'Capacity', name: 'capacity', required: true, type: 'quantity', units: capacityUnits(domain) },
+    { label: 'Vehicle Photo', name: 'photo', accept: 'image/*', type: 'file', existingUrl: existingPhotoUrl, group: 'Vehicle photo' },
+    { label: 'Brand', name: 'brand', required: true, type: 'text', group: 'Technical details' },
+    { label: 'Model', name: 'model', required: true, type: 'text', group: 'Technical details' },
+    { label: 'Year Model', name: 'year_model', required: true, type: 'number', group: 'Technical details' },
+    { label: 'Capacity', name: 'capacity', required: true, type: 'quantity', units: capacityUnits(domain), group: 'Technical details' },
     // #10 — optional; without it, lifetime-cost-vs-value (decommission signal)
     // simply has nothing to compare against and is skipped for this vehicle.
-    { label: 'Acquisition Cost (optional)', name: 'acquisition_cost', type: 'number', placeholder: 'e.g. 850000' },
-    { label: 'Vehicle Color', name: 'vehicle_color', required: true, type: 'text' },
-    ...vehicleDomainFields(domain),
+    { label: 'Acquisition Cost (optional)', name: 'acquisition_cost', type: 'number', placeholder: 'e.g. 850000', group: 'Technical details' },
+    { label: 'Vehicle Color', name: 'vehicle_color', required: true, type: 'text', group: 'Technical details' },
+    ...vehicleDomainFields(domain).map((field) => ({ ...field, group: 'Technical details' })),
     {
-      label: 'Current Location', name: 'current_location', options: hubOptions, required: true, type: 'select',
+      label: 'Current Location', name: 'current_location', options: hubOptions, required: true, type: 'select', group: 'Location & service availability',
       // Full-width (not inline in the select's own half-column) — this map
       // needs real width to read as a map, not a cramped strip. Reflects
       // whatever is currently picked, not just what the vehicle loaded
@@ -8053,7 +7941,6 @@ const SCHEDULE_STAT_CARDS = [
   { key: 'Overdue', label: 'Due Today / Overdue', icon: 'alert', bg: '#fee2e2', color: '#dc2626' },
   { key: 'Due1to3', label: '1 - 3 Days', icon: 'calendar', bg: '#ffedd5', color: '#c2410c' },
   { key: 'Due4to7', label: '4 - 7 Days', icon: 'calendar', bg: '#fef3c7', color: '#d97706' },
-  { key: 'Due8plus', label: '8+ Days', icon: 'calendar', bg: '#e0f2fe', color: '#0284c7' },
   { key: 'Completed', label: 'Completed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
   // A schedule marked "Completed" only means the calendar task is done —
   // its record might still be sitting unverified. Its own filter so those
@@ -8186,7 +8073,7 @@ function vehicleColumns(role, onEdit, deleteRecord, restoreRecord, filterStatus,
         </div>
       ),
     },
-    { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.plate_number },
+    { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.plate_number },
     { key: 'type', label: 'Type', render: (row) => row.category?.category_name ?? 'Unassigned' },
     { key: 'brand_model', label: 'Brand / Model', render: (row) => `${row.brand} ${row.model}` },
     { key: 'capacity', label: 'Capacity', className: 'cell-center', render: (row) => row.capacity },
@@ -8368,7 +8255,7 @@ function UserCard({ user: person, onClick }) {
 function locationColumns(currentUser, onViewOnMap, onEdit) {
   return [
   { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.location_record_id ?? 'Current' },
-  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
   { key: 'status', label: 'Status', className: 'cell-center', render: (row) => <StatusBadge value={row.vehicle?.status ?? '-'} /> },
   { key: 'current_location', label: 'Current Location', render: (row) => row.current_location ?? '-' },
   { key: 'address_area', label: 'Address / Area', render: (row) => row.address_area ?? '-' },
@@ -8419,7 +8306,7 @@ function locationColumns(currentUser, onViewOnMap, onEdit) {
 function conditionColumns(role, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onAddCondition) {
   const columns = [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.condition_check_id ?? '-' },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'result', label: 'Result', className: 'cell-center', render: (row) => <StatusBadge value={row.condition_result} /> },
     { key: 'checked_by', label: 'Checked By', className: 'cell-center', render: (row) => <UserAvatarName user={row.checked_by} /> },
     { key: 'date', label: 'Date', className: 'cell-center', render: (row) => <DateBadge value={row.created_at} /> },
@@ -8956,7 +8843,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
       ),
     },
     { key: 'vehicle', label: 'Vehicle', width: '28%', render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { key: 'plate', label: 'Plate', width: '7%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'plate', label: 'Plate Number', width: '7%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'severity', label: 'Severity', width: '9%', className: 'cell-center', render: (row) => <TicketStatusBadge value={row.severity_level} /> },
     { key: 'status', label: 'Status', width: '9%', className: 'cell-center', render: (row) => <StatusBadge value={row.status} /> },
     {
@@ -9018,7 +8905,7 @@ function maintenanceColumns(role, setEditTarget, updateRecord, onViewRecord) {
   const columns = [
     { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => row.maintenance_id },
     { key: 'vehicle', label: 'Vehicle', width: '15%', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { key: 'plate', label: 'Plate', width: '8%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'plate', label: 'Plate Number', width: '8%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     {
       key: 'type',
       label: 'Type',
@@ -9196,8 +9083,8 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
 
   return (
     <ModulePanel description={`Maintenance #${record.maintenance_id}`}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 4px 8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+      <div className="maintenance-record-detail">
+        <div className="maintenance-record-hero">
           <VehicleCell vehicle={record.vehicle} />
           <span className="muted">{record.maintenance_type}</span>
           <StatusBadge value={record.source} />
@@ -9222,7 +9109,7 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
 
         {/* Progress trail — where this record actually sits, not just a
             status word. Filled/checked nodes are stages already passed. */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', maxWidth: 480 }}>
+        <div className="maintenance-progress">
           {MAINTENANCE_PROGRESS_STAGES.map((stage, i) => (
             <div key={stage} style={{ display: 'flex', alignItems: 'flex-start', flex: i === MAINTENANCE_PROGRESS_STAGES.length - 1 ? '0 0 auto' : 1 }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 56 }}>
@@ -9242,29 +9129,29 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
           ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: '0.88rem', maxWidth: 640 }}>
+        <div className="maintenance-detail-grid">
           <div>
-            <span className="muted" style={{ fontSize: '0.74rem', display: 'block' }}>Problem / Reason</span>
+            <span className="maintenance-detail-label">Problem / Reason</span>
             {record.problem_reason || '—'}
           </div>
           <div>
-            <span className="muted" style={{ fontSize: '0.74rem', display: 'block' }}>Action Taken</span>
+            <span className="maintenance-detail-label">Action Taken</span>
             {record.action_taken || '—'}
           </div>
           <div>
-            <span className="muted" style={{ fontSize: '0.74rem', display: 'block' }}>Parts Used</span>
+            <span className="maintenance-detail-label">Parts Used</span>
             {record.parts_used || '—'}
           </div>
           <div>
-            <span className="muted" style={{ fontSize: '0.74rem', display: 'block' }}>Cost</span>
+            <span className="maintenance-detail-label">Cost</span>
             {record.maintenance_cost != null ? `₱${Number(record.maintenance_cost).toLocaleString()}` : '—'}
           </div>
           <div>
-            <span className="muted" style={{ fontSize: '0.74rem', display: 'block' }}>Personnel</span>
+            <span className="maintenance-detail-label">Personnel</span>
             <UserAvatarName user={record.maintenance_personnel} fallback={record.performed_by_other ?? '-'} />
           </div>
           <div>
-            <span className="muted" style={{ fontSize: '0.74rem', display: 'block' }}>Date Started / Completed</span>
+            <span className="maintenance-detail-label">Date Started / Completed</span>
             {formatDate(record.date_started)} — {formatDate(record.date_completed)}
           </div>
         </div>
@@ -9398,7 +9285,7 @@ function MaintenanceRecordProfilePage({ maintenanceId, onConfirm, onReopen, onDe
 function maintenanceStatusColumns(setEditTarget, currentUserId) {
   return [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.maintenance_id },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'type', label: 'Type', className: 'cell-center', render: (row) => row.maintenance_type },
     { key: 'source', label: 'Source', className: 'cell-center', render: (row) => <StatusBadge value={row.source} /> },
     { key: 'personnel', label: 'Personnel', className: 'cell-center', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
@@ -9427,7 +9314,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
   const currentUserId = currentUser?.id;
   return [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.schedule_id },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'type', label: 'Type', className: 'cell-center', render: (row) => row.maintenance_type },
     {
       key: 'assigned_to',
@@ -9667,19 +9554,9 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
   );
 }
 
-const maintenanceHistoryColumns = [
-  { key: 'id', label: 'ID', locked: true, render: (row) => row.maintenance_id },
-  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
-  { key: 'type', label: 'Type', render: (row) => row.maintenance_type },
-  { key: 'parts_used', label: 'Parts Used', render: (row) => <PartsTags value={row.parts_used} /> },
-  { key: 'personnel', label: 'Personnel', render: (row) => row.maintenance_personnel?.name ?? row.performed_by_other ?? '-' },
-  { key: 'completed', label: 'Completed', render: (row) => <DateBadge value={row.date_completed ?? row.updated_at} /> },
-  { key: 'time', label: 'Time', render: (row) => formatTime(row.date_completed ?? row.updated_at) },
-];
-
 const historyColumns = [
   { key: 'id', label: 'ID', locked: true, render: (row) => row.history_id },
-  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate', render: (row) => row.vehicle?.plate_number ?? '-' },
+  { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', render: (row) => row.vehicle?.plate_number ?? '-' },
   { key: 'activity', label: 'Activity', render: (row) => row.activity_type },
   { key: 'related_record', label: 'Related Record', render: (row) => row.related_record_id ?? '-' },
   { key: 'updated_by', label: 'Updated By', render: (row) => <UserAvatarName user={row.updated_by} /> },
@@ -10711,6 +10588,31 @@ function flattenSubIssueRows(tickets, mechanicId = null) {
   return rows;
 }
 
+// One entry per ticket (a sub-issue belongs to exactly one ticket, which
+// belongs to exactly one vehicle) — so a vehicle with several sub-issues
+// dispatched to the same mechanic collapses into a single list entry
+// instead of a separate table row per Cause. Mirrors groupWorkTrackerByTicket
+// below, but tailored to flattenSubIssueRows' shape (no isMechanic/isVerifier
+// flags — "needs action" here is just "still Under Repair").
+function groupMechanicRowsByTicket(rows) {
+  const map = new Map();
+  rows.forEach((row) => {
+    if (!map.has(row.ticket_id)) {
+      map.set(row.ticket_id, {
+        ticket_id: row.ticket_id,
+        ticket_title: row.ticket_title,
+        vehicle: row.vehicle,
+        subIssues: [],
+      });
+    }
+    map.get(row.ticket_id).subIssues.push(row);
+  });
+  return Array.from(map.values()).map((group) => ({
+    ...group,
+    needsAction: group.subIssues.some((s) => s.status === 'Under Repair'),
+  }));
+}
+
 // =========================================================================
 // WORK TRACKER — cross-phase outcome feed (Custodian + Maintenance)
 // =========================================================================
@@ -10979,9 +10881,13 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
           }]}
         />
       </section>
-      <section className="panel">
-        <div className="panel-header-bar">
-          <h3>Work Tracker <span className="count-badge">{visibleRows.length}</span></h3>
+      <section className="panel operations-board work-tracker-board">
+        <div className="operations-board-head">
+          <div>
+            <span className="operations-kicker">Service activity</span>
+            <h3>Work Tracker <span className="count-badge">{visibleRows.length}</span></h3>
+            <p>Follow each assigned repair from active work through verification and completion.</p>
+          </div>
           <LocalSearchInput
             value={search}
             onChange={setSearch}
@@ -10989,7 +10895,7 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
             onExport={() => exportRowsToCsv('work-tracker.csv', [
               { label: 'Ticket', value: (r) => `#${r.ticket_id} ${r.ticket_title}` },
               { label: 'Vehicle', value: (r) => r.vehicle?.vehicle_name ?? '' },
-              { label: 'Plate', value: (r) => r.vehicle?.plate_number ?? '' },
+              { label: 'Plate Number', value: (r) => r.vehicle?.plate_number ?? '' },
               { label: 'Sub-Issue', value: (r) => r.title ?? '' },
               { label: 'My Role', value: (r) => r.relationship },
               { label: 'Status', value: (r) => r.status ?? '' },
@@ -11003,7 +10909,8 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
           without hunting for the ticket. Items needing your action are pinned to the top.
         </p>
         <div style={{ height: '16px' }} />
-        <div className="work-tracker-grid">
+        <div className="operations-board-note"><Icon name="alert" size={14} /> Items requiring your action are shown first. Select a vehicle to review every related issue.</div>
+        <div className="work-tracker-grid operations-card-grid">
           {groupedTickets.length === 0 ? (
             <p className="empty-state" style={{ gridColumn: '1 / -1' }}>
               Nothing here yet — vehicles you repair or verify will show up here with their current status.
@@ -11290,10 +11197,12 @@ function TicketStatusBadge({ value, size = 'normal' }) {
 // =========================================================================
 
 function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, onReassignMechanic, onReassignCustodian, onConfirm, onReopenDone, onAddSubIssue, onDeferSubIssue, onCloseTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSendToExternalShop, onClose, asPage = false }) {
-  const [assigningId, setAssigningId] = useState(null);
-  const [reassigningId, setReassigningId] = useState(null);
+  const [assigningAll, setAssigningAll] = useState(false);
+  const [reassigningAll, setReassigningAll] = useState(false);
+  const [reassignTargetId, setReassignTargetId] = useState(null);
   const [confirmingId, setConfirmingId] = useState(null);
-  const [deferringId, setDeferringId] = useState(null);
+  const [deferringAll, setDeferringAll] = useState(false);
+  const [deferTargetId, setDeferTargetId] = useState(null);
   const [reassigningCustodian, setReassigningCustodian] = useState(false);
   const [editingDoneId, setEditingDoneId] = useState(null);
   const [addingSubIssue, setAddingSubIssue] = useState(false);
@@ -11302,6 +11211,9 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
   if (!ticket) return null;
 
   const subIssues = ticket.sub_issues ?? [];
+  const openSubIssues = subIssues.filter((s) => s.status === 'Open');
+  const allOpenHaveType = openSubIssues.every((s) => s.maintenance_type);
+  const underRepairSubIssues = subIssues.filter((s) => s.status === 'Under Repair');
   const progress = ticket.progress ?? {
     done: subIssues.filter((s) => s.status === 'Done').length,
     deferred: subIssues.filter((s) => s.status === 'Deferred').length,
@@ -11311,6 +11223,9 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
   // decision not to fix it now (Deferred). A ticket closes when everything
   // is resolved — not only when everything is Done.
   const isResolvedStatus = (s) => s === 'Done' || s === 'Deferred';
+  const deferrableSubIssues = ticket.status === 'Active'
+    ? subIssues.filter((s) => !isResolvedStatus(s.status) && s.status !== 'For Confirmation')
+    : [];
   const hasUnresolved = subIssues.some((s) => !isResolvedStatus(s.status));
   const allResolved = subIssues.length === 0 || !hasUnresolved;
   const canClose = ticket.status === 'Active' && allResolved;
@@ -11539,30 +11454,30 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
                     still Open it can't even be closed. Same escape hatch the
                     mechanic work orders already have. */}
                 {isAdmin && onReassignCustodian && !['Closed', 'Cancelled'].includes(ticket.status) && (
-                  reassigningCustodian ? (
-                    <div className="ticket-inline-form" style={{ marginTop: 10, padding: '10px 12px' }}>
-                      <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>
-                        Hand this ticket to a different Custodian (e.g. the current one is on leave). Any repairs already awaiting verification move with it.
-                      </p>
-                      <SmartForm
-                        fields={[
-                          { label: 'Reassign to Custodian', name: 'assigned_custodian_id', options: (lookups.custodians ?? []).filter((c) => c.id !== ticket.assigned_custodian_id).map((c) => ({ value: c.id, label: c.name })), required: true, type: 'select' },
-                          { label: 'Reason for reassigning', name: 'reassign_reason', required: true, type: 'textarea', rows: 2 },
-                        ]}
-                        key={`reassign-custodian-${ticket.ticket_id}`}
-                        onCancel={() => setReassigningCustodian(false)}
-                        onSubmit={(payload) => onReassignCustodian(ticket, payload).then(() => setReassigningCustodian(false))}
-                        submitLabel="Reassign Custodian"
-                        title=""
-                      />
-                    </div>
-                  ) : (
-                    <button className="ghost-button btn-reassign-custodian" style={{ marginTop: 10 }} type="button" onClick={() => setReassigningCustodian(true)}>
-                      <Icon name="undo" size={14} /> Reassign Custodian
-                    </button>
-                  )
+                  <button className="ghost-button btn-reassign-action" style={{ marginTop: 10 }} type="button" onClick={() => setReassigningCustodian(true)}>
+                    <Icon name="undo" size={12} /> Reassign Custodian
+                  </button>
                 )}
               </section>
+            )}
+
+            {isAdmin && onReassignCustodian && (
+              <FormModal open={reassigningCustodian} title="Reassign Custodian" onClose={() => setReassigningCustodian(false)}>
+                <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>
+                  Hand this ticket to a different Custodian (e.g. the current one is on leave). Any repairs already awaiting verification move with it.
+                </p>
+                <SmartForm
+                  fields={[
+                    { label: 'Reassign to Custodian', name: 'assigned_custodian_id', options: (lookups.custodians ?? []).filter((c) => c.id !== ticket.assigned_custodian_id).map((c) => ({ value: c.id, label: c.name })), required: true, type: 'select' },
+                    { label: 'Reason for reassigning', name: 'reassign_reason', required: true, type: 'textarea', rows: 2 },
+                  ]}
+                  key={`reassign-custodian-${ticket.ticket_id}`}
+                  onCancel={() => setReassigningCustodian(false)}
+                  onSubmit={(payload) => onReassignCustodian(ticket, payload).then(() => setReassigningCustodian(false))}
+                  submitLabel="Reassign Custodian"
+                  title=""
+                />
+              </FormModal>
             )}
 
             {/* Recaps the ticket's own lifecycle dates in one place — also
@@ -11628,6 +11543,138 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
               {subIssues.length === 0 && (
                 <p className="muted">No sub-issues — inspection found nothing to repair.</p>
               )}
+
+              {/* Bulk controls — one set for the whole ticket instead of a
+                  repeated Assign/Reassign/Defer per sub-issue card below.
+                  Assign is the main flow (solid, primary); Reassign and
+                  Defer are corrective/exception actions (outline), so the
+                  row reads as one primary + secondaries instead of three
+                  equally-weighted solid buttons competing for attention. */}
+              {isAdmin && (openSubIssues.length > 0 || underRepairSubIssues.length > 0 || deferrableSubIssues.length > 0) && (
+                <div className="subissue-bulk-actions">
+                  {openSubIssues.length > 0 && !assigningAll && (
+                    <button className="primary-button" type="button" onClick={() => setAssigningAll(true)}>
+                      <Icon name="wrench" size={12} /> Assign Mechanic
+                    </button>
+                  )}
+                  {underRepairSubIssues.length > 0 && !reassigningAll && (
+                    <button className="ghost-button btn-reassign-action" type="button" onClick={() => setReassigningAll(true)}>
+                      <Icon name="undo" size={12} /> Reassign Mechanic
+                    </button>
+                  )}
+                  {deferrableSubIssues.length > 0 && !deferringAll && (
+                    <button
+                      type="button"
+                      className="ghost-button btn-defer-action"
+                      onClick={() => setDeferringAll(true)}
+                    >
+                      <Icon name="alert" size={12} /> Defer (can't finish now)
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {isAdmin && assigningAll && (
+                <div className="ticket-inline-form" style={{ marginBottom: 10, padding: '10px 12px' }}>
+                  <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>Assigns this mechanic to all {openSubIssues.length} open sub-issue{openSubIssues.length > 1 ? 's' : ''} below.</p>
+                  <SmartForm
+                    fields={allOpenHaveType ? mechanicAssignFields(lookups).filter((f) => f.name !== 'maintenance_type') : mechanicAssignFields(lookups)}
+                    onCancel={() => setAssigningAll(false)}
+                    onSubmit={(payload) => Promise.all(openSubIssues.map((si) => onAssignMechanic(ticket, si, { ...payload, maintenance_type: si.maintenance_type || payload.maintenance_type }))).then(() => setAssigningAll(false))}
+                    submitLabel="Assign & Dispatch"
+                    title=""
+                  />
+                </div>
+              )}
+
+              <FormModal
+                open={isAdmin && reassigningAll}
+                title="Reassign Mechanic"
+                onClose={() => { setReassigningAll(false); setReassignTargetId(null); }}
+              >
+                <p className="muted" style={{ marginBottom: 10, fontSize: '0.8rem' }}>
+                  Pick the specific in-progress sub-issue you want to hand to a different mechanic — different Causes can need different specialties, so this only changes the one you pick.
+                </p>
+                {underRepairSubIssues.map((si) => (
+                  <div key={si.sub_issue_id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: '0.86rem' }}>{si.title}</strong>
+                      {si.assigned_mechanic && <UserAvatarName user={si.assigned_mechanic} />}
+                    </div>
+                    {reassignTargetId === si.sub_issue_id ? (
+                      <div style={{ marginTop: 8 }}>
+                        <SmartForm
+                          fields={[
+                            { label: 'Reassign to Mechanic', name: 'assigned_mechanic_id', options: (lookups.maintenance_personnel ?? []).filter((m) => m.id !== si.assigned_mechanic_id).map((m) => ({ value: m.id, label: m.name })), required: true, type: 'select' },
+                            { label: 'Reason for reassigning', name: 'reassign_reason', required: true, type: 'textarea', rows: 2 },
+                          ]}
+                          key={`reassign-${si.sub_issue_id}`}
+                          onCancel={() => setReassignTargetId(null)}
+                          onSubmit={(payload) => onReassignMechanic(ticket, si, payload).then(() => { setReassignTargetId(null); setReassigningAll(false); })}
+                          submitLabel="Reassign Work Order"
+                          title=""
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ghost-button btn-reassign-action"
+                        style={{ marginTop: 8 }}
+                        onClick={() => setReassignTargetId(si.sub_issue_id)}
+                      >
+                        <Icon name="undo" size={12} /> Reassign This Sub-Issue
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </FormModal>
+
+              <FormModal
+                open={isAdmin && deferringAll}
+                title="Defer Sub-Issues"
+                onClose={() => { setDeferringAll(false); setDeferTargetId(null); }}
+              >
+                <p className="muted" style={{ marginBottom: 10, fontSize: '0.8rem' }}>
+                  Pick the specific sub-issue you can't fix right now (e.g. no budget, part on back-order) — the others aren't affected, including any already Done.
+                </p>
+                {subIssues.map((si) => {
+                  const canDefer = deferrableSubIssues.some((d) => d.sub_issue_id === si.sub_issue_id);
+                  return (
+                    <div key={si.sub_issue_id} style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 10px', marginBottom: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                        <strong style={{ fontSize: '0.86rem' }}>{si.title}</strong>
+                        <TicketStatusBadge value={si.status} />
+                      </div>
+                      {deferTargetId === si.sub_issue_id ? (
+                        <div style={{ marginTop: 8 }}>
+                          <SmartForm
+                            fields={[{ label: 'Reason for deferring', name: 'deferred_reason', required: true, type: 'textarea', rows: 2 }]}
+                            key={`defer-${si.sub_issue_id}`}
+                            onCancel={() => setDeferTargetId(null)}
+                            onSubmit={(payload) => onDeferSubIssue(ticket, si, payload).then(() => { setDeferTargetId(null); setDeferringAll(false); })}
+                            submitLabel="Defer This Sub-Issue"
+                            title=""
+                          />
+                        </div>
+                      ) : canDefer ? (
+                        <button
+                          type="button"
+                          className="ghost-button btn-defer-action"
+                          style={{ marginTop: 8, height: 30, padding: '0 10px', fontSize: '0.74rem', gap: 5 }}
+                          onClick={() => setDeferTargetId(si.sub_issue_id)}
+                        >
+                          <Icon name="alert" size={12} /> Defer This Sub-Issue
+                        </button>
+                      ) : (
+                        <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.78rem' }}>
+                          {si.status === 'Done' ? 'Already finished — nothing to defer.' : 'Not eligible to defer right now.'}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </FormModal>
+
               {subIssues.map((si, index) => {
                 const stageBanner = {
                   'Under Repair':     { color: '#d97706', bg: '#fffbeb', text: '#92400e', icon: 'wrench', label: `Awaiting ${si.assigned_mechanic?.name ?? 'the mechanic'}'s repair log` },
@@ -11650,12 +11697,28 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
                       mechanic, wrench icon = category, ₱ = cost, colored
                       badge = verdict), which cuts the block's height by more
                       than half without losing any information. */}
-                  {(si.assigned_mechanic || si.maintenance_type || si.verification_verdict || (si.maintenance_cost !== null && si.maintenance_cost !== undefined)) && (
+                  {(si.assigned_mechanic || si.maintenance_type || si.verification_verdict || si.source_vehicle || si.external_vendor || (si.maintenance_cost !== null && si.maintenance_cost !== undefined)) && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 10px', marginTop: 8, padding: '6px 9px', background: '#f8fafc', borderRadius: 8, fontSize: '0.8rem' }}>
                       {si.assigned_mechanic && <UserAvatarName user={si.assigned_mechanic} />}
                       {si.maintenance_type && (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#475569' }}>
                           <Icon name="wrench" size={11} /> {si.maintenance_type}
+                        </span>
+                      )}
+                      {/* Cannibalized/External are set once, at ticket creation —
+                          surfaced here so the donor vehicle/vendor is visible
+                          right away instead of only reappearing when a mechanic
+                          opens Log Repairs (where it's pre-filled but otherwise
+                          invisible on the ticket itself in the meantime). */}
+                      {si.source_vehicle && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#475569' }}>
+                          <Icon name="vehicle" size={11} /> Donor: {si.source_vehicle.vehicle_name} ({si.source_vehicle.plate_number})
+                        </span>
+                      )}
+                      {si.external_vendor && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#475569' }}>
+                          <Icon name="clipboard" size={11} /> Vendor: {si.external_vendor}
+                          {si.warranty_until && ` (warranty until ${formatDate(si.warranty_until)})`}
                         </span>
                       )}
                       {si.maintenance_cost !== null && si.maintenance_cost !== undefined && (
@@ -11748,42 +11811,6 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
                     </div>
                   )}
 
-                  {isAdmin && ticket.status === 'Active' && !isResolvedStatus(si.status) && (
-                    deferringId === si.sub_issue_id ? (
-                      <div className="ticket-inline-form" style={{ marginTop: 8, padding: '10px 12px' }}>
-                        <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>Record a decision not to fix this now (e.g. no budget, part on back-order). A follow-up issue report is opened automatically.</p>
-                        <SmartForm
-                          fields={[{ label: 'Reason for deferring', name: 'deferred_reason', required: true, type: 'textarea', rows: 2 }]}
-                          key={`defer-${si.sub_issue_id}`}
-                          onCancel={() => setDeferringId(null)}
-                          onSubmit={(payload) => onDeferSubIssue(ticket, si, payload).then(() => setDeferringId(null))}
-                          submitLabel="Defer This Sub-Issue"
-                          title=""
-                        />
-                      </div>
-                    ) : null
-                  )}
-
-                  {isAdmin && si.status === 'Open' && (
-                    assigningId === si.sub_issue_id ? (
-                      <div className="ticket-inline-form" style={{ marginTop: 8, padding: '10px 12px' }}>
-                        {si.maintenance_type && (
-                          <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>Category: <strong>{si.maintenance_type}</strong> (fixed from inspection — not changeable here)</p>
-                        )}
-                        <SmartForm
-                          fields={si.maintenance_type ? mechanicAssignFields(lookups).filter((f) => f.name !== 'maintenance_type') : mechanicAssignFields(lookups)}
-                          key={`assign-${si.sub_issue_id}`}
-                          onCancel={() => setAssigningId(null)}
-                          onSubmit={(payload) => onAssignMechanic(ticket, si, { ...payload, maintenance_type: si.maintenance_type || payload.maintenance_type }).then(() => setAssigningId(null))}
-                          submitLabel="Assign & Dispatch"
-                          title=""
-                        />
-                      </div>
-                    ) : (
-                      <button className="primary-button" style={{ marginTop: 10 }} type="button" onClick={() => setAssigningId(si.sub_issue_id)}>Assign Mechanic</button>
-                    )
-                  )}
-
                   {isAdmin && si.status === 'For Confirmation' && (
                     confirmingId === si.sub_issue_id ? (
                       <div className="ticket-inline-form" style={{ marginTop: 8, padding: '10px 12px' }}>
@@ -11823,47 +11850,6 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
                     )
                   )}
 
-                  {/* Hand an in-progress work order to a different mechanic
-                      (e.g. the assigned one is unavailable) so it isn't frozen. */}
-                  {isAdmin && si.status === 'Under Repair' && (
-                    reassigningId === si.sub_issue_id ? (
-                      <div className="ticket-inline-form" style={{ marginTop: 8, padding: '10px 12px' }}>
-                        <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>Hand this work order to a different mechanic (e.g. the current one is unavailable).</p>
-                        <SmartForm
-                          fields={[
-                            { label: 'Reassign to Mechanic', name: 'assigned_mechanic_id', options: (lookups.maintenance_personnel ?? []).filter((m) => m.id !== si.assigned_mechanic_id).map((m) => ({ value: m.id, label: m.name })), required: true, type: 'select' },
-                            { label: 'Reason for reassigning', name: 'reassign_reason', required: true, type: 'textarea', rows: 2 },
-                          ]}
-                          key={`reassign-${si.sub_issue_id}`}
-                          onCancel={() => setReassigningId(null)}
-                          onSubmit={(payload) => onReassignMechanic(ticket, si, payload).then(() => setReassigningId(null))}
-                          submitLabel="Reassign Work Order"
-                          title=""
-                        />
-                      </div>
-                    ) : (
-                      <button className="ghost-button btn-edit-action" style={{ marginTop: 10 }} type="button" onClick={() => { setReassigningId(si.sub_issue_id); setDeferringId(null); setConfirmingId(null); }}>
-                        <Icon name="undo" size={14} /> Reassign Mechanic
-                      </button>
-                    )
-                  )}
-
-                  {/* Escape hatch for a line item that can't be finished (no
-                      budget, part unavailable) — i.e. it was never actually
-                      fixed. Once it reaches For Confirmation the Custodian
-                      has already verified the repair works, so there's
-                      nothing left to "not fix" — Confirm or Reopen is the
-                      only choice that still makes sense there. */}
-                  {isAdmin && ticket.status === 'Active' && !isResolvedStatus(si.status) && si.status !== 'For Confirmation' && deferringId !== si.sub_issue_id && (
-                    <button
-                      type="button"
-                      className="ghost-button btn-defer-action"
-                      onClick={() => { setDeferringId(si.sub_issue_id); setAssigningId(null); setConfirmingId(null); }}
-                      style={{ marginTop: 10, marginLeft: 8, gap: 6 }}
-                    >
-                      <Icon name="alert" size={13} /> Defer (can't finish now)
-                    </button>
-                  )}
                 </div>
                 );
               })}
@@ -11919,14 +11905,11 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
             </div>
           )}
 
-          {/* The explanation and its action live in one visual unit, so the
-              recommended next step is never separated from why it's offered. */}
+          {/* Its action now lives beside Delete Ticket in the action row below
+              — this stays as the explanation for why that button is there. */}
           {isAdmin && canDecisionClose && !decisionClosing && (
-            <div className="notice warning" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon name="alert" size={15} /> {progress.done}/{progress.total} sub-issue(s) done. You can still finish or defer the rest — or close now as a decision, which records the leftovers as Deferred.
-              </span>
-              <button className="primary-button" type="button" style={{ background: '#d97706', borderColor: '#d97706', flexShrink: 0 }} onClick={() => setDecisionClosing(true)}>Close as Decision</button>
+            <div className="notice warning" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="alert" size={15} /> {progress.done}/{progress.total} sub-issue(s) done. You can still finish or defer the rest — or close now as a decision, which records the leftovers as Deferred.
             </div>
           )}
 
@@ -11964,8 +11947,11 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
               <button className="primary-button" type="button" onClick={() => onUncancel(ticket)}>Restore Ticket</button>
             )}
             {/* Close Ticket itself now lives in the green banner above when
-                canClose is true — no need to repeat the same button here.
-                Cancel is excluded once canClose too: every sub-issue is
+                canClose is true — no need to repeat the same button here. */}
+            {isAdmin && canDecisionClose && !decisionClosing && (
+              <button className="primary-button" type="button" style={{ background: '#d97706', borderColor: '#d97706' }} onClick={() => setDecisionClosing(true)}>Close as Decision</button>
+            )}
+            {/* Cancel is excluded once canClose too: every sub-issue is
                 already resolved at that point, so there's real, confirmed
                 work on record — cancelling would void it instead of just
                 abandoning an unstarted/unfinished ticket. */}
@@ -12381,10 +12367,9 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
                 </label>
                 <label>
                   <span>Warranty Until</span>
-                  <input
-                    type="date"
+                  <DateFilterInput
                     value={liveValues.warranty_until ?? ''}
-                    onChange={(e) => setField('warranty_until', e.target.value)}
+                    onChange={(v) => setField('warranty_until', v)}
                   />
                 </label>
               </div>
@@ -12711,11 +12696,14 @@ function TicketModule({
           : ticketViewMode === 'table'
             ? <PaginatedTable columns={ticketColumnChooser.visibleColumns} onReorderColumn={ticketColumnChooser.reorderColumn} rows={tickets} onRowClick={onViewTicket} />
             : (
-              <div className="ticket-card-grid">
-                {tickets.map((t) => (
-                  <TicketCard key={t.ticket_id} ticket={t} unreadCount={unreadByTicket[t.ticket_id] ?? 0} onClick={() => onViewTicket(t)} />
-                ))}
-              </div>
+              <PaginatedCardGrid
+                items={tickets}
+                keyOf={(t) => t.ticket_id}
+                emptyMessage="No tickets yet. Create one to begin the workflow."
+                renderItem={(t) => (
+                  <TicketCard ticket={t} unreadCount={unreadByTicket[t.ticket_id] ?? 0} onClick={() => onViewTicket(t)} />
+                )}
+              />
             )
         }
       </section>
@@ -13633,24 +13621,24 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
           </div>
         )}
       </div>
-      {progress?.total > 0 && (
-        <div style={{ margin: '8px 0 2px' }}>
-          <div style={{ height: 6, borderRadius: 999, background: '#e2e8f0', overflow: 'hidden' }}>
-            <div style={{
-              height: '100%',
-              width: `${(progress.done / progress.total) * 100}%`,
-              background: progress.done === progress.total ? '#16a34a' : '#d97706',
-              borderRadius: 999,
-            }} />
-          </div>
-          <span className="muted" style={{ fontSize: '0.72rem' }}>{progress.done}/{progress.total} sub-issues done</span>
-        </div>
-      )}
-      {stage && (
-        <div style={{ margin: '6px 0 2px' }}>
-          <TicketStageBadge ticket={ticket} />
-        </div>
-      )}
+      <div style={{ margin: '8px 0 2px', minHeight: 22 }}>
+        {progress?.total > 0 && (
+          <>
+            <div style={{ height: 6, borderRadius: 999, background: '#e2e8f0', overflow: 'hidden' }}>
+              <div style={{
+                height: '100%',
+                width: `${(progress.done / progress.total) * 100}%`,
+                background: progress.done === progress.total ? '#16a34a' : '#d97706',
+                borderRadius: 999,
+              }} />
+            </div>
+            <span className="muted" style={{ fontSize: '0.72rem' }}>{progress.done}/{progress.total} sub-issues done</span>
+          </>
+        )}
+      </div>
+      <div style={{ margin: '6px 0 2px', minHeight: 26 }}>
+        {stage && <TicketStageBadge ticket={ticket} />}
+      </div>
       <div className="ticket-card-bottom">
         <TicketStatusBadge value={ticket.status} />
         <DateBadge value={ticket.created_at} />
@@ -13684,7 +13672,7 @@ function CustodianInspectionModule({
 
   const inspectionColumnDefs = useMemo(() => [
     { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
     { key: 'title', label: 'Title', render: (r) => r.ticket_title },
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     { key: 'result', label: 'Result', className: 'cell-center', render: (r) => r.inspection_result ? <TicketStatusBadge value={r.inspection_result} /> : <span className="muted">—</span> },
@@ -13983,7 +13971,7 @@ function CustodianVerificationModule({
   const verificationColumnDefs = useMemo(() => [
     { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
     { key: 'ticket_title', label: 'Ticket Title', render: (r) => r.ticket_title },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
     { key: 'sub_issue', label: 'Sub-Issue', render: (r) => r.title },
     { key: 'mechanic', label: 'Mechanic', className: 'cell-center', render: (r) => r.assigned_mechanic?.name ?? '—' },
     {
@@ -14164,6 +14152,7 @@ function CustodianVerificationModule({
 
 function MechanicWorkOrderModule({
   tickets,
+  allRows,
   onOpenLogRepairs,
   categories,
   vehicles,
@@ -14182,43 +14171,22 @@ function MechanicWorkOrderModule({
   onFilterChange
 }) {
   const isPendingView = activeFilter !== 'Submitted';
+  const [modalGroup, setModalGroup] = useState(null);
 
-  const workOrderColumnDefs = useMemo(() => [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
-    { key: 'ticket_title', label: 'Ticket Title', render: (r) => r.ticket_title },
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
-    {
-      key: 'work_order',
-      label: 'Work Order',
-      render: (r) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>{r.title}</div>
-          {r.confirmation_verdict === 'Reopened' ? (
-            <span className="status-badge rework-danger" style={{ fontSize: '0.75rem', padding: '3px 8px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <Icon name="alert" size={13} /> Admin Reopened Rework
-            </span>
-          ) : r.verification_verdict === 'Rejected' ? (
-            <span className="status-badge rework-warning" style={{ fontSize: '0.75rem', padding: '3px 8px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              <Icon name="alert" size={13} /> Custodian Rejected Rework
-            </span>
-          ) : null}
-        </div>
-      )
-    },
-    { key: 'type', label: 'Type', className: 'cell-center', render: (r) => r.maintenance_type ?? '—' },
-    { key: 'dispatched', label: 'Dispatched', className: 'cell-center', render: (r) => <DateBadge value={r.mechanic_assigned_at} /> },
-    { key: 'time', label: 'Time', className: 'cell-center', render: (r) => formatTime(r.mechanic_assigned_at) },
-    {
-      key: 'action',
-      label: 'Action',
-      locked: true,
-      className: 'cell-center',
-      render: (r) => r.status === 'Under Repair'
-        ? <button className="btn-edit-action icon-btn" type="button" onClick={() => onOpenLogRepairs(r)} title="Log Repairs" aria-label="Log Repairs"><Icon name="wrench" size={14} /></button>
-        : <span className="muted">Submitted</span>
-    },
-  ], [onOpenLogRepairs]);
-  const workOrderColumnChooser = useColumnChooser('vms_mechanic_work_order_columns', workOrderColumnDefs);
+  // One card per ticket/vehicle — a vehicle with several Causes dispatched to
+  // this mechanic (Cause A/B/C) no longer repeats its ticket/vehicle info on
+  // every row; clicking the card opens the list of Causes underneath it.
+  const groupedTickets = useMemo(() => groupMechanicRowsByTicket(tickets), [tickets]);
+
+  // The modal itself always reads from the UNFILTERED per-mechanic rows, not
+  // the Pending/Submitted-filtered `tickets` above — otherwise submitting a
+  // repair log flips that sub-issue's status away from "Under Repair", which
+  // drops it out of the Pending filter and makes it vanish out from under the
+  // mechanic mid-click instead of just updating its badge in place.
+  const allGroupedTickets = useMemo(() => groupMechanicRowsByTicket(allRows ?? tickets), [allRows, tickets]);
+  const displayGroup = modalGroup
+    ? (allGroupedTickets.find((g) => g.ticket_id === modalGroup.ticket_id) ?? modalGroup)
+    : null;
 
   return (
     <div className="module-grid">
@@ -14245,28 +14213,101 @@ function MechanicWorkOrderModule({
           priorityLabel="Maintenance Type"
         />
       </section>
-      <section className="panel">
-        <div className="panel-header-bar">
-          <h3>{isPendingView ? 'Pending Work Orders' : 'Submitted Work Orders'} <span className="count-badge">{tickets.length}</span></h3>
-          <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search work orders..." columnChooser={workOrderColumnChooser} />
+      <section className="panel operations-board work-order-board">
+        <div className="operations-board-head">
+          <div>
+            <span className="operations-kicker">Mechanic queue</span>
+            <h3>{isPendingView ? 'Pending Work Orders' : 'Submitted Work Orders'} <span className="count-badge">{tickets.length}</span></h3>
+            <p>{isPendingView ? 'Open a work order, record the repair, then send it for verification.' : 'Review work already submitted for Custodian verification.'}</p>
+          </div>
+          <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search work orders..." />
         </div>
-        <div style={{ height: '16px' }} />
-        {tickets.length === 0
-          ? <p className="empty-state">{isPendingView ? 'No active work orders assigned to you.' : 'No repair logs submitted yet.'}</p>
-          : (
-            <DataTable
-              columns={workOrderColumnChooser.visibleColumns}
-              onReorderColumn={workOrderColumnChooser.reorderColumn}
-              rows={tickets}
-              onRowClick={(row) => row.vehicle && onViewVehicle(row.vehicle)}
-              renderSubRow={(row) => subRowFields([
-                ['Instructions', row.work_order_notes ?? row.ticket_description],
-                ...(isPendingView ? [] : [['Repair Log', row.repair_logs]]),
-              ])}
-            />
-          )
-        }
+        <div className="operations-board-note"><Icon name={isPendingView ? 'wrench' : 'checkCircle'} size={14} /> {isPendingView ? 'Repair logs are due for the highlighted work orders.' : 'Submitted items remain here until their next workflow update.'}</div>
+        <div className="work-tracker-grid operations-card-grid">
+          {groupedTickets.length === 0 ? (
+            <p className="empty-state" style={{ gridColumn: '1 / -1' }}>
+              {isPendingView ? 'No active work orders assigned to you.' : 'No repair logs submitted yet.'}
+            </p>
+          ) : (
+            groupedTickets.map((group) => {
+              const photo = group.vehicle?.photo_url ? resolvePhotoUrl(group.vehicle.photo_url) : null;
+              return (
+                <button
+                  key={group.ticket_id}
+                  type="button"
+                  className={`work-tracker-card${group.needsAction ? ' needs-action' : ''}`}
+                  onClick={() => setModalGroup(group)}
+                >
+                  <span className="work-tracker-thumb">
+                    {photo ? <img src={photo} alt="" /> : <Icon name="vehicle" size={18} />}
+                  </span>
+                  <span className="work-tracker-card-heading">
+                    <span className="work-tracker-card-title-row">
+                      <strong>{group.vehicle?.vehicle_name ?? 'Unknown Vehicle'}</strong>
+                      <span className="muted" style={{ fontSize: '0.78rem' }}>({group.vehicle?.plate_number ?? '-'})</span>
+                      {group.needsAction && <Icon name="alert" size={13} className="work-tracker-item-flag" />}
+                    </span>
+                    <span className="work-tracker-card-sub" title={group.ticket_title}>#{group.ticket_id} · {group.ticket_title}</span>
+                    <span className="work-tracker-card-summary">
+                      {group.subIssues.length} work order{group.subIssues.length !== 1 ? 's' : ''}
+                    </span>
+                  </span>
+                  <span className="work-tracker-card-chevron">▸</span>
+                </button>
+              );
+            })
+          )}
+        </div>
       </section>
+
+      <FormModal
+        open={!!modalGroup}
+        onClose={() => setModalGroup(null)}
+        title={displayGroup ? `${displayGroup.vehicle?.vehicle_name ?? 'Unknown Vehicle'} — #${displayGroup.ticket_id} · ${displayGroup.ticket_title}` : ''}
+      >
+        {displayGroup && (
+          <>
+            <button
+              type="button"
+              className="ghost-button"
+              style={{ marginBottom: 14 }}
+              onClick={() => displayGroup.vehicle && onViewVehicle(displayGroup.vehicle)}
+            >
+              View Vehicle ↗
+            </button>
+            <div className="work-tracker-subissue-list">
+              {displayGroup.subIssues.map((r) => (
+                <div key={r.sub_issue_id} className={`work-tracker-subissue-card${r.status === 'Under Repair' ? ' needs-action' : ''}`}>
+                  <div className="work-tracker-subissue-top">
+                    <strong>{r.title}</strong>
+                    <TicketStatusBadge value={r.status} />
+                  </div>
+                  {r.confirmation_verdict === 'Reopened' ? (
+                    <span className="status-badge rework-danger" style={{ fontSize: '0.75rem', padding: '3px 8px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <Icon name="alert" size={13} /> Admin Reopened Rework
+                    </span>
+                  ) : r.verification_verdict === 'Rejected' ? (
+                    <span className="status-badge rework-warning" style={{ fontSize: '0.75rem', padding: '3px 8px', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <Icon name="alert" size={13} /> Custodian Rejected Rework
+                    </span>
+                  ) : null}
+                  <p className="muted" style={{ margin: '6px 0 0', fontSize: '0.8rem' }}>{r.work_order_notes ?? r.ticket_description}</p>
+                  {!isPendingView && r.repair_logs && <RepairLogEntries text={r.repair_logs} compact />}
+                  <div className="work-tracker-subissue-bottom">
+                    <span className="muted" style={{ fontSize: '0.78rem' }}>{r.maintenance_type ?? '—'}</span>
+                    <span className="muted" style={{ fontSize: '0.78rem' }}><DateBadge value={r.mechanic_assigned_at} /> · {formatTime(r.mechanic_assigned_at)}</span>
+                    <span style={{ marginLeft: 'auto' }}>
+                      {r.status === 'Under Repair'
+                        ? <button className="btn-edit-action icon-btn" type="button" onClick={() => onOpenLogRepairs(r)} title="Log Repairs" aria-label="Log Repairs"><Icon name="wrench" size={14} /></button>
+                        : <span className="muted">Submitted</span>}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </FormModal>
     </div>
   );
 }
@@ -14382,13 +14423,12 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                   onChange={(e) => { setExternalVendor(e.target.value); onDirty?.(); }}
                   style={{ maxWidth: 220 }}
                 />
-                <input
-                  type="date"
-                  title="Warranty Until"
-                  value={warrantyUntil}
-                  onChange={(e) => { setWarrantyUntil(e.target.value); onDirty?.(); }}
-                  style={{ maxWidth: 180 }}
-                />
+                <span title="Warranty Until" style={{ maxWidth: 180, display: 'inline-block' }}>
+                  <DateFilterInput
+                    value={warrantyUntil}
+                    onChange={(v) => { setWarrantyUntil(v); onDirty?.(); }}
+                  />
+                </span>
               </>
             )}
           </div>
@@ -14463,11 +14503,11 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             <h4 style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: 6, color: '#0f172a', fontSize: '0.85rem' }}><Icon name="calendar" size={14} /> Schedule</h4>
             <label style={{ marginBottom: 6 }}>
               <span style={{ fontSize: '0.68rem' }}>Start Date</span>
-              <input type="date" value={repairStartedAt} onChange={(e) => { setRepairStartedAt(e.target.value); onDirty?.(); }} style={{ width: '100%', padding: '6px 5px', fontSize: '0.75rem' }} />
+              <DateFilterInput value={repairStartedAt} onChange={(v) => { setRepairStartedAt(v); onDirty?.(); }} />
             </label>
             <label style={{ marginBottom: 6 }}>
               <span style={{ fontSize: '0.68rem' }}>Completion Date</span>
-              <input type="date" value={repairCompletedAt} onChange={(e) => { setRepairCompletedAt(e.target.value); onDirty?.(); }} style={{ width: '100%', padding: '6px 5px', fontSize: '0.75rem' }} />
+              <DateFilterInput value={repairCompletedAt} onChange={(v) => { setRepairCompletedAt(v); onDirty?.(); }} />
             </label>
           </div>
         </div>
@@ -14587,7 +14627,7 @@ function ticketTableColumns(unreadByTicket = {}) {
         );
       },
     },
-    { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
     { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.status} /> },
     { key: 'next_step', label: 'Next Step', className: 'cell-center', render: (r) => <TicketStageBadge ticket={r} /> },
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
@@ -14605,7 +14645,7 @@ const ticketArchiveColumns = [
   { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => r.ticket_id },
   { key: 'title', label: 'Title', render: (r) => r.ticket_title },
   { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle ?? { vehicle_name: r.vehicle_name, plate_number: r.plate_number }} /> },
-  { key: 'plate', label: 'Plate', className: 'cell-center', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
+  { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
   { key: 'expenses', label: 'Expenses', className: 'cell-center', render: (r) => r.maintenance_cost ? `₱${Number(r.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₱0.00' },
   { key: 'final_status', label: 'Final Status', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.final_status} /> },
   { key: 'archived_by', label: 'Archived By', className: 'cell-center', render: (r) => <UserAvatarName user={r.archived_by} fallback="—" /> },
