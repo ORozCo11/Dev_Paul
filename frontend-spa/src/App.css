@@ -1241,25 +1241,48 @@
 .breadcrumb-path { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
 .topbar h2 { font-size: 1.4rem; font-weight: 800; color: #0f172a; margin-top: 2px; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
-/* Only shows up while the current session was reached via Impersonate —
-   amber/warning-toned on purpose, so it reads as "you're not really this
-   account" rather than blending in as an ordinary nav button. */
-.return-impersonator-btn {
+/* Phase A5 — persistent full-width reminder (not just a topbar button) that
+   the current session is a read-only impersonation, shown on every page
+   for as long as it's active. Amber/warning-toned on purpose, same family
+   as the app's other warning callouts, so it reads as "you're not really
+   this account" rather than blending in as ordinary chrome. */
+.impersonation-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+  background: #4a2e05;
+  border-bottom: 1px solid #f59e0b;
+  color: #fcd34d;
+  font-size: 0.85rem;
+}
+.impersonation-banner > svg { flex-shrink: 0; }
+.impersonation-banner strong { color: #fde68a; }
+.impersonation-banner-return {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  margin-left: auto;
   padding: 7px 14px;
   border: 1.5px solid #f59e0b;
   border-radius: 8px;
   background: rgba(245, 158, 11, 0.12);
-  color: #92400e;
+  color: #fde68a;
   font-size: 0.8rem;
   font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
   transition: background 0.15s ease;
+  flex-shrink: 0;
 }
-.return-impersonator-btn:hover { background: rgba(245, 158, 11, 0.22); }
+.impersonation-banner-return:hover { background: rgba(245, 158, 11, 0.22); }
+html[data-theme="light"] .impersonation-banner {
+  background: #fffbeb;
+  border-bottom: 1px solid #fcd34d;
+  color: #92400e;
+}
+html[data-theme="light"] .impersonation-banner strong { color: #78350f; }
+html[data-theme="light"] .impersonation-banner-return { color: #92400e; }
 .topbar-search {
   display: flex; align-items: center; position: relative;
   background: #f8fafc; border: 1px solid #e2e8f0;
@@ -1643,6 +1666,16 @@ html[data-theme="light"] .toast-notice-ticket-link:hover,
   color: #fca5a5;
   box-shadow: 0 4px 10px rgba(239, 68, 68, 0.18);
 }
+/* Action succeeded but flagged something worth a second look (e.g. a
+   self-verification conflict from assign-mechanic/reassign-custodian) —
+   amber, same family as the other warning callouts in the app, so it never
+   blends into an ordinary green success or reads as a red failure. */
+.toast-notice.warning {
+  background: #4a2e05;
+  border: 1px solid #f59e0b;
+  color: #fcd34d;
+  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.18);
+}
 html[data-theme="light"] .toast-notice.success {
   background: #eafcf3;
   border: 1px solid #86efac;
@@ -1655,6 +1688,40 @@ html[data-theme="light"] .toast-notice.error {
   color: #b91c1c;
   box-shadow: 0 4px 10px rgba(239, 68, 68, 0.12);
 }
+html[data-theme="light"] .toast-notice.warning {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.12);
+}
+/* Phase A4 — "you're the only active Admin" dashboard banner. Same amber
+   family as .toast-notice.warning, but a persistent inline section (not a
+   dismissible toast) since this is standing state, not a one-off event. */
+.dashboard-sole-admin-warning {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: #4a2e05;
+  border: 1px solid #f59e0b;
+  color: #fcd34d;
+}
+.dashboard-sole-admin-warning > svg { flex-shrink: 0; }
+.dashboard-sole-admin-warning strong { display: block; color: #fde68a; }
+.dashboard-sole-admin-warning p { margin: 2px 0 0; font-size: 0.85rem; opacity: 0.9; }
+.dashboard-sole-admin-warning .ghost-button { flex-shrink: 0; margin-left: auto; border-color: #f59e0b; color: #fde68a; }
+html[data-theme="light"] .dashboard-sole-admin-warning {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+html[data-theme="light"] .dashboard-sole-admin-warning strong { color: #78350f; }
+html[data-theme="light"] .dashboard-sole-admin-warning .ghost-button { border-color: #fcd34d; color: #92400e; }
+/* Phase A4 — the same warning, compact, next to a barangay's Admin Status
+   badge in the Super Admin's barangay list. */
+.sole-admin-flag { display: inline-flex; color: #f59e0b; cursor: help; }
+html[data-theme="light"] .sole-admin-flag { color: #d97706; }
 /* Icon + message side by side, not stacked — any extra content (e.g. the
    ticket-link buttons below) still stacks under this row since the outer
    .toast-notice itself stays a column. */

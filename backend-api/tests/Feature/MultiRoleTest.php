@@ -18,6 +18,12 @@ use Tests\TestCase;
  * several roles on a single account and act under each — the system enforces
  * separation by ROLE (not by person), so the workflow still completes with
  * one human, and every action records which function they performed.
+ *
+ * One exception: whoever logged a sub-issue's repair can never be the one
+ * who verifies it, even under a different hat on the same account — "don't
+ * grade your own homework" is enforced per PERSON, not per role. Only an
+ * Admin can step in for that specific verification (see
+ * TicketController::verifyRepair, VMS-IMPROVEMENT-PLAN.md Phase A2).
  */
 class MultiRoleTest extends TestCase
 {
@@ -76,7 +82,7 @@ class MultiRoleTest extends TestCase
     }
 
     #[Test]
-    public function one_person_holding_two_hats_can_run_the_whole_pipeline(): void
+    public function one_person_holding_two_hats_can_run_the_whole_pipeline_except_verifying_their_own_repair(): void
     {
         $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
         // Juan is the barangay's single utility staffer — Custodian AND Maintenance.
@@ -104,11 +110,15 @@ class MultiRoleTest extends TestCase
         $subIssue = MaintenanceTicket::find($ticketId)->subIssues->first();
 
         // Admin assigns the repair to Juan (now wearing his Maintenance hat).
+        // This is exactly the setup that creates a self-verification conflict
+        // (Juan is both this sub-issue's mechanic AND the ticket's
+        // Custodian/verifier), so the response carries a warning about it.
         Sanctum::actingAs($admin, ['*']);
-        $this->putJson("/api/tickets/{$ticketId}/sub-issues/{$subIssue->sub_issue_id}/assign-mechanic", [
+        $assignResponse = $this->putJson("/api/tickets/{$ticketId}/sub-issues/{$subIssue->sub_issue_id}/assign-mechanic", [
             'assigned_mechanic_id' => $juan->id,
             'maintenance_type' => 'Engine Repair',
         ])->assertOk();
+        $assignResponse->assertJsonPath('warning', "{$juan->name} is also this ticket's Custodian — they won't be able to verify their own repair. An Admin will need to verify it instead.");
 
         // Juan (as Maintenance) logs the repair.
         Sanctum::actingAs($juan, ['*']);
@@ -116,7 +126,18 @@ class MultiRoleTest extends TestCase
             'repair_logs' => 'Refilled coolant, tested.',
         ])->assertOk();
 
-        // Juan (back in his Custodian hat) runs the functional test and accepts.
+        // Juan (back in his Custodian hat) CANNOT run the functional test on
+        // his own repair — "don't grade your own homework" holds per person,
+        // not per role, even though he's the sub-issue's assigned verifier.
+        $this->putJson("/api/tickets/{$ticketId}/sub-issues/{$subIssue->sub_issue_id}/verify", [
+            'verification_verdict' => 'Approved',
+            'test_attested' => true,
+            'functional_test' => [['item' => 'Reported issue no longer occurs', 'passed' => true]],
+        ])->assertForbidden()
+            ->assertJsonFragment(['message' => 'You performed this repair — an Admin needs to verify it.']);
+
+        // Admin steps in as the fallback and verifies it instead.
+        Sanctum::actingAs($admin, ['*']);
         $this->putJson("/api/tickets/{$ticketId}/sub-issues/{$subIssue->sub_issue_id}/verify", [
             'verification_verdict' => 'Approved',
             'test_attested' => true,
@@ -124,7 +145,6 @@ class MultiRoleTest extends TestCase
         ])->assertOk();
 
         // Admin gives the final verdict and closes.
-        Sanctum::actingAs($admin, ['*']);
         $this->putJson("/api/tickets/{$ticketId}/sub-issues/{$subIssue->sub_issue_id}/confirm", [
             'confirmation_verdict' => 'Confirmed',
         ])->assertOk();

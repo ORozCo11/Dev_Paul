@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ChecksRecurrence;
+use App\Http\Controllers\Concerns\GuardsLastAdmin;
 use App\Http\Controllers\Concerns\UploadsImages;
 use App\Models\ActivityLog;
 use App\Models\FaultCategory;
@@ -31,6 +32,7 @@ class FleetController extends Controller
 {
     use UploadsImages;
     use ChecksRecurrence;
+    use GuardsLastAdmin;
 
     private const HULL_MATERIAL_OPTIONS = ['Fiberglass', 'Aluminum', 'Steel', 'Wood', 'Rubber/Inflatable'];
 
@@ -286,6 +288,12 @@ class FleetController extends Controller
                     ->orderBy('scheduled_date')
                     ->get(['schedule_id', 'vehicle_id', 'maintenance_type', 'scheduled_date', 'scheduled_time', 'status'])
                 : [],
+
+            // VMS-IMPROVEMENT-PLAN.md Phase A4 — surfaces the same
+            // condition GuardsLastAdmin blocks from being CREATED, so an
+            // Admin sees "you're one departure away from an orphaned
+            // barangay" before it becomes a Super Admin recovery case.
+            'sole_active_admin' => $user->hasRole('Admin') && $this->isLastActiveAdminForBarangay($user),
         ]);
     }
 

@@ -15,6 +15,7 @@ use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\SuperAdminController;
 use App\Http\Controllers\UserController;
 use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\RestrictImpersonatedToReadOnly;
 use App\Http\Middleware\RestrictSuperAdminScope;
 
 /*
@@ -55,7 +56,7 @@ Route::post('/concern-reports', [ConcernReportController::class, 'store'])->midd
 | Protected Routes (Requires a Valid Sanctum Token in Header)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdminScope::class])->group(function () {
+Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class])->group(function () {
     
     // Session termination route
     Route::post('/logout', [AuthController::class, 'logout']);
@@ -141,6 +142,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
     Route::put('/superadmin/users/{user}/role', [SuperAdminController::class, 'updateUserRole']);
     Route::get('/superadmin/barangays/{barangay}/registration-code', [SuperAdminController::class, 'registrationCode']);
     Route::post('/superadmin/barangays/{barangay}/registration-code/regenerate', [SuperAdminController::class, 'regenerateRegistrationCode']);
+    Route::post('/superadmin/barangays/{barangay}/boundary/refresh', [SuperAdminController::class, 'refreshBarangayBoundary']);
     Route::get('/superadmin/activity-log', [SuperAdminController::class, 'activityLog']);
     Route::get('/superadmin/concern-reports', [SuperAdminController::class, 'concernReports']);
     Route::put('/superadmin/concern-reports/{concernReport}/resolve', [SuperAdminController::class, 'resolveConcernReport']);
@@ -216,6 +218,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
 
     // Phase 3 — Mechanic: Log physical repairs on a sub-issue
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/log-repairs', [TicketController::class, 'logRepairs']);
+
+    // Phase 3.5 — Admin: Approve or reject a cannibalized repair
+    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/approve-cannibalization', [TicketController::class, 'approveCannibalization']);
+    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/reject-cannibalization', [TicketController::class, 'rejectCannibalization']);
 
     // Phase 4 Tier 1 — Custodian: Verify a sub-issue's repair
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/verify', [TicketController::class, 'verifyRepair']);

@@ -309,7 +309,20 @@ function SignalCard({ icon, label, value, detail, tone = '', meter, onClick }) {
 // clickable filter-tabs, a search/filter row, and the full barangay table
 // with Add/Recover — one page, same shape as a "records in the market"
 // overview page rather than scattered across separate tabs.
-function DashboardTab({ barangays, users, pendingApprovals, concernReports, onPromote, onAddedBarangay, onNavigate }) {
+function DashboardTab({ barangays, users, pendingApprovals, concernReports, onPromote, onAddedBarangay, onRetryBoundary, onNavigate }) {
+  // Tracks which rows have a retry in flight, purely so the button can show
+  // "Checking…" and not be double-clicked — the lookup itself takes a couple
+  // seconds (it can make two sequential OSM requests, see lookupBoundary()).
+  const [retryingBoundaryId, setRetryingBoundaryId] = useState(null);
+  const retryBoundary = async (b) => {
+    setRetryingBoundaryId(b.id);
+    try {
+      await onRetryBoundary(b);
+    } finally {
+      setRetryingBoundaryId(null);
+    }
+  };
+
   const orphaned = barangays.filter((b) => !b.has_active_admin);
   const openConcerns = concernReports.filter((r) => r.status !== 'Resolved').length;
   const activeUsers = users.filter((u) => u.is_active).length;
@@ -398,7 +411,18 @@ function DashboardTab({ barangays, users, pendingApprovals, concernReports, onPr
     { label: 'City / Province', render: (b) => `${b.city_name ?? '-'} · ${b.province_name ?? '-'}` },
     { label: 'Staff', render: (b) => b.staff_count },
     { label: 'Admin Status', render: (b) => (
-      <StatusBadge value={b.has_active_admin ? 'Active Admin' : 'Orphaned'} />
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <StatusBadge value={b.has_active_admin ? 'Active Admin' : 'Orphaned'} />
+        {/* Phase A4 — one departure away from Orphaned: GuardsLastAdmin
+            blocks that departure from happening through deactivate/role-
+            change, but not this Admin simply leaving with no successor
+            ever promoted. */}
+        {b.sole_active_admin && (
+          <span className="sole-admin-flag" title="Only one active Admin — promote a backup before this barangay risks becoming orphaned.">
+            <Icon name="alert" size={13} />
+          </span>
+        )}
+      </span>
     ) },
     // Reg. Code / Boundary — the two other things that make a barangay
     // fully usable (staff can't register at all without a code; the
@@ -412,7 +436,17 @@ function DashboardTab({ barangays, users, pendingApprovals, concernReports, onPr
     { label: 'Boundary', className: 'cell-center', render: (b) => (
       b.has_boundary
         ? <span className="status-badge good" title="A map boundary polygon is on file."><Icon name="pin" size={11} /> On file</span>
-        : <span className="muted">Not set</span>
+        : (
+          <button
+            type="button"
+            className="ghost-button"
+            disabled={retryingBoundaryId === b.id}
+            title="No boundary matched when this barangay was added — try the lookup again."
+            onClick={() => retryBoundary(b)}
+          >
+            {retryingBoundaryId === b.id ? 'Checking…' : 'Not set · Retry'}
+          </button>
+        )
     ) },
     { label: 'Action', render: (b) => (
       !b.has_active_admin ? (
@@ -1038,6 +1072,10 @@ function ImpersonateInline({ candidates, onImpersonate }) {
   const [provinceKey, setProvinceKey] = useState('');
   const [barangayKey, setBarangayKey] = useState('');
   const [userId, setUserId] = useState('');
+  // Phase A5 — a written reason is required before impersonating anyone
+  // (support/recovery only, never idle browsing), and appears in both the
+  // target barangay's Activity Log and the Super Admin's own account log.
+  const [reason, setReason] = useState('');
 
   const groups = useMemo(() => {
     const byProvince = new Map();
@@ -1076,7 +1114,7 @@ function ImpersonateInline({ candidates, onImpersonate }) {
           {barangayOptions.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
       </div>
-      <div className="dev-impersonate" title="Impersonate a staff account for support or testing. This is logged.">
+      <div className="dev-impersonate" title="Impersonate a staff account for support or account recovery. Read-only, expires in 30 minutes, and is logged.">
         <select
           aria-label="Impersonate staff"
           value={userId}
@@ -1088,7 +1126,23 @@ function ImpersonateInline({ candidates, onImpersonate }) {
             <option key={u.id} value={u.id} disabled={!u.is_active}>{u.name} · {u.role}{u.is_active ? '' : ' (inactive)'}</option>
           ))}
         </select>
-        <button type="button" disabled={!userId} onClick={() => onImpersonate(userId)}>Impersonate</button>
+        {userId && (
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason (required)"
+            aria-label="Reason for impersonating"
+            style={{ width: 180 }}
+          />
+        )}
+        <button
+          type="button"
+          disabled={!userId || !reason.trim()}
+          onClick={() => { onImpersonate(userId, reason.trim()); setReason(''); }}
+        >
+          Impersonate
+        </button>
       </div>
     </>
   );
@@ -1407,6 +1461,22 @@ export default function SuperAdminWorkspace() {
     await loadAll(true);
   };
 
+  // Only meaningful for a barangay that has_boundary === false — re-runs the
+  // same OSM lookup storeBarangay() tried on creation, for the (common) case
+  // where nothing trustworthy was found the first time. Never overwrites a
+  // boundary that's already on file (see refreshBarangayBoundary()).
+  const retryBoundary = async (barangay) => {
+    try {
+      const res = await api.post(`/superadmin/barangays/${barangay.id}/boundary/refresh`);
+      setNotice(res.data.has_boundary
+        ? { type: 'success', text: `Found a boundary for ${barangay.name}.` }
+        : { type: 'error', text: `Still no boundary match for ${barangay.name} — try again later, or add it manually.` });
+      await loadAll(true);
+    } catch (error) {
+      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not retry that boundary lookup.' });
+    }
+  };
+
   const changeRole = async (targetUser, role) => {
     if (role === targetUser.role) return;
     try {
@@ -1468,9 +1538,9 @@ export default function SuperAdminWorkspace() {
     }
   };
 
-  const doImpersonate = async (userId) => {
+  const doImpersonate = async (userId, reason) => {
     try {
-      const res = await api.post(`/impersonate/${userId}`);
+      const res = await api.post(`/impersonate/${userId}`, { reason });
       // Stash the Super Admin's own token before it's overwritten below —
       // otherwise there was no way back into it short of logging out and
       // back in. Workspace.jsx's topbar reads these same keys to show a
@@ -1713,6 +1783,7 @@ export default function SuperAdminWorkspace() {
                 concernReports={concernReports}
                 onPromote={promoteToAdmin}
                 onAddedBarangay={addBarangay}
+                onRetryBoundary={retryBoundary}
                 onNavigate={setActiveTab}
               />
             ) : activeTab === 'pending' ? (
