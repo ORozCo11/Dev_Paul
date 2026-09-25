@@ -13,6 +13,7 @@ use App\Models\TicketSubIssue;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleConditionCheck;
+use App\Models\VehicleHistory;
 use App\Models\VehicleIssueReport;
 use App\Models\VehicleMaintenanceRecord;
 use Illuminate\Http\Request;
@@ -28,6 +29,12 @@ use Illuminate\Validation\Rule;
  *
  *   Open -> Under Repair -> For Inspection -> For Confirmation -> Done
  *
+ * A cannibalized repair (repair_type = cannibalized, a part taken from
+ * another vehicle) takes a detour between Under Repair and For Inspection:
+ *
+ *   Under Repair -> Pending Approval -> [Admin approves] -> For Inspection
+ *                                     -> [Admin rejects]  -> Under Repair
+ *
  * The ticket's progress is X/N sub-issues Done. New sub-issues can be
  * appended for as long as the ticket is Active. Once an Admin explicitly
  * Closes the ticket (only allowed at N/N), it is permanently locked — no
@@ -38,6 +45,7 @@ use Illuminate\Validation\Rule;
  *          A new sub-issue can be added later             -> addSubIssue()
  * Phase 3: Admin assigns a mechanic per sub-issue          -> assignMechanic()
  *          Mechanic logs repair per sub-issue              -> logRepairs()
+ *          Admin approves/rejects a cannibalized repair    -> approveCannibalization()/rejectCannibalization()
  * Phase 4: Custodian verifies a sub-issue (Tier 1)         -> verifyRepair()
  *          Admin confirms or reworks a sub-issue (Tier 2)  -> confirmSubIssue()
  * Phase 5: Admin explicitly closes the ticket (N/N only)   -> closeTicket()
@@ -111,7 +119,7 @@ class TicketController extends Controller
             'fault_categories'      => FaultCategory::orderBy('name')->pluck('name'),
             'maintenance_types'     => MaintenanceType::orderBy('name')->pluck('name'),
             'ticket_statuses'       => ['Open', 'Active', 'Closed', 'Cancelled'],
-            'sub_issue_statuses'    => ['Open', 'Under Repair', 'For Inspection', 'For Confirmation', 'Done', 'Deferred'],
+            'sub_issue_statuses'    => ['Open', 'Under Repair', 'Pending Approval', 'For Inspection', 'For Confirmation', 'Done', 'Deferred'],
         ]);
     }
 
@@ -555,7 +563,19 @@ class TicketController extends Controller
         abort_unless($mechanic->hasRole('Maintenance Personnel'), 422, 'The selected user is not Maintenance Personnel.');
         abort_unless($mechanic->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected mechanic does not belong to this barangay.');
 
-        DB::transaction(function () use ($ticket, $subIssue, $data, $request) {
+        // Not blocked — a small barangay may genuinely have no one else to
+        // assign — but the eventual verifier is already knowable here: it's
+        // whoever logRepairs()/verifyRepair() will later stamp/require,
+        // i.e. this ticket's current Custodian (see reassignCustodian's
+        // docblock for that cascade). If they match, this mechanic won't be
+        // able to verify their own work — verifyRepair() enforces that;
+        // this just tells the Admin up front instead of them discovering it
+        // when the sub-issue gets stuck at For Inspection.
+        $selfVerificationWarning = $mechanic->id === $ticket->assigned_custodian_id
+            ? "{$mechanic->name} is also this ticket's Custodian — they won't be able to verify their own repair. An Admin will need to verify it instead."
+            : null;
+
+        DB::transaction(function () use ($ticket, $subIssue, $data, $request, $selfVerificationWarning) {
             // Lock the sub-issue row for the duration of this assignment so
             // two concurrent work-order dispatches on the same sub-issue
             // serialize instead of racing.
@@ -572,7 +592,13 @@ class TicketController extends Controller
 
             $this->recomputeVehicleStatus($ticket->vehicle_id);
 
-            $this->log($request, 'Mechanic Assigned', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" assigned to mechanic ID {$data['assigned_mechanic_id']}.", $ticket->ticket_id);
+            $this->log(
+                $request,
+                'Mechanic Assigned',
+                "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" assigned to mechanic ID {$data['assigned_mechanic_id']}."
+                . ($selfVerificationWarning ? " ⚠ {$selfVerificationWarning}" : ''),
+                $ticket->ticket_id
+            );
 
             $vehicleName = $ticket->vehicle->vehicle_name;
             $this->notifyUser(
@@ -584,7 +610,12 @@ class TicketController extends Controller
             );
         });
 
-        return $subIssue->fresh();
+        $response = $subIssue->fresh()->toArray();
+        if ($selfVerificationWarning) {
+            $response['warning'] = $selfVerificationWarning;
+        }
+
+        return $response;
     }
 
     /**
@@ -692,7 +723,20 @@ class TicketController extends Controller
 
         $previousCustodianId = $ticket->assigned_custodian_id;
 
-        DB::transaction(function () use ($ticket, $data, $request, $newCustodian, $previousCustodianId) {
+        // Not blocked, same reasoning as assignMechanic()'s equivalent
+        // check — but checked the other way around: does the incoming
+        // Custodian already have a still-open work order of their own on
+        // THIS ticket? 'Done' is excluded — that repair is already
+        // verified, so there's no self-verification risk left to warn about.
+        $conflictingSubIssueTitles = $ticket->subIssues()
+            ->where('assigned_mechanic_id', $newCustodian->id)
+            ->where('status', '!=', 'Done')
+            ->pluck('title');
+        $selfVerificationWarning = $conflictingSubIssueTitles->isNotEmpty()
+            ? "{$newCustodian->name} is also the assigned mechanic on: {$conflictingSubIssueTitles->implode(', ')}. They won't be able to verify their own repair there — an Admin will need to verify it instead."
+            : null;
+
+        DB::transaction(function () use ($ticket, $data, $request, $newCustodian, $previousCustodianId, $selfVerificationWarning) {
             $previousName = User::find($previousCustodianId)?->name ?? 'the previous Custodian';
 
             $ticket->update(['assigned_custodian_id' => $newCustodian->id]);
@@ -713,7 +757,8 @@ class TicketController extends Controller
                 'Custodian Reassigned',
                 "Ticket #{$ticket->ticket_id} — Custodian reassigned from {$previousName} to {$newCustodian->name}."
                 . ($cascaded > 0 ? " {$cascaded} pending verification(s) moved with it." : '')
-                . " Reason: {$data['reassign_reason']}",
+                . " Reason: {$data['reassign_reason']}"
+                . ($selfVerificationWarning ? " ⚠ {$selfVerificationWarning}" : ''),
                 $ticket->ticket_id
             );
 
@@ -737,7 +782,12 @@ class TicketController extends Controller
             }
         });
 
-        return $ticket->fresh($this->eagerLoads());
+        $response = $ticket->fresh($this->eagerLoads())->toArray();
+        if ($selfVerificationWarning) {
+            $response['warning'] = $selfVerificationWarning;
+        }
+
+        return $response;
     }
 
     // ===================================================================
@@ -770,11 +820,20 @@ class TicketController extends Controller
             'warranty_until'        => ['nullable', 'date'],
         ]);
 
-        DB::transaction(function () use ($ticket, $subIssue, $data, $request) {
+        $effectiveRepairType = $data['repair_type'] ?? $subIssue->repair_type;
+        // A cannibalized repair is really two actions in one — fixing this
+        // vehicle by un-fixing another — so it doesn't go straight to
+        // Custodian verification like an in_house/external repair does. It
+        // parks at Pending Approval for an Admin to sign off first
+        // (approveCannibalization()/rejectCannibalization() below).
+        $needsCannibalizationApproval = $effectiveRepairType === 'cannibalized'
+            && ($data['source_vehicle_id'] ?? $subIssue->source_vehicle_id);
+
+        DB::transaction(function () use ($ticket, $subIssue, $data, $request, $effectiveRepairType, $needsCannibalizationApproval) {
             $existingLogs = $subIssue->repair_logs ? $subIssue->repair_logs . "\n\n" : '';
 
             $subIssue->update([
-                'status'                    => 'For Inspection',
+                'status'                    => $needsCannibalizationApproval ? 'Pending Approval' : 'For Inspection',
                 'verification_assigned_to'  => $ticket->assigned_custodian_id,
                 'repair_logs'               => $existingLogs . '[' . now()->format('Y-m-d H:i') . '] ' . $data['repair_logs'],
                 'parts_used'                => $data['parts_used'] ?? $subIssue->parts_used,
@@ -784,16 +843,24 @@ class TicketController extends Controller
                 'repair_started_at'         => $data['repair_started_at'] ?? $subIssue->repair_started_at,
                 'repair_completed_at'       => $data['repair_completed_at'] ?? null,
                 'maintenance_cost'          => $data['maintenance_cost'] ?? $subIssue->maintenance_cost,
-                'repair_type'               => $data['repair_type'] ?? $subIssue->repair_type,
-                'source_vehicle_id'         => ($data['repair_type'] ?? $subIssue->repair_type) === 'cannibalized'
+                'repair_type'               => $effectiveRepairType,
+                'source_vehicle_id'         => $effectiveRepairType === 'cannibalized'
                     ? ($data['source_vehicle_id'] ?? $subIssue->source_vehicle_id)
                     : null,
-                'external_vendor'           => ($data['repair_type'] ?? $subIssue->repair_type) === 'external'
+                'external_vendor'           => $effectiveRepairType === 'external'
                     ? ($data['external_vendor'] ?? $subIssue->external_vendor)
                     : null,
-                'warranty_until'            => ($data['repair_type'] ?? $subIssue->repair_type) === 'external'
+                'warranty_until'            => $effectiveRepairType === 'external'
                     ? ($data['warranty_until'] ?? $subIssue->warranty_until)
                     : null,
+                // Reset on every (re-)submission, not just the first: if a
+                // previously-rejected cannibalized repair is resubmitted
+                // (same or different donor vehicle), it needs a fresh
+                // Pending review, not to still read Rejected.
+                'cannibalization_status'            => $needsCannibalizationApproval ? 'Pending' : null,
+                'cannibalization_rejection_reason'  => null,
+                'cannibalization_reviewed_by'       => null,
+                'cannibalization_reviewed_at'       => null,
             ]);
 
             if (array_key_exists('estimated_return_date', $data) && $data['estimated_return_date']) {
@@ -804,11 +871,146 @@ class TicketController extends Controller
 
             $mechanicName = $request->user()->name;
             $vehicleName = $ticket->vehicle->vehicle_name;
+
+            if ($needsCannibalizationApproval) {
+                $this->notifyAdmins(
+                    'Cannibalized Repair Needs Approval',
+                    "Mechanic {$mechanicName} logged a cannibalized repair for \"{$subIssue->title}\" on Ticket #{$ticket->ticket_id} ({$vehicleName}), using a part from another vehicle. Please review before it goes to verification.",
+                    'cannibalization_pending',
+                    $ticket->ticket_id,
+                    $ticket->vehicle->barangay_id
+                );
+            } else {
+                $this->notifyUser(
+                    $ticket->assigned_custodian_id,
+                    'Verification Required: Repairs Completed',
+                    "Mechanic {$mechanicName} logged repair work for \"{$subIssue->title}\" on Ticket #{$ticket->ticket_id} ({$vehicleName}). Please verify.",
+                    'repairs_completed',
+                    $ticket->ticket_id
+                );
+            }
+        });
+
+        return $subIssue->fresh();
+    }
+
+    /**
+     * Admin approves a cannibalized repair — releases the sub-issue to
+     * Custodian verification (same handoff logRepairs() does for every
+     * other repair type) and records the donor vehicle's side of the
+     * trade: an Issue Report so "this vehicle is now missing a part" is
+     * never invisible, and a readiness recompute so that shows up
+     * immediately, not just whenever someone next inspects it.
+     */
+    public function approveCannibalization(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->requireRole($request, ['Admin']);
+        $this->assertBelongsToTicket($ticket, $subIssue);
+
+        abort_unless($subIssue->status === 'Pending Approval' && $subIssue->cannibalization_status === 'Pending', 422, 'This sub-issue is not awaiting cannibalization approval.');
+
+        $donorVehicle = Vehicle::findOrFail($subIssue->source_vehicle_id);
+        $vehicleName = $ticket->vehicle->vehicle_name;
+
+        DB::transaction(function () use ($ticket, $subIssue, $request, $donorVehicle, $vehicleName) {
+            $issue = VehicleIssueReport::create([
+                'vehicle_id'        => $donorVehicle->vehicle_id,
+                'issue_type'        => 'Other',
+                'issue_description' => "Part removed for use on {$vehicleName} (Ticket #{$ticket->ticket_id}: \"{$subIssue->title}\").",
+                'severity_level'    => 'Medium',
+                'reported_by'       => $request->user()->id,
+                'status'            => 'Pending',
+                'remarks'           => 'Auto-created when a cannibalized repair using this vehicle\'s part was approved.',
+            ]);
+
+            $donorVehicle->update(['condition' => 'Needs Inspection']);
+
+            VehicleHistory::create([
+                'vehicle_id'         => $donorVehicle->vehicle_id,
+                'activity_type'      => 'Issue Reported',
+                'description'        => "A part was removed from {$donorVehicle->vehicle_name} for use on {$vehicleName} (Ticket #{$ticket->ticket_id}).",
+                'related_table'      => 'vehicle_issue_reports',
+                'related_record_id'  => (string) $issue->issue_report_id,
+                'updated_by'         => $request->user()->id,
+            ]);
+
+            $subIssue->update([
+                'status'                       => 'For Inspection',
+                'cannibalization_status'       => 'Approved',
+                'cannibalization_reviewed_by'  => $request->user()->id,
+                'cannibalization_reviewed_at'  => now(),
+                'cannibalization_issue_report_id' => $issue->issue_report_id,
+            ]);
+
+            $this->log(
+                $request,
+                'Cannibalization Approved',
+                "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" cannibalized repair approved. Donor: {$donorVehicle->vehicle_name} ({$donorVehicle->plate_number}).",
+                $ticket->ticket_id
+            );
+
+            $adminName = $request->user()->name;
+            $this->notifyUser(
+                $subIssue->assigned_mechanic_id,
+                'Cannibalization Approved',
+                "{$adminName} approved the cannibalized repair for \"{$subIssue->title}\" on Ticket #{$ticket->ticket_id} ({$vehicleName}).",
+                'cannibalization_approved',
+                $ticket->ticket_id
+            );
             $this->notifyUser(
                 $ticket->assigned_custodian_id,
                 'Verification Required: Repairs Completed',
-                "Mechanic {$mechanicName} logged repair work for \"{$subIssue->title}\" on Ticket #{$ticket->ticket_id} ({$vehicleName}). Please verify.",
+                "A cannibalized repair for \"{$subIssue->title}\" on Ticket #{$ticket->ticket_id} ({$vehicleName}) was approved and is ready for your verification.",
                 'repairs_completed',
+                $ticket->ticket_id
+            );
+        });
+
+        return $subIssue->fresh();
+    }
+
+    /**
+     * Admin rejects a cannibalized repair — sends it back to the mechanic
+     * (Under Repair) instead of on to verification. No donor-vehicle side
+     * effects happen at all: nothing was actually removed from another
+     * vehicle on a rejection, so there's nothing to record there.
+     */
+    public function rejectCannibalization(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->requireRole($request, ['Admin']);
+        $this->assertBelongsToTicket($ticket, $subIssue);
+
+        abort_unless($subIssue->status === 'Pending Approval' && $subIssue->cannibalization_status === 'Pending', 422, 'This sub-issue is not awaiting cannibalization approval.');
+
+        $data = $request->validate([
+            'cannibalization_rejection_reason' => ['required', 'string'],
+        ], [
+            'cannibalization_rejection_reason.required' => 'A reason is required so the mechanic knows what to do instead.',
+        ]);
+
+        DB::transaction(function () use ($ticket, $subIssue, $data, $request) {
+            $subIssue->update([
+                'status'                            => 'Under Repair',
+                'cannibalization_status'            => 'Rejected',
+                'cannibalization_rejection_reason'  => $data['cannibalization_rejection_reason'],
+                'cannibalization_reviewed_by'       => $request->user()->id,
+                'cannibalization_reviewed_at'       => now(),
+            ]);
+
+            $this->log(
+                $request,
+                'Cannibalization Rejected',
+                "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" cannibalized repair rejected. Reason: {$data['cannibalization_rejection_reason']}",
+                $ticket->ticket_id
+            );
+
+            $adminName = $request->user()->name;
+            $vehicleName = $ticket->vehicle->vehicle_name;
+            $this->notifyUser(
+                $subIssue->assigned_mechanic_id,
+                'Cannibalization Rejected',
+                "{$adminName} rejected the cannibalized repair for \"{$subIssue->title}\" on Ticket #{$ticket->ticket_id} ({$vehicleName}). Reason: {$data['cannibalization_rejection_reason']}",
+                'cannibalization_rejected',
                 $ticket->ticket_id
             );
         });
@@ -822,10 +1024,34 @@ class TicketController extends Controller
 
     public function verifyRepair(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
-        $this->requireRole($request, ['Custodian']);
+        $this->requireRole($request, ['Custodian', 'Admin']);
         $this->assertBelongsToTicket($ticket, $subIssue);
 
-        abort_unless($subIssue->verification_assigned_to === $request->user()->id, 403, "This verification is assigned to {$subIssue->verificationAssignedTo?->name}.");
+        $isAdmin = $request->user()->hasRole('Admin');
+
+        // Admin is a general fallback for this Custodian action (same as
+        // every other Custodian action Admin can stand in for) — not
+        // restricted to just the self-verification case below, so a
+        // Custodian being unavailable for any reason (leave, reassignment
+        // lag, etc.) never has to dead-end a ticket. A Custodian, unlike
+        // Admin, must be the specific verifier this sub-issue was assigned
+        // to.
+        if (!$isAdmin) {
+            abort_unless($subIssue->verification_assigned_to === $request->user()->id, 403, "This verification is assigned to {$subIssue->verificationAssignedTo?->name}.");
+        }
+
+        // Independent check is the entire point of this step — "don't grade
+        // your own homework." A dual-role (Custodian + Maintenance
+        // Personnel) account that logged this repair can never be the one
+        // who signs off on it, even if they're also this sub-issue's
+        // assigned verifier; only Admin can step in for that case (the
+        // unconditional Admin path above already covers it).
+        abort_if(
+            $subIssue->assigned_mechanic_id === $request->user()->id,
+            403,
+            'You performed this repair — an Admin needs to verify it.'
+        );
+
         abort_unless($ticket->status === 'Active', 422, "Verification can only be submitted while the ticket is Active. Current status: {$ticket->status}.");
         abort_unless($subIssue->status === 'For Inspection', 422, "Verification can only be submitted when the sub-issue is For Inspection. Current: {$subIssue->status}.");
 
@@ -1577,6 +1803,7 @@ class TicketController extends Controller
             'subIssues.createdBy',
             'subIssues.verificationAssignedTo',
             'subIssues.sourceVehicle:vehicle_id,vehicle_name,plate_number',
+            'subIssues.cannibalizationReviewedBy',
         ];
     }
 

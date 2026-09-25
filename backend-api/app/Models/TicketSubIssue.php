@@ -68,6 +68,14 @@ class TicketSubIssue extends Model
         'deferred_by',
         'deferred_at',
         'deferred_issue_report_id',
+        // VMS-IMPROVEMENT-PLAN.md Phase A3 — an Admin's sign-off gate for a
+        // cannibalized repair, before it's allowed on to Custodian
+        // verification. Null for in_house/external repairs entirely.
+        'cannibalization_status',
+        'cannibalization_rejection_reason',
+        'cannibalization_reviewed_by',
+        'cannibalization_reviewed_at',
+        'cannibalization_issue_report_id',
     ];
 
     protected $casts = [
@@ -76,6 +84,7 @@ class TicketSubIssue extends Model
         'confirmed_at'         => 'datetime',
         'warranty_until'       => 'date',
         'deferred_at'          => 'datetime',
+        'cannibalization_reviewed_at' => 'datetime',
         'maintenance_cost'     => 'decimal:2',
         'functional_test'      => 'array',
         'test_attested'        => 'boolean',
@@ -134,6 +143,16 @@ class TicketSubIssue extends Model
     public function deferredBy()
     {
         return $this->belongsTo(User::class, 'deferred_by');
+    }
+
+    public function cannibalizationReviewedBy()
+    {
+        return $this->belongsTo(User::class, 'cannibalization_reviewed_by');
+    }
+
+    public function cannibalizationIssueReport()
+    {
+        return $this->belongsTo(VehicleIssueReport::class, 'cannibalization_issue_report_id', 'issue_report_id');
     }
 
     /**

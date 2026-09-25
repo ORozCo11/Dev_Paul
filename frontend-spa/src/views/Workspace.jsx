@@ -896,9 +896,18 @@ function Workspace() {
   const ticketAction = async (path, payload, successMsg, method = 'put') => {
     setNotice(null);
     try {
-      await sendPayload(method, path, payload);
+      const response = await sendPayload(method, path, payload);
       setEditTarget(null);
-      setNotice({ type: 'success', text: successMsg });
+      // assign-mechanic/reassign-custodian can succeed while also flagging a
+      // self-verification conflict they just created (e.g. the mechanic
+      // being assigned is also this ticket's Custodian) — see
+      // TicketController's `warning` responses (VMS-IMPROVEMENT-PLAN.md
+      // Phase A2). Not an error: the action went through, but it's worth a
+      // distinct amber notice instead of blending into an ordinary success.
+      const warning = response?.data?.warning;
+      setNotice(warning
+        ? { type: 'warning', text: `${successMsg} ⚠ ${warning}` }
+        : { type: 'success', text: successMsg });
       await refreshCurrent();
       return true;
     } catch (error) {
@@ -1962,7 +1971,11 @@ function Workspace() {
   const doImpersonate = async () => {
     if (!impersonateId) return;
     try {
-      const res = await api.post(`/impersonate/${impersonateId}`);
+      // Phase A5 — a reason is now required on every impersonation, even
+      // this dev-only shortcut; a fixed one keeps the "quick account
+      // switch while testing" flow frictionless instead of adding another
+      // field to a tool that's already stripped out of production.
+      const res = await api.post(`/impersonate/${impersonateId}`, { reason: 'Dev testing (local impersonate control)' });
       // Stash the acting account's own token before it's overwritten below —
       // otherwise there was no way back into it short of logging out and back
       // in. Keyed off role so "Return to..." can route straight to the right
@@ -1995,9 +2008,20 @@ function Workspace() {
   // assertImpersonationEnabled) — so the "Return to..." control only makes
   // sense, and only appears, when it was a Super Admin who impersonated in.
   const showReturnButton = !!impersonatorToken && impersonatorRole === 'Super Admin';
-  const stopImpersonating = () => {
+  const stopImpersonating = async () => {
     if (!impersonatorToken) return;
     const originalRole = localStorage.getItem('impersonator_role');
+    // Phase A5 — properly ends the impersonated session (revokes the token
+    // immediately rather than letting it just sit unused until its own
+    // 30-minute expiry, and logs "Impersonation Ended" — see
+    // AuthController::logout()) instead of only swapping tokens client-side.
+    // Best-effort: the token may already be close to expiring, and either
+    // way the local swap below is what actually gets the Super Admin back.
+    try {
+      await api.post('/logout');
+    } catch {
+      // ignore — proceeding to swap back regardless
+    }
     localStorage.setItem('token', impersonatorToken);
     localStorage.removeItem('impersonator_token');
     localStorage.removeItem('impersonator_name');
@@ -2263,16 +2287,9 @@ function Workspace() {
         </div>
 
         <div className="topbar-right">
-          {showReturnButton && (
-            <button
-              type="button"
-              className="return-impersonator-btn"
-              onClick={stopImpersonating}
-              title={`Stop impersonating and return to ${impersonatorName || 'your account'}`}
-            >
-              <Icon name="undo" size={14} /> Return to {impersonatorName || 'your account'}
-            </button>
-          )}
+          {/* The Return control now lives in the persistent banner below the
+              topbar (Phase A5) — a single, more visible home for it instead
+              of duplicating the button here too. */}
           <div className="notifications-dropdown-container" ref={notificationsRef}>
             <button
               className="icon-btn notification-btn"
@@ -2373,6 +2390,23 @@ function Workspace() {
         </div>
       </div>
       </header>
+
+      {/* Phase A5 — persistent, impossible-to-miss (spans every page, not
+          just a topbar button) reminder that this session is read-only:
+          RestrictImpersonatedToReadOnly rejects every non-GET request the
+          impersonated token makes except logout/switch-account, so this
+          also sets expectations before an action gets silently 403'd. */}
+      {showReturnButton && (
+        <div className="impersonation-banner" role="status">
+          <Icon name="alert" size={16} />
+          <span>
+            You're viewing <strong>{user.name}</strong>'s account as <strong>{impersonatorName || 'yourself'}</strong> — read-only, expires automatically.
+          </span>
+          <button type="button" className="impersonation-banner-return" onClick={stopImpersonating}>
+            <Icon name="undo" size={13} /> Return to {impersonatorName || 'your account'}
+          </button>
+        </div>
+      )}
 
       <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`}>
@@ -4441,6 +4475,12 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
   const visibleTypeRows = (data.vehicles_by_type ?? []).slice(0, 5);
   const isAdminDashboard = hasRole(user, 'Admin');
   const isMaintenanceDashboard = hasRole(user, 'Maintenance Personnel') && !isAdminDashboard;
+  // Phase A4 — one departure away from an orphaned barangay (nobody left
+  // who can manage users, vehicles, or approvals). GuardsLastAdmin blocks
+  // that departure from happening through deactivate/role-change, but not
+  // e.g. this Admin simply leaving with no successor ever promoted — this
+  // is the "before it happens" half of that protection.
+  const soleActiveAdmin = isAdminDashboard && data.sole_active_admin === true;
   const primaryActionCount = isAdminDashboard
     ? actionQueue.length
     : isMaintenanceDashboard
@@ -4458,6 +4498,16 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
 
   return (
     <div className="dashboard-grid dashboard-grid-smart">
+      {soleActiveAdmin && (
+        <section className="dashboard-sole-admin-warning full-span" role="alert">
+          <Icon name="alert" size={18} />
+          <div>
+            <strong>You're the only active Admin for this barangay.</strong>
+            <p>If your account is deactivated or steps down, nobody will be left who can manage users, vehicles, or approvals here. Promote another trusted staff member to Admin as a backup.</p>
+          </div>
+          <button type="button" className="ghost-button" onClick={() => onGoToModule('users', [])}>Manage Users</button>
+        </section>
+      )}
       <section className={`dashboard-command-center full-span is-${opsTone}`}>
         <div className="dashboard-command-copy">
           <span className="dashboard-command-role">{greetingRole}</span>
@@ -10869,7 +10919,7 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
           setFilterStatus={setFilterStatus}
           filterPriority={filterRole}
           setFilterPriority={setFilterRole}
-          statusOptions={['Open', 'Under Repair', 'For Inspection', 'For Confirmation', 'Done', 'Deferred']}
+          statusOptions={['Open', 'Under Repair', 'Pending Approval', 'For Inspection', 'For Confirmation', 'Done', 'Deferred']}
           priorityOptions={(hasRole(user, 'Custodian') && hasRole(user, 'Maintenance Personnel')) ? ['Mechanic', 'Custodian'] : []}
           priorityLabel="Role"
           extraFilters={[{
@@ -11170,6 +11220,7 @@ function TicketStatusBadge({ value, size = 'normal' }) {
     'Active': 'ticket-repair',
     'For Maintenance': 'ticket-formaint',
     'Under Repair': 'ticket-repair',
+    'Pending Approval': 'ticket-formaint',
     'For Inspection': 'ticket-forinspect',
     'For Confirmation': 'ticket-forconfirm',
     'Done': 'ticket-done',
@@ -11196,11 +11247,21 @@ function TicketStatusBadge({ value, size = 'normal' }) {
 // TICKET DETAIL PANEL — shown when admin clicks a ticket row
 // =========================================================================
 
-function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, onReassignMechanic, onReassignCustodian, onConfirm, onReopenDone, onAddSubIssue, onDeferSubIssue, onCloseTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSendToExternalShop, onClose, asPage = false }) {
+function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, onReassignMechanic, onReassignCustodian, onConfirm, onReopenDone, onAddSubIssue, onDeferSubIssue, onCloseTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSendToExternalShop, onVerify, onApproveCannibalization, onRejectCannibalization, onClose, asPage = false }) {
   const [assigningAll, setAssigningAll] = useState(false);
   const [reassigningAll, setReassigningAll] = useState(false);
   const [reassignTargetId, setReassignTargetId] = useState(null);
   const [confirmingId, setConfirmingId] = useState(null);
+  // Admin-only fallback verify (VMS-IMPROVEMENT-PLAN.md Phase A2) — the
+  // Custodian's own verify action lives entirely in CustodianVerificationModule;
+  // this is the one path Admin has into the same VerificationForm, for
+  // whenever the assigned Custodian can't do it themself (most notably:
+  // they're also the sub-issue's mechanic, and verifyRepair() blocks that).
+  const [verifyingId, setVerifyingId] = useState(null);
+  // Cannibalization approval (Phase A3) — tracks which sub-issue's reject
+  // form is open; Approve has no form of its own (it needs no input beyond
+  // the click itself), so it doesn't need a tracked id.
+  const [reviewingCannibalizationId, setReviewingCannibalizationId] = useState(null);
   const [deferringAll, setDeferringAll] = useState(false);
   const [deferTargetId, setDeferTargetId] = useState(null);
   const [reassigningCustodian, setReassigningCustodian] = useState(false);
@@ -11678,6 +11739,7 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
               {subIssues.map((si, index) => {
                 const stageBanner = {
                   'Under Repair':     { color: '#d97706', bg: '#fffbeb', text: '#92400e', icon: 'wrench', label: `Awaiting ${si.assigned_mechanic?.name ?? 'the mechanic'}'s repair log` },
+                  'Pending Approval': { color: '#d97706', bg: '#fffbeb', text: '#92400e', icon: 'alert', label: 'Cannibalized repair — awaiting Admin approval' },
                   'For Inspection':   { color: '#7c3aed', bg: '#f5f3ff', text: '#5b21b6', icon: 'search', label: 'Awaiting Custodian verification' },
                   'For Confirmation': { color: '#db2777', bg: '#fdf2f8', text: '#9d174d', icon: 'flag', label: "Custodian approved — awaiting Admin's final confirmation" },
                 }[si.status];
@@ -11809,6 +11871,69 @@ function TicketDetailPanel({ role, userId, ticket, lookups, onAssignMechanic, on
                         </button>
                       )}
                     </div>
+                  )}
+
+                  {/* Cannibalization approval (Phase A3) — a repair that used
+                      a part taken from another vehicle waits here for an
+                      Admin's sign-off before it's allowed on to Custodian
+                      verification. Approving auto-opens an Issue Report on
+                      the donor vehicle (backend side effect); rejecting
+                      requires a reason and sends the sub-issue back to the
+                      mechanic. */}
+                  {isAdmin && onApproveCannibalization && si.status === 'Pending Approval' && (
+                    reviewingCannibalizationId === si.sub_issue_id ? (
+                      <div className="ticket-inline-form" style={{ marginTop: 8, padding: '10px 12px' }}>
+                        <SmartForm
+                          fields={[
+                            { label: 'Rejection Reason', name: 'cannibalization_rejection_reason', type: 'textarea', rows: 2, required: true, placeholder: 'e.g., Needed on the donor vehicle itself' },
+                          ]}
+                          key={`reject-cannibalization-${si.sub_issue_id}`}
+                          onCancel={() => setReviewingCannibalizationId(null)}
+                          onSubmit={(payload) => onRejectCannibalization(ticket, si, payload).then(() => setReviewingCannibalizationId(null))}
+                          submitLabel="Reject Repair"
+                          title=""
+                        />
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: 10 }}>
+                        <p className="muted" style={{ marginBottom: 6, fontSize: '0.8rem' }}>
+                          Donor vehicle: <strong>{si.source_vehicle?.vehicle_name ?? 'Unknown'}</strong> ({si.source_vehicle?.plate_number ?? '-'}). Approving opens an Issue Report on it for the removed part.
+                        </p>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="primary-button" type="button" onClick={() => onApproveCannibalization(ticket, si, {})}>
+                            <Icon name="checkCircle" size={14} /> Approve Cannibalization
+                          </button>
+                          <button className="ghost-button" type="button" onClick={() => setReviewingCannibalizationId(si.sub_issue_id)}>
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  )}
+
+                  {/* Admin fallback verify (Phase A2) — the Custodian's own
+                      verify action lives in CustodianVerificationModule and
+                      isn't duplicated here; this exists specifically for
+                      when the assigned Custodian can't do it themself, most
+                      notably a dual-role account that also logged this
+                      repair (verifyRepair() blocks that on the backend).
+                      Not restricted to just that case — a general fallback,
+                      same as every other Custodian action Admin can stand
+                      in for. */}
+                  {isAdmin && onVerify && si.status === 'For Inspection' && (
+                    verifyingId === si.sub_issue_id ? (
+                      <div className="ticket-inline-form" style={{ marginTop: 8, padding: '10px 12px' }}>
+                        <VerificationForm
+                          target={{ ...si, vehicle: ticket.vehicle }}
+                          onCancel={() => setVerifyingId(null)}
+                          onSubmit={(payload) => onVerify(ticket, si, payload).then(() => setVerifyingId(null))}
+                        />
+                      </div>
+                    ) : (
+                      <button className="primary-button" style={{ marginTop: 10 }} type="button" onClick={() => setVerifyingId(si.sub_issue_id)}>
+                        <Icon name="checkCircle" size={14} /> Verify Repair (Admin)
+                      </button>
+                    )
                   )}
 
                   {isAdmin && si.status === 'For Confirmation' && (
@@ -12033,6 +12158,9 @@ function TicketProfilePage({ ticketId, role, userId, ticketLookups, onBack, onDe
       onReassignCustodian={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/reassign-custodian`, payload, 'Custodian reassigned.').then(loadTicket)}
       onConfirm={(t, subIssue, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues/${subIssue.sub_issue_id}/confirm`, payload, 'Confirmation verdict submitted.').then(loadTicket)}
       onReopenDone={(t, subIssue, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues/${subIssue.sub_issue_id}/reopen-confirmed`, payload, 'Sub-issue reopened for re-verification.').then(loadTicket)}
+      onVerify={(t, subIssue, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues/${subIssue.sub_issue_id}/verify`, payload, 'Repair verification submitted.').then(loadTicket)}
+      onApproveCannibalization={(t, subIssue, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues/${subIssue.sub_issue_id}/approve-cannibalization`, payload, 'Cannibalized repair approved — a donor-vehicle issue report was opened.').then(loadTicket)}
+      onRejectCannibalization={(t, subIssue, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues/${subIssue.sub_issue_id}/reject-cannibalization`, payload, 'Cannibalized repair rejected.').then(loadTicket)}
       onAddSubIssue={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues`, payload, 'Sub-issue added.', 'post').then(loadTicket)}
       onDeferSubIssue={(t, subIssue, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues/${subIssue.sub_issue_id}/defer`, payload, 'Sub-issue deferred — a follow-up issue report was opened.').then(loadTicket)}
       onSendToExternalShop={onSendToExternalShop}
@@ -14012,6 +14140,17 @@ function CustodianVerificationModule({
         if (r.status === 'For Inspection') {
           const assignedId = typeof r.verification_assigned_to === 'object' ? r.verification_assigned_to?.id : r.verification_assigned_to;
           const isAssignedToUser = assignedId === user.id || String(assignedId) === String(user.id);
+          // Mirrors TicketController::verifyRepair's own guard — a dual-role
+          // (Custodian + Maintenance Personnel) account assigned to verify
+          // their own repair can't "grade their own homework" here even
+          // though they're the assigned verifier. The button is hidden
+          // proactively; the backend is what actually enforces it. Only an
+          // Admin can step in for this one (from Ticket Detail).
+          const isOwnRepair = r.assigned_mechanic_id != null
+            && (r.assigned_mechanic_id === user.id || String(r.assigned_mechanic_id) === String(user.id));
+          if (isAssignedToUser && isOwnRepair) {
+            return <span className="muted" title="You performed this repair — an Admin needs to verify it.">Needs Admin (you did this repair)</span>;
+          }
           if (isAssignedToUser) {
             return <button className="btn-edit-action icon-btn" type="button" onClick={() => setEditTarget(r)} title="Verify Repair" aria-label="Verify Repair"><Icon name="checkCircle" size={14} /></button>;
           }

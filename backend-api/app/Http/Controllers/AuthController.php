@@ -367,20 +367,42 @@ class AuthController extends Controller
         // above.
         abort_if(!$user->is_active, 422, 'That account is deactivated.');
 
+        // A written reason, on every impersonation (dev-only included, so the
+        // habit — and the log's shape — is the same one that matters in
+        // production): this is a deliberate support/recovery action taken on
+        // someone else's behalf, not idle browsing, and the reason is what
+        // lets whoever reviews the log later actually judge that.
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'min:5', 'max:500'],
+        ], [
+            'reason.required' => 'A reason is required before impersonating an account.',
+        ]);
+
         // Impersonation is a brief, deliberate admin action, not a persistent
         // login — give it a short explicit expiry regardless of the global
         // Sanctum 'expiration' setting (config/sanctum.php), which governs
-        // ordinary login tokens instead.
-        $token = $user->createToken('impersonation_token', [...$user->allRoles(), 'impersonated'], now()->addHours(4))->plainTextToken;
+        // ordinary login tokens instead. 30 minutes (not the 4 hours this
+        // used to be): long enough for one support task, short enough that a
+        // forgotten/abandoned session doesn't sit live for hours.
+        $token = $user->createToken('impersonation_token', [...$user->allRoles(), 'impersonated'], now()->addMinutes(30))->plainTextToken;
 
         $actingAsSuperAdmin = $request->user()?->hasRole('Super Admin');
         ActivityLog::create([
-            'user_id' => $request->user()?->id,
-            'role'    => $request->user()?->role,
-            'action'  => 'Impersonate',
-            'module'  => $actingAsSuperAdmin ? 'Super Admin' : 'Dev Tools',
-            'details' => ($request->user()?->name ?? 'Someone') . " impersonated {$user->name}"
-                . ($actingAsSuperAdmin ? '.' : ' (dev only).'),
+            'user_id'     => $request->user()?->id,
+            'role'        => $request->user()?->role,
+            'action'      => 'Impersonate',
+            'module'      => $actingAsSuperAdmin ? 'Super Admin' : 'Dev Tools',
+            // Explicitly set (not left to BelongsToBarangay's creating-hook
+            // default, which would stamp the ACTOR's own barangay_id — null
+            // for a Super Admin) so this entry is visible in the TARGET
+            // barangay's own Activity Log (FleetController::logs(), scoped
+            // by BelongsToBarangay's global scope) as well as here via
+            // SuperAdminController::activityLog()'s module filter, from the
+            // same single row.
+            'barangay_id' => $user->barangay_id,
+            'details'     => ($request->user()?->name ?? 'Someone') . " impersonated {$user->name}"
+                . ($actingAsSuperAdmin ? '.' : ' (dev only).')
+                . " Reason: {$data['reason']}",
         ]);
 
         return response()->json([
@@ -401,8 +423,35 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
+        $user = $request->user();
+        $token = $user->currentAccessToken();
+
+        // Phase A5 — "log start and end": impersonate() above logs the
+        // start; ending one always goes through here (either an explicit
+        // logout, or Workspace.jsx's "Return to..." control, which calls
+        // this on the impersonated token before swapping back to the real
+        // account — see stopImpersonating()). $user IS the impersonated
+        // account at this point, not who started it, so this can't name
+        // them the way the start log does; cross-referencing barangay_id
+        // and timing against that start entry covers that.
+        //
+        // Keyed off the token's NAME, not ->can('impersonated') — see
+        // RestrictImpersonatedToReadOnly's docblock for why: the ability
+        // check is satisfied by ANY Sanctum::actingAs($user, ['*']) token,
+        // which is this whole test suite's normal way of authenticating.
+        if ($token?->name === 'impersonation_token') {
+            ActivityLog::create([
+                'user_id'     => $user->id,
+                'role'        => $user->role,
+                'action'      => 'Impersonation Ended',
+                'module'      => 'Super Admin',
+                'barangay_id' => $user->barangay_id,
+                'details'     => "Impersonated session for {$user->name} ended.",
+            ]);
+        }
+
         // Revoke the exact token string utilized to authenticate the active API request
-        $request->user()->currentAccessToken()->delete();
+        $token->delete();
 
         return response()->json([
             'message' => 'Session terminated and token revoked successfully.'

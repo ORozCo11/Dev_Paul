@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\GuardsLastAdmin;
 use App\Http\Controllers\Concerns\UploadsImages;
 use App\Models\RegistrationSetting;
 use App\Models\User;
@@ -12,6 +13,7 @@ use Illuminate\Validation\Rule;
 class UserController extends Controller
 {
     use UploadsImages;
+    use GuardsLastAdmin;
 
     private const ROLES = ['Admin', 'Custodian', 'Maintenance Personnel'];
 
@@ -134,6 +136,14 @@ class UserController extends Controller
             abort_if(!in_array('Admin', $data['roles'], true), 422, 'You cannot remove your own Admin role.');
         }
 
+        // Phase A4 — same protection, extended to an Admin editing SOMEONE
+        // ELSE'S roles: the self-check above only covers the acting Admin
+        // locking out their own account, not them demoting the barangay's
+        // only OTHER Admin.
+        if (array_key_exists('roles', $data) && !in_array('Admin', $data['roles'], true)) {
+            $this->abortIfLastActiveAdmin($user, 'removing their Admin role');
+        }
+
         if (!empty($data['password'])) {
             $data['password'] = Hash::make($data['password']);
         } else {
@@ -155,6 +165,7 @@ class UserController extends Controller
         $this->requireAdmin($request);
         $this->requireSameBarangay($request, $user);
         abort_if($user->id === $request->user()->id, 422, 'You cannot deactivate your own account.');
+        $this->abortIfLastActiveAdmin($user, 'deactivating them');
 
         $user->update(['is_active' => false]);
         // Revoke every existing token immediately — otherwise a session

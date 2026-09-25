@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\GuardsLastAdmin;
 use App\Models\ActivityLog;
 use App\Models\Barangay;
 use App\Models\ConcernReport;
@@ -24,6 +25,8 @@ use Illuminate\Validation\Rule;
  */
 class SuperAdminController extends Controller
 {
+    use GuardsLastAdmin;
+
     private const ROLES = ['Admin', 'Custodian', 'Maintenance Personnel'];
 
     /**
@@ -69,20 +72,36 @@ class SuperAdminController extends Controller
             ->withCount('users')
             ->orderBy('name')
             ->get()
-            ->map(fn ($b) => [
-                'id' => $b->id,
-                'name' => $b->name,
-                'city_name' => $b->city?->name,
-                'province_name' => $b->city?->province?->name,
-                'staff_count' => $b->users_count,
-                'has_active_admin' => $b->users()->havingRole('Admin')->where('is_active', true)->exists(),
-                // Both one-line, already-loaded checks — no extra queries per
-                // row. A barangay can exist with neither yet: freshly added
-                // via storeBarangay() below, nobody's registered there, and
-                // no boundary polygon has been matched/drawn for it.
-                'has_registration_code' => $b->registrationSetting !== null,
-                'has_boundary' => $b->boundary !== null,
-            ]);
+            ->map(function ($b) {
+                // One query, two derived facts — has_active_admin was
+                // previously its own separate ->exists() query; counting
+                // instead also gives Phase A4's "only one Admin left" signal
+                // for free.
+                $activeAdminCount = $b->users()->havingRole('Admin')->where('is_active', true)->count();
+
+                return [
+                    'id' => $b->id,
+                    'name' => $b->name,
+                    'city_name' => $b->city?->name,
+                    'province_name' => $b->city?->province?->name,
+                    'staff_count' => $b->users_count,
+                    'has_active_admin' => $activeAdminCount > 0,
+                    // VMS-IMPROVEMENT-PLAN.md Phase A4 — one departure away
+                    // from becoming a `has_active_admin: false` orphaned
+                    // barangay (see GuardsLastAdmin, which blocks that
+                    // departure from happening through the ordinary
+                    // deactivate/role-change endpoints, but not e.g. the
+                    // Admin simply leaving with no successor promoted).
+                    'sole_active_admin' => $activeAdminCount === 1,
+                    // Both one-line, already-loaded checks — no extra queries
+                    // per row. A barangay can exist with neither yet: freshly
+                    // added via storeBarangay() below, nobody's registered
+                    // there, and no boundary polygon has been matched/drawn
+                    // for it.
+                    'has_registration_code' => $b->registrationSetting !== null,
+                    'has_boundary' => $b->boundary !== null,
+                ];
+            });
     }
 
     /**
@@ -134,6 +153,34 @@ class SuperAdminController extends Controller
     }
 
     /**
+     * Re-runs the same best-effort boundary lookup storeBarangay() does on
+     * creation, for a barangay that doesn't have one yet — OSM's PH barangay
+     * coverage keeps growing, and a match that failed (or got correctly
+     * rejected as untrustworthy) when the barangay was first added can start
+     * succeeding later without anyone needing to delete and re-add the row.
+     * Only fills in a *missing* boundary; never overwrites one already on
+     * file (use a fresh delete+re-add for that, which is rare enough not to
+     * need its own endpoint).
+     */
+    public function refreshBarangayBoundary(Request $request, Barangay $barangay)
+    {
+        $this->requireSuperAdmin($request);
+
+        if ($barangay->boundary !== null) {
+            return response()->json(['has_boundary' => true]);
+        }
+
+        $barangay->load('city');
+        $boundary = $this->lookupBoundary($barangay->name, $barangay->city?->name);
+        if ($boundary) {
+            $barangay->update(['boundary' => $boundary]);
+            $this->log($request, 'Edit', "Found a boundary for barangay {$barangay->name} ({$barangay->city?->name}) on retry.");
+        }
+
+        return response()->json(['has_boundary' => $boundary !== null]);
+    }
+
+    /**
      * Asks OpenStreetMap's public Nominatim geocoder for a boundary polygon
      * matching "<barangay>, <city>, Philippines" — free, no API key, but
      * rate-limited to ~1 req/sec and requires an identifying User-Agent per
@@ -142,6 +189,20 @@ class SuperAdminController extends Controller
      * operation. Coverage isn't guaranteed for every barangay in the
      * country — returns null (silently — this must never block a barangay
      * from being created) whenever nothing usable comes back.
+     *
+     * Nominatim's free-text ranking isn't trustworthy enough to take its
+     * first "administrative boundary" hit as-is: PH barangay names repeat
+     * constantly nationwide (there are dozens of "San Isidro"s, "Poblacion"s,
+     * "San Roque"s...), and `class=boundary`/`type=administrative` matches
+     * ANY admin tier — barangay, city/municipality, province, or region —
+     * not specifically the barangay. Left unchecked, that silently attaches
+     * a same-named barangay's polygon from a different province, or the
+     * whole containing city's/province's polygon, to this barangay. So every
+     * candidate is cross-checked against its own `address` breakdown before
+     * being trusted: it must resolve to the requested city, and it must
+     * actually name the barangay at barangay-level granularity — not just
+     * be a match on the city/province. No match surviving that means no
+     * boundary, same as if the lookup had found nothing at all.
      */
     private function lookupBoundary(string $barangayName, ?string $cityName): ?array
     {
@@ -149,19 +210,54 @@ class SuperAdminController extends Controller
             return null;
         }
 
+        // Two phrasings, tried in order until one produces a validated match.
+        // OSM contributors are inconsistent about whether a barangay relation
+        // is named "San Isidro" or "Barangay San Isidro" — plain free-text
+        // search sometimes ranks the bare form above the "Barangay "-prefixed
+        // one for the same place (or vice versa) depending on what else on
+        // OSM shares that name, so both are worth a try before giving up.
+        $queries = [
+            "{$barangayName}, {$cityName}, Philippines",
+            "Barangay {$barangayName}, {$cityName}, Philippines",
+        ];
+
+        foreach ($queries as $i => $query) {
+            // Nominatim's usage policy caps this at ~1 req/sec; only the
+            // fallback attempt needs a beat before it, since it only runs
+            // when the first request has already returned.
+            if ($i > 0) {
+                usleep(1_000_000);
+            }
+
+            $geojson = $this->lookupBoundaryForQuery($query, $barangayName, $cityName);
+            if ($geojson) {
+                return $geojson;
+            }
+        }
+
+        return null;
+    }
+
+    private function lookupBoundaryForQuery(string $query, string $barangayName, string $cityName): ?array
+    {
         try {
             $response = Http::withHeaders(['User-Agent' => 'BarangayVMS/1.0 (https://github.com/ORozCo11/Dev_Paul)'])
                 ->timeout(6)
                 ->get('https://nominatim.openstreetmap.org/search', [
                     'format' => 'json',
                     'polygon_geojson' => 1,
+                    'addressdetails' => 1,
+                    'countrycodes' => 'ph',
                     'limit' => 5,
-                    'q' => "{$barangayName}, {$cityName}, Philippines",
+                    'q' => $query,
                 ]);
 
             if (!$response->successful()) {
                 return null;
             }
+
+            $normalizedCity = self::normalizeForMatch($cityName);
+            $normalizedBarangay = self::normalizeForMatch($barangayName);
 
             foreach ($response->json() ?? [] as $result) {
                 // Only trust an actual administrative boundary relation — anything
@@ -173,16 +269,63 @@ class SuperAdminController extends Controller
                 }
 
                 $geojson = $result['geojson'] ?? null;
-                if (in_array($geojson['type'] ?? null, ['Polygon', 'MultiPolygon'], true)) {
-                    return $geojson;
+                if (!in_array($geojson['type'] ?? null, ['Polygon', 'MultiPolygon'], true)) {
+                    continue;
                 }
+
+                // Reject anything outside the requested city — a same-named
+                // barangay elsewhere in the country must not be accepted just
+                // because it ranked in the top 5 results.
+                $address = $result['address'] ?? [];
+                $resultCity = $address['city'] ?? $address['municipality'] ?? $address['town'] ?? null;
+                if (!$resultCity || self::normalizeForMatch($resultCity) !== $normalizedCity) {
+                    continue;
+                }
+
+                // Reject a match that's actually the whole city/municipality
+                // (or province) rather than the barangay itself — too coarse
+                // to draw as one barangay's territory. A genuine barangay-
+                // level match names the barangay somewhere in its own
+                // address breakdown (OSM tags it as village/suburb/quarter/
+                // neighbourhood/city_district depending on how it was mapped).
+                $barangayLevelNames = array_filter([
+                    $address['village'] ?? null,
+                    $address['suburb'] ?? null,
+                    $address['quarter'] ?? null,
+                    $address['neighbourhood'] ?? null,
+                    $address['city_district'] ?? null,
+                ]);
+                $matchesBarangay = false;
+                foreach ($barangayLevelNames as $candidate) {
+                    if (self::normalizeForMatch($candidate) === $normalizedBarangay) {
+                        $matchesBarangay = true;
+                        break;
+                    }
+                }
+                if (!$matchesBarangay) {
+                    continue;
+                }
+
+                return $geojson;
             }
 
             return null;
         } catch (\Throwable $e) {
-            Log::warning("Boundary lookup failed for {$barangayName}, {$cityName}: {$e->getMessage()}");
+            Log::warning("Boundary lookup failed for {$barangayName}, {$cityName} (query \"{$query}\"): {$e->getMessage()}");
             return null;
         }
+    }
+
+    /**
+     * Same normalization BarangayBoundarySeeder uses to match the Mandaue
+     * boundary file's names against seeded rows — strip everything but
+     * letters/digits and lowercase, so "Centro (Poblacion)" vs "Centro",
+     * "Pakna-an" vs "Paknaan", casing, and stray whitespace never cause a
+     * real match to be rejected.
+     */
+    private static function normalizeForMatch(string $name): string
+    {
+        return strtolower(preg_replace('/[^a-z0-9]/i', '', $name));
     }
 
     /**
@@ -229,6 +372,7 @@ class SuperAdminController extends Controller
     {
         $this->requireSuperAdmin($request);
         abort_if($user->id === $request->user()->id, 422, 'You cannot deactivate your own account.');
+        $this->abortIfLastActiveAdmin($user, 'deactivating them');
 
         $user->update(['is_active' => false]);
         $user->tokens()->delete();
@@ -300,6 +444,10 @@ class SuperAdminController extends Controller
         $data = $request->validate([
             'role' => ['required', Rule::in(self::ROLES)],
         ]);
+
+        if ($data['role'] !== 'Admin') {
+            $this->abortIfLastActiveAdmin($user, 'changing their role');
+        }
 
         $user->update(['role' => $data['role'], 'roles' => [$data['role']]]);
         $this->log($request, 'Edit', "Changed {$user->name}'s role to {$data['role']}.");
