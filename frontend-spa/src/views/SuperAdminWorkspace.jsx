@@ -5,6 +5,7 @@ import api from '../api/axios';
 import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import ConfirmDialog from '../components/ConfirmDialog';
+import TouchMapGuard from '../components/TouchMapGuard';
 import { DonutChart, HorizontalBarChart } from '../components/charts';
 import { AuthContext } from '../context/AuthContextObject';
 import { geoJsonToRings } from '../utils/boundary';
@@ -134,8 +135,10 @@ function DataTable({ columns, rows, onRowClick, emptyMessage = 'No records found
               key={row.id ?? row.log_id ?? i}
               className={onRowClick ? 'is-clickable' : undefined}
               onClick={onRowClick ? (e) => { if (!e.target.closest('button, a, select')) onRowClick(row); } : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              onKeyDown={onRowClick ? (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); onRowClick(row); } } : undefined}
             >
-              {columns.map((c) => <td key={c.label} className={c.className}>{c.render ? c.render(row) : (row[c.key] ?? '-')}</td>)}
+              {columns.map((c) => <td key={c.label} className={c.className} data-label={typeof c.label === 'string' ? c.label : ''}>{c.render ? c.render(row) : (row[c.key] ?? '-')}</td>)}
             </tr>
           ))}
         </tbody>
@@ -223,9 +226,9 @@ function LocalSearchInput({ value, onChange, placeholder = 'Search...' }) {
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
-        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="local-search-input" />
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder.replace(/\.+$/, '')} className="local-search-input" />
         {value && (
-          <button className="local-search-clear" onClick={() => onChange('')} type="button" title="Clear search">
+          <button className="local-search-clear" onClick={() => onChange('')} type="button" title="Clear search" aria-label="Clear search">
             <Icon name="close" size={14} />
           </button>
         )}
@@ -627,6 +630,12 @@ function DashboardTab({ barangays, users, pendingApprovals, concernReports, onPr
 // uses — no new geospatial code.
 function BoundaryReviewModal({ barangay, onClose, onConfirm, onDiscard }) {
   const [busy, setBusy] = useState(false);
+  // Escape closes the review (unless a confirm/discard is in flight).
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onClose?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [busy, onClose]);
   const rings = useMemo(() => geoJsonToRings(barangay.pending_boundary), [barangay.pending_boundary]);
   const allPoints = rings.flat();
   const center = allPoints.length
@@ -640,7 +649,7 @@ function BoundaryReviewModal({ barangay, onClose, onConfirm, onDiscard }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-box" role="dialog" aria-modal="true" aria-label={`Review boundary for ${barangay.name}`} style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Review Boundary — {barangay.name}</h3>
           <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
@@ -658,6 +667,7 @@ function BoundaryReviewModal({ barangay, onClose, onConfirm, onDiscard }) {
                 {rings.map((ring, i) => (
                   <Polygon key={i} positions={ring} pathOptions={{ color: '#d97706', fillColor: '#fbbf24', fillOpacity: 0.3 }} />
                 ))}
+                <TouchMapGuard />
               </MapContainer>
             </div>
           )}
@@ -1416,6 +1426,22 @@ export default function SuperAdminWorkspace() {
   // deliberate, in-session choice (the toggle button), never the default a
   // returning user lands on.
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Phone-width drawer (the sidebar slides in over the page instead of
+  // collapsing to an icon rail).
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setMobileNavOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileNavOpen]);
+  const toggleSidebar = () => {
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      setMobileNavOpen((open) => !open);
+      return;
+    }
+    setIsSidebarCollapsed((v) => !v);
+  };
   const [collapsedNavGroups, setCollapsedNavGroups] = useState([]);
   const toggleNavGroup = (section) => {
     setCollapsedNavGroups((prev) => (prev.includes(section) ? prev.filter((s) => s !== section) : [...prev, section]));
@@ -1722,13 +1748,14 @@ export default function SuperAdminWorkspace() {
     // couldn't be targeted on its own without also restyling every select
     // in the fleet-facing app.
     <div className="superadmin-shell">
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <header className="topbar">
         <div className="topbar-left">
           <div className="topbar-brand-cluster">
             <button
               aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               className="sidebar-toggle-btn"
-              onClick={() => setIsSidebarCollapsed((v) => !v)}
+              onClick={toggleSidebar}
               title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               type="button"
             >
@@ -1736,7 +1763,7 @@ export default function SuperAdminWorkspace() {
             </button>
             <Icon name="gear" size={28} className="topbar-gear-icon" filled />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
-            <ImpersonateInline candidates={candidates} onImpersonate={doImpersonate} />
+            <span className="topbar-pickers"><ImpersonateInline candidates={candidates} onImpersonate={doImpersonate} /></span>
           </div>
         </div>
 
@@ -1745,6 +1772,7 @@ export default function SuperAdminWorkspace() {
             <button
               className="icon-btn notification-btn"
               title="Notifications"
+              aria-label={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : 'Notifications'}
               type="button"
               onClick={() => setShowNotifications((v) => !v)}
             >
@@ -1778,6 +1806,9 @@ export default function SuperAdminWorkspace() {
                         <div
                           key={n.notification_id}
                           className={`notification-item notification-${notificationType} ${!n.read_at ? 'unread' : ''}`}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); e.currentTarget.click(); } }}
                           onClick={async () => {
                             await markNotificationAsRead(n.notification_id);
                             if (n.type === 'pending_admin_approval') {
@@ -1840,8 +1871,9 @@ export default function SuperAdminWorkspace() {
         </div>
       </header>
 
-      <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`}>
+      <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
+        <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="superadmin-sidebar">
+          <div className="sidebar-mobile-extras"><ImpersonateInline candidates={candidates} onImpersonate={doImpersonate} /></div>
           <nav className="module-nav" aria-label="Super Admin modules">
             {NAV_GROUPS.map(({ section, icon, items }) => {
               const renderItem = ([key, label]) => {
@@ -1850,7 +1882,8 @@ export default function SuperAdminWorkspace() {
                   <button
                     key={key}
                     className={key === activeTab ? 'active' : ''}
-                    onClick={() => setActiveTab(key)}
+                    onClick={() => { setActiveTab(key); setMobileNavOpen(false); }}
+                    aria-label={badgeCount > 0 ? `${label} (${badgeCount})` : label}
                     title={isSidebarCollapsed ? label : undefined}
                     type="button"
                   >
@@ -1887,8 +1920,9 @@ export default function SuperAdminWorkspace() {
             })}
           </nav>
         </aside>
+        {mobileNavOpen && <div className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
 
-        <section className="content-area">
+        <section className="content-area" id="main-content" tabIndex={-1}>
           <div className="page-heading-row">
             <span className="page-heading-icon">{TAB_ICONS[activeTab]}</span>
             <div className="page-heading-text">

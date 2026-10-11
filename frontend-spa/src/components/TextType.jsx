@@ -34,6 +34,11 @@ const TextType = ({
   const containerRef = useRef(null);
 
   const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
+  // With "reduce motion" on, show the text at once — no typing, no blinking.
+  const reduceMotion = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+    []
+  );
 
   const getRandomSpeed = useCallback(() => {
     if (!variableSpeed) return typingSpeed;
@@ -65,7 +70,7 @@ const TextType = ({
   }, [startOnVisible]);
 
   useEffect(() => {
-    if (showCursor && cursorRef.current) {
+    if (!reduceMotion && showCursor && cursorRef.current) {
       gsap.set(cursorRef.current, { opacity: 1 });
       gsap.to(cursorRef.current, {
         opacity: 0,
@@ -75,10 +80,10 @@ const TextType = ({
         ease: 'power2.inOut',
       });
     }
-  }, [showCursor, cursorBlinkDuration]);
+  }, [showCursor, cursorBlinkDuration, reduceMotion]);
 
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible || reduceMotion) return;
 
     let timeout;
     const currentText = textArray[currentTextIndex];
@@ -155,11 +160,14 @@ const TextType = ({
       className: `text-type ${className}`,
       ...props,
     },
-    <span className="text-type__content" style={{ color: getCurrentTextColor() || 'inherit' }}>
-      {displayedText}
+    // Screen readers get the whole sentence, not the half-typed text.
+    <span className="sr-only">{textArray[currentTextIndex]}</span>,
+    <span className="text-type__content" style={{ color: getCurrentTextColor() || 'inherit' }} aria-hidden="true">
+      {reduceMotion ? textArray[0] : displayedText}
     </span>,
-    showCursor && (
+    showCursor && !reduceMotion && (
       <span
+        aria-hidden="true"
         ref={cursorRef}
         className={`text-type__cursor ${cursorClassName} ${shouldHideCursor ? 'text-type__cursor--hidden' : ''}`}
       >

@@ -3,7 +3,17 @@
 // changes...) needs a yes/no gate, instead of the browser's own native
 // window.confirm(). `dialog` is null when closed; set it to
 // { title?, message, confirmLabel?, variant?: 'primary', onConfirm } to open.
+import { useEffect } from 'react';
+
 export default function ConfirmDialog({ busy, dialog, onCancel, onConfirm }) {
+  // Escape cancels (unless an action is already running).
+  useEffect(() => {
+    if (!dialog) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) onCancel?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [dialog, busy, onCancel]);
+
   if (!dialog) return null;
 
   return (

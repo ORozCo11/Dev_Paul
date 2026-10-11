@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import TouchMapGuard from './TouchMapGuard';
 
 const ESRI_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const ESRI_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
@@ -92,6 +93,7 @@ export default function AddLocationMap({ marker, boundaryRings, onPick }) {
       ))}
       {marker && <Marker position={[marker.lat, marker.lng]} icon={pickPin} />}
       <FlyToMarker marker={marker} />
+      <TouchMapGuard />
     </MapContainer>
   );
 }

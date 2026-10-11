@@ -85,12 +85,12 @@ function Login() {
           <h1 id="login-title" className="auth-login-heading">Login</h1>
         </div>
 
-        <form className="auth-form" autoComplete="off" onSubmit={handleSubmit} noValidate>
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <label className="auth-field">
             <span>Email Address</span>
             <div className="auth-input-wrapper auth-input-plain">
               <input
-                autoComplete="off"
+                autoComplete="email"
                 name="email"
                 onChange={handleChange}
                 placeholder="Email address"
@@ -105,7 +105,7 @@ function Login() {
             <span>Password</span>
             <div className="auth-input-wrapper auth-input-plain">
               <input
-                autoComplete="new-password"
+                autoComplete="current-password"
                 name="password"
                 onChange={handleChange}
                 placeholder="Password"
@@ -134,7 +134,7 @@ function Login() {
             Remember Me
           </label>
 
-          {error ? <p className="notice error">{error}</p> : null}
+          {error ? <p className="notice error" role="alert">{error}</p> : null}
 
           <button className="primary-button auth-submit-btn" disabled={submitting} type="submit">
             {submitting ? (

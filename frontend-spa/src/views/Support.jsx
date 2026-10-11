@@ -179,7 +179,7 @@ export default function Support() {
               </div>
             </label>
 
-            {result && <p className={`notice ${result.type} auth-field-full`}>{result.text}</p>}
+            {result && <p className={`notice ${result.type} auth-field-full`} role={result.type === 'error' ? 'alert' : 'status'}>{result.text}</p>}
 
             <button className="primary-button auth-submit-btn auth-field-full" type="submit" disabled={submitting}>
               {submitting ? 'Submitting…' : 'Submit Concern'}

@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
@@ -235,6 +235,19 @@ function userRoles(user) {
 // primary role first, so a module defined by two roles keeps the label from
 // the user's primary portal (e.g. "Report Vehicle Issue" vs "View Vehicle
 // Issues" for a Custodian+Maintenance account).
+// Phone bottom bar: the first four of these a role actually has, with
+// short labels that fit under an icon.
+const BOTTOM_NAV_PRIORITY = ['dashboard', 'myTasks', 'ticketWorkOrders', 'tickets', 'reportOrPropose', 'schedules', 'vehicles'];
+const BOTTOM_NAV_LABELS = {
+  dashboard: 'Home',
+  myTasks: 'My Tasks',
+  ticketWorkOrders: 'Work Orders',
+  tickets: 'Tickets',
+  reportOrPropose: 'Report',
+  schedules: 'Schedule',
+  vehicles: 'Vehicles',
+};
+
 function resolveModuleGroups(user) {
   const roles = userRoles(user);
   const source = roles.length ? roles : [user?.role].filter(Boolean);
@@ -683,6 +696,15 @@ function Workspace() {
   // deliberate, in-session choice (the toggle button), never the default a
   // returning user lands on.
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Escape closes the phone drawer.
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setMobileNavOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileNavOpen]);
   const [lookups, setLookups] = useState(emptyLookups);
   const [ticketLookups, setTicketLookups] = useState(emptyTicketLookups);
   const [records, setRecords] = useState({});
@@ -2396,7 +2418,14 @@ function Workspace() {
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
 
+  // On phones the menu button opens the sidebar as a slide-out drawer
+  // instead of collapsing it to the icon rail.
+  const isPhoneWidth = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
   const toggleSidebar = () => {
+    if (isPhoneWidth()) {
+      setMobileNavOpen((open) => !open);
+      return;
+    }
     setIsSidebarCollapsed((prev) => !prev);
   };
 
@@ -2665,9 +2694,86 @@ function Workspace() {
       : (dashboard?.badge_counts?.[key] ?? 0)
   );
 
+  // Open a sidebar module — shared by the sidebar, the phone drawer and the
+  // phone bottom bar. Closes the drawer once navigation actually happens.
+  const goToModule = (key) => guardedNavigate(() => {
+    setMobileNavOpen(false);
+    // 'ticketPropose' isn't a real module — it's a direct link to the
+    // Propose Ticket form.
+    if (key === 'ticketPropose') {
+      navigate(`${roleRoutes[user.role]}/tickets/new`);
+      return;
+    }
+    // 'myTasks' / 'maintenanceLedger' are thin tabbed wrappers — they reopen
+    // whichever tab was last open.
+    if (key === 'myTasks') {
+      setMyTasksTab(myTasksLastTab);
+    } else if (key === 'maintenanceLedger') {
+      setMaintenanceLedgerTab(maintenanceLedgerLastTab);
+    } else {
+      if (key === 'workTracker') setWorkTrackerViaMyTasks(false);
+      // 'reportOrPropose' is a relabeled alias for the Issue Reports list.
+      setActiveModule(key === 'reportOrPropose' ? 'issues' : key);
+    }
+    if (isOnSpecialPage) {
+      navigate(roleRoutes[user.role]);
+    }
+  });
+
+  // The phone bottom bar shows up to four of the role's most-used modules.
+  const bottomNavItems = BOTTOM_NAV_PRIORITY
+    .map((key) => modules.find(([k]) => k === key))
+    .filter(Boolean)
+    .slice(0, 4);
+
+  // Map-boundary pickers (+ the dev-only impersonate control). Rendered in
+  // the top bar on wider screens and inside the drawer on phones.
+  const topbarPickers = (
+    <>
+      <div className="map-boundary-selector" title="Choose which registered barangay outline the Vehicle Location map draws.">
+        <select
+          aria-label="Map boundary province"
+          onChange={handleMapProvinceChange}
+          value={mapProvinceId}
+        >
+          {provinceOptions.map((province) => (
+            <option key={province.id} value={province.id}>{province.name}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Map boundary barangay"
+          disabled={barangayOptions.length === 0}
+          onChange={handleMapBarangayChange}
+          value={mapBarangayId}
+        >
+          {barangayOptions.length > 0 ? (
+            barangayOptions.map((barangay) => (
+              <option key={barangay.id} value={barangay.id}>{barangay.name}</option>
+            ))
+          ) : (
+            <option value="">No registered barangay</option>
+          )}
+        </select>
+      </div>
+      {import.meta.env.DEV && impersonateGroupUsers.length > 0 && (
+        <div className="dev-impersonate" title="Dev only — switch account without logging out. Not present in production. Staff list follows the barangay picked above.">
+          <select value={impersonateId} onChange={(e) => setImpersonateId(e.target.value)} aria-label="Impersonate account">
+            {impersonateGroupUsers.map((u) => (
+              <option key={u.id} value={u.id} disabled={!u.is_active}>
+                {u.name} · {u.role}{u.is_active ? '' : ' (inactive)'}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={doImpersonate}>Impersonate</button>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <FormNoticeContext.Provider value={notice}>
     <RowActionsContext.Provider value={rowActions}>
+      <a className="skip-link" href="#main-content">Skip to content</a>
       <header className="topbar">
         <div className="topbar-left">
           <div className="topbar-brand-cluster">
@@ -2683,43 +2789,7 @@ function Workspace() {
             <Icon name="gear" size={28} className="topbar-gear-icon" filled />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
-          <div className="map-boundary-selector" title="Choose which registered barangay outline the Vehicle Location map draws.">
-            <select
-              aria-label="Map boundary province"
-              onChange={handleMapProvinceChange}
-              value={mapProvinceId}
-            >
-              {provinceOptions.map((province) => (
-                <option key={province.id} value={province.id}>{province.name}</option>
-              ))}
-            </select>
-            <select
-              aria-label="Map boundary barangay"
-              disabled={barangayOptions.length === 0}
-              onChange={handleMapBarangayChange}
-              value={mapBarangayId}
-            >
-              {barangayOptions.length > 0 ? (
-                barangayOptions.map((barangay) => (
-                  <option key={barangay.id} value={barangay.id}>{barangay.name}</option>
-                ))
-              ) : (
-                <option value="">No registered barangay</option>
-              )}
-            </select>
-          </div>
-          {import.meta.env.DEV && impersonateGroupUsers.length > 0 && (
-            <div className="dev-impersonate" title="Dev only — switch account without logging out. Not present in production. Staff list follows the barangay picked above.">
-              <select value={impersonateId} onChange={(e) => setImpersonateId(e.target.value)} aria-label="Impersonate account">
-                {impersonateGroupUsers.map((u) => (
-                  <option key={u.id} value={u.id} disabled={!u.is_active}>
-                    {u.name} · {u.role}{u.is_active ? '' : ' (inactive)'}
-                  </option>
-                ))}
-              </select>
-              <button type="button" onClick={doImpersonate}>Impersonate</button>
-            </div>
-          )}
+          <div className="topbar-pickers">{topbarPickers}</div>
         </div>
 
         <div className="topbar-right">
@@ -2750,6 +2820,9 @@ function Workspace() {
                       <div
                         key={n.notification_id}
                         className={`notification-item notification-${notificationType} ${!n.read_at ? 'unread' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); e.currentTarget.click(); } }}
                         onClick={async () => {
                           await markNotificationAsRead(n.notification_id);
                           // Production-readiness audit finding #10 — open the
@@ -2828,66 +2901,21 @@ function Workspace() {
       </div>
       </header>
 
-      <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
-        <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`}>
+      <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
+        <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="workspace-sidebar">
+          {/* Phone-only: the map-boundary pickers (and the dev impersonate
+              control) move here from the top bar, which has no room. */}
+          <div className="sidebar-mobile-extras">{topbarPickers}</div>
           <nav className="module-nav" aria-label="Workspace modules">
             {moduleGroups.map(({ section, items }) => {
               const renderItem = ([key, label]) => {
                 const badgeCount = badgeCountFor(key);
-                // Admin's "Maintenance Tickets" badge (badge_counts.tickets)
-                // already counts every non-Closed/Cancelled ticket, Pending
-                // Approval proposals included — adding ticketProposals on top
-                // would double-count them. Shown as its own small pill
-                // instead, so "N open tickets" and "M awaiting your review"
-                // stay two distinct, addable-up-in-your-head signals.
-                // 'ticketPropose' isn't a real module (no list view/endpoint
-                // of its own) — it's a direct link straight to the Propose
-                // Ticket form, same URL Admin's own Create Ticket flow uses.
-                // Every other item here just flips `activeModule` in place.
-                const isDirectRouteLink = key === 'ticketPropose';
-                // 'myTasks' also isn't a real module — clicking it jumps
-                // straight to whichever of its three tabs was last open
-                // (see setMyTasksTab / myTasksLastTab above).
-                const isMyTasksContainer = key === 'myTasks';
-                // 'maintenanceLedger' is the same kind of thin wrapper —
-                // jumps to whichever of its two tabs was last open (see
-                // setMaintenanceLedgerTab / maintenanceLedgerLastTab above).
-                const isMaintenanceLedgerContainer = key === 'maintenanceLedger';
                 return (
                   <button
                     className={key === breadcrumbModule ? 'active' : ''}
                     key={key}
-                    onClick={() => guardedNavigate(() => {
-                      if (isDirectRouteLink) {
-                        navigate(`${roleRoutes[user.role]}/tickets/new`);
-                        return;
-                      }
-                      if (isMyTasksContainer) {
-                        setMyTasksTab(myTasksLastTab);
-                      } else if (isMaintenanceLedgerContainer) {
-                        setMaintenanceLedgerTab(maintenanceLedgerLastTab);
-                      } else {
-                        // 'workTracker' used to also be a plain sidebar row
-                        // (Maintenance Personnel's standalone "Work Tracker"
-                        // entry) reached via this generic click path — that
-                        // row is gone now (folded into 'ticketWorkOrders'
-                        // own Archive toggle), so no sidebar button sets
-                        // activeModule to 'workTracker' through here anymore.
-                        // This branch is kept, harmlessly unreachable, rather
-                        // than special-cased away — My Tasks' own "History"
-                        // tab still sets 'workTracker' exclusively through
-                        // setMyTasksTab (see the tab bar below), which always
-                        // keeps workTrackerViaMyTasks true.
-                        if (key === 'workTracker') setWorkTrackerViaMyTasks(false);
-                        // 'reportOrPropose' is a relabeled alias for the
-                        // Issue Reports list — its "Report Vehicle Issue" and
-                        // "Propose Ticket" actions both live inline there.
-                        setActiveModule(key === 'reportOrPropose' ? 'issues' : key);
-                      }
-                      if (isOnSpecialPage) {
-                        navigate(roleRoutes[user.role]);
-                      }
-                    })}
+                    onClick={() => goToModule(key)}
+                    aria-label={badgeCount > 0 ? `${label} (${badgeCount})` : label}
                     title={isSidebarCollapsed ? label : undefined}
                     type="button"
                   >
@@ -2903,8 +2931,41 @@ function Workspace() {
             })}
           </nav>
         </aside>
+        {mobileNavOpen && <div className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
 
-        <section className="content-area">
+        {/* Phone-only bottom bar: the role's most-used pages plus Menu. */}
+        <nav className="mobile-bottom-nav" aria-label="Quick navigation">
+          {bottomNavItems.map(([key, label]) => {
+            const badgeCount = badgeCountFor(key);
+            return (
+              <button
+                key={key}
+                type="button"
+                className={key === breadcrumbModule ? 'active' : ''}
+                aria-current={key === breadcrumbModule ? 'page' : undefined}
+                onClick={() => goToModule(key)}
+              >
+                <span className="mobile-bottom-nav-icon">
+                  {moduleIcons[key]}
+                  {badgeCount > 0 && <span className="module-nav-badge">{badgeCount}</span>}
+                </span>
+                <span className="mobile-bottom-nav-label">{BOTTOM_NAV_LABELS[key] ?? label}</span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            className={mobileNavOpen ? 'active' : ''}
+            aria-expanded={mobileNavOpen}
+            aria-controls="workspace-sidebar"
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            <span className="mobile-bottom-nav-icon"><Icon name="menu" size={20} /></span>
+            <span className="mobile-bottom-nav-label">Menu</span>
+          </button>
+        </nav>
+
+        <section className="content-area" id="main-content" tabIndex={-1}>
           {/* Dashboard has its own greeting banner right below (name, role,
               date) — this generic icon+title bar would just repeat "Dashboard"
               redundantly above it, so it's skipped for that one page only. */}
@@ -3637,7 +3698,7 @@ function Workspace() {
           }
         >
           {hasRole(user, 'Admin') && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', marginBottom: 14, border: '1px solid var(--border-subtle, #e2e8f0)', borderRadius: 8 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '12px 14px', marginBottom: 14, border: '1px solid var(--border-subtle, #e2e8f0)', borderRadius: 8 }}>
               <div>
                 <strong style={{ display: 'block', fontSize: '0.8rem' }}>Staff Registration Code</strong>
                 <span className="muted" style={{ fontSize: '0.78rem' }}>
@@ -4878,9 +4939,10 @@ function DashboardQuickCard({ icon, title, stat, tone, preview, onClick }) {
 // just the same modal-overlay/modal-box chrome so it looks consistent with
 // every other modal in the app.
 function DashboardListModal({ title, tag, onClose, children }) {
+  useEscapeKey(true, onClose);
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box-wide" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-box modal-box-wide" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{title}</h3>
           <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
@@ -6009,6 +6071,8 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           max={lastIndex}
           step={1}
           value={minIndex}
+          aria-label="Minimum"
+          aria-valuetext={labels[minIndex]}
           // Stacked on top of the max thumb once they meet at the same stop
           // (e.g. narrowing the filter down to "Medium" only) — otherwise,
           // since it's first in the DOM, the max thumb always paints over it
@@ -6024,6 +6088,8 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           max={lastIndex}
           step={1}
           value={maxIndex}
+          aria-label="Maximum"
+          aria-valuetext={labels[maxIndex]}
           style={{ zIndex: minIndex >= maxIndex ? 1 : 2 }}
           onChange={(e) => onChange(minIndex, Math.max(Number(e.target.value), minIndex))}
         />
@@ -6110,20 +6176,33 @@ function ModulePanel({ children, description, statCards, filterBar, tabBar }) {
 }
 
 /** Generic modal wrapper that hosts a SmartForm popup. */
+// Calls onEscape when Escape is pressed while `active` — shared by the
+// app's dialogs so each one can be dismissed from the keyboard.
+function useEscapeKey(active, onEscape) {
+  useEffect(() => {
+    if (!active) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onEscape?.(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, onEscape]);
+}
+
 function FormModal({ open, title, onClose, children, wide = false }) {
   const notice = useContext(FormNoticeContext);
+  const titleId = useId();
+  useEscapeKey(open, onClose);
 
   if (!open) return null;
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className={`modal-box${wide ? ' modal-box-wide' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal-box${wide ? ' modal-box-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>{title}</h3>
+          <h3 id={titleId}>{title}</h3>
           <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
         </div>
         {notice && notice.type === 'error' && (
-          <div className="notice error" style={{ margin: '12px 28px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textAlign: 'center', flexDirection: 'column' }}>
+          <div className="notice error" role="alert" style={{ margin: '12px 28px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textAlign: 'center', flexDirection: 'column' }}>
             <span style={{ display: 'inline-flex', flexShrink: 0 }}><Icon name="alert" size={16} /></span>
             <span>{notice.text}</span>
           </div>
@@ -6136,13 +6215,14 @@ function FormModal({ open, title, onClose, children, wide = false }) {
 }
 
 function UserInfoModal({ user, onClose }) {
+  useEscapeKey(true, onClose);
   const initials = user.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : 'U';
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-box" role="dialog" aria-modal="true" aria-label="Reporter Information" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Reporter Information</h3>
           <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
@@ -7872,9 +7952,11 @@ function DataTable({ columns, rows, compact = false, onRowClick, onReorderColumn
                 <tr
                   className={onRowClick ? 'is-clickable' : undefined}
                   onClick={onRowClick ? (e) => { if (!e.target.closest('button, a')) onRowClick(row); } : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onKeyDown={onRowClick ? (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); onRowClick(row); } } : undefined}
                 >
                   {columns.map((column) => (
-                    <td key={column.label} className={column.className}>{column.render ? column.render(row) : row[column.key]}</td>
+                    <td key={column.label} className={column.className} data-label={typeof column.label === 'string' ? column.label : ''}>{column.render ? column.render(row) : row[column.key]}</td>
                   ))}
                 </tr>
                 {subContent && (
@@ -9134,6 +9216,12 @@ const ISSUE_STAT_CARDS = [
 // High/Medium/Low segments (see the StackedBarChart segments above).
 const ISSUE_SEVERITY_CHIP_BG = { High: '#fee2e2', Medium: '#fef3c7', Low: '#e0f2fe' };
 const ISSUE_SEVERITY_CHIP_COLOR = { High: '#dc2626', Medium: '#f59e0b', Low: '#0ea5e9' };
+// Darker text for the same hues, so chip labels reach 4.5:1 on their pale
+// chip backgrounds (the base colours stay for icons and bars).
+const CHIP_TEXT_COLOR = {
+  '#dc2626': '#991b1b', '#f59e0b': '#92400e', '#d97706': '#92400e', '#a16207': '#713f12',
+  '#0ea5e9': '#075985', '#16a34a': '#166534', '#64748b': '#334155',
+};
 
 // Simplified per product direction: the urgency breakdown (Overdue/1-3
 // Days/4-7 Days) was its own set of cards here — removed in favor of a
@@ -9841,11 +9929,11 @@ function IssueFilterPanel({
       <div className="issue-filter-dates">
         <div className="filter-date-group issue-filter-date-input">
           <span>From Date</span>
-          <DateFilterInput value={draft.dateStart} onChange={(val) => setDraft((d) => ({ ...d, dateStart: val }))} />
+          <DateFilterInput ariaLabel="From date" value={draft.dateStart} onChange={(val) => setDraft((d) => ({ ...d, dateStart: val }))} />
         </div>
         <div className="filter-date-group issue-filter-date-input">
           <span>To Date</span>
-          <DateFilterInput value={draft.dateEnd} onChange={(val) => setDraft((d) => ({ ...d, dateEnd: val }))} />
+          <DateFilterInput ariaLabel="To date" value={draft.dateEnd} onChange={(val) => setDraft((d) => ({ ...d, dateEnd: val }))} />
         </div>
       </div>
 
@@ -9861,7 +9949,7 @@ function IssueFilterPanel({
           {severityLevels.map((level) => (
             <label key={level} className="issue-filter-status-chip" style={{ background: ISSUE_SEVERITY_CHIP_BG[level] ?? '#f1f5f9' }}>
               <input type="checkbox" checked={draft.severity.length === 0 || draft.severity.includes(level)} onChange={() => toggleDraftSeverity(level)} />
-              <span style={{ color: ISSUE_SEVERITY_CHIP_COLOR[level] ?? '#334155' }}>{level}</span>
+              <span style={{ color: CHIP_TEXT_COLOR[ISSUE_SEVERITY_CHIP_COLOR[level]] ?? '#334155' }}>{level}</span>
             </label>
           ))}
         </div>
@@ -10049,11 +10137,11 @@ function TicketFilterPanel({
       <div className="issue-filter-dates">
         <div className="filter-date-group issue-filter-date-input">
           <span>From Date</span>
-          <DateFilterInput value={draft.dateStart} onChange={(val) => setDraft((d) => ({ ...d, dateStart: val }))} />
+          <DateFilterInput ariaLabel="From date" value={draft.dateStart} onChange={(val) => setDraft((d) => ({ ...d, dateStart: val }))} />
         </div>
         <div className="filter-date-group issue-filter-date-input">
           <span>To Date</span>
-          <DateFilterInput value={draft.dateEnd} onChange={(val) => setDraft((d) => ({ ...d, dateEnd: val }))} />
+          <DateFilterInput ariaLabel="To date" value={draft.dateEnd} onChange={(val) => setDraft((d) => ({ ...d, dateEnd: val }))} />
         </div>
       </div>
 
@@ -10071,7 +10159,7 @@ function TicketFilterPanel({
           {TICKET_STAT_CARDS.filter((c) => statusOptions.includes(c.key)).map((c) => (
             <label key={c.key} className="issue-filter-status-chip" style={{ background: c.bg }}>
               <input type="checkbox" checked={draft.status.length === 0 || draft.status.includes(c.key)} onChange={() => toggleDraftStatus(c.key)} />
-              <span style={{ color: c.color }}>{c.label}</span>
+              <span style={{ color: CHIP_TEXT_COLOR[c.color] ?? c.color }}>{c.label}</span>
             </label>
           ))}
         </div>
@@ -12518,6 +12606,31 @@ function TicketStatusBadge({ value, size = 'normal' }) {
   };
   const cls = colorMap[value] ?? 'status-badge';
   return <span className={`status-badge ${cls} ${size === 'large' ? 'badge-large' : ''}`}>{value ?? '-'}</span>;
+}
+
+// Ticket-level status → colour family. One source of truth for every ticket
+// view (cards, tables, archives, the repair workspace header): the card
+// border/accent and the status pill both read the same class, so a ticket
+// never changes colour just because the view switched. Unknown or missing
+// statuses fall back to a neutral tone instead of breaking the render.
+const TICKET_STATUS_TONE = {
+  'Pending Approval': 'pending',
+  Declined: 'declined',
+  Active: 'active',
+  Open: 'active',
+  'For Verification': 'verify',
+  Closed: 'closed',
+  Cancelled: 'cancelled',
+  Deleted: 'cancelled',
+};
+function ticketStatusClass(status) {
+  return `ts-${TICKET_STATUS_TONE[status] ?? 'unknown'}`;
+}
+
+// The ticket's overall status as a tinted pill in its status colour —
+// separate from priority (TicketStatusBadge keeps its own priority colours).
+function TicketStatusPill({ status }) {
+  return <span className={`status-badge ticket-status-pill ${ticketStatusClass(status)}`}>{status ?? 'Unknown'}</span>;
 }
 
 // =========================================================================
@@ -15151,6 +15264,7 @@ function VehicleFiles({ vehicleId, canManage, onRequestConfirmation }) {
 // reset-on-open effect — a new mount already starts from the right state.
 function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged, initialFile, onRequestConfirmation }) {
   const { user } = useContext(AuthContext);
+  useEscapeKey(true, onClose);
   // Phase B4 — document.delete is Admin-only (Custodian lost it); edit stays
   // Admin (any document) + Custodian, but only on the document THEY uploaded
   // (added_by is already in the list payload, so this needs no extra fetch —
@@ -15237,7 +15351,7 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box-wide files-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-box modal-box-wide files-modal" role="dialog" aria-modal="true" aria-label="Files" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Files</h3>
           <div className="files-modal-toolbar">
@@ -15871,7 +15985,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
   const stage = ticketWorkflowStage(ticket);
 
   return (
-    <div className="ticket-card" style={{ position: 'relative' }} onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
+    <div className={`ticket-card ticket-card-status ${ticketStatusClass(ticket.status)}`} style={{ position: 'relative' }} onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
       {unreadCount > 0 && (
         <span
           title={`${unreadCount} unread update${unreadCount > 1 ? 's' : ''} on this ticket`}
@@ -15887,8 +16001,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
       <div className="ticket-card-content-wrapper">
         <div className="ticket-card-info">
           <div className="ticket-card-top">
-            <span className="ticket-card-id">Ticket #{ticket.ticket_id}</span>
-            <TicketStatusBadge value={ticket.priority} />
+            <span className="ticket-card-id"><span className="ticket-card-id-label">Ticket</span> #{ticket.ticket_id}</span>
           </div>
           <p className="ticket-card-title">{ticket.ticket_title}</p>
           <p className="ticket-card-vehicle">{ticket.vehicle?.vehicle_name} · {ticket.vehicle?.plate_number}</p>
@@ -15918,7 +16031,12 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
         {stage && <TicketStageBadge ticket={ticket} />}
       </div>
       <div className="ticket-card-bottom">
-        <TicketStatusBadge value={ticket.status} />
+        {/* Status and priority side by side — the status pill carries the
+            card's status colour, the priority badge keeps its own colours. */}
+        <span className="ticket-card-badges">
+          <TicketStatusPill status={ticket.status} />
+          <TicketStatusBadge value={ticket.priority} />
+        </span>
         <DateBadge value={ticket.created_at} />
       </div>
     </div>
@@ -16803,7 +16921,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             {[ticket.vehicle?.plate_number, ticket.maintenance_type, `Ticket #${ticket.ticket_id}`].filter(Boolean).join(' · ')}
           </p>
         </div>
-        <TicketStatusBadge value={ticket.status} />
+        <TicketStatusPill status={ticket.status} />
       </header>
 
       {ticket.confirmation_verdict === 'Reopened' && (
@@ -17198,7 +17316,7 @@ function ticketTableColumns(unreadByTicket = {}) {
       },
     },
     { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
-    { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.status} /> },
+    { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <TicketStatusPill status={r.status} /> },
     { key: 'next_step', label: 'Next Step', className: 'cell-center', render: (r) => <TicketStageBadge ticket={r} /> },
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
@@ -17217,7 +17335,7 @@ const ticketArchiveColumns = [
   { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle ?? { vehicle_name: r.vehicle_name, plate_number: r.plate_number }} /> },
   { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
   { key: 'expenses', label: 'Expenses', className: 'cell-center', render: (r) => r.maintenance_cost ? `₱${Number(r.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₱0.00' },
-  { key: 'final_status', label: 'Final Status', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.final_status} /> },
+  { key: 'final_status', label: 'Final Status', className: 'cell-center', render: (r) => <TicketStatusPill status={r.final_status} /> },
   { key: 'archived_by', label: 'Archived By', className: 'cell-center', render: (r) => <UserAvatarName user={r.archived_by} fallback="—" /> },
   { key: 'archived_at', label: 'Archived At', className: 'cell-center', render: (r) => <DateBadge value={r.archived_at} /> },
   { key: 'time', label: 'Time', className: 'cell-center', render: (r) => formatTime(r.archived_at) },
@@ -17286,7 +17404,7 @@ function displayDateToIso(display) {
 // guaranteed regardless of the browser/OS locale.
 // `id` lets a standalone <label htmlFor> point at the visible text input;
 // both are optional and unused by every existing caller.
-function DateFilterInput({ value, onChange, placeholder = 'mm/dd/yyyy', id, ariaLabel }) {
+function DateFilterInput({ value, onChange, placeholder = 'mm/dd/yyyy', id, ariaLabel = 'Date (mm/dd/yyyy)' }) {
   const hiddenRef = useRef(null);
   const [text, setText] = useState(() => isoDateToDisplay(value));
 
@@ -17484,6 +17602,7 @@ function CreatableSelect({
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  useEscapeKey(Boolean(deleteTarget) && !deleteBusy, useCallback(() => setDeleteTarget(null), []));
   // True right after opening (via focus), before the user has actually
   // typed anything — the input still shows the current value, but the
   // option list is NOT filtered by it, so reopening an already-picked
@@ -18511,9 +18630,10 @@ function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className="local-search-input"
+          aria-label={placeholder.replace(/\.+$/, '')}
         />
         {value && (
-          <button className="local-search-clear" onClick={() => onChange('')} type="button" title="Clear search">
+          <button className="local-search-clear" onClick={() => onChange('')} type="button" title="Clear search" aria-label="Clear search">
             <Icon name="close" size={14} />
           </button>
         )}

@@ -266,12 +266,12 @@ function Register() {
             </Link>
           </div>
         ) : (
-          <form className="auth-form auth-form-grid" autoComplete="off" onSubmit={handleSubmit} noValidate>
+          <form className="auth-form auth-form-grid" onSubmit={handleSubmit} noValidate>
             <label className="auth-field">
               <span>First Name</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <input
-                  autoComplete="off"
+                  autoComplete="given-name"
                   maxLength={60}
                   name="first_name"
                   onChange={handleNameChange}
@@ -287,7 +287,7 @@ function Register() {
               <span>Middle Name</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <input
-                  autoComplete="off"
+                  autoComplete="additional-name"
                   maxLength={60}
                   name="middle_name"
                   onChange={handleNameChange}
@@ -302,7 +302,7 @@ function Register() {
               <span>Last Name</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <input
-                  autoComplete="off"
+                  autoComplete="family-name"
                   maxLength={60}
                   name="last_name"
                   onChange={handleNameChange}
@@ -318,7 +318,7 @@ function Register() {
               <span>Email Address</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <input
-                  autoComplete="off"
+                  autoComplete="email"
                   name="email"
                   onChange={handleChange}
                   placeholder="Email address"
@@ -333,7 +333,7 @@ function Register() {
               <span>Phone Number</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <input
-                  autoComplete="off"
+                  autoComplete="tel"
                   inputMode="numeric"
                   maxLength={11}
                   name="phone"
@@ -423,7 +423,7 @@ function Register() {
               <span>Street Address</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <input
-                  autoComplete="off"
+                  autoComplete="street-address"
                   name="address"
                   onChange={handleChange}
                   placeholder="House no. / street / purok"
@@ -506,7 +506,7 @@ function Register() {
               </div>
             </label>
 
-            {error ? <p className="notice error auth-field-full">{error}</p> : null}
+            {error ? <p className="notice error auth-field-full" role="alert">{error}</p> : null}
 
             <button className="primary-button auth-submit-btn auth-field-full" disabled={submitting} type="submit">
               {submitting ? (

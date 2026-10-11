@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { MapContainer, Marker, TileLayer, Tooltip, ZoomControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import TouchMapGuard from './TouchMapGuard';
 
 const CARTO_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 const CARTO_ATTRIBUTION = '&copy; OpenStreetMap contributors &copy; CARTO';
@@ -92,6 +93,7 @@ export default function VehicleLocationMap({ lat, lng, label, scrollWheelZoom = 
           <Tooltip permanent direction="top">{label}</Tooltip>
         )}
       </Marker>
+      <TouchMapGuard />
     </MapContainer>
   );
 }
