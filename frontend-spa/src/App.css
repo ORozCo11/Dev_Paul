@@ -14949,3 +14949,5 @@ html .ticket-detail-panel.is-page .ticket-process-meter-core { background: #fff;
 .tpa-row { justify-content: space-between; }
 .pring { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .pring-text { position: absolute; font-size: 0.6rem; font-weight: 700; color: #334155; }
+.smart-form label.has-error input, .smart-form label.has-error select, .smart-form label.has-error textarea { border-color: #dc2626; }
+.smart-form label.has-error > .fx-error { margin-top: 4px; }

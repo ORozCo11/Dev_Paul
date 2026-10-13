@@ -6931,14 +6931,14 @@ function CatalogOrOtherField({ value, onChange, note, onNoteChange, options = []
 // styled by the browser, not this app). Re-implemented here so every form
 // reports through the same in-app, styled validation card the server-side
 // (422) errors already use — one consistent message UI instead of two.
-function collectValidationErrors(fields, values) {
-  const lines = [];
+function collectFieldErrors(fields, values) {
+  const errs = {};
   fields.forEach((field) => {
     const value = values[field.name];
 
     if (field.type === 'checkboxes') {
       if (field.required && !(Array.isArray(value) && value.length > 0)) {
-        lines.push(`${field.label}: select at least one.`);
+        errs[field.name] = (`${field.label}: select at least one.`);
       }
       return;
     }
@@ -6946,7 +6946,7 @@ function collectValidationErrors(fields, values) {
     if (field.type === 'list') {
       const rows = Array.isArray(value) ? value : [];
       if (field.required && !rows.some((row) => row.trim())) {
-        lines.push(`${field.label} is required.`);
+        errs[field.name] = (`${field.label} is required.`);
       }
       return;
     }
@@ -6958,7 +6958,7 @@ function collectValidationErrors(fields, values) {
       if (field.required) {
         const { amount } = splitQuantityValue(value, field.units);
         if (!isQuantityAmountFilled(amount)) {
-          lines.push(`${field.label} is required.`);
+          errs[field.name] = (`${field.label} is required.`);
         }
       }
       return;
@@ -6966,33 +6966,33 @@ function collectValidationErrors(fields, values) {
 
     if (field.confirmOf) {
       if (field.required && isValueMissing(value)) {
-        lines.push(`${field.label} is required.`);
+        errs[field.name] = (`${field.label} is required.`);
       } else if (value && value !== values[field.confirmOf]) {
-        lines.push(`${field.label} does not match.`);
+        errs[field.name] = (`${field.label} does not match.`);
       }
       return;
     }
 
     if (field.required && isValueMissing(value)) {
-      lines.push(`${field.label} is required.`);
+      errs[field.name] = (`${field.label} is required.`);
       return;
     }
 
     if (field.type === 'number' && value !== '' && value != null) {
       const num = Number(value);
       if (field.min != null && num < Number(field.min)) {
-        lines.push(`${field.label} must be at least ${field.min}.`);
+        errs[field.name] = (`${field.label} must be at least ${field.min}.`);
       }
       if (field.max != null && num > Number(field.max)) {
-        lines.push(`${field.label} must be at most ${field.max}.`);
+        errs[field.name] = (`${field.label} must be at most ${field.max}.`);
       }
     }
 
     if (field.pattern && value && !new RegExp(`^(?:${field.pattern})$`).test(value)) {
-      lines.push(field.title || `${field.label} is invalid.`);
+      errs[field.name] = (field.title || `${field.label} is invalid.`);
     }
   });
-  return lines;
+  return errs;
 }
 
 // Opt-in field grouping: fields carrying a `group` label render inside their
@@ -7021,7 +7021,9 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
   // Per-field show/hide toggle for password inputs — keyed by field name so
   // e.g. Old/New/Confirm Password on the same form toggle independently.
   const [visiblePasswords, setVisiblePasswords] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
   const [validationLines, setValidationLines] = useState(null);
+  const formRef = useRef(null);
 
   useEffect(() => {
     setValues(valuesFromFields(fields, initialValues));
@@ -7040,17 +7042,21 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
     const finalValue = type === 'file' ? files[0] : nextValue;
     const next = { ...values, [name]: finalValue };
     setValues(next);
+    if (fieldErrors[name]) setFieldErrors(({ [name]: _gone, ...rest }) => rest);
     onValuesChange?.(next);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const lines = collectValidationErrors(fields, values);
-    if (lines.length) {
-      setValidationLines(lines);
+    const errs = collectFieldErrors(fields, values);
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
+      // Bring the first problem into view.
+      requestAnimationFrame(() => formRef.current?.querySelector('.has-error input, .has-error select, .has-error textarea')?.focus());
       return;
     }
+    setFieldErrors({});
 
     setSubmitting(true);
     try {
@@ -7094,7 +7100,7 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
   };
 
   return (
-    <form className="smart-form" onSubmit={handleSubmit} noValidate autoComplete="off">
+    <form ref={formRef} className="smart-form" onSubmit={handleSubmit} noValidate autoComplete="off">
       {validationLines && (
         <div className="toast-notice-overlay" onClick={() => setValidationLines(null)}>
           <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
@@ -7131,7 +7137,7 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
         return (
         <Fragment key={field.name}>
         <label
-          className={[field.compactFile ? 'file-inline' : null, fieldHasValue ? 'has-value' : null].filter(Boolean).join(' ') || undefined}
+          className={[field.compactFile ? 'file-inline' : null, fieldHasValue ? 'has-value' : null, fieldErrors[field.name] ? 'has-error' : null].filter(Boolean).join(' ') || undefined}
           style={field.fullWidth ? { gridColumn: '1 / -1' } : undefined}
         >
           <span style={field.action ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } : undefined}>
@@ -7535,7 +7541,8 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
               {typeof field.inlineExtra === 'function' ? field.inlineExtra(values) : field.inlineExtra}
             </div>
           ) : null}
-          {field.hint ? <small className="field-hint">{field.hint}</small> : null}
+          {fieldErrors[field.name] ? <small className="fx-error" role="alert">{fieldErrors[field.name]}</small> : null}
+          {field.hint && !fieldErrors[field.name] ? <small className="field-hint">{field.hint}</small> : null}
         </label>
         {field.extra ? (
           <div className="field-extra" style={{ gridColumn: field.extraGridColumn ?? '1 / -1' }}>
