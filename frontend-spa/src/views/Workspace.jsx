@@ -112,7 +112,6 @@ const modulesByRole = {
       ['schedules', 'Maintenance Schedule'],
       ['maintenance', 'Maintenance Records'],
       ['conditions', 'Condition Monitoring'],
-      ['cannibalizations', 'Cannibalization'],
     ] },
     // The old cross-vehicle "Vehicle Documents" picker page (VehicleDocumentsPage)
     // was removed (2026-10-10) — unlinked everywhere and reachable only by
@@ -160,7 +159,6 @@ const modulesByRole = {
       // now a row-level button in this same table (see maintenanceColumns'
       // record.verify branch), matching Admin's "no tabs" reference design.
       ['maintenance', 'Maintenance Records'],
-      ['cannibalizations', 'Cannibalization'],
     ] },
   ],
   'Maintenance Personnel': [
@@ -180,7 +178,6 @@ const modulesByRole = {
       ['ticketWorkOrders', 'My Work Orders'],
       ['maintenance', 'Maintenance Records'],
       ['schedules', 'Maintenance Schedule'],
-      ['cannibalizations', 'Cannibalization'],
     ] },
     // "Vehicle Issues" removed per product direction — redundant for this
     // role (not necessary; a mechanic's own ticket/work-order flow already
@@ -279,7 +276,6 @@ const moduleEndpoints = {
   maintenanceStatus: '/maintenance-records',
   schedules: '/maintenance-schedules',
   histories: '/histories',
-  cannibalizations: '/cannibalizations',
   logs: '/logs',
   tickets: '/tickets',
   ticketInspections: '/tickets',
@@ -291,12 +287,6 @@ const moduleEndpoints = {
 };
 
 const moduleIcons = {
-  cannibalizations: (
-    <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 7h12l-3-3" />
-      <path d="M20 17H8l3 3" />
-    </svg>
-  ),
   dashboard: (
     <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="9" rx="1" />
@@ -3137,6 +3127,7 @@ function Workspace() {
               canViewDocuments={canDo(user, 'document.view')}
               canViewUsage={canDo(user, 'usage.view')}
               canLogUsage={canDo(user, 'usage.log')}
+              currentUser={user}
               canCheckReadiness={canDo(user, 'vehicle.readiness_check')}
               canRequestInspection={canDo(user, 'vehicle.request_inspection')}
               // Production-readiness audit finding #8 — the reliability
@@ -4241,27 +4232,6 @@ function Workspace() {
             )}
           </FormModal>
         </>
-      );
-    }
-
-    if (activeModule === 'cannibalizations') {
-      return (
-        <CannibalizationModule
-          user={user}
-          rows={records.cannibalizations ?? []}
-          vehicles={lookups.vehicles}
-          onRecord={async (formData) => {
-            try {
-              await api.post('/cannibalizations', formData);
-              setNotice({ type: 'success', text: 'Cannibalization recorded. It now appears in both vehicles\' history.' });
-              await refreshCurrent();
-              return true;
-            } catch (error) {
-              showError(error, setNotice);
-              return false;
-            }
-          }}
-        />
       );
     }
 
@@ -8501,9 +8471,9 @@ const nowLocalInput = () => {
   return d.toISOString().slice(0, 16);
 };
 
-function CannibalizationRecordForm({ user, vehicles, onCancel, onSubmit }) {
+function CannibalizationRecordForm({ user, vehicles, onCancel, onSubmit, initialSourceId = '' }) {
   const [v, setV] = useState({
-    source_vehicle_id: '', source_reason: '', destination_type: 'vehicle', destination_vehicle_id: '', storage_location: '',
+    source_vehicle_id: initialSourceId ? String(initialSourceId) : '', source_reason: '', destination_type: 'vehicle', destination_vehicle_id: '', storage_location: '',
     reason: '', notes: '', removed_at: nowLocalInput(), performed_by_name: '', received_by_name: '', transferred_at: '',
   });
   const [parts, setParts] = useState([emptyCannibalPart()]);
@@ -8696,75 +8666,101 @@ function CannibalizationRecordForm({ user, vehicles, onCancel, onSubmit }) {
   );
 }
 
-function CannibalizationModule({ user, rows, vehicles, onRecord }) {
-  const [search, setSearch] = useState('');
+function CannibalizationDetail({ record }) {
+  return (
+    <div className="can-review">
+      <dl className="can-kv">
+        <div><dt>Recorded by</dt><dd>{record.recorded_by?.name ?? '—'} · {formatDate(record.created_at)}</dd></div>
+        <div><dt>Source vehicle</dt><dd>{record.source_vehicle ? `${record.source_vehicle.vehicle_name} · ${record.source_vehicle.plate_number}` : '—'}</dd></div>
+        <div><dt>Destination</dt><dd>{record.destination_type === 'vehicle' ? (record.destination_vehicle ? `${record.destination_vehicle.vehicle_name} · ${record.destination_vehicle.plate_number}` : '—') : `Storage: ${record.storage_location}`}</dd></div>
+        <div><dt>Removed</dt><dd>{formatDate(record.removed_at)}{record.performed_by_name ? ` · by ${record.performed_by_name}` : ''}</dd></div>
+        {(record.received_by_name || record.transferred_at) && <div><dt>Received / installed</dt><dd>{record.received_by_name || '—'}{record.transferred_at ? ` · ${formatDate(record.transferred_at)}` : ''}</dd></div>}
+        <div className="can-kv-wide"><dt>Reason</dt><dd>{record.reason}</dd></div>
+        <div className="can-kv-wide"><dt>Why removed from the source</dt><dd>{record.source_reason}</dd></div>
+        {record.notes && <div className="can-kv-wide"><dt>Notes</dt><dd>{record.notes}</dd></div>}
+      </dl>
+      <table className="can-parts-table">
+        <thead><tr><th>Part</th><th>Qty</th><th>Condition</th><th>Installation / notes</th></tr></thead>
+        <tbody>{(record.parts ?? []).map((p) => <tr key={p.part_id}><td>{p.part_name}{p.part_number ? ` (${p.part_number})` : ''}</td><td>{p.quantity} {p.unit}</td><td>{p.part_condition || '—'}</td><td>{[p.installation_details, p.notes].filter(Boolean).join(' · ') || '—'}</td></tr>)}</tbody>
+      </table>
+      {(record.evidence_urls ?? []).length > 0 && (
+        <p>Evidence: {record.evidence_urls.map((u, i) => <a key={u} href={resolvePhotoUrl(u)} target="_blank" rel="noreferrer" style={{ marginRight: 10 }}>File {i + 1}</a>)}</p>
+      )}
+    </div>
+  );
+}
+
+// Vehicle profile: parts moved off / onto THIS vehicle, with a button to
+// record a new transfer (source pre-filled). Lives on the profile, not in
+// the sidebar.
+function VehicleCannibalizationCard({ vehicle, user, vehicles, setNotice, onSaved }) {
+  const [records, setRecords] = useState([]);
   const [formOpen, setFormOpen] = useState(false);
   const [viewing, setViewing] = useState(null);
-  const canRecord = canDo(user, 'cannibalization.record');
+  const [reloadKey, setReloadKey] = useState(0);
+  const canView = canDo(user, 'cannibalization.view');
+  const canRecord = canDo(user, 'cannibalization.record') && !['Inactive', 'Decommissioned'].includes(vehicle.status);
 
-  const q = search.trim().toLowerCase();
-  const visible = (rows ?? []).filter((r) => !q || [
-    r.record_number, r.source_vehicle?.vehicle_name, r.source_vehicle?.plate_number, r.destination_vehicle?.vehicle_name,
-    r.storage_location, r.reason, ...(r.parts ?? []).map((p) => p.part_name),
-  ].some((x) => x && String(x).toLowerCase().includes(q)));
+  useEffect(() => {
+    if (!canView) return undefined;
+    let cancelled = false;
+    api.get('/cannibalizations').then((res) => {
+      if (!cancelled) setRecords((res.data ?? []).filter((r) => r.source_vehicle_id === vehicle.vehicle_id || r.destination_vehicle_id === vehicle.vehicle_id));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [vehicle.vehicle_id, reloadKey, canView]);
 
-  const columns = [
-    { key: 'no', label: 'Record', locked: true, render: (r) => <strong>{r.record_number}</strong> },
-    { key: 'date', label: 'Removed', render: (r) => formatDate(r.removed_at) },
-    { key: 'source', label: 'Source vehicle', render: (r) => <VehicleCell vehicle={r.source_vehicle} link={false} /> },
-    { key: 'dest', label: 'Destination', render: (r) => (r.destination_type === 'vehicle' ? <VehicleCell vehicle={r.destination_vehicle} link={false} /> : <span>Storage: {r.storage_location}</span>) },
-    { key: 'parts', label: 'Parts', render: (r) => (r.parts ?? []).map((p) => `${p.quantity} × ${p.part_name}`).join(', ') },
-    { key: 'by', label: 'Recorded by', render: (r) => r.recorded_by?.name ?? '—' },
-    { key: 'action', label: 'Action', locked: true, render: (r) => <button type="button" className="btn-view-action icon-btn" title="View" aria-label="View" onClick={(e) => { e.stopPropagation(); setViewing(r); }}><Icon name="eye" size={14} /></button> },
-  ];
+  if (!canView && !canRecord) return null;
 
   return (
-    <div className="module-grid">
-      <section className="panel">
-        <div className="panel-header-bar">
-          <h3>Cannibalization Records <span className="count-badge">{visible.length}</span></h3>
-          <LocalSearchInput value={search} onChange={setSearch} placeholder="Search records..."
-            onAdd={canRecord ? () => setFormOpen(true) : undefined} addLabel="Record Cannibalization" />
-        </div>
-        <p className="can-intro">Parts taken off one vehicle and put on another, or into storage. Saved records are final and appear in each vehicle's history.</p>
-        <PaginatedTable columns={columns} rows={visible} emptyMessage="No cannibalization recorded yet." onRowClick={(r) => setViewing(r)} />
-      </section>
-
+    <section className="veh-card">
+      <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>Parts Transfers</h4></div>
+      <div style={{ padding: '0 18px 18px', display: 'grid', gap: 10 }}>
+        {canRecord && (
+          <button type="button" className="btn-sm ghost-button" style={{ justifySelf: 'start' }} onClick={() => setFormOpen(true)}>
+            <Icon name="plus" size={13} /> Record Cannibalization
+          </button>
+        )}
+        {records.length === 0 ? <p className="muted" style={{ margin: 0 }}>No parts have been moved on or off this vehicle.</p> : (
+          <ul className="dispatch-trips">
+            {records.slice(0, 6).map((r) => (
+              <li key={r.cannibalization_id}>
+                <button type="button" className="link-button" style={{ background: 'none', border: 0, padding: 0, color: 'var(--primary)', cursor: 'pointer', textAlign: 'left', fontWeight: 600 }} onClick={() => setViewing(r)}>
+                  {r.record_number}: {(r.parts ?? []).map((p) => `${p.quantity} × ${p.part_name}`).join(', ')}
+                </button>
+                <span>{r.source_vehicle_id === vehicle.vehicle_id ? 'removed' : 'received'} · {formatDate(r.removed_at)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <FormModal open={formOpen} title="Record Cannibalization" onClose={() => setFormOpen(false)} wide>
         {formOpen && (
           <CannibalizationRecordForm
             user={user}
             vehicles={vehicles}
+            initialSourceId={vehicle.vehicle_id}
             onCancel={() => setFormOpen(false)}
-            onSubmit={async (fd) => { const ok = await onRecord(fd); if (ok !== false) setFormOpen(false); return ok; }}
+            onSubmit={async (fd) => {
+              try {
+                await api.post('/cannibalizations', fd);
+                setNotice?.({ type: 'success', text: 'Cannibalization recorded. It now appears in both vehicles\' history.' });
+                setFormOpen(false);
+                setReloadKey((k) => k + 1);
+                onSaved?.();
+                return true;
+              } catch (error) {
+                showError(error, setNotice);
+                return false;
+              }
+            }}
           />
         )}
       </FormModal>
-
       <FormModal open={!!viewing} title={viewing ? `${viewing.record_number} — Cannibalization` : ''} onClose={() => setViewing(null)} wide>
-        {viewing && (
-          <div className="can-review">
-            <dl className="can-kv">
-              <div><dt>Recorded by</dt><dd>{viewing.recorded_by?.name ?? '—'} · {formatDate(viewing.created_at)}</dd></div>
-              <div><dt>Source vehicle</dt><dd>{viewing.source_vehicle ? `${viewing.source_vehicle.vehicle_name} · ${viewing.source_vehicle.plate_number}` : '—'}</dd></div>
-              <div><dt>Destination</dt><dd>{viewing.destination_type === 'vehicle' ? (viewing.destination_vehicle ? `${viewing.destination_vehicle.vehicle_name} · ${viewing.destination_vehicle.plate_number}` : '—') : `Storage: ${viewing.storage_location}`}</dd></div>
-              <div><dt>Removed</dt><dd>{formatDate(viewing.removed_at)}{viewing.performed_by_name ? ` · by ${viewing.performed_by_name}` : ''}</dd></div>
-              {(viewing.received_by_name || viewing.transferred_at) && <div><dt>Received / installed</dt><dd>{viewing.received_by_name || '—'}{viewing.transferred_at ? ` · ${formatDate(viewing.transferred_at)}` : ''}</dd></div>}
-              <div className="can-kv-wide"><dt>Reason</dt><dd>{viewing.reason}</dd></div>
-              <div className="can-kv-wide"><dt>Why removed from the source</dt><dd>{viewing.source_reason}</dd></div>
-              {viewing.notes && <div className="can-kv-wide"><dt>Notes</dt><dd>{viewing.notes}</dd></div>}
-            </dl>
-            <table className="can-parts-table">
-              <thead><tr><th>Part</th><th>Qty</th><th>Condition</th><th>Installation / notes</th></tr></thead>
-              <tbody>{(viewing.parts ?? []).map((p) => <tr key={p.part_id}><td>{p.part_name}{p.part_number ? ` (${p.part_number})` : ''}</td><td>{p.quantity} {p.unit}</td><td>{p.part_condition || '—'}</td><td>{[p.installation_details, p.notes].filter(Boolean).join(' · ') || '—'}</td></tr>)}</tbody>
-            </table>
-            {(viewing.evidence_urls ?? []).length > 0 && (
-              <p>Evidence: {viewing.evidence_urls.map((u, i) => <a key={u} href={resolvePhotoUrl(u)} target="_blank" rel="noreferrer" style={{ marginRight: 10 }}>File {i + 1}</a>)}</p>
-            )}
-          </div>
-        )}
+        {viewing && <CannibalizationDetail record={viewing} />}
       </FormModal>
-    </div>
+    </section>
   );
 }
 
@@ -16144,7 +16140,7 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
   );
 }
 
-function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canCheckReadiness = false, canRequestInspection = false, canViewReliability = false, canViewUsage = false, canLogUsage = false, setNotice, onSaved, onRequestConfirmation }) {
+function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canCheckReadiness = false, canRequestInspection = false, canViewReliability = false, canViewUsage = false, canLogUsage = false, currentUser = null, setNotice, onSaved, onRequestConfirmation }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(new URLSearchParams(location.search).get('tab') === 'edit');
@@ -16471,6 +16467,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
               {canViewDocuments && <VehicleFiles vehicleId={vehicle.vehicle_id} canManage={canManageDocuments} onRequestConfirmation={onRequestConfirmation} />}
 
               {canViewReliability && <VehicleReliabilityCard vehicleId={vehicle.vehicle_id} />}
+               {currentUser && <VehicleCannibalizationCard vehicle={vehicle} user={currentUser} vehicles={lookups.vehicles} setNotice={setNotice} onSaved={onSaved} />}
             </div>
           </div>
 
