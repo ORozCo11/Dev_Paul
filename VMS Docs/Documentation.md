@@ -114,3 +114,11 @@ Four navigation decisions are deliberate and final — not oversights to "fix" i
 - Root `README.md` — a fuller project overview (setup, data model, API endpoints, deployment); kept in sync with this document's role/workflow model, but where the two ever disagree, treat this document (and the code) as current.
 - Root `ROLE-AUDIT.md` and `VMS Docs/VMS-IMPROVEMENT-PLAN.md` — **point-in-time audit/planning snapshots**, not living documentation; several of the role/permission decisions they describe have since been superseded (see `Role-Realignment-Analysis.md`). Useful for history, not for "how the system works today."
 - `docs/` (project root) — earlier QA, defense, and design documents from previous phases of the project; same caveat as above.
+
+## Recent changes (see `System-Capabilities.md` §5.3, §5.4, §14b for detail)
+
+- Cannibalized repairs have **no Admin approval**: the mechanic records one donor vehicle and a CRUD list of donor parts on the Record Repair Work page; submitting goes straight to the Custodian and files one donor Issue Report. Standalone Cannibalization records live on the vehicle profile (no sidebar item).
+- External-shop repairs are handled by the Admin (dispatch and return details); the handler can't verify.
+- The Custodian closes tickets: verification is a popup (Approve / Disapprove with reason); "Tickets Ready to Close" is on the Custodian page; closing notifies the Admin. Verification is never done by Admin or by the repairer.
+- Vehicle Management shows Dispatched (open Usage Log trip) with a Dispatch action and popup.
+- Assigned-personnel avatars on tickets, schedules and records; progress ring on ticket cards; inline per-field validation messages in the shared form.
