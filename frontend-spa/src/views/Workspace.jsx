@@ -11126,6 +11126,9 @@ function MaintenanceRecordCard({ record, onClick }) {
         {record.verification_result
           ? <StatusBadge value={record.verification_result} />
           : <span className="muted" style={{ fontSize: '0.72rem' }}>{record.maintenance_personnel?.name ?? record.performed_by_other ?? '—'}</span>}
+        {(record.verified_by?.name || record.maintenance_personnel?.name) && (
+          <TicketPersonnelAvatars people={[record.verified_by?.name && { ...record.verified_by, role: 'Custodian' }, record.maintenance_personnel?.name && { ...record.maintenance_personnel, role: 'Maintenance Personnel' }].filter(Boolean)} />
+        )}
         <span className="ticket-card-date">{formatDate(record.date_completed ?? record.date_started)}</span>
       </div>
     </div>
@@ -11396,6 +11399,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
         const isMe = currentUserId != null && String(row.assigned_to) === String(currentUserId);
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <TicketPersonnelAvatars people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} />
             {name}
             {isMe && <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>YOU</span>}
           </span>
@@ -11614,7 +11618,7 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
           <dt><Icon name="wrench" size={13} /> Mechanic</dt>
           <dd>
             {row.assigned_to_user?.name
-              ? <>{row.assigned_to_user.name}{isMine && <span className="sch-you-tag">You</span>}</>
+              ? <><TicketPersonnelAvatars people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} /> {row.assigned_to_user.name}{isMine && <span className="sch-you-tag">You</span>}</>
               : <span className="muted">Unassigned</span>}
           </dd>
         </div>
@@ -16652,13 +16656,30 @@ function PersonAvatar({ person }) {
 
 // Shared by Card View and List View. `showNames` adds the readable role/name
 // text (list view, and always available to touch users without tooltips).
-function TicketPersonnelAvatars({ ticket }) {
-  const people = ticketPersonnel(ticket);
+function TicketPersonnelAvatars({ ticket, people: given }) {
+  const people = given ?? ticketPersonnel(ticket);
   if (!people.length) return <span className="tpa-empty">Not assigned</span>;
   return (
     <span className="tpa-group" onClick={(e) => e.stopPropagation()}>
       {people.map((p) => <PersonAvatar key={`${p.role}-${p.id}`} person={p} />)}
       <span className="tpa-sr">{people.map((p) => `${p.role}: ${p.name}`).join('; ')}</span>
+    </span>
+  );
+}
+
+// Circular percentage ring (sub-issues done / total).
+function ProgressRing({ done, total, size = 38 }) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const r = 15;
+  const c = 2 * Math.PI * r;
+  const color = pct === 100 ? '#16a34a' : '#d97706';
+  return (
+    <span className="pring" role="img" aria-label={`${pct}% complete, ${done} of ${total} sub-issues done`} title={`${done}/${total} sub-issues done`} style={{ width: size, height: size }}>
+      <svg viewBox="0 0 38 38" width={size} height={size} aria-hidden="true">
+        <circle cx="19" cy="19" r={r} fill="none" stroke="#e2e8f0" strokeWidth="4" />
+        <circle cx="19" cy="19" r={r} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform="rotate(-90 19 19)" />
+      </svg>
+      <span className="pring-text">{pct}%</span>
     </span>
   );
 }
@@ -16720,7 +16741,10 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
         </div>
         <DateBadge value={ticket.created_at} />
       </div>
-      <div className="tpa-row"><TicketPersonnelAvatars ticket={ticket} /></div>
+      <div className="tpa-row">
+        {progress?.total > 0 ? <ProgressRing done={progress.done} total={progress.total} /> : <span />}
+        <TicketPersonnelAvatars ticket={ticket} />
+      </div>
     </div>
   );
 }
