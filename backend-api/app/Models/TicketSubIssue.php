@@ -61,6 +61,10 @@ class TicketSubIssue extends Model
         'external_shop_contact',
         'external_sent_by',
         'external_contact_person',
+        'external_shop_address',
+        'external_expected_return',
+        'external_handled_by',
+        'external_received_by',
         'external_estimated_cost',
         'warranty_until',
         'work_order_notes',
@@ -146,6 +150,16 @@ class TicketSubIssue extends Model
     public function sourceVehicle()
     {
         return $this->belongsTo(Vehicle::class, 'source_vehicle_id', 'vehicle_id');
+    }
+
+    public function externalHandler()
+    {
+        return $this->belongsTo(User::class, 'external_handled_by');
+    }
+
+    public function externalReceiver()
+    {
+        return $this->belongsTo(User::class, 'external_received_by');
     }
 
     public function mechanicAssignedBy()

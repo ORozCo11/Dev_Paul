@@ -178,6 +178,13 @@ return [
     'subissue.assign_mechanic' => [],
     'subissue.reassign_mechanic' => [],
     'subissue.log_repair' => ['Maintenance Personnel'],
+    // Dispatching / receiving / writing up an EXTERNAL-shop repair that has no
+    // in-house mechanic. Admin records it (never the verifying Custodian).
+    'external.handle' => ['Admin'],
+    // Cannibalization records: anyone on the barangay's repair side can record
+    // and read them. There is no approval ability by design.
+    'cannibalization.record' => ['Admin', 'Custodian', 'Maintenance Personnel'],
+    'cannibalization.view' => ['Admin', 'Custodian', 'Maintenance Personnel'],
     // Production-readiness audit finding #2 — Admin was a general Tier-1
     // verification fallback; removed. Verification is a Custodian-only
     // action now. An unavailable Custodian is handled by reassigning the

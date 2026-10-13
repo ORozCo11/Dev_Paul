@@ -112,6 +112,7 @@ const modulesByRole = {
       ['schedules', 'Maintenance Schedule'],
       ['maintenance', 'Maintenance Records'],
       ['conditions', 'Condition Monitoring'],
+      ['cannibalizations', 'Cannibalization'],
     ] },
     // The old cross-vehicle "Vehicle Documents" picker page (VehicleDocumentsPage)
     // was removed (2026-10-10) — unlinked everywhere and reachable only by
@@ -159,6 +160,7 @@ const modulesByRole = {
       // now a row-level button in this same table (see maintenanceColumns'
       // record.verify branch), matching Admin's "no tabs" reference design.
       ['maintenance', 'Maintenance Records'],
+      ['cannibalizations', 'Cannibalization'],
     ] },
   ],
   'Maintenance Personnel': [
@@ -178,6 +180,7 @@ const modulesByRole = {
       ['ticketWorkOrders', 'My Work Orders'],
       ['maintenance', 'Maintenance Records'],
       ['schedules', 'Maintenance Schedule'],
+      ['cannibalizations', 'Cannibalization'],
     ] },
     // "Vehicle Issues" removed per product direction — redundant for this
     // role (not necessary; a mechanic's own ticket/work-order flow already
@@ -276,6 +279,7 @@ const moduleEndpoints = {
   maintenanceStatus: '/maintenance-records',
   schedules: '/maintenance-schedules',
   histories: '/histories',
+  cannibalizations: '/cannibalizations',
   logs: '/logs',
   tickets: '/tickets',
   ticketInspections: '/tickets',
@@ -287,6 +291,12 @@ const moduleEndpoints = {
 };
 
 const moduleIcons = {
+  cannibalizations: (
+    <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7h12l-3-3" />
+      <path d="M20 17H8l3 3" />
+    </svg>
+  ),
   dashboard: (
     <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="9" rx="1" />
@@ -1777,17 +1787,6 @@ function Workspace() {
       result = result.filter((row) => row.status !== 'Inactive');
     }
 
-    if (activeModule === 'schedules' && !filterStatus.length) {
-      // Recurring schedules auto-regenerate every time one is completed
-      // (Workflow 15), so Completed rows pile up indefinitely otherwise —
-      // default view stays to just what's actually upcoming/actionable.
-      // Pending Approval is included so a newly-submitted schedule is
-      // visible immediately, not just after clicking its stat card — it
-      // needs timely action the same way Scheduled rows do. Click the
-      // Declined/Completed/Cancelled stat card to see the rest.
-      result = result.filter((row) => row.status === 'Scheduled' || row.status === 'Pending Approval');
-    }
-
     if (activeModule === 'schedules' && filterStatus.includes('MyAssigned')) {
       result = result.filter((row) => row.status === 'Scheduled' && String(row.assigned_to) === String(user.id));
     } else if (activeModule === 'schedules' && filterStatus.includes('AwaitingVerification')) {
@@ -3269,8 +3268,8 @@ function Workspace() {
             />
           ) : logRepairsTicketId ? (
             <LogRepairsPage
-              key={flattenSubIssueRows(records.ticketWorkOrders).some((r) => String(r.ticket_id) === String(logRepairsTicketId) && String(r.sub_issue_id) === String(logRepairsSubIssueId)) ? 'ready' : 'loading'}
-              ticket={flattenSubIssueRows(records.ticketWorkOrders).find((r) => String(r.ticket_id) === String(logRepairsTicketId) && String(r.sub_issue_id) === String(logRepairsSubIssueId))}
+              key={flattenSubIssueRows(records.ticketWorkOrders ?? records.tickets).some((r) => String(r.ticket_id) === String(logRepairsTicketId) && String(r.sub_issue_id) === String(logRepairsSubIssueId)) ? 'ready' : 'loading'}
+              ticket={flattenSubIssueRows(records.ticketWorkOrders ?? records.tickets).find((r) => String(r.ticket_id) === String(logRepairsTicketId) && String(r.sub_issue_id) === String(logRepairsSubIssueId))}
               vehicleOptions={lookups.vehicles ?? []}
               onBack={() => returnToModule('ticketWorkOrders')}
               onSubmit={(subIssueRow, payload) => ticketAction(`/tickets/${subIssueRow.ticket_id}/sub-issues/${subIssueRow.sub_issue_id}/log-repairs`, payload, 'Repair logged. Once every repair on this ticket is logged, it goes to the Custodian for verification automatically.').then((ok) => { if (ok) returnToModule('ticketWorkOrders'); })}
@@ -4234,18 +4233,47 @@ function Workspace() {
       );
     }
 
+    if (activeModule === 'cannibalizations') {
+      return (
+        <CannibalizationModule
+          user={user}
+          rows={records.cannibalizations ?? []}
+          vehicles={lookups.vehicles}
+          onRecord={async (formData) => {
+            try {
+              await api.post('/cannibalizations', formData);
+              setNotice({ type: 'success', text: 'Cannibalization recorded. It now appears in both vehicles\' history.' });
+              await refreshCurrent();
+              return true;
+            } catch (error) {
+              showError(error, setNotice);
+              return false;
+            }
+          }}
+        />
+      );
+    }
+
     if (activeModule === 'schedules') {
       // A mechanic's own assignments surface first — the shared list still
       // shows everyone's schedules for context, but their own work isn't
       // buried in it. Computed once so the table and card views can't drift
       // into showing different orderings.
-      const scheduleRows = (!hasRole(user, 'Admin') && hasRole(user, 'Maintenance Personnel'))
-        ? [...visibleRows].sort((a, b) => {
-            const aMine = String(a.assigned_to) === String(user.id) ? 0 : 1;
-            const bMine = String(b.assigned_to) === String(user.id) ? 0 : 1;
-            return aMine - bMine;
-          })
-        : visibleRows;
+      // "Total Schedules" now means every schedule, so the default list shows
+      // them all — live work (Pending Approval, Scheduled) first by date, then
+      // Declined / Completed / Cancelled — instead of silently hiding some.
+      const STATUS_RANK = { 'Pending Approval': 0, Scheduled: 1, Declined: 2, Completed: 3, Cancelled: 4 };
+      const mineFirst = (!hasRole(user, 'Admin') && hasRole(user, 'Maintenance Personnel'));
+      const scheduleRows = [...visibleRows].sort((a, b) => {
+        if (mineFirst) {
+          const am = String(a.assigned_to) === String(user.id) ? 0 : 1;
+          const bm = String(b.assigned_to) === String(user.id) ? 0 : 1;
+          if (am !== bm) return am - bm;
+        }
+        const ar = STATUS_RANK[a.status] ?? 5, br = STATUS_RANK[b.status] ?? 5;
+        if (ar !== br) return ar - br;
+        return String(a.scheduled_date).localeCompare(String(b.scheduled_date));
+      });
 
       return (
         <ModulePanel
@@ -8447,6 +8475,288 @@ function OpenItemsWarning({ kind, rows, basePath }) {
 // =========================================================================
 
 // Shared page frame: breadcrumb, heading, one white panel.
+// =========================================================================
+// CANNIBALIZATION — a direct record of parts moved off a vehicle.
+// No request / approval / pending state: fill the form, review, record.
+// A saved record is final (the API has no edit or delete) and is attributed
+// to the signed-in user by the server, never by a form field.
+// =========================================================================
+
+const CANNIBAL_UNITS = ['pc', 'set', 'pair', 'L', 'kg', 'm'];
+const emptyCannibalPart = () => ({ part_name: '', part_number: '', quantity: 1, unit: 'pc', part_condition: '', installation_details: '', notes: '' });
+const nowLocalInput = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+};
+
+function CannibalizationRecordForm({ user, vehicles, onCancel, onSubmit }) {
+  const [v, setV] = useState({
+    source_vehicle_id: '', source_reason: '', destination_type: 'vehicle', destination_vehicle_id: '', storage_location: '',
+    reason: '', notes: '', removed_at: nowLocalInput(), performed_by_name: '', received_by_name: '', transferred_at: '',
+  });
+  const [parts, setParts] = useState([emptyCannibalPart()]);
+  const [files, setFiles] = useState([]);
+  const [errors, setErrors] = useState([]);
+  const [reviewing, setReviewing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const set = (name, value) => setV((s) => ({ ...s, [name]: value }));
+  const usable = (vehicles ?? []).filter((x) => !['Inactive', 'Decommissioned'].includes(x.status));
+  const source = usable.find((x) => String(x.vehicle_id) === String(v.source_vehicle_id));
+  const dest = usable.find((x) => String(x.vehicle_id) === String(v.destination_vehicle_id));
+  const vehicleLabel = (x) => `${x.vehicle_name} · ${x.plate_number}`;
+
+  const setPart = (i, patch) => setParts((rows) => rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
+  const addPart = () => setParts((rows) => [...rows, emptyCannibalPart()]);
+  const removePart = (i) => setParts((rows) => (rows.length > 1 ? rows.filter((_, k) => k !== i) : rows));
+
+  const validate = () => {
+    const e = [];
+    if (!v.source_vehicle_id) e.push('Choose the source vehicle.');
+    if (!v.source_reason.trim()) e.push('Say why parts are being removed from the source vehicle.');
+    if (v.destination_type === 'vehicle') {
+      if (!v.destination_vehicle_id) e.push('Choose the destination vehicle.');
+      else if (v.destination_vehicle_id === v.source_vehicle_id) e.push('The destination must be a different vehicle from the source.');
+    } else if (!v.storage_location.trim()) e.push('Enter the storage location.');
+    if (!v.reason.trim()) e.push('Enter the reason for the cannibalization.');
+    if (!v.removed_at) e.push('Enter when the parts were removed.');
+    else if (new Date(v.removed_at) > new Date()) e.push('The removal date cannot be in the future.');
+    if (v.transferred_at && v.removed_at && new Date(v.transferred_at) < new Date(v.removed_at)) e.push('The transfer / installation cannot be before the removal.');
+    parts.forEach((p, i) => {
+      if (!p.part_name.trim()) e.push(`Part ${i + 1}: enter the part name.`);
+      if (!(Number(p.quantity) >= 1) || !Number.isInteger(Number(p.quantity))) e.push(`Part ${i + 1}: quantity must be a whole number of 1 or more.`);
+    });
+    return e;
+  };
+
+  const goReview = (ev) => {
+    ev.preventDefault();
+    const e = validate();
+    setErrors(e);
+    if (!e.length) setReviewing(true);
+  };
+
+  const save = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      Object.entries(v).forEach(([k, val]) => {
+        if (val === '' || val == null) return;
+        if (k === 'destination_vehicle_id' && v.destination_type !== 'vehicle') return;
+        if (k === 'storage_location' && v.destination_type !== 'storage') return;
+        // datetime-local is the user's local time; send an absolute (UTC) instant.
+        fd.append(k, k === 'removed_at' || k === 'transferred_at' ? new Date(val).toISOString() : val);
+      });
+      fd.append('parts', JSON.stringify(parts.map((p) => ({ ...p, quantity: Number(p.quantity) }))));
+      files.forEach((f) => fd.append('evidence[]', f));
+      const ok = await onSubmit(fd);
+      if (ok === false) setReviewing(false);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (reviewing) {
+    return (
+      <div className="can-review">
+        <h4>Review before recording</h4>
+        <p className="muted">Once recorded this cannot be edited or deleted. Check it carefully.</p>
+        <dl className="can-kv">
+          <div><dt>Recorded by</dt><dd>{user.name} (automatically)</dd></div>
+          <div><dt>Source vehicle</dt><dd>{source ? vehicleLabel(source) : '—'}</dd></div>
+          <div><dt>Destination</dt><dd>{v.destination_type === 'vehicle' ? (dest ? vehicleLabel(dest) : '—') : `Storage: ${v.storage_location}`}</dd></div>
+          <div><dt>Removed</dt><dd>{v.removed_at.replace('T', ' ')}{v.performed_by_name ? ` · by ${v.performed_by_name}` : ''}</dd></div>
+          {(v.received_by_name || v.transferred_at) && <div><dt>Received / installed</dt><dd>{v.received_by_name || '—'}{v.transferred_at ? ` · ${v.transferred_at.replace('T', ' ')}` : ''}</dd></div>}
+          <div className="can-kv-wide"><dt>Reason</dt><dd>{v.reason}</dd></div>
+        </dl>
+        <table className="can-parts-table">
+          <thead><tr><th>Part</th><th>Qty</th><th>Condition</th></tr></thead>
+          <tbody>{parts.map((p, i) => <tr key={i}><td>{p.part_name}{p.part_number ? ` (${p.part_number})` : ''}</td><td>{p.quantity} {p.unit}</td><td>{p.part_condition || '—'}</td></tr>)}</tbody>
+        </table>
+        {files.length > 0 && <p className="muted">{files.length} evidence file{files.length === 1 ? '' : 's'} attached.</p>}
+        <div className="can-actions">
+          <button type="button" className="ghost-button" onClick={() => setReviewing(false)} disabled={submitting}>Back</button>
+          <button type="button" className="primary-button" onClick={save} disabled={submitting}>{submitting ? 'Recording…' : 'Record Cannibalization'}</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form className="can-form" onSubmit={goReview} noValidate>
+      {errors.length > 0 && (
+        <div className="notice danger" role="alert">{errors.map((e) => <div key={e}>{e}</div>)}</div>
+      )}
+
+      <section className="can-section">
+        <h4>A. Transaction details</h4>
+        <div className="can-grid">
+          <label><span>Record number</span><input type="text" value="Generated when recorded" disabled /></label>
+          <label><span>Recorded by</span><input type="text" value={user.name} disabled /></label>
+          <label><span>Date and time removed <b className="req">*</b></span>
+            <input type="datetime-local" max={nowLocalInput()} value={v.removed_at} onChange={(e) => set('removed_at', e.target.value)} /></label>
+          <label className="can-wide"><span>Reason for cannibalization <b className="req">*</b></span>
+            <textarea rows={2} value={v.reason} onChange={(e) => set('reason', e.target.value)} /></label>
+          <label className="can-wide"><span>Notes</span><textarea rows={2} value={v.notes} onChange={(e) => set('notes', e.target.value)} /></label>
+        </div>
+      </section>
+
+      <section className="can-section">
+        <h4>B. Source vehicle</h4>
+        <div className="can-grid">
+          <label className="can-wide"><span>Vehicle the parts come from <b className="req">*</b></span>
+            <select value={v.source_vehicle_id} onChange={(e) => set('source_vehicle_id', e.target.value)}>
+              <option value="">Select source vehicle</option>
+              {usable.map((x) => <option key={x.vehicle_id} value={x.vehicle_id}>{vehicleLabel(x)}</option>)}
+            </select></label>
+          {source && <p className="can-hint can-wide">{source.vehicle_name} · {source.plate_number} · condition: <strong>{source.condition}</strong> · status: <strong>{source.status}</strong></p>}
+          <label className="can-wide"><span>Why parts are removed from this vehicle <b className="req">*</b></span>
+            <textarea rows={2} value={v.source_reason} onChange={(e) => set('source_reason', e.target.value)} /></label>
+        </div>
+      </section>
+
+      <section className="can-section">
+        <h4>C. Destination</h4>
+        <div className="can-choice" role="radiogroup" aria-label="Destination type">
+          {[['vehicle', 'Another registered vehicle'], ['storage', 'Spare-parts storage']].map(([val, label]) => (
+            <button key={val} type="button" role="radio" aria-checked={v.destination_type === val} className={v.destination_type === val ? 'is-on' : ''} onClick={() => set('destination_type', val)}>{label}</button>
+          ))}
+        </div>
+        <div className="can-grid">
+          {v.destination_type === 'vehicle' ? (
+            <label className="can-wide"><span>Receiving vehicle <b className="req">*</b></span>
+              <select value={v.destination_vehicle_id} onChange={(e) => set('destination_vehicle_id', e.target.value)}>
+                <option value="">Select destination vehicle</option>
+                {usable.filter((x) => String(x.vehicle_id) !== String(v.source_vehicle_id)).map((x) => <option key={x.vehicle_id} value={x.vehicle_id}>{vehicleLabel(x)}</option>)}
+              </select></label>
+          ) : (
+            <label className="can-wide"><span>Storage location <b className="req">*</b></span>
+              <input type="text" value={v.storage_location} onChange={(e) => set('storage_location', e.target.value)} placeholder="e.g. Parts room, Brgy Hall" /></label>
+          )}
+          {dest && v.destination_type === 'vehicle' && <p className="can-hint can-wide">{dest.vehicle_name} · condition: <strong>{dest.condition}</strong> · status: <strong>{dest.status}</strong></p>}
+          <p className="can-hint can-wide">This does not mark any vehicle operational. Spare-parts stock levels are not tracked by this system, so none are updated.</p>
+        </div>
+      </section>
+
+      <section className="can-section">
+        <h4>D. Parts removed</h4>
+        {parts.map((p, i) => (
+          <div className="can-part" key={i}>
+            <div className="can-part-head">
+              <strong>Part {i + 1}</strong>
+              <button type="button" className="ghost-button" onClick={() => removePart(i)} disabled={parts.length === 1}>Remove</button>
+            </div>
+            <div className="can-grid">
+              <label><span>Part name <b className="req">*</b></span><input type="text" value={p.part_name} onChange={(e) => setPart(i, { part_name: e.target.value })} /></label>
+              <label><span>Part number / description</span><input type="text" value={p.part_number} onChange={(e) => setPart(i, { part_number: e.target.value })} /></label>
+              <label><span>Quantity <b className="req">*</b></span><input type="number" min="1" step="1" value={p.quantity} onChange={(e) => setPart(i, { quantity: e.target.value })} /></label>
+              <label><span>Unit</span>
+                <select value={p.unit} onChange={(e) => setPart(i, { unit: e.target.value })}>{CANNIBAL_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}</select></label>
+              <label><span>Condition</span>
+                <select value={p.part_condition} onChange={(e) => setPart(i, { part_condition: e.target.value })}>
+                  <option value="">Not stated</option>{['Good', 'Fair', 'Worn', 'Damaged'].map((c) => <option key={c} value={c}>{c}</option>)}
+                </select></label>
+              <label><span>Installation details</span><input type="text" value={p.installation_details} onChange={(e) => setPart(i, { installation_details: e.target.value })} /></label>
+              <label className="can-wide"><span>Notes</span><input type="text" value={p.notes} onChange={(e) => setPart(i, { notes: e.target.value })} /></label>
+            </div>
+          </div>
+        ))}
+        <button type="button" className="ghost-button" onClick={addPart}><Icon name="plus" size={14} /> Add another part</button>
+      </section>
+
+      <section className="can-section">
+        <h4>E. Completion details</h4>
+        <div className="can-grid">
+          <label><span>Removed by (if not you)</span><input type="text" value={v.performed_by_name} onChange={(e) => set('performed_by_name', e.target.value)} placeholder={user.name} /></label>
+          <label><span>Received / installed by</span><input type="text" value={v.received_by_name} onChange={(e) => set('received_by_name', e.target.value)} /></label>
+          <label><span>Date transferred / installed</span><input type="datetime-local" max={nowLocalInput()} value={v.transferred_at} onChange={(e) => set('transferred_at', e.target.value)} /></label>
+          <label className="can-wide"><span>Evidence (photos or documents, up to 10)</span>
+            <input type="file" multiple accept="image/*,.pdf,.doc,.docx" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 10))} /></label>
+        </div>
+      </section>
+
+      <div className="can-actions">
+        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="primary-button">Review</button>
+      </div>
+    </form>
+  );
+}
+
+function CannibalizationModule({ user, rows, vehicles, onRecord }) {
+  const [search, setSearch] = useState('');
+  const [formOpen, setFormOpen] = useState(false);
+  const [viewing, setViewing] = useState(null);
+  const canRecord = canDo(user, 'cannibalization.record');
+
+  const q = search.trim().toLowerCase();
+  const visible = (rows ?? []).filter((r) => !q || [
+    r.record_number, r.source_vehicle?.vehicle_name, r.source_vehicle?.plate_number, r.destination_vehicle?.vehicle_name,
+    r.storage_location, r.reason, ...(r.parts ?? []).map((p) => p.part_name),
+  ].some((x) => x && String(x).toLowerCase().includes(q)));
+
+  const columns = [
+    { key: 'no', label: 'Record', locked: true, render: (r) => <strong>{r.record_number}</strong> },
+    { key: 'date', label: 'Removed', render: (r) => formatDate(r.removed_at) },
+    { key: 'source', label: 'Source vehicle', render: (r) => <VehicleCell vehicle={r.source_vehicle} link={false} /> },
+    { key: 'dest', label: 'Destination', render: (r) => (r.destination_type === 'vehicle' ? <VehicleCell vehicle={r.destination_vehicle} link={false} /> : <span>Storage: {r.storage_location}</span>) },
+    { key: 'parts', label: 'Parts', render: (r) => (r.parts ?? []).map((p) => `${p.quantity} × ${p.part_name}`).join(', ') },
+    { key: 'by', label: 'Recorded by', render: (r) => r.recorded_by?.name ?? '—' },
+    { key: 'action', label: 'Action', locked: true, render: (r) => <button type="button" className="btn-view-action icon-btn" title="View" aria-label="View" onClick={(e) => { e.stopPropagation(); setViewing(r); }}><Icon name="eye" size={14} /></button> },
+  ];
+
+  return (
+    <div className="module-grid">
+      <section className="panel">
+        <div className="panel-header-bar">
+          <h3>Cannibalization Records <span className="count-badge">{visible.length}</span></h3>
+          <LocalSearchInput value={search} onChange={setSearch} placeholder="Search records..."
+            onAdd={canRecord ? () => setFormOpen(true) : undefined} addLabel="Record Cannibalization" />
+        </div>
+        <p className="can-intro">Parts taken off one vehicle and put on another, or into storage. Saved records are final and appear in each vehicle's history.</p>
+        <PaginatedTable columns={columns} rows={visible} emptyMessage="No cannibalization recorded yet." onRowClick={(r) => setViewing(r)} />
+      </section>
+
+      <FormModal open={formOpen} title="Record Cannibalization" onClose={() => setFormOpen(false)} wide>
+        {formOpen && (
+          <CannibalizationRecordForm
+            user={user}
+            vehicles={vehicles}
+            onCancel={() => setFormOpen(false)}
+            onSubmit={async (fd) => { const ok = await onRecord(fd); if (ok !== false) setFormOpen(false); return ok; }}
+          />
+        )}
+      </FormModal>
+
+      <FormModal open={!!viewing} title={viewing ? `${viewing.record_number} — Cannibalization` : ''} onClose={() => setViewing(null)} wide>
+        {viewing && (
+          <div className="can-review">
+            <dl className="can-kv">
+              <div><dt>Recorded by</dt><dd>{viewing.recorded_by?.name ?? '—'} · {formatDate(viewing.created_at)}</dd></div>
+              <div><dt>Source vehicle</dt><dd>{viewing.source_vehicle ? `${viewing.source_vehicle.vehicle_name} · ${viewing.source_vehicle.plate_number}` : '—'}</dd></div>
+              <div><dt>Destination</dt><dd>{viewing.destination_type === 'vehicle' ? (viewing.destination_vehicle ? `${viewing.destination_vehicle.vehicle_name} · ${viewing.destination_vehicle.plate_number}` : '—') : `Storage: ${viewing.storage_location}`}</dd></div>
+              <div><dt>Removed</dt><dd>{formatDate(viewing.removed_at)}{viewing.performed_by_name ? ` · by ${viewing.performed_by_name}` : ''}</dd></div>
+              {(viewing.received_by_name || viewing.transferred_at) && <div><dt>Received / installed</dt><dd>{viewing.received_by_name || '—'}{viewing.transferred_at ? ` · ${formatDate(viewing.transferred_at)}` : ''}</dd></div>}
+              <div className="can-kv-wide"><dt>Reason</dt><dd>{viewing.reason}</dd></div>
+              <div className="can-kv-wide"><dt>Why removed from the source</dt><dd>{viewing.source_reason}</dd></div>
+              {viewing.notes && <div className="can-kv-wide"><dt>Notes</dt><dd>{viewing.notes}</dd></div>}
+            </dl>
+            <table className="can-parts-table">
+              <thead><tr><th>Part</th><th>Qty</th><th>Condition</th><th>Installation / notes</th></tr></thead>
+              <tbody>{(viewing.parts ?? []).map((p) => <tr key={p.part_id}><td>{p.part_name}{p.part_number ? ` (${p.part_number})` : ''}</td><td>{p.quantity} {p.unit}</td><td>{p.part_condition || '—'}</td><td>{[p.installation_details, p.notes].filter(Boolean).join(' · ') || '—'}</td></tr>)}</tbody>
+            </table>
+            {(viewing.evidence_urls ?? []).length > 0 && (
+              <p>Evidence: {viewing.evidence_urls.map((u, i) => <a key={u} href={resolvePhotoUrl(u)} target="_blank" rel="noreferrer" style={{ marginRight: 10 }}>File {i + 1}</a>)}</p>
+            )}
+          </div>
+        )}
+      </FormModal>
+    </div>
+  );
+}
+
 function FxPage({ icon, crumbs, title, description, children }) {
   return (
     <div className="module-grid">
@@ -9533,6 +9843,7 @@ const ISSUE_SEVERITY_CHIP_COLOR = { High: '#dc2626', Medium: '#f59e0b', Low: '#0
 // badges (isScheduleOverdue) still show urgency per-row; this stat row now
 // only tracks status.
 const SCHEDULE_STAT_CARDS = [
+  { key: 'Scheduled', label: 'Scheduled', icon: 'calendar', bg: '#dbeafe', color: '#1d4ed8' },
   { key: 'Pending Approval', label: 'Pending Approval', icon: 'alert', bg: '#fef3c7', color: '#d97706' },
   { key: 'Declined', label: 'Declined', icon: 'close', bg: '#fee2e2', color: '#dc2626' },
   { key: 'Completed', label: 'Completed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
@@ -11233,63 +11544,57 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
 
   return (
     <div
-      className="ticket-card"
+      className={`sch-card sch-${String(row.status).toLowerCase().replace(/[^a-z]+/g, '-')}${overdue ? ' is-overdue' : ''}`}
       style={{ cursor: canView ? 'pointer' : 'default' }}
       onClick={canView ? () => onViewVehicle(row.vehicle) : undefined}
       role={canView ? 'button' : undefined}
       tabIndex={canView ? 0 : undefined}
       onKeyDown={canView ? (e) => { if (e.key === 'Enter') onViewVehicle(row.vehicle); } : undefined}
     >
-      <div className="ticket-card-content-wrapper">
-        <div className="ticket-card-info">
-          <div className="ticket-card-top">
-            <span className="ticket-card-id">#{row.schedule_id}</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-              <TicketStatusBadge value={row.status} />
-              {overdue && (
-                <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>OVERDUE</span>
-              )}
-            </span>
-          </div>
-          <p className="ticket-card-title">{row.maintenance_type}</p>
-          <p className="ticket-card-vehicle" style={{ marginBottom: 8 }}>
-            {row.vehicle?.vehicle_name}{row.vehicle?.plate_number ? ` · ${row.vehicle.plate_number}` : ''}
+      <div className="sch-card-head">
+        <span className="sch-card-id">Schedule #{row.schedule_id}</span>
+        <span className="sch-card-badges">
+          <TicketStatusBadge value={row.status} />
+          {overdue && <span className="sch-overdue-pill">OVERDUE</span>}
+        </span>
+      </div>
+
+      <div className="sch-card-main">
+        <div className="sch-card-titles">
+          <p className="sch-card-title">{row.maintenance_type}</p>
+          <p className="sch-card-vehicle">
+            {row.vehicle?.vehicle_name}{row.vehicle?.plate_number ? <span className="sch-card-plate"> · {row.vehicle.plate_number}</span> : null}
           </p>
         </div>
-        {row.vehicle?.photo_url && (
-          <div className="ticket-card-photo">
-            <img src={resolvePhotoUrl(row.vehicle.photo_url)} alt={row.vehicle.vehicle_name} />
-          </div>
-        )}
+        <div className="sch-card-photo">
+          {row.vehicle?.photo_url
+            ? <img src={resolvePhotoUrl(row.vehicle.photo_url)} alt={row.vehicle.vehicle_name} />
+            : <Icon name="vehicle" size={26} />}
+        </div>
       </div>
 
-      {/* The date is the whole point of a schedule, so it leads here rather
-          than being one column among many. */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: '0.78rem', margin: '2px 0 8px' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 700, color: overdue ? '#b91c1c' : undefined }}>
-          <Icon name="calendar" size={13} /> {formatDate(row.scheduled_date)}{row.scheduled_time ? ` · ${row.scheduled_time}` : ''}
-        </span>
-        <span className="muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-          <Icon name="undo" size={13} /> {row.recurrence_months ? (RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`) : 'One-time'}
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', marginBottom: 8, flexWrap: 'wrap' }}>
-        {row.assigned_to_user?.name
-          ? (
-            <>
-              <UserAvatarName user={row.assigned_to_user} />
-              {isMine && <span style={{ fontSize: '0.64rem', fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>YOU</span>}
-            </>
-          )
-          : <span className="muted">Unassigned</span>}
-      </div>
-
-      {row.service_location && (
-        <p className="muted" style={{ fontSize: '0.74rem', margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <Icon name="pin" size={12} /> {row.service_location}
-        </p>
-      )}
+      <dl className="sch-card-meta">
+        <div className={overdue ? 'is-alert' : ''}>
+          <dt><Icon name="calendar" size={13} /> When</dt>
+          <dd>{formatDate(row.scheduled_date)}{row.scheduled_time ? ` · ${String(row.scheduled_time).slice(0, 5)}` : ''}</dd>
+        </div>
+        <div>
+          <dt><Icon name="undo" size={13} /> Repeats</dt>
+          <dd>{row.recurrence_months ? (RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`) : 'One-time'}</dd>
+        </div>
+        <div>
+          <dt><Icon name="wrench" size={13} /> Mechanic</dt>
+          <dd>
+            {row.assigned_to_user?.name
+              ? <>{row.assigned_to_user.name}{isMine && <span className="sch-you-tag">You</span>}</>
+              : <span className="muted">Unassigned</span>}
+          </dd>
+        </div>
+        <div>
+          <dt><Icon name="pin" size={13} /> Location</dt>
+          <dd>{row.service_location || <span className="muted">Not set</span>}</dd>
+        </div>
+      </dl>
 
       {/* Traceability, same as the table's Status column: "Completed" alone
           doesn't say whether the record it produced was ever verified. */}
@@ -11318,7 +11623,7 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
           line up across a row of cards regardless of how much optional
           content (overdue flag, location, verification badge) a given card
           has above it. */}
-      <div className="row-actions ticket-card-bottom" style={{ justifyContent: 'flex-start' }} onClick={(e) => e.stopPropagation()}>
+      <div className="sch-card-actions" onClick={(e) => e.stopPropagation()}>
         {canComplete && (
           <button className="btn-confirm-action icon-btn" onClick={() => onComplete(row)} type="button" title="Mark as Done" aria-label="Mark as Done"><Icon name="checkCircle" size={14} /></button>
         )}
@@ -13027,6 +13332,12 @@ function RepairContextDetails({ si }) {
         ['Contact Person', si.external_contact_person],
         ['Contact Number', si.external_shop_contact],
         ['Sent By', si.external_sent_by],
+        ['Shop Address', si.external_shop_address],
+        ['Date Sent', si.external_sent_at ? formatDate(si.external_sent_at) : null],
+        ['Expected Return', si.external_expected_return ? formatDate(si.external_expected_return) : null],
+        ['Returned', si.external_returned_at ? `${formatDate(si.external_returned_at)}${si.external_receiver?.name ? ` · received by ${si.external_receiver.name}` : ''}` : (si.external_sent_at ? 'Not yet returned' : null)],
+        ['Actual Cost', si.external_actual_cost != null ? `₱${Number(si.external_actual_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : null],
+        ['Shop Result', si.external_return_notes],
         ['Estimated Cost', si.external_estimated_cost != null ? `₱${Number(si.external_estimated_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : null],
         ['Work to Be Done', si.external_work_scope],
       ]
@@ -13060,6 +13371,9 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
   const [declining, setDeclining] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [validationLine, setValidationLine] = useState(null);
+  // An external-shop ticket goes to an outside shop: no in-house mechanic.
+  const extSub = (ticket.sub_issues ?? []).find((si) => si.repair_type === 'external');
+  const isExternalTicket = (ticket.sub_issues ?? []).length > 0 && (ticket.sub_issues ?? []).every((si) => si.repair_type === 'external');
 
   const setField = (name, value) => setFields((f) => ({ ...f, [name]: value }));
   const updateSubRow = (index, patch) => setSubRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -13067,7 +13381,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
   // One mechanic does the whole ticket now — approving is the single
   // moment the ticket gets both activated AND dispatched, in one step.
   const submitApprove = async () => {
-    if (!fields.assigned_mechanic_id) {
+    if (!isExternalTicket && !fields.assigned_mechanic_id) {
       setValidationLine('Pick who will do this repair before approving.');
       return;
     }
@@ -13077,7 +13391,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
       await onApprove({
         ticket_description: fields.ticket_description,
         priority: fields.priority,
-        assigned_mechanic_id: fields.assigned_mechanic_id,
+        ...(isExternalTicket ? {} : { assigned_mechanic_id: fields.assigned_mechanic_id }),
         sub_issues: subRows.map((r) => ({
           sub_issue_id: r.sub_issue_id,
           title: r.title,
@@ -13128,6 +13442,16 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
             <span>Details</span>
             <textarea rows={3} value={fields.ticket_description} onChange={(e) => setField('ticket_description', e.target.value)} />
           </label>
+          {isExternalTicket ? (
+            <div className="external-approve-note">
+              <strong><Icon name="vehicle" size={14} /> Sent to an external shop: no in-house mechanic needed</strong>
+              <dl>
+                <div><dt>Shop</dt><dd>{extSub?.external_vendor || 'To be recorded at dispatch'}</dd></div>
+                <div><dt>Sent by / responsible</dt><dd>{extSub?.external_sent_by || 'Recorded from the signed-in user at dispatch'}</dd></div>
+                <div><dt>Reason</dt><dd>{extSub?.external_reason || '—'}</dd></div>
+              </dl>
+            </div>
+          ) : (
           <label>
             <span>Assign Mechanic <span className="required-asterisk">*</span></span>
             <select value={fields.assigned_mechanic_id} onChange={(e) => setField('assigned_mechanic_id', e.target.value)}>
@@ -13135,6 +13459,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
               {(lookups.maintenance_personnel ?? []).map((m) => <option key={m.id} value={m.id}>{mechanicWorkloadLabel(m)}</option>)}
             </select>
           </label>
+          )}
         </div>
 
         <div className="proposal-review-group">
@@ -13387,6 +13712,19 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
   const allLogged = subIssues.length > 0 && subIssues.every((s) => s.status === 'For Inspection');
   const canSubmitForVerification = ticket.status === 'Active' && isAssignedMechanic && allLogged && canDo(user, 'ticket.submit_for_verification');
   const canVerifyTicket = ticket.status === 'For Verification' && isAssignedCustodian && canDo(user, 'ticket.verify');
+  // External-shop ticket: where the vehicle actually is right now.
+  const isExternalTicket = subIssues.length > 0 && subIssues.every((s) => s.repair_type === 'external');
+  const extSubs = subIssues.filter((s) => s.repair_type === 'external');
+  const extStage = (() => {
+    if (!isExternalTicket) return { label: '', hint: '' };
+    const sent = extSubs.every((s) => s.external_sent_at);
+    const anySent = extSubs.some((s) => s.external_sent_at);
+    const returned = extSubs.every((s) => s.external_returned_at);
+    if (!anySent) return { label: 'Awaiting dispatch', hint: 'Waiting to be sent to the shop', detail: 'Approved. The vehicle has not been sent to the shop yet — record the dispatch.' };
+    if (!sent || !returned) return { label: 'At external shop', hint: 'Sent to the shop; service in progress', detail: 'The vehicle is with the outside shop. Record its return when it comes back.' };
+    return { label: 'Returned — record service report', hint: 'Vehicle returned; service report next', detail: 'The vehicle is back. Record the service report so the Custodian can verify it.' };
+  })();
+  const canHandleExternal = isExternalTicket && ticket.status === 'Active' && canDo(user, 'external.handle');
   const ticketCost = subIssues.reduce((sum, s) => sum + (Number(s.maintenance_cost) || 0), 0);
   const resolvedPercent = ticket.status === 'Closed'
     ? 100
@@ -13399,6 +13737,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
     if (ticket.status === 'For Verification') return isAssignedCustodian
       ? { tone: 'warn', label: 'Verify repair', detail: 'The mechanic says this is done — confirm it before the ticket closes.' }
       : { tone: 'active', label: 'Awaiting verification', detail: `${ticket.assigned_custodian?.name ?? 'The assigned Custodian'} needs to verify this repair.` };
+    if (isExternalTicket && ticket.status === 'Active') return { tone: 'active', label: extStage.label, detail: extStage.detail };
     if (canSubmitForVerification) return { tone: 'warn', label: 'Submit for verification', detail: 'Every sub-issue is logged — submit the ticket for the Custodian to verify.' };
     if (isAdminUser && pendingApprovalCount > 0) return { tone: 'warn', label: 'Approve cannibalized repair', detail: `${pendingApprovalCount} repair${pendingApprovalCount === 1 ? '' : 's'} using a part from another vehicle ${pendingApprovalCount === 1 ? 'needs' : 'need'} your approval.` };
     if (pendingApprovalCount > 0) return { tone: 'active', label: 'Awaiting Admin approval', detail: 'A cannibalized repair is waiting for Admin approval before it can be logged as done.' };
@@ -13510,12 +13849,17 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
             {phaseOrder.map((s, i) => {
               const current = phaseOrder.indexOf(ticket.status);
               const state = i < current ? 'done' : i === current ? 'active' : 'upcoming';
-              const hint = {
+              const hint = (isExternalTicket ? {
+                'Pending Approval': 'Admin reviews the outsourcing request',
+                Active: extStage.hint,
+                'For Verification': 'Custodian verifies the returned vehicle',
+                Closed: 'Verified and closed',
+              } : {
                 'Pending Approval': 'Admin approves & assigns a mechanic',
                 Active: 'Mechanic repairs, logs, submits',
                 'For Verification': 'Custodian verifies',
                 Closed: 'Return or archive',
-              }[s];
+              })[s];
               return (
                 <div key={s} className={`ticket-process-flow-step is-${state}`} role="listitem" style={state === 'active' ? { '--ticket-flow-active-color': PHASE_STEP_COLORS[s] } : undefined}>
                   <span className="ticket-process-flow-marker" style={state === 'active' ? { background: PHASE_STEP_COLORS[s], borderColor: PHASE_STEP_COLORS[s] } : undefined}>
@@ -13845,6 +14189,13 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
                   )}
                   {open && <RepairContextDetails si={si} />}
 
+                  {onLogRepairs && canHandleExternal && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && (
+                    <div className="subissue-head-right">
+                      <button className="primary-button" type="button" onClick={() => onLogRepairs(ticket, si)}>
+                        <Icon name="vehicle" size={14} /> {!si.external_sent_at ? 'Record dispatch' : !si.external_returned_at ? 'Record return' : 'Record service report'}
+                      </button>
+                    </div>
+                  )}
                   {onLogRepairs && ticket.status === 'Active' && canDo(user, 'subissue.log_repair') && si.status === 'Under Repair' && String(si.assigned_mechanic_id) === String(userId) && (
                     <div className="subissue-head-right">
                       <button className="primary-button" type="button" onClick={() => onLogRepairs(ticket, si)}>
@@ -16966,7 +17317,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   const [cannibalReason, setCannibalReason] = useState(ticket?.cannibal_reason ?? '');
   const [partInstalledAt, setPartInstalledAt] = useState((ticket?.part_installed_at ?? '').slice(0, 10));
   // External shop stages: send out, then mark returned, then submit.
-  const [sendForm, setSendForm] = useState({ external_vendor: ticket?.external_vendor ?? '', external_reason: '', external_work_scope: '', external_shop_contact: '', external_estimated_cost: '' });
+  const [sendForm, setSendForm] = useState({ external_vendor: ticket?.external_vendor ?? '', external_reason: '', external_work_scope: '', external_shop_contact: '', external_shop_address: '', external_expected_return: '', external_estimated_cost: '' });
   const [returnForm, setReturnForm] = useState({ external_return_notes: '', external_actual_cost: '', warranty_until: '' });
 
   if (!ticket) {
@@ -17199,6 +17550,14 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                     <div className="lr-field">
                       <label className="lr-label" htmlFor={`${idBase}-sc`}>Shop Contact</label>
                       <input id={`${idBase}-sc`} type="text" value={sendForm.external_shop_contact} onChange={(e) => setSendForm({ ...sendForm, external_shop_contact: e.target.value })} />
+                    </div>
+                    <div className="lr-field">
+                      <label className="lr-label" htmlFor={`${idBase}-sa`}>Shop Address</label>
+                      <input id={`${idBase}-sa`} type="text" value={sendForm.external_shop_address} onChange={(e) => setSendForm({ ...sendForm, external_shop_address: e.target.value })} />
+                    </div>
+                    <div className="lr-field">
+                      <label className="lr-label" htmlFor={`${idBase}-sx`}>Expected Return</label>
+                      <DateFilterInput id={`${idBase}-sx`} value={sendForm.external_expected_return} onChange={(v) => setSendForm({ ...sendForm, external_expected_return: v })} />
                     </div>
                     <div className="lr-field">
                       <label className="lr-label" htmlFor={`${idBase}-se`}>Estimated Cost (₱)</label>

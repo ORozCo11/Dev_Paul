@@ -14807,3 +14807,63 @@ html .ticket-detail-panel.is-page .ticket-process-meter-core { background: #fff;
 .verify-decision-error { margin: 0; color: #dc2626; font-size: 0.82rem; font-weight: 600; }
 .verify-decision-actions { display: flex; justify-content: flex-end; gap: 10px; }
 @media (max-width: 520px) { .verify-decision-choices { grid-template-columns: 1fr; } }
+
+/* ===== Maintenance Schedule cards (sch-*) ===== */
+.sch-card { display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; min-width: 0; height: 100%; padding: 16px; border: 1px solid #dbe5f3; border-radius: 14px; background: #fff; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06); transition: box-shadow .15s, transform .15s; }
+.sch-card:hover { box-shadow: 0 10px 24px rgba(29, 78, 216, 0.14); transform: translateY(-2px); }
+.sch-card.is-overdue { border-color: #fecaca; }
+.sch-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.sch-card-id { font-size: 0.82rem; font-weight: 800; color: #1d4ed8; letter-spacing: 0.02em; }
+.sch-card-badges { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.sch-overdue-pill { font-size: 0.66rem; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.sch-card-main { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 12px; align-items: start; }
+.sch-card-titles { min-width: 0; }
+.sch-card-title { margin: 0 0 4px; font-size: 1.05rem; font-weight: 800; line-height: 1.25; color: #0f172a; overflow-wrap: anywhere; }
+.sch-card-vehicle { margin: 0; font-size: 0.84rem; line-height: 1.35; color: #475569; overflow-wrap: anywhere; }
+.sch-card-plate { white-space: nowrap; color: #64748b; }
+.sch-card-photo { width: 76px; height: 56px; border-radius: 10px; overflow: hidden; background: #eff6ff; display: grid; place-items: center; color: #93c5fd; border: 1px solid #dbeafe; }
+.sch-card-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sch-card-meta { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; padding: 12px; border-radius: 10px; background: #f8fbff; }
+.sch-card-meta > div { min-width: 0; }
+.sch-card-meta dt { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; }
+.sch-card-meta dd { margin: 0; font-size: 0.84rem; font-weight: 600; color: #0f172a; overflow-wrap: anywhere; }
+.sch-card-meta .is-alert dd { color: #b91c1c; }
+.sch-card-meta .muted { font-weight: 400; }
+.sch-you-tag { margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 0.64rem; font-weight: 700; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.sch-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid #eef2f7; min-height: 52px; }
+@media (max-width: 420px) { .sch-card-meta { grid-template-columns: 1fr; } }
+
+/* Approve form: external-shop ticket (no mechanic to assign). */
+.external-approve-note { padding: 12px 14px; border-radius: 10px; background: #f5f3ff; border: 1px solid #ddd6fe; }
+.external-approve-note > strong { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; color: #5b21b6; font-size: 0.9rem; }
+.external-approve-note dl { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 16px; }
+.external-approve-note dt { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #6d28d9; }
+.external-approve-note dd { margin: 2px 0 0; font-size: 0.88rem; color: #1e1b4b; overflow-wrap: anywhere; }
+
+/* ===== Cannibalization record form / view (can-*) ===== */
+.can-intro { margin: 0 0 14px; font-size: 0.88rem; color: #64748b; }
+.can-form, .can-review { display: flex; flex-direction: column; gap: 18px; }
+.can-section { padding: 14px 16px; border: 1px solid #dbe5f3; border-radius: 12px; background: #f8fbff; }
+.can-section h4 { margin: 0 0 12px; font-size: 0.82rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #1d4ed8; }
+.can-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.can-grid label { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 0.78rem; font-weight: 700; color: #334155; }
+.can-grid input, .can-grid select, .can-grid textarea { width: 100%; box-sizing: border-box; min-height: 40px; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; background: #fff; font: inherit; font-weight: 400; font-size: 0.9rem; }
+.can-grid input:disabled { background: #f1f5f9; color: #64748b; }
+.can-wide { grid-column: 1 / -1; }
+.can-hint { margin: 0; font-size: 0.8rem; color: #475569; }
+.req { color: #dc2626; }
+.can-choice { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.can-choice button { padding: 8px 14px; border-radius: 999px; border: 1.5px solid #cbd5e1; background: #fff; font-weight: 700; font-size: 0.84rem; cursor: pointer; }
+.can-choice button.is-on { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+.can-part { padding: 12px; margin-bottom: 10px; border: 1px solid #dbe5f3; border-radius: 10px; background: #fff; }
+.can-part-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.can-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.can-kv { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+.can-kv dt { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; }
+.can-kv dd { margin: 2px 0 0; font-size: 0.92rem; color: #0f172a; overflow-wrap: anywhere; }
+.can-kv-wide { grid-column: 1 / -1; }
+.can-parts-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.can-parts-table th, .can-parts-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+.can-parts-table th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+@media (max-width: 640px) { .can-grid, .can-kv { grid-template-columns: minmax(0, 1fr); } }
+.sch-card-meta > div:first-child { grid-column: 1 / -1; }

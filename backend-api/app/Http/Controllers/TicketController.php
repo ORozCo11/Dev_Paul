@@ -745,7 +745,9 @@ class TicketController extends Controller
             'ticket_description'    => ['sometimes', 'string'],
             'priority'              => ['sometimes', Rule::in($this->priorities)],
             'assigned_custodian_id' => ['sometimes', 'exists:users,id'],
-            'assigned_mechanic_id'  => ['required', 'exists:users,id'],
+            // Required for an in-house ticket. An EXTERNAL-shop ticket has no
+            // in-house mechanic: the vehicle goes to an outside shop.
+            'assigned_mechanic_id'  => ['nullable', 'exists:users,id'],
             'sub_issues'                        => ['nullable', 'array'],
             'sub_issues.*.sub_issue_id'          => ['required_with:sub_issues', 'exists:ticket_sub_issues,sub_issue_id'],
             'sub_issues.*.title'                 => ['nullable', 'string', 'max:255'],
@@ -759,9 +761,16 @@ class TicketController extends Controller
             abort_unless($newCustodian->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected Custodian does not belong to this barangay.');
         }
 
-        $assignedMechanic = User::findOrFail($data['assigned_mechanic_id']);
-        abort_unless($assignedMechanic->hasRole('Maintenance Personnel'), 422, 'The selected user is not Maintenance Personnel.');
-        abort_unless($assignedMechanic->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected mechanic does not belong to this barangay.');
+        $isExternalTicket = $ticket->subIssues()->count() > 0
+            && $ticket->subIssues()->where('repair_type', '!=', 'external')->count() === 0;
+        abort_if(!$isExternalTicket && empty($data['assigned_mechanic_id']), 422, 'Choose the mechanic who will do this repair.');
+
+        $assignedMechanic = null;
+        if (!empty($data['assigned_mechanic_id'])) {
+            $assignedMechanic = User::findOrFail($data['assigned_mechanic_id']);
+            abort_unless($assignedMechanic->hasRole('Maintenance Personnel'), 422, 'The selected user is not Maintenance Personnel.');
+            abort_unless($assignedMechanic->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected mechanic does not belong to this barangay.');
+        }
 
         abort_if(
             in_array($ticket->vehicle->status, ['Inactive', 'Decommissioned'], true),
@@ -776,8 +785,8 @@ class TicketController extends Controller
             abort_unless($locked && $locked->status === 'Pending Approval', 422, 'This proposal is no longer awaiting approval.');
 
             $ticket->update(array_intersect_key($data, array_flip([
-                'ticket_description', 'priority', 'assigned_custodian_id', 'assigned_mechanic_id',
-            ])));
+                'ticket_description', 'priority', 'assigned_custodian_id',
+            ])) + ['assigned_mechanic_id' => $assignedMechanic?->id]);
 
             foreach ($data['sub_issues'] ?? [] as $subData) {
                 $subIssue = TicketSubIssue::where('ticket_id', $ticket->ticket_id)
@@ -818,13 +827,15 @@ class TicketController extends Controller
             $this->history($vehicle, 'Ticket Approved', "Ticket #{$ticket->ticket_id} (\"{$ticket->ticket_title}\") was approved — {$vehicle->vehicle_name} moved to Under Maintenance.", 'maintenance_tickets', $ticket->ticket_id, $request);
 
             $dispatchedMechanics = [];
-            $ticket->subIssues()->update([
+            $ticket->subIssues()->update($assignedMechanic ? [
                 'status'               => 'Under Repair',
                 'assigned_mechanic_id' => $assignedMechanic->id,
                 'mechanic_assigned_at' => now(),
                 'mechanic_assigned_by' => $request->user()->id,
-            ]);
-            $dispatchedMechanics[] = $assignedMechanic;
+            ] : ['status' => 'Under Repair']);
+            if ($assignedMechanic) {
+                $dispatchedMechanics[] = $assignedMechanic;
+            }
             /* Legacy suggested-mechanic dispatch is deliberately skipped:
              * approval now assigns the ticket, and all of its line items,
              * to the one mechanic selected above.
@@ -853,7 +864,7 @@ class TicketController extends Controller
             }
 
             */
-            $this->log($request, 'Approve Ticket', "Ticket #{$ticket->ticket_id} ({$ticket->ticket_title}) proposal approved and assigned to {$assignedMechanic->name}.", $ticket->ticket_id);
+            $this->log($request, 'Approve Ticket', "Ticket #{$ticket->ticket_id} ({$ticket->ticket_title}) proposal approved" . ($assignedMechanic ? " and assigned to {$assignedMechanic->name}." : ' for an external shop (no in-house mechanic).'), $ticket->ticket_id);
 
             $this->notifyUser(
                 $ticket->assigned_custodian_id,
@@ -1090,6 +1101,7 @@ class TicketController extends Controller
         $priorMechanicIds = $ticket->subIssues
             ->flatMap(fn ($s) => $s->prior_mechanic_ids ?? [])
             ->push($ticket->assigned_mechanic_id)
+            ->merge($ticket->subIssues->flatMap(fn ($s) => [$s->external_handled_by, $s->external_received_by]))
             ->filter()
             ->unique()
             ->values()
@@ -1782,12 +1794,29 @@ class TicketController extends Controller
         return response()->json(['message' => 'Sub-issue removed.']);
     }
 
-    /** The mechanic hands the vehicle (or part) to an outside shop. */
+    /**
+     * The assigned mechanic may always act on their own work order. An
+     * EXTERNAL-shop work order with no in-house mechanic is recorded by an
+     * Admin (ability external.handle): never a placeholder user, and never
+     * the Custodian who will later verify it.
+     */
+    private function authorizeWorkOrderActor(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue): void
+    {
+        $uid = $request->user()->id;
+        if ($subIssue->assigned_mechanic_id && (int) $subIssue->assigned_mechanic_id === (int) $uid) {
+            $this->requireAbility($request, 'subissue.log_repair');
+            return;
+        }
+        $externalNoMechanic = $subIssue->repair_type === 'external' && !$subIssue->assigned_mechanic_id;
+        abort_unless($externalNoMechanic && $request->user()->hasRole('Admin'), 403, 'This work order is not assigned to you.');
+        $this->requireAbility($request, 'external.handle');
+    }
+
+    /** The responsible person hands the vehicle (or part) to an outside shop. */
     public function markExternalSent(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
-        $this->requireAbility($request, 'subissue.log_repair');
         $this->assertBelongsToTicket($ticket, $subIssue);
-        abort_unless($subIssue->assigned_mechanic_id === $request->user()->id, 403, 'This work order is not assigned to you.');
+        $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
         abort_unless($subIssue->status === 'Under Repair', 422, "Only an Under Repair sub-issue can be sent out. Current: {$subIssue->status}.");
         abort_if($subIssue->external_sent_at, 422, 'This repair has already been sent out.');
 
@@ -1796,14 +1825,18 @@ class TicketController extends Controller
             'external_reason' => ['required', 'string', 'max:255'],
             'external_work_scope' => ['required', 'string'],
             'external_shop_contact' => ['nullable', 'string', 'max:255'],
+            'external_shop_address' => ['nullable', 'string', 'max:255'],
             'external_contact_person' => ['nullable', 'string', 'max:255'],
             'external_estimated_cost' => ['nullable', 'numeric', 'min:0'],
+            'external_expected_return' => ['nullable', 'date'],
         ]);
 
+        // Identity comes from the session, never from the form.
         $subIssue->update($data + [
             'repair_type' => 'external',
             'external_sent_at' => now(),
-            'external_sent_by' => $request->user()->id,
+            'external_sent_by' => $request->user()->name,
+            'external_handled_by' => $request->user()->id,
         ]);
         $this->log($request, 'Sent Out', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" sent to {$data['external_vendor']}.", $ticket->ticket_id);
 
@@ -1813,9 +1846,8 @@ class TicketController extends Controller
     /** The shop returns it; the mechanic records the outcome before writing up the repair. */
     public function markExternalReturned(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
-        $this->requireAbility($request, 'subissue.log_repair');
         $this->assertBelongsToTicket($ticket, $subIssue);
-        abort_unless($subIssue->assigned_mechanic_id === $request->user()->id, 403, 'This work order is not assigned to you.');
+        $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
         abort_unless($subIssue->external_sent_at, 422, 'This repair has not been sent out yet.');
         abort_if($subIssue->external_returned_at, 422, 'This repair has already been marked returned.');
 
@@ -1825,7 +1857,7 @@ class TicketController extends Controller
             'warranty_until' => ['nullable', 'date'],
         ]);
 
-        $subIssue->update($data + ['external_returned_at' => now()]);
+        $subIssue->update($data + ['external_returned_at' => now(), 'external_received_by' => $request->user()->id]);
         $this->log($request, 'Returned From Shop', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" returned from {$subIssue->external_vendor}.", $ticket->ticket_id);
 
         return $subIssue->fresh();
@@ -1833,10 +1865,8 @@ class TicketController extends Controller
 
     public function logRepairs(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
-        $this->requireAbility($request, 'subissue.log_repair');
         $this->assertBelongsToTicket($ticket, $subIssue);
-
-        abort_unless($subIssue->assigned_mechanic_id === $request->user()->id, 403, 'This work order is not assigned to you.');
+        $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
         abort_unless($ticket->status === 'Active', 422, "Repairs can only be logged while the ticket is Active. Current status: {$ticket->status}.");
         abort_unless($subIssue->status === 'Under Repair', 422, "Repairs can only be logged when the sub-issue is Under Repair. Current: {$subIssue->status}.");
 
@@ -3036,6 +3066,8 @@ class TicketController extends Controller
             'subIssues.verificationAssignedTo',
             'subIssues.sourceVehicle:vehicle_id,vehicle_name,plate_number',
             'subIssues.cannibalizationReviewedBy',
+            'subIssues.externalHandler:id,name',
+            'subIssues.externalReceiver:id,name',
         ];
     }
 

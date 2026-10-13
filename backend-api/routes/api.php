@@ -8,6 +8,7 @@ use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConcernReportController;
 use App\Http\Controllers\FleetController;
+use App\Http\Controllers\CannibalizationController;
 use App\Http\Controllers\HubController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\NotificationController;
@@ -295,6 +296,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
     // a "Deleted" entry (an accidental delete that had real progress on it)
     // can be reopened.
     Route::get('/ticket-archives', [TicketController::class, 'archives']);
+    // Cannibalization: direct, final records of parts moved between vehicles
+    // (no approval step, and deliberately no update/delete routes).
+    Route::get('/cannibalizations', [CannibalizationController::class, 'index']);
+    Route::get('/cannibalizations/{id}', [CannibalizationController::class, 'show']);
+    Route::post('/cannibalizations', [CannibalizationController::class, 'store']);
     Route::put('/ticket-archives/{archive}/reopen', [TicketController::class, 'reopenArchive']);
 
     // Notifications API
