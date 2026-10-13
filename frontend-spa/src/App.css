@@ -14867,3 +14867,29 @@ html .ticket-detail-panel.is-page .ticket-process-meter-core { background: #fff;
 .can-parts-table th { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
 @media (max-width: 640px) { .can-grid, .can-kv { grid-template-columns: minmax(0, 1fr); } }
 .sch-card-meta > div:first-child { grid-column: 1 / -1; }
+
+/* Vehicle dispatch status chip + popup */
+.dispatch-chip { display: inline-flex; padding: 3px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
+.dispatch-chip.is-out { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+.dispatch-chip.is-in { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; }
+.dispatch-modal { display: flex; flex-direction: column; gap: 14px; }
+.dispatch-state { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; }
+.dispatch-state strong { display: block; font-size: 1rem; }
+.dispatch-state small { color: #475569; }
+.dispatch-state.is-in { background: #ecfdf5; color: #065f46; }
+.dispatch-state.is-out { background: #ede9fe; color: #5b21b6; }
+.dispatch-state.is-off { background: #f1f5f9; color: #475569; }
+.dispatch-block { padding: 12px 14px; border: 1px solid #dbe5f3; border-radius: 12px; background: #f8fbff; display: flex; flex-direction: column; gap: 10px; }
+.dispatch-block h4 { margin: 0; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #1d4ed8; }
+.dispatch-block dl { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.dispatch-block dt { font-size: 0.66rem; font-weight: 800; text-transform: uppercase; color: #64748b; }
+.dispatch-block dd { margin: 2px 0 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+.dispatch-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.dispatch-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; font-weight: 700; color: #334155; }
+.dispatch-grid input { min-height: 40px; padding: 8px 10px; border: 1.5px solid #cbd5e1; border-radius: 9px; font: inherit; font-weight: 400; }
+.dispatch-wide { grid-column: 1 / -1; }
+.dispatch-block .primary-button { align-self: flex-start; }
+.dispatch-trips { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 0.84rem; }
+.dispatch-trips li { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.dispatch-trips li span { color: #64748b; }
+@media (max-width: 560px) { .dispatch-grid, .dispatch-block dl { grid-template-columns: minmax(0, 1fr); } }

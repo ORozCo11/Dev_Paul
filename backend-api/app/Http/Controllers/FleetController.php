@@ -975,7 +975,15 @@ class FleetController extends Controller
             ->get()
             ->groupBy('vehicle_id');
 
-        $vehicles->each(function (Vehicle $vehicle) use ($latestChecks, $openTicketsByVehicle) {
+        // Which vehicles are out on a trip right now (dispatched) — one query.
+        $openTrips = \App\Models\VehicleUsageLog::whereNull('ended_at')->get()->keyBy('vehicle_id');
+
+        $vehicles->each(function (Vehicle $vehicle) use ($latestChecks, $openTicketsByVehicle, $openTrips) {
+            $trip = $openTrips->get($vehicle->vehicle_id);
+            $vehicle->open_trip = $trip ? [
+                'usage_id' => $trip->usage_id, 'purpose' => $trip->purpose, 'destination' => $trip->destination,
+                'driver_name' => $trip->driver_name, 'started_at' => $trip->started_at, 'odometer_start' => $trip->odometer_start,
+            ] : null;
             $latest = $latestChecks->get($vehicle->vehicle_id);
             $vehicle->readiness_state = $this->responseReadinessState($vehicle, $latest);
             $vehicle->readiness_last_checked = $latest?->checked_at;

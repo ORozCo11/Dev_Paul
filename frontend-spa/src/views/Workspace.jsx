@@ -745,6 +745,7 @@ function Workspace() {
   // vehicle — offer the Readiness Check right then instead of making them
   // come back for a second visit. Holds the vehicle to check, or null.
   const [readinessPromptTarget, setReadinessPromptTarget] = useState(null);
+  const [dispatchTarget, setDispatchTarget] = useState(null);
   // Card/List toggle for Maintenance Records, remembered per browser the same
   // way the Tickets module does it (separate key so the two don't clobber
   // each other). Defaults to the table — these rows carry more columns worth
@@ -2269,7 +2270,7 @@ function Workspace() {
   // (show/hide + drag to reorder, persisted per browser) — see
   // ColumnChooserButton/useColumnChooser below.
   const vehicleColumnDefs = useMemo(
-    () => vehicleColumns(user, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile, (row) => setReadinessPromptTarget(row)),
+    () => vehicleColumns(user, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile, (row) => setReadinessPromptTarget(row), (row) => setDispatchTarget(row)),
     [user, openVehicleProfile, deleteRecord, restoreRecord, filterStatus, openTicketProfile],
   );
   const vehicleColumnChooser = useColumnChooser('vms_vehicle_columns', vehicleColumnDefs);
@@ -3581,6 +3582,16 @@ function Workspace() {
           </div>
           <PaginatedTable columns={vehicleColumnChooser.visibleColumns} rows={visibleRows} onRowClick={openVehicleProfile} onReorderColumn={vehicleColumnChooser.reorderColumn} emptyMessage="No vehicles here yet — click the + button to register one." />
           <VehicleImportModal open={vehicleImportOpen} onClose={() => setVehicleImportOpen(false)} onImported={refreshCurrent} />
+          <FormModal open={!!dispatchTarget} title={`Dispatch — ${dispatchTarget?.vehicle_name ?? ''}`} onClose={() => setDispatchTarget(null)}>
+            {dispatchTarget && (
+              <VehicleDispatchModal
+                key={dispatchTarget.vehicle_id}
+                vehicle={(records.vehicles ?? []).find((v) => v.vehicle_id === dispatchTarget.vehicle_id) ?? dispatchTarget}
+                onClose={() => setDispatchTarget(null)}
+                onChanged={refreshCurrent}
+              />
+            )}
+          </FormModal>
           <FormModal
             open={!!readinessPromptTarget}
             title={`Readiness Check — ${readinessPromptTarget?.vehicle_name ?? ''}`}
@@ -9984,7 +9995,7 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFil
   );
 }
 
-function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus, onViewTicket, onReadinessCheck) {
+function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus, onViewTicket, onReadinessCheck, onDispatch) {
   const columns = [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.vehicle_id },
     {
@@ -10055,6 +10066,16 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
     },
   ];
 
+  // Dispatch state: in station or out on a trip (from the open usage log).
+  columns.push({
+    key: 'dispatch',
+    label: 'Dispatch',
+    className: 'cell-center',
+    render: (row) => (row.open_trip
+      ? <span className="dispatch-chip is-out" title={`${row.open_trip.purpose}${row.open_trip.destination ? ` → ${row.open_trip.destination}` : ''}`}>Dispatched</span>
+      : (row.status === 'Available' ? <span className="dispatch-chip is-in">In station</span> : <span className="muted">—</span>)),
+  });
+
   if (filterStatus?.includes?.('Inactive')) {
     columns.push(
       { key: 'archived_at', label: 'Archived At', className: 'cell-center', render: (row) => <DateBadge value={row.archived_at} /> },
@@ -10068,7 +10089,8 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
   // Readiness checks are a Custodian's hands-on job — give them an Action
   // column even though they can't edit/restore/archive vehicles.
   const canCheckReadiness = canDo(user, 'vehicle.readiness_check') && !!onReadinessCheck;
-  if (canEditVehicle || canRestoreVehicle || canArchiveVehicle || canCheckReadiness) {
+  const canDispatch = canDo(user, 'usage.log') && !!onDispatch;
+  if (canEditVehicle || canRestoreVehicle || canArchiveVehicle || canCheckReadiness || canDispatch) {
     columns.push({
       key: 'action',
       label: 'Action',
@@ -10085,6 +10107,13 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
             <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.open_ticket_id })} type="button" title={`View Ticket #${row.open_ticket_id}`} aria-label={`View Ticket #${row.open_ticket_id}`}><Icon name="ticket" size={14} /></button>
           ) : (
             <span className="icon-btn-spacer" aria-hidden="true" />
+          )}
+          {canDispatch && (
+            (row.status === 'Inactive' || row.status === 'Decommissioned') ? (
+              <span className="icon-btn-spacer" aria-hidden="true" />
+            ) : (
+              <button className="btn-view-action icon-btn" onClick={() => onDispatch(row)} type="button" title="Dispatch status" aria-label="Dispatch status"><Icon name="vehicle" size={14} /></button>
+            )
           )}
           {canCheckReadiness && (
             (row.status === 'Inactive' || row.status === 'Decommissioned') ? (
@@ -19042,6 +19071,99 @@ function CapabilityImpactCard({ items, onNavigate, basePath }) {
 
 // Vehicle Usage Log — open a trip when the vehicle goes out, close it when it
 // is back. Recording only; it never changes the vehicle's status.
+// Row-level "Dispatch" popup on Vehicle Management: see whether a vehicle is in
+// the station or out on a trip, and take it out / mark it returned. Uses the
+// existing Usage Log endpoints (the server enforces who may do this).
+function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
+  const [trips, setTrips] = useState([]);
+  const [form, setForm] = useState({ purpose: '', destination: '', driver_name: '', odometer_start: '' });
+  const [endForm, setEndForm] = useState({ odometer_end: '', notes: '' });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get(`/vehicles/${vehicle.vehicle_id}/usage`).then((res) => { if (!cancelled) setTrips(res.data); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [vehicle.vehicle_id, reloadKey]);
+
+  const open = trips.find((t) => !t.ended_at);
+  const retired = ['Inactive', 'Decommissioned'].includes(vehicle.status);
+  const canTakeOut = !open && vehicle.status === 'Available';
+  const clean = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => String(v).trim() !== ''));
+
+  const run = async (fn) => {
+    if (busy) return;
+    setBusy(true); setError('');
+    try { await fn(); setReloadKey((k) => k + 1); onChanged?.(); } catch (err) {
+      setError(err.response?.data?.message || (err.response?.data?.errors && Object.values(err.response.data.errors)[0]?.[0]) || 'Could not save.');
+    } finally { setBusy(false); }
+  };
+
+  const state = open ? { label: 'Dispatched', tone: 'out' } : retired ? { label: vehicle.status, tone: 'off' }
+    : vehicle.status === 'Under Maintenance' ? { label: 'Under Maintenance — not available', tone: 'off' } : { label: 'In station — available', tone: 'in' };
+
+  return (
+    <div className="dispatch-modal">
+      <div className={`dispatch-state is-${state.tone}`}>
+        <Icon name="vehicle" size={18} />
+        <div>
+          <strong>{state.label}</strong>
+          <small>{vehicle.vehicle_name} · {vehicle.plate_number}{open ? ` · out since ${formatDate(open.started_at)}` : ''}</small>
+        </div>
+      </div>
+      {error && <div className="notice error">{error}</div>}
+
+      {open && (
+        <div className="dispatch-block">
+          <h4>Current trip</h4>
+          <dl>
+            <div><dt>Purpose</dt><dd>{open.purpose}</dd></div>
+            <div><dt>Destination</dt><dd>{open.destination || '—'}</dd></div>
+            <div><dt>Driver</dt><dd>{open.driver_name || '—'}</dd></div>
+            <div><dt>Odometer out</dt><dd>{open.odometer_start ?? '—'}</dd></div>
+          </dl>
+          <div className="dispatch-grid">
+            <label><span>Odometer on return</span><input type="number" min={open.odometer_start ?? 0} value={endForm.odometer_end} onChange={(e) => setEndForm({ ...endForm, odometer_end: e.target.value })} /></label>
+            <label><span>Notes</span><input type="text" value={endForm.notes} onChange={(e) => setEndForm({ ...endForm, notes: e.target.value })} /></label>
+          </div>
+          <button type="button" className="primary-button" disabled={busy} onClick={() => run(() => api.put(`/usage-logs/${open.usage_id}/end`, clean(endForm)))}>Mark Returned</button>
+        </div>
+      )}
+
+      {canTakeOut && (
+        <div className="dispatch-block">
+          <h4>Dispatch this vehicle</h4>
+          <div className="dispatch-grid">
+            <label className="dispatch-wide"><span>Purpose <b className="req">*</b></span><input type="text" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} placeholder="e.g. Patient transport, fire response, drill" /></label>
+            <label><span>Destination</span><input type="text" value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} /></label>
+            <label><span>Driver</span><input type="text" value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} /></label>
+            <label><span>Odometer</span><input type="number" min="0" value={form.odometer_start} onChange={(e) => setForm({ ...form, odometer_start: e.target.value })} /></label>
+          </div>
+          <button type="button" className="primary-button" disabled={busy || !form.purpose.trim()} onClick={() => run(() => api.post(`/vehicles/${vehicle.vehicle_id}/usage`, clean(form)))}>Dispatch</button>
+        </div>
+      )}
+
+      {!open && !canTakeOut && (
+        <p className="muted">{retired ? 'This vehicle is archived or decommissioned.' : 'A vehicle can only be dispatched while it is Available. Finish its repair first.'}</p>
+      )}
+
+      <div className="dispatch-block">
+        <h4>Recent trips</h4>
+        {trips.length === 0 ? <p className="muted">No trips recorded yet.</p> : (
+          <ul className="dispatch-trips">
+            {trips.slice(0, 6).map((t) => (
+              <li key={t.usage_id}><strong>{t.purpose}</strong>{t.destination ? ` → ${t.destination}` : ''}{t.driver_name ? ` · ${t.driver_name}` : ''}<span>{formatDate(t.started_at)}{t.ended_at ? ` – ${formatDate(t.ended_at)}` : ' · out now'}</span></li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="can-actions"><button type="button" className="ghost-button" onClick={onClose}>Close</button></div>
+    </div>
+  );
+}
+
 function VehicleUsageCard({ vehicleId, canLog, vehicleStatus }) {
   const [trips, setTrips] = useState([]);
   const [form, setForm] = useState({ purpose: '', destination: '', driver_name: '', odometer_start: '' });
