@@ -1035,7 +1035,7 @@ class TicketWorkflowTest extends TestCase
 
         return $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
             'repair_logs' => 'Swapped in a part from another vehicle.',
-            'repair_type' => 'cannibalized',
+            'repair_type' => 'cannibalized', 'part_needed' => 'Alternator', 'part_quantity' => 1,
             'source_vehicle_id' => $donorVehicle->vehicle_id,
         ]);
     }
@@ -1227,7 +1227,7 @@ class TicketWorkflowTest extends TestCase
         // Donor part only — no repair_logs sent at all.
         Sanctum::actingAs($this->mechanic, ['*']);
         $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$partOnly->sub_issue_id}/log-repairs", [
-            'repair_type' => 'cannibalized', 'source_vehicle_id' => $donor->vehicle_id,
+            'repair_type' => 'cannibalized', 'part_needed' => 'Gearbox',  'source_vehicle_id' => $donor->vehicle_id,
         ])->assertOk();
         $this->assertStringContainsString('Donor Vehicle', $partOnly->fresh()->repair_logs);
 
@@ -1236,7 +1236,7 @@ class TicketWorkflowTest extends TestCase
 
         // Repair + donor part together is fine too.
         $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$repairOnly->sub_issue_id}/log-repairs", [
-            'repair_logs' => 'Fitted the part and re-torqued.', 'repair_type' => 'cannibalized', 'source_vehicle_id' => $donor->vehicle_id,
+            'repair_logs' => 'Fitted the part and re-torqued.', 'repair_type' => 'cannibalized', 'part_needed' => 'Hose',  'source_vehicle_id' => $donor->vehicle_id,
         ])->assertOk();
         $this->assertSame('For Verification', $ticket->fresh()->status);
     }

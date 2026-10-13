@@ -3263,6 +3263,8 @@ function Workspace() {
               key={flattenSubIssueRows(records.ticketWorkOrders ?? records.tickets).some((r) => String(r.ticket_id) === String(logRepairsTicketId) && String(r.sub_issue_id) === String(logRepairsSubIssueId)) ? 'ready' : 'loading'}
               ticket={flattenSubIssueRows(records.ticketWorkOrders ?? records.tickets).find((r) => String(r.ticket_id) === String(logRepairsTicketId) && String(r.sub_issue_id) === String(logRepairsSubIssueId))}
               vehicleOptions={lookups.vehicles ?? []}
+              onDonorChanged={() => loadModule('ticketWorkOrders')}
+              notify={setNotice}
               onBack={() => returnToModule('ticketWorkOrders')}
               onSubmit={(subIssueRow, payload) => ticketAction(`/tickets/${subIssueRow.ticket_id}/sub-issues/${subIssueRow.sub_issue_id}/log-repairs`, payload, 'Repair logged. Once every repair on this ticket is logged, it goes to the Custodian for verification automatically.').then((ok) => { if (ok) returnToModule('ticketWorkOrders'); })}
               onExternalSend={(row, payload) => ticketAction(`/tickets/${row.ticket_id}/sub-issues/${row.sub_issue_id}/external-sent`, payload, 'Marked as sent to the shop.')}
@@ -17319,7 +17321,225 @@ function MechanicWorkOrderModule({
   );
 }
 
-function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty, onExternalSend, onExternalReturn }) {
+// =========================================================================
+// CANNIBALIZATION MANAGEMENT (inside Record Repair Work)
+// The donor vehicle plus any number of donor parts, each persisted on its own
+// through /tickets/{t}/sub-issues/{s}/donor-parts. Editable only while the
+// work order is still Under Repair; once the repair is logged the parts are
+// history. Nothing happens to the donor vehicle until the repair is submitted.
+// =========================================================================
+
+const DONOR_PART_CONDITIONS = ['Good', 'Fair', 'Worn', 'Damaged'];
+const emptyDonorPart = () => ({ part_name: '', quantity: 1, part_condition: '', installed_at: '', reason: '', notes: '' });
+
+function DonorPartModal({ mode, part, base, onClose, onSaved, notify }) {
+  const readOnly = mode === 'view';
+  const [v, setV] = useState(() => ({ ...emptyDonorPart(), ...(part ? {
+    part_name: part.part_name ?? '', quantity: part.quantity ?? 1, part_condition: part.part_condition ?? '',
+    installed_at: (part.installed_at ?? '').slice(0, 10), reason: part.reason ?? '', notes: part.notes ?? '',
+  } : {}) }));
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const set = (k, val) => { setV((s) => ({ ...s, [k]: val })); setErrors((e) => ({ ...e, [k]: undefined })); };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    // This modal renders in a portal, but React still bubbles its submit to the
+    // Record Repair Work form around it — which would submit the whole repair.
+    e.stopPropagation();
+    if (saving || readOnly) return;
+    const local = {};
+    if (!v.part_name.trim()) local.part_name = 'Enter the part name.';
+    if (!Number.isInteger(Number(v.quantity)) || Number(v.quantity) < 1) local.quantity = 'Quantity must be a whole number of 1 or more.';
+    setErrors(local);
+    if (Object.keys(local).length) return;
+    setSaving(true);
+    try {
+      const body = { ...v, quantity: Number(v.quantity) };
+      Object.keys(body).forEach((k) => { if (body[k] === '') body[k] = null; });
+      if (mode === 'edit') await api.put(`${base}/donor-parts/${part.part_id}`, body);
+      else await api.post(`${base}/donor-parts`, body);
+      notify?.({ type: 'success', text: mode === 'edit' ? 'Donor part updated.' : 'Donor part added.' });
+      await onSaved();
+      onClose();
+    } catch (err) {
+      const serverErrors = err.response?.data?.errors;
+      if (serverErrors) setErrors(Object.fromEntries(Object.entries(serverErrors).map(([k, m]) => [k, m[0]])));
+      else setErrors({ _form: err.response?.data?.message || 'Could not save this part.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = (name, label, control, required) => (
+    <label className={`dp-field${errors[name] ? ' has-error' : ''}`}>
+      <span>{label}{required && <b className="req"> *</b>}</span>
+      {control}
+      {errors[name] && <small className="dp-error" role="alert">{errors[name]}</small>}
+    </label>
+  );
+
+  return (
+    <form className="dp-form" onSubmit={submit} noValidate>
+      {errors._form && <div className="notice danger" role="alert">{errors._form}</div>}
+      <div className="dp-grid">
+        {field('part_name', 'Part name', <input type="text" value={v.part_name} disabled={readOnly} onChange={(e) => set('part_name', e.target.value)} />, true)}
+        {field('quantity', 'Quantity', <input type="number" min="1" step="1" value={v.quantity} disabled={readOnly} onChange={(e) => set('quantity', e.target.value)} />, true)}
+        {field('part_condition', 'Part condition',
+          <select value={v.part_condition} disabled={readOnly} onChange={(e) => set('part_condition', e.target.value)}>
+            <option value="">Not stated</option>{DONOR_PART_CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>)}
+        {field('installed_at', 'Date installed', <input type="date" max={new Date().toISOString().slice(0, 10)} value={v.installed_at} disabled={readOnly} onChange={(e) => set('installed_at', e.target.value)} />)}
+        <div className="dp-wide">{field('reason', 'Why a donor part instead of buying one', <textarea rows={2} value={v.reason} disabled={readOnly} onChange={(e) => set('reason', e.target.value)} />)}</div>
+        <div className="dp-wide">{field('notes', 'Remarks', <textarea rows={2} value={v.notes} disabled={readOnly} onChange={(e) => set('notes', e.target.value)} />)}</div>
+      </div>
+      <div className="can-actions">
+        <button type="button" className="ghost-button" onClick={onClose} disabled={saving}>{readOnly ? 'Close' : 'Cancel'}</button>
+        {!readOnly && <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving…' : (mode === 'edit' ? 'Save changes' : 'Add part')}</button>}
+      </div>
+    </form>
+  );
+}
+
+function CannibalizationManagement({ ticket, vehicleOptions, onChanged, notify }) {
+  const base = `/tickets/${ticket.ticket_id}/sub-issues/${ticket.sub_issue_id}`;
+  const parts = ticket.donor_parts ?? [];
+  const editable = ticket.status === 'Under Repair' && ticket.ticket_status === 'Active';
+  const donor = (vehicleOptions ?? []).find((x) => String(x.vehicle_id) === String(ticket.source_vehicle_id));
+  const donorFallback = ticket.source_vehicle;
+  const [modal, setModal] = useState(null);       // { mode, part }
+  const [deleting, setDeleting] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const totalQty = parts.reduce((n, p) => n + (p.quantity || 0), 0);
+
+  const remove = async () => {
+    if (busy || !deleting) return;
+    setBusy(true);
+    try {
+      await api.delete(`${base}/donor-parts/${deleting.part_id}`);
+      notify?.({ type: 'success', text: 'Donor part removed.' });
+      await onChanged();
+      setDeleting(null);
+    } catch (err) {
+      notify?.({ type: 'error', text: err.response?.data?.message || 'Could not remove this part.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const switchToInHouse = async () => {
+    try { await api.put(`${base}/donor`, { source_vehicle_id: null }); await onChanged(); } catch (err) { notify?.({ type: 'error', text: err.response?.data?.message || 'Could not switch the repair method.' }); }
+  };
+
+  return (
+    <section className="lr-group cm-section" aria-label="Cannibalization management">
+      <div className="cm-head">
+        <h4 className="lr-section-label" style={{ margin: 0 }}>Cannibalization Management</h4>
+        <span className="cm-badge">Cannibalized Repair</span>
+      </div>
+      <p className="cm-desc">This repair uses parts recovered from a donor vehicle. Parts and materials you buy are listed separately, and donor parts never add to the repair cost.</p>
+
+      <div className="cm-donor">
+        <div><dt>Donor vehicle</dt><dd>{donor?.vehicle_name ?? donorFallback?.vehicle_name ?? '—'}</dd></div>
+        <div><dt>Plate</dt><dd>{donor?.plate_number ?? donorFallback?.plate_number ?? '—'}</dd></div>
+        <div><dt>Type</dt><dd>{donor?.category?.category_name ?? '—'}</dd></div>
+        <div><dt>Status</dt><dd>{donor ? <StatusBadge value={donor.status} /> : '—'}</dd></div>
+        <div><dt>Condition</dt><dd>{donor ? <StatusBadge value={donor.condition} /> : '—'}</dd></div>
+      </div>
+      <p className="cm-note"><Icon name="info" size={13} /> Adding or editing parts changes nothing on the donor. When you submit this repair, one issue report listing these parts is filed on the donor vehicle and it is flagged for inspection.</p>
+
+      <div className="cm-toolbar">
+        <strong>{parts.length} part{parts.length === 1 ? '' : 's'}{parts.length ? ` · ${totalQty} unit${totalQty === 1 ? '' : 's'} in total` : ''}</strong>
+        {editable && <button type="button" className="btn-sm primary-button" onClick={() => setModal({ mode: 'add' })}><Icon name="plus" size={13} /> Add Part</button>}
+      </div>
+
+      {parts.length === 0 ? (
+        <div className="cm-empty">
+          <p>No donor parts recorded yet.</p>
+          {editable && <button type="button" className="btn-sm primary-button" onClick={() => setModal({ mode: 'add' })}><Icon name="plus" size={13} /> Add Part</button>}
+        </div>
+      ) : (
+        <div className="cm-table-wrap">
+          <table className="cm-table">
+            <thead><tr><th>Part</th><th>Qty</th><th>Condition</th><th>Date installed</th><th>Reason / remarks</th><th>Actions</th></tr></thead>
+            <tbody>
+              {parts.map((p) => (
+                <tr key={p.part_id}>
+                  <td data-label="Part"><strong>{p.part_name}</strong></td>
+                  <td data-label="Qty">{p.quantity}</td>
+                  <td data-label="Condition">{p.part_condition || '—'}</td>
+                  <td data-label="Installed">{p.installed_at ? formatDate(p.installed_at) : '—'}</td>
+                  <td data-label="Reason">{[p.reason, p.notes].filter(Boolean).join(' · ') || '—'}</td>
+                  <td data-label="Actions">
+                    <div className="row-actions">
+                      <button type="button" className="btn-view-action icon-btn" title="View" aria-label={`View ${p.part_name}`} onClick={() => setModal({ mode: 'view', part: p })}><Icon name="eye" size={14} /></button>
+                      {editable && <button type="button" className="btn-edit-action icon-btn" title="Edit" aria-label={`Edit ${p.part_name}`} onClick={() => setModal({ mode: 'edit', part: p })}><Icon name="edit" size={14} /></button>}
+                      {editable && <button type="button" className="btn-delete-action icon-btn" title="Delete" aria-label={`Delete ${p.part_name}`} onClick={() => setDeleting(p)}><Icon name="trash" size={14} /></button>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!editable && parts.length > 0 && <p className="cm-note">These parts are locked because the repair has been submitted.</p>}
+      {editable && parts.length === 0 && (
+        <button type="button" className="link-button cm-switch" onClick={switchToInHouse}>Not using a donor part? Switch back to in-house</button>
+      )}
+
+      <FormModal open={!!modal} title={modal?.mode === 'edit' ? 'Edit donor part' : modal?.mode === 'view' ? 'Donor part' : 'Add donor part'} onClose={() => setModal(null)}>
+        {modal && <DonorPartModal key={`${modal.mode}-${modal.part?.part_id ?? 'new'}`} mode={modal.mode} part={modal.part} base={base} onClose={() => setModal(null)} onSaved={onChanged} notify={notify} />}
+      </FormModal>
+      <FormModal open={!!deleting} title="Delete donor part?" onClose={() => setDeleting(null)}>
+        {deleting && (
+          <div className="dp-form">
+            <p>Remove <strong>{deleting.quantity} × {deleting.part_name}</strong> from this repair? This cannot be undone.</p>
+            <div className="can-actions">
+              <button type="button" className="ghost-button" onClick={() => setDeleting(null)} disabled={busy}>Cancel</button>
+              <button type="button" className="danger-button" onClick={remove} disabled={busy}>{busy ? 'Deleting…' : 'Delete part'}</button>
+            </div>
+          </div>
+        )}
+      </FormModal>
+    </section>
+  );
+}
+
+// Pick a donor vehicle for an in-house repair. Saved immediately, so the
+// repair method shown on this page is always the persisted one.
+function DonorVehiclePicker({ ticket, vehicleOptions, onChanged, notify }) {
+  const [open, setOpen] = useState(false);
+  const [donorId, setDonorId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const options = (vehicleOptions ?? []).filter((x) => String(x.vehicle_id) !== String(ticket.vehicle?.vehicle_id) && !['Inactive', 'Decommissioned'].includes(x.status));
+  const save = async () => {
+    if (!donorId || busy) return;
+    setBusy(true);
+    try {
+      await api.put(`/tickets/${ticket.ticket_id}/sub-issues/${ticket.sub_issue_id}/donor`, { source_vehicle_id: donorId });
+      await onChanged();
+    } catch (err) {
+      notify?.({ type: 'error', text: err.response?.data?.errors?.source_vehicle_id?.[0] || err.response?.data?.message || 'Could not set the donor vehicle.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open) return <button type="button" className="btn-sm ghost-button" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>Use parts from another vehicle</button>;
+  return (
+    <div className="cm-picker">
+      <label className="lr-label" htmlFor="cm-donor">Donor vehicle</label>
+      <select id="cm-donor" value={donorId} onChange={(e) => setDonorId(e.target.value)}>
+        <option value="">Select donor vehicle</option>
+        {options.map((x) => <option key={x.vehicle_id} value={x.vehicle_id}>{x.vehicle_name} ({x.plate_number})</option>)}
+      </select>
+      <button type="button" className="btn-sm primary-button" disabled={!donorId || busy} onClick={save}>{busy ? 'Saving…' : 'Use this donor'}</button>
+      <button type="button" className="btn-sm ghost-button" onClick={() => setOpen(false)}>Cancel</button>
+    </div>
+  );
+}
+
+function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty, onExternalSend, onExternalReturn, onDonorChanged, notify }) {
   const [repairLogs, setRepairLogs] = useState('');
   const [parts, setParts] = useState([{ name: '', cost: '' }]);
   const [attachment, setAttachment] = useState(null);
@@ -17330,18 +17550,13 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   // sometimes ends up differing from the original plan. Sub-issues created
   // via "Needs Inspection" arrive with this blank, since nobody could know
   // it yet — this is the first point it's actually knowable.
-  const [repairType, setRepairType] = useState(ticket?.repair_type ?? '');
-  const [sourceVehicleId, setSourceVehicleId] = useState(ticket?.source_vehicle_id ?? '');
+  // The repair method is the saved one (ticket.repair_type) — never local state
+  // and never inferred from whether donor fields happen to hold values.
+  const repairType = ticket?.repair_type ?? '';
   const [externalVendor, setExternalVendor] = useState(ticket?.external_vendor ?? '');
   // date casts serialize with a time component (ISO datetime) — <input
   // type="date"> needs exactly YYYY-MM-DD or it silently fails to populate.
   const [warrantyUntil, setWarrantyUntil] = useState((ticket?.warranty_until ?? '').slice(0, 10));
-  // Cannibalized part details.
-  const [partNeeded, setPartNeeded] = useState(ticket?.part_needed ?? '');
-  const [partQuantity, setPartQuantity] = useState(ticket?.part_quantity ?? '');
-  const [partCondition, setPartCondition] = useState(ticket?.part_condition ?? '');
-  const [cannibalReason, setCannibalReason] = useState(ticket?.cannibal_reason ?? '');
-  const [partInstalledAt, setPartInstalledAt] = useState((ticket?.part_installed_at ?? '').slice(0, 10));
   // External shop stages: send out, then mark returned, then submit.
   const [sendForm, setSendForm] = useState({ external_vendor: ticket?.external_vendor ?? '', external_reason: '', external_work_scope: '', external_shop_contact: '', external_shop_address: '', external_expected_return: '', external_estimated_cost: '' });
   const [returnForm, setReturnForm] = useState({ external_return_notes: '', external_actual_cost: '', warranty_until: '' });
@@ -17366,10 +17581,13 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   // nothing to log here until it comes back. De-emphasized, not removed or
   // disabled, since a mechanic may still want to note something early.
   const awaitingShopReturn = repairType === 'external' && !!ticket.external_sent_at && !ticket.external_returned_at;
-  const sourceVehicleOptions = vehicleOptions.filter((v) => String(v.vehicle_id) !== String(ticket.vehicle?.vehicle_id));
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (repairType === 'cannibalized' && !(ticket.donor_parts ?? []).length) {
+      notify?.({ type: 'error', text: 'Add at least one donor part before submitting a cannibalized repair.' });
+      return;
+    }
     const namedParts = parts.filter((p) => p.name.trim());
     onSubmit(ticket, {
       repair_logs: repairLogs,
@@ -17379,20 +17597,15 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
       repair_started_at: repairStartedAt || undefined,
       repair_completed_at: repairCompletedAt || undefined,
       repair_type: repairType || undefined,
-      source_vehicle_id: repairType === 'cannibalized' ? sourceVehicleId : undefined,
+      source_vehicle_id: repairType === 'cannibalized' ? ticket.source_vehicle_id : undefined,
       external_vendor: repairType === 'external' ? (externalVendor || undefined) : undefined,
       warranty_until: repairType === 'external' ? (warrantyUntil || undefined) : undefined,
-      part_needed: repairType === 'cannibalized' ? (partNeeded || undefined) : undefined,
-      part_quantity: repairType === 'cannibalized' ? (partQuantity || undefined) : undefined,
-      part_condition: repairType === 'cannibalized' ? (partCondition || undefined) : undefined,
-      cannibal_reason: repairType === 'cannibalized' ? (cannibalReason || undefined) : undefined,
-      part_installed_at: repairType === 'cannibalized' ? (partInstalledAt || undefined) : undefined,
     });
   };
 
   // Display-only helpers for the workspace below — none of them feed into
   // handleSubmit, which still sends exactly the same payload as before.
-  const REPAIR_TYPE_LABEL = { in_house: 'In-House Repair', cannibalized: 'Used Cannibalized Part', external: 'Sent to External Shop' };
+  const REPAIR_TYPE_LABEL = { in_house: 'In-House Repair', cannibalized: 'Cannibalized Repair', external: 'Sent to External Shop' };
   const idBase = `lr-${ticket.sub_issue_id ?? ticket.ticket_id}`;
   const workDescription = ticket.work_order_notes ?? ticket.ticket_description;
   const namedPartCount = parts.filter((p) => p.name.trim()).length;
@@ -17440,7 +17653,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
               type and status already live in the header above, so this
               only carries what the header doesn't: what to fix and why. */}
           <section className="lr-group lr-workorder" aria-labelledby={`${idBase}-wo`}>
-            <h4 className="lr-section-label" id={`${idBase}-wo`}>Work Order</h4>
+            <h4 className="lr-section-label" id={`${idBase}-wo`}>Work Order Overview</h4>
             <dl className="lr-kv">
               <div><dt>Repair Item</dt><dd>{ticket.title}</dd></div>
               <div><dt>Main Issue</dt><dd>{ticket.ticket_title}</dd></div>
@@ -17456,48 +17669,21 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 
           {/* The primary task — visually the heaviest group on the page. */}
           <section className="lr-group lr-primary" aria-labelledby={`${idBase}-rw`}>
-            <h4 className="lr-section-label" id={`${idBase}-rw`}>Repair Work</h4>
+            <h4 className="lr-section-label" id={`${idBase}-rw`}>Repair Details</h4>
             <div className="lr-field">
               <span className="lr-label" id={`${idBase}-type`}>Repair Type</span>
               {/* Read-only on purpose: decided when the ticket was proposed
                   and never changed here — shown as a value, not a disabled
                   dropdown that looks clickable. */}
               <p className="lr-readonly" aria-labelledby={`${idBase}-type`}>
-                {repairType === 'external' ? REPAIR_TYPE_LABEL.external : REPAIR_TYPE_LABEL.in_house}
+                {repairType === 'cannibalized' ? <span className="cm-badge">{REPAIR_TYPE_LABEL.cannibalized}</span> : (REPAIR_TYPE_LABEL[repairType] ?? REPAIR_TYPE_LABEL.in_house)}
                 {repairType === 'external' && <span className="lr-hint"> · set when the ticket was proposed</span>}
               </p>
             </div>
-            {/* The mechanic — not the Custodian — records when a part is taken
-                from another (donor) vehicle. The Admin approves it before the
-                repair can be submitted. */}
-            {repairType !== 'external' && (
-              <label className="lr-check">
-                <input
-                  type="checkbox"
-                  checked={repairType === 'cannibalized'}
-                  onChange={(e) => { setRepairType(e.target.checked ? 'cannibalized' : 'in_house'); if (!e.target.checked) setSourceVehicleId(''); onDirty?.(); }}
-                />
-                <span>
-                  <strong>This repair uses a part taken from another vehicle</strong>
-                  <small>The donor vehicle is flagged for inspection automatically. This can be a repair, a donor part, or both.</small>
-                </span>
-              </label>
+            {repairType !== 'external' && repairType !== 'cannibalized' && ticket.status === 'Under Repair' && ticket.ticket_status === 'Active' && (
+              <DonorVehiclePicker ticket={ticket} vehicleOptions={vehicleOptions} onChanged={onDonorChanged} notify={notify} />
             )}
 
-            {repairType === 'cannibalized' && (
-              <div className="lr-field">
-                <label className="lr-label" htmlFor={`${idBase}-source`}>Source Vehicle <abbr className="required-asterisk" title="required">*</abbr></label>
-                <select
-                  id={`${idBase}-source`}
-                  required
-                  value={sourceVehicleId}
-                  onChange={(e) => { setSourceVehicleId(e.target.value); onDirty?.(); }}
-                >
-                  <option value="">Select source vehicle</option>
-                  {sourceVehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
-                </select>
-              </div>
-            )}
             {repairType === 'external' && (
               <div className="lr-two-col">
                 <div className="lr-field">
@@ -17532,31 +17718,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
           </section>
 
           {repairType === 'cannibalized' && (
-            <section className="lr-group" aria-labelledby={`${idBase}-donor`}>
-              <h4 className="lr-section-label" id={`${idBase}-donor`}>Part Taken From Donor</h4>
-              <div className="lr-two-col">
-                <div className="lr-field">
-                  <label className="lr-label" htmlFor={`${idBase}-pn`}>Part</label>
-                  <input id={`${idBase}-pn`} type="text" placeholder="e.g. Radiator" value={partNeeded} onChange={(e) => { setPartNeeded(e.target.value); onDirty?.(); }} />
-                </div>
-                <div className="lr-field">
-                  <label className="lr-label" htmlFor={`${idBase}-pq`}>Quantity</label>
-                  <input id={`${idBase}-pq`} type="number" min="1" value={partQuantity} onChange={(e) => { setPartQuantity(e.target.value); onDirty?.(); }} />
-                </div>
-                <div className="lr-field">
-                  <label className="lr-label" htmlFor={`${idBase}-pc`}>Part Condition</label>
-                  <input id={`${idBase}-pc`} type="text" value={partCondition} onChange={(e) => { setPartCondition(e.target.value); onDirty?.(); }} />
-                </div>
-                <div className="lr-field">
-                  <label className="lr-label" htmlFor={`${idBase}-pi`}>Date Installed</label>
-                  <DateFilterInput id={`${idBase}-pi`} value={partInstalledAt} onChange={(v) => { setPartInstalledAt(v); onDirty?.(); }} />
-                </div>
-              </div>
-              <div className="lr-field">
-                <label className="lr-label" htmlFor={`${idBase}-cr`}>Why this donor / why not buy the part?</label>
-                <textarea id={`${idBase}-cr`} className="lr-textarea" rows={2} value={cannibalReason} onChange={(e) => { setCannibalReason(e.target.value); onDirty?.(); }} />
-              </div>
-            </section>
+            <CannibalizationManagement ticket={ticket} vehicleOptions={vehicleOptions} onChanged={onDonorChanged} notify={notify} />
           )}
 
           {repairType === 'external' && onExternalSend && (

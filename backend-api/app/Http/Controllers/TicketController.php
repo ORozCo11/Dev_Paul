@@ -1794,6 +1794,107 @@ class TicketController extends Controller
         return response()->json(['message' => 'Sub-issue removed.']);
     }
 
+    // ===================================================================
+    // Cannibalized repair — donor vehicle + its parts (CRUD)
+    // ===================================================================
+
+    /**
+     * Who may change a cannibalized repair's donor details: the assigned
+     * mechanic, while the work order is still being repaired. Once the repair
+     * is logged (For Inspection and beyond) the parts are history and locked.
+     */
+    private function authorizeDonorEdit(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue): void
+    {
+        $this->requireAbility($request, 'subissue.log_repair');
+        $this->assertBelongsToTicket($ticket, $subIssue);
+        abort_unless((int) $subIssue->assigned_mechanic_id === (int) $request->user()->id, 403, 'This work order is not assigned to you.');
+        abort_unless($ticket->status === 'Active', 422, "Donor parts can only be changed while the ticket is Active. Current status: {$ticket->status}.");
+        abort_unless($subIssue->status === 'Under Repair', 422, 'This repair has already been logged, so its donor parts are locked.');
+        abort_if($subIssue->repair_type === 'external', 422, 'An external-shop repair cannot use donor parts.');
+    }
+
+    private function assertDonorEligible(MaintenanceTicket $ticket, ?int $donorId): Vehicle
+    {
+        abort_if(!$donorId, 422, 'Choose the donor vehicle first.');
+        $donor = Vehicle::find($donorId);
+        abort_if(!$donor, 422, 'The donor vehicle no longer exists.');
+        abort_if((int) $donor->vehicle_id === (int) $ticket->vehicle_id, 422, 'The donor vehicle must be a different vehicle from the one being repaired.');
+        abort_unless($donor->barangay_id === $ticket->vehicle->barangay_id, 422, 'The donor vehicle must be in the same barangay.');
+        abort_if(in_array($donor->status, ['Inactive', 'Decommissioned'], true), 422, 'The donor vehicle is archived or decommissioned.');
+
+        return $donor;
+    }
+
+    /** Choose (or clear) the donor vehicle. Clearing is refused while parts exist. */
+    public function setDonorVehicle(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        $data = $request->validate(['source_vehicle_id' => ['nullable', 'exists:vehicles,vehicle_id']]);
+
+        if (empty($data['source_vehicle_id'])) {
+            abort_if($subIssue->donorParts()->exists(), 422, 'Delete the donor parts before switching this repair back to in-house.');
+            $subIssue->update(['repair_type' => 'in_house', 'source_vehicle_id' => null]);
+        } else {
+            $this->assertDonorEligible($ticket, (int) $data['source_vehicle_id']);
+            $subIssue->update(['repair_type' => 'cannibalized', 'source_vehicle_id' => $data['source_vehicle_id']]);
+        }
+        $this->log($request, 'Donor Vehicle Set', "Ticket #{$ticket->ticket_id} - sub-issue \"{$subIssue->title}\" repair method is now {$subIssue->repair_type}.", $ticket->ticket_id);
+
+        return $subIssue->fresh(['donorParts', 'sourceVehicle:vehicle_id,vehicle_name,plate_number']);
+    }
+
+    private function donorPartRules(): array
+    {
+        return [
+            'part_name'      => ['required', 'string', 'max:255'],
+            'quantity'       => ['required', 'integer', 'min:1', 'max:100000'],
+            'part_condition' => ['nullable', 'string', 'max:100'],
+            'installed_at'   => ['nullable', 'date', 'before_or_equal:today'],
+            'reason'         => ['nullable', 'string', 'max:2000'],
+            'notes'          => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+
+    private function requireDonorSet(MaintenanceTicket $ticket, TicketSubIssue $subIssue): void
+    {
+        abort_unless($subIssue->repair_type === 'cannibalized' && $subIssue->source_vehicle_id, 422, 'Choose the donor vehicle before adding parts.');
+        $this->assertDonorEligible($ticket, (int) $subIssue->source_vehicle_id);
+    }
+
+    public function storeDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        $this->requireDonorSet($ticket, $subIssue);
+        $data = $request->validate($this->donorPartRules());
+
+        $part = $subIssue->donorParts()->create($data);
+        $this->log($request, 'Donor Part Added', "Ticket #{$ticket->ticket_id} - added {$part->quantity} x {$part->part_name} from the donor vehicle.", $ticket->ticket_id);
+
+        return response()->json($part, 201);
+    }
+
+    public function updateDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
+    {
+        $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        $this->requireDonorSet($ticket, $subIssue);
+        $record = $subIssue->donorParts()->where('part_id', $part)->firstOrFail();
+        $record->update($request->validate($this->donorPartRules()));
+        $this->log($request, 'Donor Part Updated', "Ticket #{$ticket->ticket_id} - updated donor part {$record->part_name}.", $ticket->ticket_id);
+
+        return $record->fresh();
+    }
+
+    public function deleteDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
+    {
+        $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        $record = $subIssue->donorParts()->where('part_id', $part)->firstOrFail();
+        $name = $record->part_name;
+        $record->delete();
+        $this->log($request, 'Donor Part Removed', "Ticket #{$ticket->ticket_id} - removed donor part {$name}.", $ticket->ticket_id);
+
+        return response()->json(['message' => 'Donor part removed.']);
+    }
+
     /**
      * The assigned mechanic may always act on their own work order. An
      * EXTERNAL-shop work order with no in-house mechanic is recorded by an
@@ -1922,6 +2023,19 @@ class TicketController extends Controller
         $usesDonorPart = $effectiveRepairType === 'cannibalized'
             && ($data['source_vehicle_id'] ?? $subIssue->source_vehicle_id);
 
+        if ($usesDonorPart) {
+            // Older clients send one part inline; keep that working by turning it
+            // into a donor-part row (only when none exist yet).
+            if (!$subIssue->donorParts()->exists() && !empty($data['part_needed'])) {
+                $subIssue->donorParts()->create([
+                    'part_name' => $data['part_needed'], 'quantity' => max(1, (int) ($data['part_quantity'] ?? 1)),
+                    'part_condition' => $data['part_condition'] ?? null, 'installed_at' => isset($data['part_installed_at']) ? substr($data['part_installed_at'], 0, 10) : null,
+                    'reason' => $data['cannibal_reason'] ?? null,
+                ]);
+            }
+            abort_unless($subIssue->donorParts()->exists(), 422, 'Add at least one donor part before submitting a cannibalized repair.');
+        }
+
         DB::transaction(function () use ($ticket, $subIssue, $data, $request, $effectiveRepairType, $usesDonorPart) {
             $existingLogs = $subIssue->repair_logs ? $subIssue->repair_logs . "\n\n" : '';
             $logText = trim((string) ($data['repair_logs'] ?? ''));
@@ -1978,7 +2092,7 @@ class TicketController extends Controller
 
             if ($usesDonorPart) {
                 $donorVehicle = Vehicle::findOrFail($data['source_vehicle_id'] ?? $subIssue->source_vehicle_id);
-                $issue = $this->fileDonorIssueReport($ticket, $subIssue->fresh(), $donorVehicle, $vehicleName, $request);
+                $issue = $this->fileDonorIssueReport($ticket, $subIssue->fresh('donorParts'), $donorVehicle, $vehicleName, $request);
                 $subIssue->update(['cannibalization_issue_report_id' => $issue->issue_report_id]);
                 $this->notifyAdmins(
                     'Part Taken From Another Vehicle',
@@ -2015,11 +2129,11 @@ class TicketController extends Controller
         $issue = VehicleIssueReport::create([
             'vehicle_id'        => $donorVehicle->vehicle_id,
             'issue_type'        => 'Other',
-            'issue_description' => "Part removed for use on {$vehicleName} (Ticket #{$ticket->ticket_id}: \"{$subIssue->title}\").",
+            'issue_description' => "Parts removed for use on {$vehicleName} (Ticket #{$ticket->ticket_id}: \"{$subIssue->title}\"): " . ($subIssue->donorParts->map(fn ($p) => "{$p->quantity} x {$p->part_name}")->implode(', ') ?: 'part details on the ticket') . '.',
             'severity_level'    => 'Medium',
             'reported_by'       => $request->user()->id,
             'status'            => 'Pending',
-            'remarks'           => 'Auto-created when a part from this vehicle was used on another vehicle\'s repair.',
+            'remarks'           => 'Auto-created when parts from this vehicle were used on another vehicle\'s repair.',
         ]);
         $donorVehicle->update(['condition' => 'Needs Inspection']);
         VehicleHistory::create([
@@ -3066,6 +3180,7 @@ class TicketController extends Controller
             'subIssues.verificationAssignedTo',
             'subIssues.sourceVehicle:vehicle_id,vehicle_name,plate_number',
             'subIssues.cannibalizationReviewedBy',
+            'subIssues.donorParts',
             'subIssues.externalHandler:id,name',
             'subIssues.externalReceiver:id,name',
         ];

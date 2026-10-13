@@ -152,6 +152,11 @@ class TicketSubIssue extends Model
         return $this->belongsTo(Vehicle::class, 'source_vehicle_id', 'vehicle_id');
     }
 
+    public function donorParts()
+    {
+        return $this->hasMany(DonorPart::class, 'sub_issue_id', 'sub_issue_id')->orderBy('part_id');
+    }
+
     public function externalHandler()
     {
         return $this->belongsTo(User::class, 'external_handled_by');
