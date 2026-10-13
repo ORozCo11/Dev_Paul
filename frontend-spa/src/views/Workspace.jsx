@@ -4780,6 +4780,7 @@ function Workspace() {
             tabBar={myTasksTabBar}
             user={user}
             tickets={visibleRows}
+            readyToCloseTickets={(records.ticketVerifications ?? []).filter((t) => t.status === 'For Verification' && String(t.assigned_custodian_id) === String(user.id))}
             editTarget={editTarget}
             setEditTarget={setEditTarget}
             onVerify={(ticket, payload) => ticketAction(`/tickets/${ticket.ticket_id}/verify`, payload, verifyOutcomeMessage(payload))}
@@ -15482,17 +15483,6 @@ function TicketModule({
   const statSourceTickets = allTickets ?? tickets;
   const allSubIssues = statSourceTickets.flatMap((t) => t.sub_issues ?? []);
   const pendingCannibalizationCount = allSubIssues.filter((s) => s.status === 'Pending Approval').length;
-  // "Ready to close" now means what it actually takes to close a ticket:
-  // the mechanic has submitted, and the Custodian's one verification is the
-  // only thing left before it's Closed. (The old definition — every
-  // sub-issue already Done while the ticket is still Active — can't happen
-  // anymore: verifyTicket() marks every sub-issue Done and closes the
-  // ticket in the same transaction.)
-  const readyToCloseTickets = useMemo(
-    () => statSourceTickets.filter((t) => t.status === 'For Verification'),
-    [statSourceTickets]
-  );
-
   // Unread-updates badge per ticket card — counts this user's unread
   // notifications tied to that ticket (assignment, verification, etc.)
   // so an admin can spot which tickets have activity they haven't seen yet.
@@ -15586,8 +15576,6 @@ function TicketModule({
           <LatestIssueCard issues={recentIssues} onRowClick={(row) => onViewIssue?.(row.issue_report_id)} />
         )}
       </div>
-
-      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} />
 
       <section className="panel" style={{ width: '100%' }}>
         {/* Alert banners */}
@@ -16632,6 +16620,49 @@ function TicketStageBadge({ ticket, variant = 'flag' }) {
   );
 }
 
+// The people actually assigned to a ticket, Custodian first. The mechanic is
+// read from the sub-issues (reassignment happens per work order, so the
+// ticket-level mechanic can be stale); a Pending Approval ticket has none yet.
+function ticketPersonnel(ticket) {
+  const people = [];
+  if (ticket?.assigned_custodian?.name) people.push({ ...ticket.assigned_custodian, role: 'Custodian' });
+  const subs = ticket?.sub_issues ?? [];
+  const open = subs.filter((s) => s.status !== 'Done' && s.status !== 'Cancelled');
+  const seen = new Set();
+  const fromWorkOrders = (open.length ? open : subs).map((s) => s.assigned_mechanic)
+    .filter((m) => m?.name && !seen.has(m.id) && seen.add(m.id));
+  // Ticket-level mechanic is only a fallback when no work order names one.
+  const mechanics = fromWorkOrders.length ? fromWorkOrders : [ticket?.assigned_mechanic].filter((m) => m?.name);
+  mechanics.forEach((m) => people.push({ ...m, role: 'Maintenance Personnel' }));
+  return people;
+}
+
+function PersonAvatar({ person }) {
+  const [failed, setFailed] = useState(false);
+  const initials = person.name.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+  const src = person.photo_url && !failed ? resolvePhotoUrl(person.photo_url) : '';
+  return (
+    <span className="tpa-avatar" tabIndex={0} role="img" aria-label={`${person.role}: ${person.name}`} data-tip={`${person.name} · ${person.role}`}>
+      {src
+        ? <img src={src} alt="" loading="lazy" onError={() => setFailed(true)} />
+        : <span className="tpa-initials" aria-hidden="true">{initials}</span>}
+    </span>
+  );
+}
+
+// Shared by Card View and List View. `showNames` adds the readable role/name
+// text (list view, and always available to touch users without tooltips).
+function TicketPersonnelAvatars({ ticket }) {
+  const people = ticketPersonnel(ticket);
+  if (!people.length) return <span className="tpa-empty">Not assigned</span>;
+  return (
+    <span className="tpa-group" onClick={(e) => e.stopPropagation()}>
+      {people.map((p) => <PersonAvatar key={`${p.role}-${p.id}`} person={p} />)}
+      <span className="tpa-sr">{people.map((p) => `${p.role}: ${p.name}`).join('; ')}</span>
+    </span>
+  );
+}
+
 function TicketCard({ ticket, unreadCount = 0, onClick }) {
   const progress = ticket.progress;
   const stage = ticketWorkflowStage(ticket);
@@ -16689,6 +16720,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
         </div>
         <DateBadge value={ticket.created_at} />
       </div>
+      <div className="tpa-row"><TicketPersonnelAvatars ticket={ticket} /></div>
     </div>
   );
 }
@@ -17003,6 +17035,7 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
 function CustodianVerificationModule({
   user,
   tickets,
+  readyToCloseTickets = [],
   editTarget,
   setEditTarget,
   onVerify,
@@ -17056,6 +17089,7 @@ function CustodianVerificationModule({
         onFilterChange={onFilterChange}
       />
       {tabBar}
+      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} />
       <section className="panel module-filter-panel">
         <FilterBar
           categories={categories}
@@ -17996,6 +18030,7 @@ function ticketTableColumns(unreadByTicket = {}) {
     { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.status} /> },
     { key: 'next_step', label: 'Next Step', className: 'cell-center', render: (r) => <TicketStageBadge ticket={r} /> },
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
+    { key: 'personnel', label: 'Assigned Personnel', render: (r) => <TicketPersonnelAvatars ticket={r} /> },
     { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
     { key: 'time', label: 'Time', className: 'cell-center', render: (r) => formatTime(r.created_at) },
   ];
