@@ -20,7 +20,7 @@ function ChartTooltipCard({ rows }) {
     <div className="chart-tooltip-card">
       {rows.map((row) => (
         <div className="chart-tooltip-row" key={row.label}>
-          {row.color && <span style={{ background: row.color }} />}
+          {row.color && <span className="chart-tooltip-dot" style={{ background: row.color }} />}
           <span className="chart-tooltip-label">{row.label}</span>
           <strong>{row.value}</strong>
         </div>
@@ -174,6 +174,8 @@ export function StackedBarChart({ title, segments }) {
             <YAxis type="category" dataKey="name" hide />
             <Tooltip
               cursor={false}
+              portal={document.body}
+              wrapperStyle={{ zIndex: 1000, pointerEvents: 'none' }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const tRows = payload.map((p) => ({

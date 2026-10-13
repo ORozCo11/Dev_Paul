@@ -477,6 +477,7 @@ function Workspace() {
   const editCategoryId = location.pathname.match(/\/categories\/(\d+)\/edit$/)?.[1] ?? null;
   const isNewSchedulePage = /\/schedules\/new$/.test(location.pathname);
   const editScheduleId = location.pathname.match(/\/schedules\/(\d+)\/edit$/)?.[1] ?? null;
+  const scheduleProfileId = location.pathname.match(/\/schedules\/(\d+)$/)?.[1] ?? null;
   const isNewIssuePage = /\/issues\/new$/.test(location.pathname);
   const editIssueId = location.pathname.match(/\/issues\/(\d+)\/edit$/)?.[1] ?? null;
   const viewIssueId = location.pathname.match(/\/issues\/(\d+)$/)?.[1] ?? null;
@@ -497,7 +498,7 @@ function Workspace() {
   const isProfilePage = /\/profile$/.test(location.pathname);
   const isOnSpecialPage = Boolean(
     isNewVehiclePage || vehicleProfileId || isNewTicketPage || ticketProfileId
-    || isNewCategoryPage || editCategoryId || isNewSchedulePage || editScheduleId
+    || isNewCategoryPage || editCategoryId || isNewSchedulePage || editScheduleId || scheduleProfileId
     || isNewIssuePage || editIssueId || viewIssueId || isNewConditionPage || editConditionId
     || isNewMaintenancePage || editMaintenanceId || maintenanceProfileId || isNewUserPage || editUserId || viewUserId
     || logRepairsTicketId || inspectTicketId || isProfilePage || isNewLocationPage || editLocationVehicleId
@@ -514,6 +515,7 @@ function Workspace() {
     || (editCategoryId && 'Edit Vehicle Type')
     || (isNewSchedulePage && 'Add Maintenance Schedule')
     || (editScheduleId && 'Update Schedule')
+    || (scheduleProfileId && 'Maintenance Schedule Details')
     || (isNewIssuePage && 'Report Vehicle Issue')
     || (editIssueId && 'Update Issue Status')
     || (viewIssueId && 'Issue Details')
@@ -586,7 +588,7 @@ function Workspace() {
     if (maintenanceProfileId || isNewMaintenancePage || editMaintenanceId) return 'maintenance';
     if (isNewVehiclePage || vehicleProfileId) return 'vehicles';
     if (isNewCategoryPage || editCategoryId) return 'categories';
-    if (isNewSchedulePage || editScheduleId) return 'schedules';
+    if (isNewSchedulePage || editScheduleId || scheduleProfileId) return 'schedules';
     if (isNewIssuePage || editIssueId || viewIssueId) return 'issues';
     if (isNewConditionPage || editConditionId) return 'conditions';
     if (isNewUserPage || editUserId || viewUserId) return 'users';
@@ -658,7 +660,7 @@ function Workspace() {
     : maintenanceProfileId || isNewMaintenancePage || editMaintenanceId ? (hasMaintenanceLedgerNav ? 'maintenanceLedger' : 'maintenance')
     : isNewVehiclePage || vehicleProfileId ? 'vehicles'
     : isNewCategoryPage || editCategoryId ? 'categories'
-    : isNewSchedulePage || editScheduleId ? 'schedules'
+    : isNewSchedulePage || editScheduleId || scheduleProfileId ? 'schedules'
     : isNewIssuePage || editIssueId || viewIssueId ? (hasReportOrProposeNav ? 'reportOrPropose' : 'issues')
     : isNewConditionPage || editConditionId ? 'conditions'
     : isNewUserPage || editUserId || viewUserId ? 'users'
@@ -1129,7 +1131,7 @@ function Workspace() {
     try {
       if (activeModule === 'reports') {
         const response = await api.get('/reports', { params: cleanPayload(payload) });
-        setReport(response.data);
+        setReport({ ...response.data, filters: cleanPayload(payload) });
         setNotice({ type: 'success', text: `${payload.report_type} generated.` });
         return;
       }
@@ -3505,7 +3507,7 @@ function Workspace() {
 
     if (activeModule === 'dashboard') {
       return (
-        <Dashboard
+              <Dashboard
           data={dashboard}
           hubs={allHubs}
           user={user}
@@ -4238,6 +4240,31 @@ function Workspace() {
     }
 
     if (activeModule === 'schedules') {
+      if (scheduleProfileId) {
+        const schedule = (records.schedules ?? []).find((row) => String(row.schedule_id) === String(scheduleProfileId));
+        if (!schedule && (loading || !records.schedules)) return <ModuleLoader label="Loading maintenance schedule" />;
+        if (!schedule) {
+          return <ModulePanel description="This maintenance schedule could not be found or is not available to your account.">
+            <button type="button" className="ghost-button" onClick={() => returnToModule('schedules')}>Back to Maintenance Schedules</button>
+          </ModulePanel>;
+        }
+        return <MaintenanceScheduleDetailPage
+          row={schedule}
+          currentUser={user}
+          onBack={() => returnToModule('schedules')}
+          onViewVehicle={openVehicleProfile}
+          onComplete={openCompleteSchedule}
+          onEdit={(row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`)}
+          onDelete={(row) => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.', `Cancel the ${row.maintenance_type} schedule for ${row.vehicle?.vehicle_name ?? 'this vehicle'}? It can be restored later if needed.`)}
+          onRestore={(row) => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored.', 'Restore this cancelled schedule back to Scheduled?')}
+          onViewRecord={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`)}
+          onReassign={setReassignScheduleTarget}
+          onViewTicket={openTicketProfile}
+          onApprove={approveSchedule}
+          onDecline={setDeclineScheduleTarget}
+        />;
+      }
+
       // A mechanic's own assignments surface first — the shared list still
       // shows everyone's schedules for context, but their own work isn't
       // buried in it. Computed once so the table and card views can't drift
@@ -4294,9 +4321,12 @@ function Workspace() {
             />
           }
         >
-          <div className="panel-header-bar">
-            <h3>Maintenance Schedules <span className="count-badge">{visibleRows.length}</span></h3>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="panel-header-bar schedule-panel-header">
+            <div className="schedule-panel-heading">
+              <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p></div>
+              <span className="schedule-count-badge">{visibleRows.length} schedules</span>
+            </div>
+            <div className="schedule-panel-tools">
               <ViewModeDropdown value={scheduleViewMode} onChange={changeScheduleViewMode} />
               {/* Custodian books directly (schedule.create) — they have the
                   day-to-day visibility into a vehicle's condition. Admin keeps
@@ -4332,6 +4362,7 @@ function Workspace() {
                   onReassign={setReassignScheduleTarget}
                   onViewTicket={openTicketProfile}
                   onViewVehicle={openVehicleProfile}
+                  onViewSchedule={(r) => navigate(`${roleRoutes[user.role]}/schedules/${r.schedule_id}`)}
                   onApprove={approveSchedule}
                   onDecline={setDeclineScheduleTarget}
                 />
@@ -4985,28 +5016,6 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function DashboardMicroMetric({ icon, label, value, tone = 'neutral', onClick }) {
-  const content = (
-    <>
-      <span><Icon name={icon} size={15} /></span>
-      <div>
-        <small>{label}</small>
-        <strong>{value}</strong>
-      </div>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button type="button" className={`dashboard-micro-metric is-${tone} is-clickable`} onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-
-  return <div className={`dashboard-micro-metric is-${tone}`}>{content}</div>;
-}
-
 function DashboardSignalCard({ icon, label, value, detail, tone = 'neutral', meter = 0, onClick }) {
   const content = (
     <>
@@ -5032,6 +5041,36 @@ function DashboardSignalCard({ icon, label, value, detail, tone = 'neutral', met
   }
 
   return <article className={`dashboard-signal-card is-${tone}`}>{content}</article>;
+}
+
+function DashboardKpiStrip({ items, label = 'Key metrics' }) {
+  if (!items?.length) return null;
+
+  return (
+    <section className="dashboard-role-kpis full-span" aria-label={label} style={{ '--dashboard-kpi-count': Math.min(items.length, 6) }}>
+      {items.map((item) => {
+        const content = (
+          <>
+            <span className={`dashboard-role-kpi-icon is-${item.tone ?? 'blue'}`}><Icon name={item.icon ?? 'chart'} size={16} /></span>
+            <span className="dashboard-role-kpi-copy">
+              <span className="dashboard-role-kpi-label">{item.label}</span>
+              <strong>{item.value ?? 0}</strong>
+              {item.detail && <small>{item.detail}</small>}
+            </span>
+            {item.onClick && <Icon name="chevronRight" size={14} className="dashboard-role-kpi-chevron" />}
+          </>
+        );
+
+        return item.onClick ? (
+          <button key={item.label} type="button" className="dashboard-role-kpi is-clickable" onClick={item.onClick}>
+            {content}
+          </button>
+        ) : (
+          <article key={item.label} className="dashboard-role-kpi">{content}</article>
+        );
+      })}
+    </section>
+  );
 }
 
 function DashboardStatusStrip({ rows }) {
@@ -5193,10 +5232,10 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
     { label: 'Inactive', value: inactiveVehicles, color: '#64748b' },
   ];
   const operationsQueue = [
-    { label: 'Issues', value: reportedIssues, color: '#ef4444' },
+    { label: 'Open Issues', value: reportedIssues, color: '#ef4444' },
+    { label: 'In Shop', value: underMaintenanceVehicles, color: '#d97706' },
     { label: 'Upcoming', value: upcomingMaintenance, color: '#f59e0b' },
     { label: 'Overdue', value: overdueMaintenanceCount, color: '#dc2626' },
-    { label: 'Ready', value: availableVehicles, color: '#22c55e' },
   ];
   const topFailurePattern = failurePatterns[0];
   const visibleReadiness = readiness.slice(0, 5);
@@ -5204,6 +5243,7 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
   const visibleTypeRows = (data.vehicles_by_type ?? []).slice(0, 5);
   const isAdminDashboard = hasRole(user, 'Admin');
   const isMaintenanceDashboard = hasRole(user, 'Maintenance Personnel') && !isAdminDashboard;
+  const hasMaintenanceRole = hasRole(user, 'Maintenance Personnel');
   // Phase A4 — one departure away from an orphaned barangay (nobody left
   // who can manage users, vehicles, or approvals). GuardsLastAdmin blocks
   // that departure from happening through deactivate/role-change, but not
@@ -5232,20 +5272,28 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
   if (!isAdminDashboard) {
     const badges = data.badge_counts ?? {};
     const isCustodianView = hasRole(user, 'Custodian');
+    const failedReadinessCount = readinessWatch.filter((row) => row.state === 'not_ready').length;
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const overdueAssignedWork = myScheduledWork.filter((item) => item.scheduled_date && item.scheduled_date < todayIso).length;
     const needsCheck = readinessWatch.slice(0, 5);
     const toneFor = (n, hot = 'warn') => (n > 0 ? hot : 'ok');
-    const quick = [];
+    const roleKpis = [];
     if (isCustodianView) {
-      quick.push(
-        { icon: 'checkCircle', label: 'To Verify', value: badges.ticketVerifications ?? 0, go: () => onGoToModule('ticketVerifications', []) },
-        { icon: 'alert', label: 'My Open Reports', value: badges.issues ?? 0, go: () => onGoToModule('issues', []) },
+      roleKpis.push(
+        { icon: 'checkCircle', label: 'Pending Verification', value: badges.ticketVerifications ?? 0, tone: toneFor(badges.ticketVerifications ?? 0), onClick: () => onGoToModule('ticketVerifications', []) },
+        { icon: 'alert', label: 'Open Issues', value: badges.issues ?? 0, tone: toneFor(badges.issues ?? 0, 'alert'), onClick: () => onGoToModule('issues', []) },
+        { icon: 'checkCircle', label: 'Need Readiness Check', value: readinessWatch.length, tone: toneFor(readinessWatch.length), onClick: () => onGoToModule('vehicles', []) },
+        { icon: 'alert', label: 'Failed Readiness', value: failedReadinessCount, tone: toneFor(failedReadinessCount, 'alert'), onClick: () => onGoToModule('vehicles', []) },
+        { icon: 'vehicle', label: 'Available Vehicles', value: availableVehicles, tone: 'blue', onClick: () => onGoToModule('vehicles', ['Available']) },
       );
     }
-    if (isMaintenanceDashboard) {
-      quick.push(
-        { icon: 'wrench', label: 'Work Orders', value: badges.ticketWorkOrders ?? 0, go: () => onGoToModule('ticketWorkOrders', []) },
-        { icon: 'calendar', label: 'My Schedule', value: myScheduledWork.length, go: onGoToSchedules },
-        { icon: 'alert', label: 'Needs Attention', value: metricValue('Vehicles Needing Attention'), go: () => onGoToModule('vehicles', []) },
+    if (hasMaintenanceRole) {
+      roleKpis.push(
+        { icon: 'wrench', label: 'My Open Work Orders', value: badges.ticketWorkOrders ?? 0, tone: toneFor(badges.ticketWorkOrders ?? 0), onClick: () => onGoToModule('ticketWorkOrders', []) },
+        { icon: 'calendar', label: 'My Scheduled Work', value: myScheduledWork.length, tone: 'blue', onClick: onGoToSchedules },
+        { icon: 'alert', label: 'Overdue Assigned', value: overdueAssignedWork, tone: toneFor(overdueAssignedWork, 'alert'), onClick: onGoToSchedules },
+        { icon: 'alert', label: 'Vehicles Need Attention', value: metricValue('Vehicles Needing Attention'), tone: toneFor(metricValue('Vehicles Needing Attention'), 'alert'), onClick: () => onGoToModule('vehicles', []) },
+        { icon: 'checkCircle', label: 'Recently Completed', value: metricValue('Recently Completed Maintenance'), detail: 'Last 30 days', tone: 'good', onClick: () => onGoToModule('maintenance', []) },
       );
     }
 
@@ -5273,11 +5321,11 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
               <div className="dashboard-ready-stat-inner">
                 <div className="dashboard-ready-row is-ready">
                   <strong>{availableVehicles}</strong>
-                  <span>Ready</span>
+                  <span>Available</span>
                 </div>
                 <div className="dashboard-ready-row is-not-ready">
                   <strong>{notReadyVehicles}</strong>
-                  <span>Not Ready</span>
+                  <span>Unavailable</span>
                 </div>
               </div>
             </div>
@@ -5297,15 +5345,12 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
                 </div>
               )}
             </div>
-            <div className="dashboard-command-mini-grid">
-              {quick.slice(0, 4).map((q) => (
-                <DashboardMicroMetric key={q.label} icon={q.icon} label={q.label} value={q.value} tone={toneFor(q.value)} onClick={q.go} />
-              ))}
-            </div>
           </div>
         </section>
 
-        {isMaintenanceDashboard && (
+      <DashboardKpiStrip items={roleKpis} label={`${greetingRole} dashboard metrics`} />
+
+        {hasMaintenanceRole && (
           <section className="panel col-span-7 action-queue-panel dashboard-lean-panel">
             <div className="panel-header-bar">
               <h3><Icon name="wrench" size={16} /> My Scheduled Work</h3>
@@ -5360,6 +5405,27 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
           </section>
         )}
 
+        {isCustodianView && (
+          <section className="panel col-span-5 dashboard-lean-panel">
+            <div className="panel-header-bar">
+              <h3><Icon name="vehicle" size={16} /> Readiness by Vehicle Type</h3>
+              {readiness.length > 0 && <span className="area-chart-tag">{readiness.length} types</span>}
+            </div>
+            {readiness.length === 0 ? (
+              <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> No vehicle types to assess yet.</p>
+            ) : (
+              <div className="dashboard-readiness-compact-list">
+                {visibleReadiness.map((r) => <ReadinessRow key={r.category} r={r} />)}
+              </div>
+            )}
+            {readiness.length > visibleReadiness.length && (
+              <button type="button" className="dashboard-inline-action" onClick={() => onNavigate(`${basePath}/vehicles`)}>
+                Review all {readiness.length} types
+              </button>
+            )}
+          </section>
+        )}
+
         <CriticalityWatchCard items={criticalityWatch} onNavigate={onNavigate} basePath={basePath} />
         <CapabilityImpactCard items={capabilityImpact} onNavigate={onNavigate} basePath={basePath} />
 
@@ -5391,6 +5457,16 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
     );
   }
 
+  const adminBadges = data.badge_counts ?? {};
+  const adminKpis = [
+    { icon: 'vehicle', label: 'Total Fleet Units', value: totalVehicles, tone: 'blue', onClick: () => onGoToModule('vehicles', []) },
+    { icon: 'checkCircle', label: 'Available', value: availableVehicles, tone: 'good', onClick: () => onGoToModule('vehicles', ['Available']) },
+    { icon: 'wrench', label: 'In Shop', value: underMaintenanceVehicles, tone: underMaintenanceVehicles > 0 ? 'warn' : 'good', onClick: () => onGoToModule('vehicles', ['Under Maintenance']) },
+    { icon: 'alert', label: 'Open Issues', value: reportedIssues, tone: reportedIssues > 0 ? 'alert' : 'good', onClick: () => onGoToModule('issues', []) },
+    { icon: 'calendar', label: 'Overdue Maintenance', value: overdueMaintenanceCount, tone: overdueMaintenanceCount > 0 ? 'alert' : 'good', onClick: onGoToSchedules },
+    { icon: 'clipboard', label: 'Pending Proposals', value: adminBadges.ticketProposals ?? 0, tone: (adminBadges.ticketProposals ?? 0) > 0 ? 'warn' : 'good', onClick: () => onGoToModule('tickets', []) },
+  ];
+
   return (
     <div className="dashboard-grid dashboard-grid-smart">
       <section className={`dashboard-command-center full-span is-${opsTone}`}>
@@ -5420,11 +5496,11 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
             <div className="dashboard-ready-stat-inner">
               <div className="dashboard-ready-row is-ready">
                 <strong>{availableVehicles}</strong>
-                <span>Ready</span>
+                <span>Available</span>
               </div>
               <div className="dashboard-ready-row is-not-ready">
                 <strong>{notReadyVehicles}</strong>
-                <span>Not Ready</span>
+                <span>Unavailable</span>
               </div>
             </div>
           </div>
@@ -5444,14 +5520,10 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
               </div>
             )}
           </div>
-          <div className="dashboard-command-mini-grid">
-            <DashboardMicroMetric icon="vehicle" label="Available" value={availableVehicles} tone="ok" onClick={() => onGoToModule('vehicles', ['Available'])} />
-            <DashboardMicroMetric icon="wrench" label="In Shop" value={underMaintenanceVehicles} tone="warn" onClick={() => onGoToModule('vehicles', ['Under Maintenance'])} />
-            <DashboardMicroMetric icon="alert" label="Issues" value={reportedIssues} tone={reportedIssues > 0 ? 'alert' : 'ok'} onClick={() => onGoToModule('issues', [])} />
-            <DashboardMicroMetric icon="calendar" label="Overdue" value={overdueMaintenanceCount} tone={overdueMaintenanceCount > 0 ? 'alert' : 'neutral'} onClick={onGoToSchedules} />
-          </div>
         </div>
       </section>
+
+      <DashboardKpiStrip items={adminKpis} label="Administrator dashboard metrics" />
 
       <section className="dashboard-signal-grid full-span" aria-label="Dashboard signals">
         <DashboardSignalCard
@@ -5669,27 +5741,6 @@ function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedu
           style, including the three "watch" counts (issues / upcoming /
           overdue) that used to sit right below in a third, slimmer card style
           for no reason other than to de-emphasise them. */}
-      <section className="metric-grid stat-one-line dashboard-headline-grid full-span" style={{ '--stat-cols': data.metrics.length }}>
-        {data.metrics.map((metric) => {
-          const style = DASHBOARD_METRIC_STYLES[metric.label] ?? DASHBOARD_METRIC_STYLE_DEFAULT;
-
-          return (
-            <article
-              className="metric-card metric-card-iconic dashboard-metric-card"
-              key={metric.label}
-            >
-              <span className="metric-card-icon" style={{ background: style.bg, color: style.color }}>
-                <Icon name={style.icon} size={16} />
-              </span>
-              <div className="metric-card-body">
-                <span>{metric.label}</span>
-                <strong>{metric.value}</strong>
-              </div>
-            </article>
-          );
-        })}
-      </section>
-
       {hasRole(user, 'Maintenance Personnel') && (
         <section className="panel col-span-7 action-queue-panel">
           <div className="panel-header-bar">
@@ -7991,15 +8042,80 @@ function ReportPreview({ report }) {
 
   const rows = report.rows ?? [];
   const columns = reportColumns(rows);
+  const generatedAt = report.generated_at ? formatDate(report.generated_at) : '—';
+  const reportPeriod = report.filters?.from || report.filters?.to
+    ? `${report.filters.from ? formatDate(report.filters.from) : 'Start'} – ${report.filters.to ? formatDate(report.filters.to) : 'Present'}`
+    : 'All available dates';
+  const reportContext = Object.entries(report.filters ?? {})
+    .filter(([key, value]) => !['report_type', 'from', 'to'].includes(key) && value !== '' && value != null)
+    .map(([key, value]) => `${prettifyKey(key)}: ${value}`);
+  const isLandscape = columns.length > 4;
+  const uniqueValues = (key) => new Set(rows.map((row) => resolveRelationLabel(row[key]) ?? row[key]).filter((value) => value != null && value !== '')).size;
+  const statusKey = rows.length ? ['status', 'condition', 'availability_status'].find((key) => rows.some((row) => row[key] != null)) : null;
+  const statusCounts = statusKey ? [...new Set(rows.map((row) => row[statusKey]).filter(Boolean))].map((status) => ({ label: status, value: rows.filter((row) => row[statusKey] === status).length })) : [];
+  const costKey = rows.length ? ['cost', 'actual_cost', 'total_cost', 'amount'].find((key) => rows.some((row) => row[key] != null && Number.isFinite(Number(row[key])))) : null;
+  const distinctVehicleKey = rows.length ? ['vehicle_id', 'vehicle'].find((key) => rows.some((row) => row[key] != null)) : null;
+  const summaryMetrics = [{ label: 'Total records', value: rows.length.toLocaleString() }];
+  if (report.report_type === 'Vehicle Inventory Report' || report.report_type === 'Vehicle Type Report') {
+    if (rows.length && rows[0].category != null) summaryMetrics.push({ label: 'Vehicle types', value: uniqueValues('category').toLocaleString() });
+    if (statusCounts.length) summaryMetrics.push(...statusCounts.map(({ label, value }) => ({ label, value: value.toLocaleString() })));
+  } else if (report.report_type === 'Vehicle Location Report') {
+    if (rows.length && rows.some((row) => row.current_location != null)) summaryMetrics.push({ label: 'Locations represented', value: uniqueValues('current_location').toLocaleString() });
+  } else if (report.report_type === 'Vehicle Issue Report' || report.report_type === 'Vehicle Maintenance Report' || report.report_type === 'Vehicle Maintenance Schedule Report') {
+    if (statusCounts.length) summaryMetrics.push(...statusCounts.map(({ label, value }) => ({ label, value: value.toLocaleString() })));
+    if (costKey) summaryMetrics.push({ label: 'Total recorded cost', value: new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(rows.reduce((sum, row) => sum + (Number(row[costKey]) || 0), 0)) });
+  } else if (report.report_type === 'Vehicle History Report' && distinctVehicleKey) {
+    summaryMetrics.push({ label: 'Vehicles represented', value: uniqueValues(distinctVehicleKey).toLocaleString() });
+  }
+  const sectionTitle = ({
+    'Vehicle Inventory Report': 'Vehicle Inventory',
+    'Vehicle Type Report': 'Vehicle Type Breakdown',
+    'Vehicle Location Report': 'Vehicles by Location',
+    'Vehicle Issue Report': 'Issue Details',
+    'Vehicle Maintenance Report': 'Maintenance Details',
+    'Vehicle Maintenance Schedule Report': 'Maintenance Schedule',
+    'Vehicle History Report': 'Vehicle Activity History',
+  })[report.report_type] ?? 'Report Details';
+
+  const reportDocument = (
+    <div className={`report-document${isLandscape ? ' is-landscape' : ''}`}>
+      <header className="report-document-header">
+        <div className="report-brand">
+          <span className="report-brand-mark"><Icon name="gear" size={22} filled /></span>
+          <span><strong>VMS</strong><small>Barangay Vehicle Management System</small></span>
+        </div>
+        <div className="report-document-heading"><span>OFFICIAL FLEET REPORT</span><h2>{report.report_type?.toUpperCase()}</h2></div>
+        <div className="report-header-meta"><span>Generated</span><strong>{generatedAt}</strong><span>Reporting period</span><strong>{reportPeriod}</strong></div>
+      </header>
+      <div className="report-document-title">
+        <p>Prepared by <strong>{report.generated_by || '—'}</strong>{reportContext.length > 0 && <> · Filters: {reportContext.join(' · ')}</>}</p>
+      </div>
+      <section className="report-data-section report-summary-section">
+        <div className="report-section-bar"><h3>{report.report_type === 'Vehicle History Report' ? 'Vehicle Information' : report.report_type === 'Vehicle Issue Report' ? 'Issue Summary' : report.report_type === 'Vehicle Maintenance Report' ? 'Maintenance Summary' : report.report_type === 'Vehicle Maintenance Schedule Report' ? 'Schedule Overview' : report.report_type === 'Vehicle Location Report' ? 'Location Overview' : report.report_type === 'Vehicle Type Report' ? 'Vehicle Type Summary' : 'Fleet Summary'}</h3></div>
+        <div className="report-summary-grid">{summaryMetrics.map((metric) => <div className="report-summary-item" key={metric.label}><strong>{metric.value}</strong><span>{metric.label}</span></div>)}</div>
+      </section>
+      <section className="report-data-section">
+        <div className="report-section-bar"><h3>{sectionTitle}</h3><span>{rows.length.toLocaleString()} {rows.length === 1 ? 'record' : 'records'}</span></div>
+        <div className="report-document-table-wrap">
+          <table className="report-document-table">
+            <thead><tr>{columns.map((col) => <th key={col.label}>{col.label}</th>)}</tr></thead>
+            <tbody>
+              {rows.length ? rows.map((row, i) => (
+                <tr key={row.id ?? i}>{columns.map((col) => <td key={col.label}>{col.render(row)}</td>)}</tr>
+              )) : <tr><td className="report-no-records" colSpan={columns.length || 1}>No records match the selected report criteria.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <footer className="report-document-footer"><span>Barangay Vehicle Management System</span><span>Generated {generatedAt}</span></footer>
+    </div>
+  );
 
   return (
-    <section>
-      <div className="report-heading">
-        <div>
-          <h3>{report.report_type}</h3>
-          <p>Generated by {report.generated_by} on {formatDate(report.generated_at)}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+    <section className="report-preview-shell">
+      <div className="report-preview-toolbar">
+        <div><strong>Report preview</strong><span>{rows.length.toLocaleString()} records · {reportPeriod}</span></div>
+        <div className="report-preview-actions">
           <button
             className="ghost-button"
             onClick={() => exportRowsToCsv(`${report.report_type.toLowerCase().replaceAll(' ', '-')}.csv`, reportExportColumns(rows), rows)}
@@ -8010,7 +8126,7 @@ function ReportPreview({ report }) {
           <button className="ghost-button" onClick={() => window.print()} type="button">Print</button>
         </div>
       </div>
-      <DataTable columns={columns} rows={rows} />
+      <div className="report-preview-canvas">{reportDocument}</div>
 
       {/* Print-only — kept off-screen (see .report-print-view), shown by the
           Print button above. Portaled to <body>, same reasoning as the
@@ -8018,30 +8134,7 @@ function ReportPreview({ report }) {
           hides #root entirely, so the printable content has to live outside
           it or Print produces a blank page. */}
       {createPortal(
-        <div className="report-print-view">
-          <div className="veh-print-header">
-            <div className="veh-print-header-left">
-              <h2>{report.report_type}</h2>
-              <p>Generated by {report.generated_by} on {formatDate(report.generated_at)}</p>
-            </div>
-            <div className="veh-print-header-right">
-              <Icon name="gear" size={48} className="topbar-gear-icon" filled />
-              <span className="vms-wordmark">vms</span>
-            </div>
-          </div>
-          <table className="report-print-table">
-            <thead>
-              <tr>{columns.map((col) => <th key={col.label}>{col.label}</th>)}</tr>
-            </thead>
-            <tbody>
-              {rows.length ? rows.map((row, i) => (
-                <tr key={row.id ?? i}>{columns.map((col) => <td key={col.label}>{col.render(row)}</td>)}</tr>
-              )) : (
-                <tr><td colSpan={columns.length || 1}>No records</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>,
+        <div className="report-print-view">{reportDocument}</div>,
         document.body,
       )}
     </section>
@@ -8703,7 +8796,7 @@ function CannibalizationDetail({ record }) {
 // Vehicle profile: parts moved off / onto THIS vehicle, with a button to
 // record a new transfer (source pre-filled). Lives on the profile, not in
 // the sidebar.
-function VehicleCannibalizationCard({ vehicle, user, vehicles, setNotice, onSaved }) {
+function VehicleCannibalizationCard({ vehicle, user, vehicles, setNotice, onSaved, compact = false }) {
   const [records, setRecords] = useState([]);
   const [formOpen, setFormOpen] = useState(false);
   const [viewing, setViewing] = useState(null);
@@ -8712,15 +8805,38 @@ function VehicleCannibalizationCard({ vehicle, user, vehicles, setNotice, onSave
   const canRecord = canDo(user, 'cannibalization.record') && !['Inactive', 'Decommissioned'].includes(vehicle.status);
 
   useEffect(() => {
-    if (!canView) return undefined;
+    if (!canView || compact) return undefined;
     let cancelled = false;
     api.get('/cannibalizations').then((res) => {
       if (!cancelled) setRecords((res.data ?? []).filter((r) => r.source_vehicle_id === vehicle.vehicle_id || r.destination_vehicle_id === vehicle.vehicle_id));
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [vehicle.vehicle_id, reloadKey, canView]);
+  }, [vehicle.vehicle_id, reloadKey, canView, compact]);
 
   if (!canView && !canRecord) return null;
+
+  if (compact) {
+    return (
+      <>
+        {canRecord && <button type="button" className="btn-sm ghost-button" onClick={() => setFormOpen(true)}><Icon name="plus" size={13} /> Record Cannibalization</button>}
+        <FormModal open={formOpen} title="Record Cannibalization" onClose={() => setFormOpen(false)} wide>
+          {formOpen && <CannibalizationRecordForm user={user} vehicles={vehicles} initialSourceId={vehicle.vehicle_id} onCancel={() => setFormOpen(false)} onSubmit={async (fd) => {
+            try {
+              await api.post('/cannibalizations', fd);
+              setNotice?.({ type: 'success', text: 'Cannibalization recorded. It now appears in both vehicles\' history.' });
+              setFormOpen(false);
+              setReloadKey((k) => k + 1);
+              onSaved?.();
+              return true;
+            } catch (error) {
+              showError(error, setNotice);
+              return false;
+            }
+          }} />}
+        </FormModal>
+      </>
+    );
+  }
 
   return (
     <section className="veh-card">
@@ -9813,22 +9929,6 @@ function ReportsModule({ lookups, onGenerate }) {
 // Icon/color per dashboard top-metric label, keyed by the exact label text the
 // backend returns (varies per role) — falls back to a plain blue chip for any
 // label not explicitly mapped.
-const DASHBOARD_METRIC_STYLES = {
-  'Total Vehicles': { icon: 'grid', bg: '#dbeafe', color: '#2563eb' },
-  'Available Vehicles': { icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
-  'Vehicles Under Maintenance': { icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
-  'Inactive Vehicles': { icon: 'archive', bg: '#fee2e2', color: '#dc2626' },
-  'Reported Issues': { icon: 'alert', bg: '#fee2e2', color: '#dc2626' },
-  'Reported Vehicle Issues': { icon: 'alert', bg: '#fee2e2', color: '#dc2626' },
-  'My Reported Issues': { icon: 'alert', bg: '#fee2e2', color: '#dc2626' },
-  'Upcoming Maintenance': { icon: 'calendar', bg: '#ede9fe', color: '#7c3aed' },
-  'Overdue Maintenance': { icon: 'alert', bg: '#fef3c7', color: '#d97706' },
-  'Total Maintenance Expenses': { icon: 'clipboard', bg: '#e0f2fe', color: '#0284c7' },
-  'Maintenance Records': { icon: 'clipboard', bg: '#e0f2fe', color: '#0284c7' },
-  'Recently Completed Maintenance': { icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
-  'Vehicles Needing Attention': { icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
-};
-const DASHBOARD_METRIC_STYLE_DEFAULT = { icon: 'grid', bg: '#dbeafe', color: '#2563eb' };
 
 // NOTE: no "In Use" card — the status exists in the DB enum but this system
 // tracks availability only (no dispatch flow ever sets a vehicle to In Use).
@@ -10793,7 +10893,7 @@ function withNoteColumn(columns, render, { label = 'Note', width = '16%' } = {})
 // Collapses a row's action icons behind a single "…" button; clicking it
 // opens a small popover with the icons (rendered in a portal so table
 // overflow never clips it). Keeps narrow Action columns tidy.
-function RowActionsMenu({ children }) {
+function RowActionsMenu({ children, alwaysVisible = false }) {
   // Only worth hiding behind "…" when there are several actions; one or two
   // icons fit in the cell, so they just show.
   const actionCount = Children.toArray(children).length;
@@ -10822,8 +10922,8 @@ function RowActionsMenu({ children }) {
     const r = btnRef.current.getBoundingClientRect();
     setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
   };
-  if (actionCount <= 2) {
-    return <div className="row-actions" style={{ flexWrap: 'nowrap', justifyContent: 'center' }}>{children}</div>;
+  if (alwaysVisible || actionCount <= 2) {
+    return <div className={`row-actions${alwaysVisible ? ' row-actions-visible' : ''}`} style={{ flexWrap: 'nowrap', justifyContent: 'center' }}>{children}</div>;
   }
   return (
     <>
@@ -10909,7 +11009,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
       locked: true,
       className: 'cell-center',
       render: (row) => (
-        <RowActionsMenu>
+        <RowActionsMenu alwaysVisible>
           {row.maintenance_ticket && onViewTicket ? (
             <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id })} type="button" title={`View Ticket #${row.maintenance_ticket.ticket_id}`} aria-label={`View Ticket #${row.maintenance_ticket.ticket_id}`}><Icon name="eye" size={14} /></button>
           ) : (
@@ -10938,7 +11038,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
       width: '6%',
       className: 'cell-center',
       render: (row) => (
-        <RowActionsMenu>
+        <RowActionsMenu alwaysVisible>
           {row.maintenance_ticket && onViewTicket ? (
             <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id })} type="button" title={`View Ticket #${row.maintenance_ticket.ticket_id}`} aria-label={`View Ticket #${row.maintenance_ticket.ticket_id}`}><Icon name="eye" size={14} /></button>
           ) : (
@@ -11071,16 +11171,14 @@ function MaintenanceRecordCard({ record, onClick }) {
   const stagesDone = stageIndex + 1;
 
   return (
-    <div className="ticket-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
+    <div className="ticket-card maintenance-record-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(); } }}>
+      <div className="ticket-card-top">
+        <span className="ticket-card-id">Record #{record.maintenance_id}</span>
+        <StatusBadge value={record.progress_status} />
+      </div>
+      <div className="maintenance-record-source"><StatusBadge value={record.source} /></div>
       <div className="ticket-card-content-wrapper">
         <div className="ticket-card-info">
-          <div className="ticket-card-top">
-            <span className="ticket-card-id">#{record.maintenance_id}</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <StatusBadge value={record.source} />
-              <StatusBadge value={record.progress_status} />
-            </div>
-          </div>
           <p className="ticket-card-title">{record.maintenance_type}</p>
           <p className="ticket-card-vehicle">
             {record.vehicle?.vehicle_name}{record.vehicle?.plate_number ? ` · ${record.vehicle.plate_number}` : ''}
@@ -11188,6 +11286,8 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
           )}
         </div>
 
+        <div className="maintenance-record-layout">
+          <div className="maintenance-record-main">
         {/* Progress trail — where this record actually sits, not just a
             status word. Filled/checked nodes are stages already passed. */}
         <div className="maintenance-progress">
@@ -11236,7 +11336,9 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
             {formatDate(record.date_started)} — {formatDate(record.date_completed)}
           </div>
         </div>
+          </div>
 
+          <aside className="maintenance-record-sidebar" aria-label="Verification and completion details">
         {/* Proof shown inline — the whole point of this view over the plain
             edit form is not having to click away just to see it. */}
         {record.receipt_url && (
@@ -11322,6 +11424,8 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
             />
           </div>
         )}
+          </aside>
+        </div>
       </div>
     </ModulePanel>
   );
@@ -11534,7 +11638,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
   ];
 }
 
-const RECURRENCE_LABEL = { 1: 'Monthly', 3: 'Quarterly', 6: 'Every 6 mo', 12: 'Yearly' };
+const RECURRENCE_LABEL = { 1: 'Monthly', 3: 'Every 3 months', 6: 'Every 6 months', 12: 'Every 12 months' };
 
 // #11 — a schedule is overdue when it's still 'Scheduled' but its date has
 // already passed (compared date-only, so "today" is never overdue).
@@ -11566,7 +11670,102 @@ function scheduleUrgencyBucket(row) {
 // Deliberately NOT one big click target: unlike a Maintenance Record, a
 // schedule has no detail page to open, and a whole-card click would fight
 // with the action buttons it needs to carry.
-function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onViewVehicle, onApprove, onDecline }) {
+function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions }) {
+  const overdue = isScheduleOverdue(row);
+  const completedRecord = row.resulting_maintenance;
+  const recurrence = row.recurrence_months ? (RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`) : 'One-time';
+  const dateLabel = `${formatDate(row.scheduled_date)}${row.scheduled_time ? ` · ${String(row.scheduled_time).slice(0, 5)}` : ''}`;
+  const linkedTicket = row.resulting_ticket_id && actions.onViewTicket;
+  const linkedRecord = row.resulting_maintenance_id && actions.onViewRecord;
+  const statusMessage = row.status === 'Pending Approval'
+    ? 'This schedule is waiting for an administrator to review it.'
+    : row.status === 'Declined'
+      ? 'This schedule was declined and needs review before it can be booked again.'
+      : linkedTicket
+        ? 'This scheduled service has been converted to a maintenance ticket. Follow the ticket for repair progress.'
+        : row.status === 'Completed' && completedRecord && completedRecord.progress_status !== 'Completed'
+          ? 'The scheduled work is complete. The linked maintenance record is waiting for custodian verification.'
+          : row.status === 'Completed'
+            ? completedRecord ? 'The scheduled service and its verification are complete.' : 'The scheduled maintenance is marked complete.'
+            : 'Review the service details, assignment, and location below.';
+  return (
+    <ModulePanel>
+      <div className="maintenance-schedule-detail">
+        <button type="button" className="ghost-button schedule-detail-back" onClick={onBack}><Icon name="arrowLeft" size={15} /> Maintenance Schedules</button>
+        <header className={`schedule-detail-hero${overdue ? ' is-overdue' : ''}`}>
+          <div className="schedule-detail-hero-main">
+            <button className="schedule-detail-vehicle-photo" type="button" disabled={!actions.onViewVehicle || !row.vehicle} onClick={() => actions.onViewVehicle?.(row.vehicle)} aria-label={row.vehicle ? `Open ${row.vehicle.vehicle_name} vehicle profile` : undefined}>
+              {row.vehicle?.photo_url ? <img src={resolvePhotoUrl(row.vehicle.photo_url)} alt={row.vehicle.vehicle_name} /> : <Icon name="vehicle" size={26} />}
+            </button>
+            <div className="schedule-detail-heading">
+              <div className="schedule-detail-eyebrow">Maintenance schedule <span>#{row.schedule_id}</span></div>
+              <h2>{row.maintenance_type}</h2>
+              <p>{row.vehicle?.vehicle_name || 'Vehicle not assigned'}{row.vehicle?.plate_number ? <span> · {row.vehicle.plate_number}</span> : null}</p>
+            </div>
+          </div>
+          <div className="schedule-detail-status">
+            <TicketStatusBadge value={row.status} />
+            {overdue && <span className="sch-overdue-pill">OVERDUE</span>}
+          </div>
+        </header>
+
+        <div className="schedule-detail-layout">
+          <section className="schedule-detail-main">
+            <div className="schedule-detail-section-heading">
+              <div><span className="schedule-detail-kicker">Service plan</span><h3>Schedule information</h3></div>
+              <span className="schedule-detail-count"><Icon name="calendar" size={14} /> Schedule #{row.schedule_id}</span>
+            </div>
+            <dl className="schedule-detail-facts">
+              <div className={`schedule-detail-fact${overdue ? ' is-alert' : ''}`}><dt><Icon name="calendar" size={15} /> Scheduled date</dt><dd>{dateLabel}</dd></div>
+              <div className="schedule-detail-fact"><dt><Icon name="undo" size={15} /> Repeat</dt><dd>{recurrence}</dd></div>
+              <div className="schedule-detail-fact"><dt><Icon name="wrench" size={15} /> Assigned mechanic</dt><dd>{row.assigned_to_user?.name ? <><TicketPersonnelAvatars people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} /> {row.assigned_to_user.name}{String(row.assigned_to) === String(currentUser?.id) && <span className="sch-you-tag">You</span>}</> : <span className="muted">Unassigned</span>}</dd></div>
+              <div className="schedule-detail-fact"><dt><Icon name="pin" size={15} /> Service location</dt><dd>{row.service_location || <span className="muted">Not set</span>}</dd></div>
+              <div className="schedule-detail-fact"><dt><Icon name="vehicle" size={15} /> Vehicle</dt><dd>{row.vehicle?.vehicle_name || 'Not assigned'}{row.vehicle?.plate_number ? <span className="schedule-detail-subvalue">{row.vehicle.plate_number}</span> : null}</dd></div>
+              <div className="schedule-detail-fact"><dt><Icon name="checkCircle" size={15} /> Schedule status</dt><dd><TicketStatusBadge value={row.status} />{overdue && <span className="schedule-detail-overdue-text">Past due</span>}</dd></div>
+            </dl>
+            {row.notes && <section className="schedule-detail-notes"><div className="schedule-detail-section-heading"><div><span className="schedule-detail-kicker">Additional details</span><h3>Schedule notes</h3></div></div><p>{row.notes}</p></section>}
+            {row.status === 'Declined' && row.decline_reason && <section className="schedule-detail-notes is-declined"><div className="schedule-detail-section-heading"><div><span className="schedule-detail-kicker">Review outcome</span><h3>Decline reason</h3></div></div><p>{row.decline_reason}</p></section>}
+          </section>
+
+          <aside className="schedule-detail-side">
+            <section className="schedule-detail-workflow">
+              <span className="schedule-detail-kicker">Workflow</span>
+              <div className="schedule-detail-workflow-title"><span className="schedule-detail-workflow-icon"><Icon name={linkedTicket ? 'ticket' : linkedRecord ? 'wrench' : 'calendar'} size={17} /></span><h3>{linkedTicket ? 'Maintenance ticket' : linkedRecord ? 'Maintenance record' : row.status === 'Pending Approval' ? 'Approval pending' : 'Schedule tracking'}</h3></div>
+              <p>{statusMessage}</p>
+              {linkedTicket && <button type="button" className="btn-view-action sch-linked-action schedule-detail-link" onClick={() => actions.onViewTicket({ ticket_id: row.resulting_ticket_id })}><Icon name="ticket" size={15} /> Open Ticket #{row.resulting_ticket_id}</button>}
+              {linkedRecord && <button type="button" className="btn-view-action sch-linked-action schedule-detail-link" onClick={() => actions.onViewRecord(row)}><Icon name="wrench" size={15} /> Open Record #{row.resulting_maintenance_id}</button>}
+              {row.status === 'Completed' && completedRecord && <div className={`schedule-detail-verification${completedRecord.progress_status === 'Completed' ? ' is-done' : ''}`}><span>{completedRecord.progress_status === 'Completed' ? 'Verification complete' : 'Record awaiting verification'}</span><strong>{completedRecord.date_completed ? formatDate(completedRecord.date_completed) : completedRecord.progress_status}</strong></div>}
+            </section>
+            <section className="schedule-detail-actions"><span className="schedule-detail-kicker">Available actions</span><h3>Schedule actions</h3><MaintenanceScheduleActions row={row} currentUser={currentUser} {...actions} /></section>
+          </aside>
+        </div>
+      </div>
+    </ModulePanel>
+  );
+}
+
+function MaintenanceScheduleActions({ row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline }) {
+  const isMine = currentUser?.id != null && String(row.assigned_to) === String(currentUser.id);
+  const canComplete = row.status === 'Scheduled' && !row.resulting_ticket_id && onComplete && isMine;
+  const becameTicket = row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket;
+  return (
+    <div className="sch-card-actions">
+      {canComplete && <button className="btn-confirm-action icon-btn" onClick={() => onComplete(row)} type="button" title="Mark as Done" aria-label="Mark as Done"><Icon name="checkCircle" size={14} /></button>}
+      {becameTicket && <button className="btn-view-action sch-linked-action" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" title={`This schedule became Ticket #${row.resulting_ticket_id} — open it`}><Icon name="ticket" size={14} /> Ticket #{row.resulting_ticket_id}</button>}
+      {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className="btn-view-action sch-linked-action" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record"><Icon name="wrench" size={14} /> Record #{row.resulting_maintenance_id}</button>}
+      {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className="btn-confirm-action icon-btn" onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} /></button>}
+      {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className="btn-delete-action icon-btn" onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} /></button>}
+      {canDo(currentUser, 'schedule.edit') && <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>}
+      {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className="btn-view-action icon-btn" onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} /></button>}
+      {row.status === 'Cancelled'
+        ? canDo(currentUser, 'schedule.restore') && onRestore && <button className="btn-confirm-action icon-btn" onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /></button>
+        : canDo(currentUser, 'schedule.delete') && <button className="btn-delete-action icon-btn" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /></button>}
+    </div>
+  );
+}
+
+function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onViewVehicle, onViewSchedule, onApprove, onDecline }) {
+  const [notesExpanded, setNotesExpanded] = useState(false);
   const currentUserId = currentUser?.id;
   const isMine = currentUserId != null && String(row.assigned_to) === String(currentUserId);
   const overdue = isScheduleOverdue(row);
@@ -11579,107 +11778,124 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
   const canComplete = row.status === 'Scheduled' && !row.resulting_ticket_id && onComplete && isMine;
   const becameTicket = row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket;
 
-  const canView = Boolean(onViewVehicle && row.vehicle);
+  const canViewSchedule = Boolean(onViewSchedule);
+  const canViewVehicle = Boolean(onViewVehicle && row.vehicle);
+  const statusClass = String(row.status ?? 'unknown').toLowerCase().replace(/[^a-z]+/g, '-');
+  const ticketStatusClass = ({
+    Scheduled: 'ticket-open',
+    'Pending Approval': 'ticket-formaint',
+    Completed: 'ticket-done',
+    Cancelled: 'ticket-cancelled',
+    Declined: 'ticket-declined',
+  })[row.status] ?? '';
+  const vehicleName = row.vehicle?.vehicle_name || 'Vehicle not specified';
 
   return (
     <div
-      className={`sch-card sch-${String(row.status).toLowerCase().replace(/[^a-z]+/g, '-')}${overdue ? ' is-overdue' : ''}`}
-      style={{ cursor: canView ? 'pointer' : 'default' }}
-      onClick={canView ? () => onViewVehicle(row.vehicle) : undefined}
-      role={canView ? 'button' : undefined}
-      tabIndex={canView ? 0 : undefined}
-      onKeyDown={canView ? (e) => { if (e.key === 'Enter') onViewVehicle(row.vehicle); } : undefined}
+      className={`sch-card sch-${String(row.status).toLowerCase().replace(/[^a-z]+/g, '-')}${overdue ? ' is-overdue' : ''}${row.status === 'Completed' && resulting && resulting.progress_status !== 'Completed' ? ' sch-awaiting-verification' : ''}`}
+      style={{ cursor: canViewSchedule ? 'pointer' : 'default' }}
+      onClick={canViewSchedule ? () => onViewSchedule(row) : undefined}
+      role={canViewSchedule ? 'link' : undefined}
+      tabIndex={canViewSchedule ? 0 : undefined}
+      onKeyDown={canViewSchedule ? (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onViewSchedule(row); } } : undefined}
     >
       <div className="sch-card-head">
-        <span className="sch-card-id">Schedule #{row.schedule_id}</span>
-        <span className="sch-card-badges">
-          <TicketStatusBadge value={row.status} />
-          {overdue && <span className="sch-overdue-pill">OVERDUE</span>}
-        </span>
+        <div className="sch-card-heading">
+          <h4 className="sch-card-title" title={row.maintenance_type}>{row.maintenance_type || 'Maintenance'}</h4>
+          <span className="sch-card-id">Schedule #{row.schedule_id}</span>
+        </div>
+        <div className="sch-card-statuses">
+          <span className={`sch-status-badge ${ticketStatusClass || `is-${statusClass}`}`}>{row.status}</span>
+          {overdue && <span className="sch-overdue-pill"><Icon name="alert" size={12} /> Overdue</span>}
+        </div>
       </div>
 
       <div className="sch-card-main">
-        <div className="sch-card-titles">
-          <p className="sch-card-title">{row.maintenance_type}</p>
-          <p className="sch-card-vehicle">
-            {row.vehicle?.vehicle_name}{row.vehicle?.plate_number ? <span className="sch-card-plate"> · {row.vehicle.plate_number}</span> : null}
-          </p>
+        <div className="sch-card-vehicle-info">
+          <strong className="sch-card-vehicle-name" title={vehicleName}>{vehicleName}</strong>
+          {row.vehicle?.plate_number && <span className="sch-card-plate">{row.vehicle.plate_number}</span>}
         </div>
-        <div className="sch-card-photo">
+        <button className="sch-card-photo sch-card-vehicle-link" type="button" disabled={!canViewVehicle} aria-label={canViewVehicle ? `Open ${row.vehicle.vehicle_name} vehicle profile` : undefined} title={canViewVehicle ? 'Open vehicle profile' : undefined} onClick={(e) => { e.stopPropagation(); onViewVehicle?.(row.vehicle); }}>
           {row.vehicle?.photo_url
             ? <img src={resolvePhotoUrl(row.vehicle.photo_url)} alt={row.vehicle.vehicle_name} />
             : <Icon name="vehicle" size={26} />}
-        </div>
+        </button>
+      </div>
+
+      <div className={`sch-card-date${overdue ? ' is-overdue' : ''}`}>
+        <span className="sch-detail-icon"><Icon name="calendar" size={15} /></span>
+        <div><span className="sch-card-detail-label">Scheduled date &amp; time</span><strong>{formatDate(row.scheduled_date)}{row.scheduled_time ? ` · ${String(row.scheduled_time).slice(0, 5)}` : ''}</strong></div>
       </div>
 
       <dl className="sch-card-meta">
-        <div className={overdue ? 'is-alert' : ''}>
-          <dt><Icon name="calendar" size={13} /> When</dt>
-          <dd>{formatDate(row.scheduled_date)}{row.scheduled_time ? ` · ${String(row.scheduled_time).slice(0, 5)}` : ''}</dd>
-        </div>
         <div>
-          <dt><Icon name="undo" size={13} /> Repeats</dt>
-          <dd>{row.recurrence_months ? (RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`) : 'One-time'}</dd>
+          <dt><Icon name="undo" size={14} /> Recurrence</dt>
+          <dd>{row.recurrence_months ? (RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} months`) : 'One-time'}</dd>
         </div>
-        <div>
-          <dt><Icon name="wrench" size={13} /> Mechanic</dt>
+        <div className="sch-mechanic-detail">
+          <dt><Icon name="wrench" size={14} /> Assigned mechanic</dt>
           <dd>
             {row.assigned_to_user?.name
-              ? <><TicketPersonnelAvatars people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} /> {row.assigned_to_user.name}{isMine && <span className="sch-you-tag">You</span>}</>
+              ? <><TicketPersonnelAvatars people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} /><span>{row.assigned_to_user.name}</span>{isMine && <span className="sch-you-tag">You</span>}</>
               : <span className="muted">Unassigned</span>}
           </dd>
         </div>
         <div>
-          <dt><Icon name="pin" size={13} /> Location</dt>
+          <dt><Icon name="pin" size={14} /> Service location</dt>
           <dd>{row.service_location || <span className="muted">Not set</span>}</dd>
         </div>
       </dl>
 
+      <div className="sch-card-notes">
+        <strong>Schedule notes</strong>
+        {row.notes ? <>
+          <p className={notesExpanded ? 'is-expanded' : ''}>{row.notes}</p>
+          {(row.notes.length > 80 || row.notes.includes('\n')) && <button type="button" aria-expanded={notesExpanded} onClick={(event) => { event.stopPropagation(); setNotesExpanded((expanded) => !expanded); }}>{notesExpanded ? 'Show less' : 'Show more'}</button>}
+        </> : <p className="sch-no-notes">No notes provided</p>}
+      </div>
+
       {/* Traceability, same as the table's Status column: "Completed" alone
           doesn't say whether the record it produced was ever verified. */}
       {row.status === 'Completed' && resulting && (
-        <div style={{ marginBottom: 8 }}>
+        <div className="sch-record-verification">
           {resulting.progress_status === 'Completed' ? (
-            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}>
-              Done {formatDate(resulting.date_completed)}
+            <span className="is-done">
+              Verification complete · {formatDate(resulting.date_completed)}
             </span>
           ) : (
-            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }} title="The calendar task is done, but the record it created still needs Custodian verification.">
-              Record: {resulting.progress_status}
+            <span className="is-pending" title="The schedule is complete, but its maintenance record still requires Custodian verification.">
+              Maintenance record: {resulting.progress_status}
             </span>
           )}
         </div>
       )}
 
-      {row.status === 'Declined' && row.decline_reason && (
-        <p className="muted" style={{ fontSize: '0.74rem', margin: '0 0 8px', color: '#991b1b' }}>
-          <strong>Declined:</strong> {row.decline_reason}
-        </p>
-      )}
+      {row.status === 'Declined' && row.decline_reason && <p className="sch-decline-reason"><strong>Declined:</strong> {row.decline_reason}</p>}
 
       {/* ticket-card-bottom pins this to the bottom of the card (margin-top:
           auto) the same way TicketCard's own footer does, so action buttons
           line up across a row of cards regardless of how much optional
           content (overdue flag, location, verification badge) a given card
           has above it. */}
-      <div className="sch-card-actions" onClick={(e) => e.stopPropagation()}>
+      <div className="sch-card-actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+        {canViewSchedule && <button className="sch-action is-info" onClick={() => onViewSchedule(row)} type="button"><Icon name="eye" size={14} /> View</button>}
         {canComplete && (
-          <button className="btn-confirm-action icon-btn" onClick={() => onComplete(row)} type="button" title="Mark as Done" aria-label="Mark as Done"><Icon name="checkCircle" size={14} /></button>
+          <button className="sch-action is-success" onClick={() => onComplete(row)} type="button"><Icon name="checkCircle" size={14} /> Complete</button>
         )}
         {becameTicket && (
-          <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" title={`This schedule became Ticket #${row.resulting_ticket_id} — open it`} aria-label={`Open Ticket #${row.resulting_ticket_id}`}><Icon name="ticket" size={14} /></button>
+          <button className="sch-action is-primary" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button"><Icon name="ticket" size={14} /> View ticket #{row.resulting_ticket_id}</button>
         )}
         {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && (
-          <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label="View Maintenance Record"><Icon name="wrench" size={14} /></button>
+          <button className="sch-action is-success" onClick={() => onViewRecord(row)} type="button"><Icon name="wrench" size={14} /> View record #{row.resulting_maintenance_id}</button>
         )}
         {/* Admin reviews a Custodian's booked schedule before it goes live —
             see scheduleColumns' matching Action column for the full
             reasoning. A Declined row can still be approved directly. */}
         {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && (
-          <button className="btn-confirm-action icon-btn" onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} /></button>
+          <button className="sch-action is-success" onClick={() => onApprove(row)} type="button"><Icon name="checkCircle" size={14} /> Approve</button>
         )}
         {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && (
-          <button className="btn-delete-action icon-btn" onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} /></button>
+          <button className="sch-action is-danger" onClick={() => onDecline(row)} type="button"><Icon name="close" size={14} /> Decline</button>
         )}
         {/* Edit/Delete/Restore are Custodian-only abilities (config/
             permissions.php — Admin doesn't hold schedule.edit/.delete/
@@ -11687,23 +11903,25 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
             actually accepts — see scheduleColumns' matching Action column
             for the full reasoning. Any Custodian may edit any schedule in
             their barangay. */}
-        {canDo(currentUser, 'schedule.edit') && (
-          <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
-        )}
         {/* schedule.reassign (Admin only) — Admin's one remaining lever over
             an already-booked schedule. */}
         {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && (
-          <button className="btn-view-action icon-btn" onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} /></button>
+          <button className="sch-action is-warning" onClick={() => onReassign(row)} type="button"><Icon name="undo" size={14} /> Reassign</button>
         )}
-        {/* Same swap as the table: a cancelled schedule offers Restore, not a
-            Delete that would just re-cancel something already cancelled. */}
-        {row.status === 'Cancelled'
-          ? canDo(currentUser, 'schedule.restore') && onRestore && (
-            <button className="btn-confirm-action icon-btn" onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /></button>
-          )
-          : canDo(currentUser, 'schedule.delete') && (
-            <button className="btn-delete-action icon-btn" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /></button>
+        {(canDo(currentUser, 'schedule.edit') || canDo(currentUser, row.status === 'Cancelled' ? 'schedule.restore' : 'schedule.delete')) && <div className="sch-card-edit-cancel">
+          {canDo(currentUser, 'schedule.edit') && (
+            <button className="sch-action is-info" onClick={() => onEdit(row)} type="button"><Icon name="edit" size={14} /> Edit</button>
           )}
+          {/* Same swap as the table: a cancelled schedule offers Restore, not a
+              Delete that would just re-cancel something already cancelled. */}
+          {row.status === 'Cancelled'
+            ? canDo(currentUser, 'schedule.restore') && onRestore && (
+              <button className="sch-action is-success" onClick={() => onRestore(row)} type="button"><Icon name="undo" size={14} /> Restore</button>
+            )
+            : canDo(currentUser, 'schedule.delete') && (
+              <button className="sch-action is-danger" onClick={() => onDelete(row)} type="button"><Icon name="trash" size={14} /> Cancel</button>
+            )}
+        </div>}
       </div>
     </div>
   );
@@ -12077,6 +12295,16 @@ function prettifyKey(key) {
   return key.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function formatReportValue(key, value) {
+  if (value == null || value === '') return '—';
+  if (typeof value === 'object') return resolveRelationLabel(value) ?? JSON.stringify(value);
+  if (/(date|_at)$/i.test(key) && !Number.isNaN(Date.parse(value))) return formatDate(value);
+  if (/(cost|amount|expense|price)$/i.test(key) && Number.isFinite(Number(value))) {
+    return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value));
+  }
+  return String(value);
+}
+
 function reportColumns(rows) {
   if (!rows?.length) {
     return [{ label: 'Result', render: () => 'No records' }];
@@ -12098,7 +12326,7 @@ function reportColumns(rows) {
   const plainKeys = Object.keys(sample).filter((key) => !relationKeys.includes(key) && !hiddenKeys.has(key));
   const plainColumns = plainKeys.slice(0, 8).map((key) => ({
     label: prettifyKey(key),
-    render: (row) => String(row[key] ?? '-'),
+    render: (row) => formatReportValue(key, row[key]),
   }));
 
   return [...relationColumns, ...plainColumns];
@@ -13624,13 +13852,10 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
     if (draft.index === index) resetDraft();
   };
 
-  const subissueBoxStyle = { border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, background: '#fff' };
-  const subissueBoxHeadStyle = { display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', marginBottom: 10 };
-
   return (
-    <div className="subissue-two-col" style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) minmax(260px, 1fr)', gap: 18, alignItems: 'start' }}>
-      <div style={subissueBoxStyle}>
-        <span style={subissueBoxHeadStyle}>Sub-Issue</span>
+    <div className="subissue-two-col">
+      <div className="subissue-editor-panel">
+        <span className="subissue-editor-title">Add a specific problem</span>
         <label>
           <span>Subissue</span>
           <input
@@ -13671,10 +13896,10 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
         </div>
       </div>
 
-      <div style={subissueBoxStyle}>
-        <span style={subissueBoxHeadStyle}>Saved Subissues</span>
+      <div className="subissue-editor-panel">
+        <span className="subissue-editor-title">Added problems <span className="subissue-count">{items.length}</span></span>
         {items.length === 0 ? (
-          <p className="muted" style={{ fontSize: '0.85rem' }}>Nothing added yet.</p>
+          <div className="subissue-empty-state"><span className="subissue-empty-icon"><Icon name="wrench" size={17} /></span><strong>No problems added yet</strong><span>Add each specific repair item here. You can include multiple problems on one ticket.</span></div>
         ) : (
           <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {items.map((it, index) => (
@@ -13928,6 +14153,11 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
                   <div className="ticket-preview-badges">
                     <StatusBadge value={ticket.vehicle?.status} />
                     <StatusBadge value={ticket.vehicle?.condition} />
+                  </div>
+                  <div className="ticket-overview-progress" aria-label="Current repair progress">
+                    <span>Repair progress</span>
+                    <TicketStatusBadge value={ticket.status} />
+                    <TicketStageBadge ticket={ticket} variant="pill" />
                   </div>
                 </div>
               </div>
@@ -14791,7 +15021,12 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
           full-width dropdowns — same reasoning as Inspect Ticket's own
           hand-built form. Reuses the .smart-form input/label styling so
           every field still looks consistent with the rest of the app. */}
-      <form className="smart-form ticket-create-form" onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <form className="smart-form ticket-create-form" onSubmit={handleSubmit} noValidate>
+        <header className="ticket-create-header">
+          <div className="ticket-create-breadcrumb">Maintenance Tickets <span aria-hidden="true">›</span> New Proposal</div>
+          <h2>Create New Ticket</h2>
+          <p>Create a maintenance proposal for Admin review. Choose a repair method, select the vehicle, and describe the work needed.</p>
+        </header>
         {validationLines && (
           <div className="toast-notice-overlay" onClick={() => setValidationLines(null)}>
             <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
@@ -14814,7 +15049,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
             specific repair type already implies the issue is diagnosed. */}
         <section className="veh-card">
           <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>How Is This Being Reported?</h4></div>
-          <div style={{ padding: 18 }}>
+          <div className="ticket-method-body">
             <div className="entry-mode-toggle" role="radiogroup" aria-label="Entry mode">
               {ENTRY_MODE_OPTIONS.map((opt) => {
                 const checked = liveValues.entry_mode === opt.value;
@@ -14824,15 +15059,20 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
                     type="button"
                     role="radio"
                     aria-checked={checked}
-                    className={`entry-mode-btn entry-mode-btn--${opt.value} ${checked ? 'primary-button' : 'ghost-button'}`}
+                    className={`entry-mode-btn ticket-method-card ${checked ? 'is-selected' : ''}`}
                     onClick={() => selectEntryMode(opt.value)}
                   >
-                    {opt.label}
+                    <span className="ticket-method-icon"><Icon name="wrench" size={17} /></span>
+                    <span className="ticket-method-copy">
+                      <strong>{opt.label}</strong>
+                      <small>{opt.value === 'external' ? 'Send the vehicle to an outside service provider.' : 'Assigned maintenance personnel will handle the repair.'}</small>
+                    </span>
+                    <span className="ticket-method-radio" aria-hidden="true" />
                   </button>
                 );
               })}
             </div>
-            <p className="muted" style={{ margin: '10px 0 0', fontSize: '0.82rem' }}>
+            <p className="muted ticket-method-hint">
               {liveValues.entry_mode == null
                 ? 'Pick whichever matches what you already know about this repair.'
                 : preDiagnosed
@@ -14881,7 +15121,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
 
         <section className="veh-card">
           <div className="veh-card-head"><Icon name="vehicle" size={16} /><h4>Vehicle & Assignment</h4></div>
-          <div className="ticket-form-grid-2">
+          <div className="ticket-form-grid-2 ticket-vehicle-grid">
             <label>
               <span>Vehicle <span className="required-asterisk">*</span></span>
               <select required value={liveValues.vehicle_id ?? ''} onChange={(e) => setField('vehicle_id', e.target.value)}>
@@ -14930,7 +15170,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
 
         <section className="veh-card veh-card-form">
           <div className="veh-card-head"><Icon name="alert" size={16} /><h4>Issue Details</h4></div>
-          <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="ticket-issue-fields">
             <div className="ticket-form-grid-2" style={{ padding: 0 }}>
               <label style={{ gridColumn: '1 / -1' }}>
                 <span>Ticket Title <span className="required-asterisk">*</span></span>
@@ -14941,7 +15181,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
               <span>Details <span className="required-asterisk">*</span></span>
               <textarea required rows={3} value={liveValues.ticket_description ?? ''} onChange={(e) => setField('ticket_description', e.target.value)} />
             </label>
-            <label style={{ maxWidth: 260 }}>
+            <label className="ticket-priority-field">
               <span>Priority <span className="required-asterisk">*</span></span>
               <select required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
                 <option value="">{' '}</option>
@@ -15222,7 +15462,12 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           </p>
         </div>
       )}
-      <form className="smart-form ticket-create-form" onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <form className="smart-form ticket-create-form" onSubmit={handleSubmit} noValidate>
+        <header className="ticket-create-header">
+          <div className="ticket-create-breadcrumb">Maintenance Tickets <span aria-hidden="true">›</span> New Proposal</div>
+          <h2>Create New Ticket</h2>
+          <p>Create a maintenance proposal for Admin review. Choose a repair method, select the vehicle, and describe the work needed.</p>
+        </header>
         {validationLines && (
           <div className="toast-notice-overlay" onClick={() => setValidationLines(null)}>
             <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
@@ -15239,7 +15484,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
 
         <section className="veh-card">
           <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>How Is This Being Reported?</h4></div>
-          <div style={{ padding: 18 }}>
+          <div className="ticket-method-body">
             <div className="entry-mode-toggle" role="radiogroup" aria-label="Entry mode">
               {modeOptions.map((opt) => {
                 const checked = pickerValue === opt.value;
@@ -15249,15 +15494,17 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
                     type="button"
                     role="radio"
                     aria-checked={checked}
-                    className={`entry-mode-btn entry-mode-btn--${opt.value} ${checked ? 'primary-button' : 'ghost-button'}`}
+                    className={`entry-mode-btn ticket-method-card ${checked ? 'is-selected' : ''}`}
                     onClick={() => selectEntryMode(opt.value)}
                   >
-                    {opt.label}
+                    <span className="ticket-method-icon"><Icon name="wrench" size={17} /></span>
+                    <span className="ticket-method-copy"><strong>{opt.label}</strong><small>{opt.value === 'external' ? 'Send the vehicle to an outside service provider.' : 'Assigned maintenance personnel will handle the repair.'}</small></span>
+                    <span className="ticket-method-radio" aria-hidden="true" />
                   </button>
                 );
               })}
             </div>
-            <p className="muted" style={{ margin: '10px 0 0', fontSize: '0.82rem' }}>
+            <p className="muted ticket-method-hint">
               {entryMode == null
                 ? 'Pick how this repair will be done.'
                 : 'Once an Admin approves and assigns a mechanic, it goes straight to repair.'}
@@ -15270,16 +15517,16 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           {/* The picker and the selected vehicle's info now sit side by side
               (one .ticket-form-grid-2 row) instead of the preview stacking
               full-width underneath — picker on the left, info on the right. */}
-          <div className="ticket-form-grid-2">
+          <div className="ticket-form-grid-2 ticket-vehicle-grid">
             <label>
               <span>Vehicle <span className="required-asterisk">*</span></span>
               <select required value={liveValues.vehicle_id ?? ''} onChange={(e) => setField('vehicle_id', e.target.value)}>
-                <option value="">{' '}</option>
+                <option value="">Select a vehicle</option>
                 {vehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
               </select>
             </label>
-            {selectedVehicle && (
-              <div className="ticket-preview-card ticket-preview-card--lg" style={{ alignSelf: 'start' }}>
+            <div className={`ticket-preview-card ticket-preview-card--lg${selectedVehicle ? '' : ' is-empty'}`}>
+              {selectedVehicle ? <>
                 {selectedVehicle.photo_url ? (
                   <img className="ticket-preview-photo ticket-preview-photo--lg" src={resolvePhotoUrl(selectedVehicle.photo_url)} alt={selectedVehicle.vehicle_name} />
                 ) : (
@@ -15287,11 +15534,16 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
                 )}
                 <div className="ticket-preview-body ticket-preview-body--lg">
                   <strong>{selectedVehicle.vehicle_name}</strong>
-                  <span>{selectedVehicle.plate_number} &middot; {selectedVehicle.category?.category_name ?? 'Unclassified'}</span>
-                  <span className="muted">{[selectedVehicle.brand, selectedVehicle.model].filter(Boolean).join(' ') || '—'} &middot; {selectedVehicle.current_location ?? 'No location on file'}</span>
+                  <span className="ticket-preview-plate">{selectedVehicle.plate_number || 'No plate / registration number'} <span>·</span> {selectedVehicle.category?.category_name ?? 'Unclassified'}</span>
+                  <span className="muted">{[selectedVehicle.brand, selectedVehicle.model].filter(Boolean).join(' ') || 'Make and model not recorded'}</span>
+                  <span className="muted">{selectedVehicle.current_location ?? 'No location on file'}</span>
+                  <span className="ticket-preview-badges">
+                    {selectedVehicle.status && <span className="ticket-preview-badge">{selectedVehicle.status}</span>}
+                    {selectedVehicle.condition && <span className="ticket-preview-badge">{selectedVehicle.condition}</span>}
+                  </span>
                 </div>
-              </div>
-            )}
+              </> : <div className="ticket-preview-empty-copy"><Icon name="vehicle" size={24} /><strong>Vehicle summary</strong><span>Select a vehicle to preview its details.</span></div>}
+            </div>
           </div>
           {!fromFlag && openReports.length > 0 && (
             <div style={{ margin: '0 18px 18px', padding: '12px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8 }}>
@@ -15330,14 +15582,14 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
 
         <section className="veh-card veh-card-form">
           <div className="veh-card-head"><Icon name="alert" size={16} /><h4>Issue Details</h4></div>
-          <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="ticket-issue-fields">
             {/* No Ticket Title field — it's automatic (vehicle + repair type),
                 and the Admin folds the ticket's own # into it on approval. */}
             <label>
               <span>Details <span className="required-asterisk">*</span></span>
               <textarea required rows={3} value={liveValues.ticket_description ?? ''} onChange={(e) => setField('ticket_description', e.target.value)} />
             </label>
-            <label style={{ maxWidth: 260 }}>
+            <label className="ticket-priority-field">
               <span>Priority <span className="required-asterisk">*</span></span>
               <select required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
                 <option value="">{' '}</option>
@@ -15351,11 +15603,11 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
         {isExternal && (
         <section className="veh-card veh-card-form">
           <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>External Shop Details</h4></div>
-          <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <p className="muted" style={{ margin: 0 }}>
+          <div className="ticket-external-fields">
+            <p className="muted ticket-section-help">
               Give the Admin a verifiable reason for sending this out and exactly what the shop is asked to do.
             </p>
-            <div className="ticket-form-grid-2" style={{ padding: 0 }}>
+            <div className="ticket-form-grid-2 ticket-external-grid">
               <label>
                 <span>Reason for Sending Out <span className="required-asterisk">*</span></span>
                 <select required value={liveValues.external_reason ?? ''} onChange={(e) => setField('external_reason', e.target.value)}>
@@ -15401,7 +15653,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
                 <input type="number" min="0" placeholder="e.g. 5000" value={liveValues.external_estimated_cost ?? ''} onChange={(e) => setField('external_estimated_cost', e.target.value)} />
               </label>
             </div>
-            <label>
+            <label className="ticket-external-scope">
               <span>Work to Be Done at the Shop <span className="required-asterisk">*</span></span>
               <textarea rows={3} placeholder="e.g. Diagnose and recharge A/C system, replace compressor if needed" value={liveValues.external_work_scope ?? ''} onChange={(e) => setField('external_work_scope', e.target.value)} />
             </label>
@@ -15412,8 +15664,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
         {isInHouse && (
         <section className="veh-card veh-card-form">
           <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>Sub-Issues</h4></div>
-          <div style={{ padding: 18 }}>
-            <p className="muted" style={{ marginTop: 0, marginBottom: 14 }}>
+          <div className="ticket-subissue-body">
+            <p className="muted ticket-section-help">
               List each specific problem you found, with its own maintenance type — different problems on the same ticket can need different kinds of repair. The Admin assigns one mechanic to the whole ticket when approving it.
             </p>
 
@@ -15428,7 +15680,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
         </section>
         )}
 
-        <div className="form-actions">
+        <div className="form-actions ticket-create-actions">
           <button className="ghost-button" onClick={() => { clearProposeDraft(); onBack(); }} type="button" disabled={submitting}>Cancel</button>
           <button className="primary-button" type="submit" disabled={submitting}>Submit for Admin Review</button>
         </div>
@@ -15892,17 +16144,7 @@ function VehicleFiles({ vehicleId, canManage, onRequestConfirmation }) {
             )}
           </div>
         ) : (
-          <div className="file-card-empty">No data</div>
-        )}
-        {canManage && (
-          <button type="button" className="file-card-dropzone veh-files-dropzone-trigger" onClick={() => openModal()}>
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M7 18a4.5 4.5 0 0 1-1-8.9A5.5 5.5 0 0 1 16.7 7 4.5 4.5 0 0 1 18 18" />
-              <path d="M12 12v7" />
-              <path d="M9.5 14.5 12 12l2.5 2.5" />
-            </svg>
-            <span>Drag file here</span>
-          </button>
+          <div className="file-card-empty"><Icon name="clipboard" size={18} /><span>No files yet. Vehicle documents and repair evidence will appear here.</span></div>
         )}
       </div>
       {modal}
@@ -16147,6 +16389,8 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
   const [editing, setEditing] = useState(new URLSearchParams(location.search).get('tab') === 'edit');
   const [decommissioning, setDecommissioning] = useState(false);
   const [readiness, setReadiness] = useState(null);
+  const [readinessLoaded, setReadinessLoaded] = useState(false);
+  const [readinessLoadFailed, setReadinessLoadFailed] = useState(false);
   const [checkingReadiness, setCheckingReadiness] = useState(false);
   // Live-tracks the Edit form's Vehicle Type select so switching a vehicle
   // to a Water category shows Hull Material/Engine Type immediately,
@@ -16166,7 +16410,9 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
 
   // Gap A — response-readiness state.
   const loadReadiness = useCallback(() => {
-    api.get(`/vehicles/${vehicleId}/readiness`).then((r) => setReadiness(r.data)).catch(() => setReadiness(null));
+    setReadinessLoaded(false);
+    setReadinessLoadFailed(false);
+    api.get(`/vehicles/${vehicleId}/readiness`).then((r) => setReadiness(r.data)).catch(() => { setReadiness(null); setReadinessLoadFailed(true); }).finally(() => setReadinessLoaded(true));
   }, [vehicleId]);
 
   useEffect(() => {
@@ -16269,10 +16515,20 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
   // Derived data for the redesigned overview dashboard.
   const hub = (allHubs ?? []).find((h) => h.name === vehicle.current_location);
   const isWater = (vehicle.category?.domain ?? 'Land') === 'Water';
+  const criticality = vehicle.criticality ?? defaultCriticalityFor(vehicle, lookups);
+  const criticalityClass = criticality === 'Critical' ? 'is-critical' : criticality === 'High' ? 'is-high' : 'is-normal';
   return (
     <ModulePanel description="Full profile, maintenance, and tickets for this vehicle.">
+      <div className="vehicle-profile-page">
       <div className="vehicle-profile-header">
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginLeft: 'auto' }}>
+        <div className="vehicle-profile-heading">
+          <h2>{vehicle.vehicle_name}</h2>
+          <div className="vehicle-profile-subtitle">
+            <span className="vehicle-profile-plate">{vehicle.category?.domain ?? 'Land'}.{vehicle.plate_number}</span>
+            <span>{vehicle.category?.category_name ?? 'Unassigned vehicle type'}</span>
+          </div>
+        </div>
+        <div className="vehicle-profile-actions">
           {canManage && vehicle.status !== 'Decommissioned' && !editing && (
             <button className="btn-sm primary-button" type="button" onClick={() => setEditing(true)}>
               <Icon name="edit" size={13} /> Edit Vehicle
@@ -16365,122 +16621,63 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
         </section>
       ) : (
       <>
-      <div className="veh-dash">
-        <div className="veh-dash-left">
+      <div className="vehicle-profile-dashboard">
+        <div className="vehicle-profile-overview">
           <section className="veh-card veh-info">
             <div className="veh-card-head"><Icon name={vehicleIconName(vehicle.category?.domain)} size={16} /><h4>Vehicle Information</h4></div>
             <div className="veh-info-body">
-              <div className="veh-info-identity">
-                <h3>{vehicle.vehicle_name}</h3>
-                <span>{vehicle.category?.domain ?? 'Land'}.{vehicle.plate_number}</span>
-              </div>
-              {vehicle.photo_url && (
+              {vehicle.photo_url ? (
                 <div className="veh-info-photo"><PhotoCell alt={vehicle.vehicle_name} url={vehicle.photo_url} /></div>
+              ) : (
+                <div className="veh-info-photo veh-info-photo-empty"><Icon name={vehicleIconName(vehicle.category?.domain)} size={42} /><span>No vehicle photo</span></div>
               )}
-              <dl className="veh-kv">
-                <div><dt>Vehicle Type</dt><dd>{vehicle.category?.category_name ?? 'Unassigned'}</dd></div>
+              <dl className="veh-kv vehicle-profile-specs">
+                <div><dt>{plateFieldLabel(vehicle.category?.domain ?? 'Land')}</dt><dd>{vehicle.plate_number ?? '-'}</dd></div>
                 <div><dt>Brand / Model</dt><dd>{`${vehicle.brand ?? '-'} ${vehicle.model ?? ''}`.trim() || '-'}</dd></div>
                 <div><dt>Year Model</dt><dd>{vehicle.year_model ?? '-'}</dd></div>
                 <div><dt>Capacity</dt><dd>{vehicle.capacity ?? '-'}</dd></div>
                 <div><dt>Color</dt><dd>{vehicle.vehicle_color ?? '-'}</dd></div>
-                {isWater && (
-                  <>
-                    <div><dt>Hull Material</dt><dd>{vehicle.hull_material ?? '-'}</dd></div>
-                    <div><dt>Engine Type</dt><dd>{vehicle.engine_type ?? '-'}</dd></div>
-                  </>
-                )}
+                {isWater && <><div><dt>Hull Material</dt><dd>{vehicle.hull_material ?? '-'}</dd></div><div><dt>Engine Type</dt><dd>{vehicle.engine_type ?? '-'}</dd></div></>}
                 <div><dt>Fuel Type</dt><dd>{vehicle.fuel_type ?? '-'}</dd></div>
                 {customValueRows(vehicle, lookups)}
               </dl>
             </div>
-            {vehicle.remarks && (
-              <div className="veh-remarks"><span className="veh-remarks-label">Remarks</span><p>{vehicle.remarks}</p></div>
-            )}
+            {vehicle.remarks && <div className="veh-remarks"><span className="veh-remarks-label">Remarks</span><p>{vehicle.remarks}</p></div>}
           </section>
-        </div>
 
-        <div className="veh-dash-right">
-          <div className="veh-status-row">
-            <section className="veh-card veh-keydates">
-              <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>Status &amp; Key Dates</h4></div>
-              <dl className="veh-kv">
-                <div><dt>Availability</dt><dd><StatusBadge value={vehicle.status} /></dd></div>
-                <div><dt>Condition</dt><dd><StatusBadge value={vehicle.condition} /></dd></div>
-                {readiness && READINESS_BADGE[readiness.state] && (
-                  <div><dt>Response Readiness</dt><dd>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.76rem', fontWeight: 700, padding: '3px 10px', borderRadius: 999, background: READINESS_BADGE[readiness.state].bg, color: READINESS_BADGE[readiness.state].color, border: `1px solid ${READINESS_BADGE[readiness.state].border}` }}>
-                      <Icon name={READINESS_BADGE[readiness.state].icon} size={11} /> {READINESS_BADGE[readiness.state].label}
-                    </span>
-                    {readiness.last_checked && <div className="muted" style={{ fontSize: '0.72rem', marginTop: 3 }}>Last checked {formatDate(readiness.last_checked)}</div>}
-                  </dd></div>
-                )}
-                {/* Confirmed via live review: a vehicle marked Under
-                    Maintenance had no visible path to WHY, forcing a
-                    separate hunt through Maintenance Tickets. */}
-                {readiness?.active_ticket_id && (
-                  <div><dt>Active Ticket</dt><dd>
-                    <button
-                      type="button"
-                      className="btn-view-action"
-                      style={{ fontSize: '0.78rem', padding: '3px 10px' }}
-                      onClick={() => navigate(`${basePath}/tickets/${readiness.active_ticket_id}`)}
-                    >
-                      {readiness.active_ticket_title ?? `Ticket #${readiness.active_ticket_id}`} →
-                    </button>
-                  </dd></div>
-                )}
-                {/* Kept beside the other at-a-glance status signals (not
-                    buried under specs) — this is how urgently a down unit of
-                    this type matters, same scale as the dashboard's
-                    Readiness & Criticality Watch. */}
-                <div><dt>Criticality</dt><dd>
-                  <span className={`risk-watch-tag${(vehicle.criticality ?? defaultCriticalityFor(vehicle, lookups)) === 'Critical' ? ' is-critical' : ''}`}>
-                    {(vehicle.criticality ?? defaultCriticalityFor(vehicle, lookups)).toUpperCase()}
+          <section className="veh-card veh-keydates vehicle-profile-operational">
+            <div className="veh-card-head"><Icon name="clipboard" size={16} /><div><h4>Operational status</h4><span className="vehicle-profile-card-subtitle">Readiness, service, and key dates</span></div></div>
+            <div className="vehicle-profile-status-body">
+              <div className="vehicle-profile-priority-status">
+                <div className="vehicle-profile-status-item"><span>Availability</span><StatusBadge value={vehicle.status} /></div>
+                <div className="vehicle-profile-status-item"><span>Condition</span><StatusBadge value={vehicle.condition} /></div>
+                <div className="vehicle-profile-status-item"><span>Response readiness</span>{readiness && READINESS_BADGE[readiness.state] ? (
+                  <span className="vehicle-readiness-badge" style={{ '--readiness-bg': READINESS_BADGE[readiness.state].bg, '--readiness-color': READINESS_BADGE[readiness.state].color, '--readiness-border': READINESS_BADGE[readiness.state].border }}>
+                    <Icon name={READINESS_BADGE[readiness.state].icon} size={13} /> {READINESS_BADGE[readiness.state].label}
                   </span>
-                  <div className="muted" style={{ fontSize: '0.72rem', marginTop: 3 }}>{vehicle.criticality ? 'Set for this vehicle' : 'From vehicle type'}</div>
-                </dd></div>
-                <div><dt>Current Location</dt><dd>{vehicle.current_location ?? '-'}</dd></div>
-                {vehicle.estimated_return_date && (
-                  <div><dt>Est. Return Date</dt><dd>{formatForecastDate(vehicle.estimated_return_date)}</dd></div>
-                )}
-                <div><dt>Date Added</dt><dd>{vehicle.created_at ? <QuietDate value={vehicle.created_at} /> : '-'}</dd></div>
-                <div><dt>Last Updated</dt><dd>{vehicle.updated_at ? <QuietDate value={vehicle.updated_at} /> : '-'}</dd></div>
+                ) : <span className="vehicle-readiness-badge is-loading">{readinessLoaded ? 'Readiness unavailable' : 'Loading readiness…'}</span>}</div>
+                <div className="vehicle-profile-status-item"><span>Criticality</span><span className={`vehicle-criticality ${criticalityClass}`} title={vehicle.criticality ? 'Set for this vehicle' : 'Inherited from vehicle type'}>{criticality}</span></div>
+              </div>
+              <dl className="vehicle-profile-keydates">
+                <div><dt>Active maintenance ticket</dt><dd>{readiness?.active_ticket_id ? <button type="button" className="vehicle-profile-ticket-link" onClick={() => navigate(`${basePath}/tickets/${readiness.active_ticket_id}`)}><Icon name="ticket" size={14} /> {readiness.active_ticket_title ?? `Ticket #${readiness.active_ticket_id}`} <Icon name="chevronRight" size={13} /></button> : <span className="muted">{!readinessLoaded ? 'Loading ticket status…' : readinessLoadFailed ? 'Status unavailable' : 'No active ticket'}</span>}</dd></div>
+                <div><dt>Last readiness check</dt><dd>{readiness?.last_checked ? formatDate(readiness.last_checked) : <span className="muted">{!readinessLoaded ? 'Loading check history…' : readinessLoadFailed ? 'History unavailable' : readiness?.state === 'unchecked' ? 'Never checked' : 'No check recorded'}</span>}</dd></div>
+                <div><dt>Current location</dt><dd>{vehicle.current_location ?? <span className="muted">Not set</span>}</dd></div>
+                {vehicle.estimated_return_date && <div><dt>Estimated return</dt><dd>{formatForecastDate(vehicle.estimated_return_date)}</dd></div>}
+                <div><dt>Date added</dt><dd>{vehicle.created_at ? <QuietDate value={vehicle.created_at} /> : '—'}</dd></div>
+                <div><dt>Last updated</dt><dd>{vehicle.updated_at ? <QuietDate value={vehicle.updated_at} /> : '—'}</dd></div>
               </dl>
-            </section>
-
-            <div className="veh-square-col">
-              <section className="veh-card veh-reports">
-                <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>Reports</h4></div>
-                <div className="veh-reports-body">
-                  <select className="veh-reports-select" defaultValue="summary">
-                    <option value="summary">Vehicle Summary Report</option>
-                  </select>
-                  <button type="button" className="veh-reports-print-btn" onClick={() => window.print()} title="Print report" aria-label="Print report">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M6 9V3h12v6" />
-                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                      <rect x="6" y="14" width="12" height="8" />
-                    </svg>
-                  </button>
-                </div>
-              </section>
-
-              {canViewDocuments && <VehicleFiles vehicleId={vehicle.vehicle_id} canManage={canManageDocuments} onRequestConfirmation={onRequestConfirmation} />}
-
-              {canViewReliability && <VehicleReliabilityCard vehicleId={vehicle.vehicle_id} />}
-               {currentUser && <VehicleCannibalizationCard vehicle={vehicle} user={currentUser} vehicles={lookups.vehicles} setNotice={setNotice} onSaved={onSaved} />}
-            </div>
-          </div>
-
-          <section className="veh-card veh-map">
-            <div className="veh-card-head"><Icon name="pin" size={16} /><h4>Current Location — {vehicle.current_location ?? 'Unknown'}</h4></div>
-            <div className="veh-map-wrap">
-              <VehicleLocationMap lat={hub?.lat} lng={hub?.lng} label={vehicle.current_location} scrollWheelZoom />
             </div>
           </section>
-        </div>
-      </div>
 
+          {canViewDocuments && <VehicleFiles vehicleId={vehicle.vehicle_id} canManage={canManageDocuments} onRequestConfirmation={onRequestConfirmation} />}
+        </div>
+
+        <section className="veh-card veh-map vehicle-profile-map">
+          <div className="veh-card-head"><Icon name="pin" size={16} /><div><h4>Current Location</h4><span className="vehicle-profile-card-subtitle">{vehicle.current_location ?? 'Location not set'}</span></div></div>
+          <div className="veh-map-wrap"><VehicleLocationMap lat={hub?.lat} lng={hub?.lng} label={vehicle.current_location} scrollWheelZoom /></div>
+        </section>
+
+      </div>
       {/* Print-only — kept off-screen (see .veh-print-report), shown by the
           Reports card's print button via window.print(). Portaled straight
           to <body> so it never inherits the app shell's own responsive
@@ -16549,6 +16746,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
       )}
       </>
       )}
+      </div>
     </ModulePanel>
   );
 }
@@ -17319,7 +17517,7 @@ function MechanicWorkOrderModule({
               priorityLabel="Maintenance Type"
             />
           </section>
-          <section className="panel operations-board work-order-board">
+          <section className="panel operations-board work-order-board work-order-queue-board">
             <div className="operations-board-head">
               <div>
                 <span className="operations-kicker">Mechanic queue</span>
@@ -19301,8 +19499,8 @@ function CapabilityImpactCard({ items, onNavigate, basePath }) {
 // existing Usage Log endpoints (the server enforces who may do this).
 function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
   const [trips, setTrips] = useState([]);
-  const [form, setForm] = useState({ purpose: '', destination: '', driver_name: '', odometer_start: '' });
-  const [endForm, setEndForm] = useState({ odometer_end: '', notes: '' });
+  const [form, setForm] = useState({ purpose: '', destination: '', driver_name: '' });
+  const [endForm, setEndForm] = useState({ notes: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -19347,10 +19545,8 @@ function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
             <div><dt>Purpose</dt><dd>{open.purpose}</dd></div>
             <div><dt>Destination</dt><dd>{open.destination || '—'}</dd></div>
             <div><dt>Driver</dt><dd>{open.driver_name || '—'}</dd></div>
-            <div><dt>Odometer out</dt><dd>{open.odometer_start ?? '—'}</dd></div>
           </dl>
           <div className="dispatch-grid">
-            <label><span>Odometer on return</span><input type="number" min={open.odometer_start ?? 0} value={endForm.odometer_end} onChange={(e) => setEndForm({ ...endForm, odometer_end: e.target.value })} /></label>
             <label><span>Notes</span><input type="text" value={endForm.notes} onChange={(e) => setEndForm({ ...endForm, notes: e.target.value })} /></label>
           </div>
           <button type="button" className="primary-button" disabled={busy} onClick={() => run(() => api.put(`/usage-logs/${open.usage_id}/end`, clean(endForm)))}>Mark Returned</button>
@@ -19364,7 +19560,6 @@ function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
             <label className="dispatch-wide"><span>Purpose <b className="req">*</b></span><input type="text" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} placeholder="e.g. Patient transport, fire response, drill" /></label>
             <label><span>Destination</span><input type="text" value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} /></label>
             <label><span>Driver</span><input type="text" value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} /></label>
-            <label><span>Odometer</span><input type="number" min="0" value={form.odometer_start} onChange={(e) => setForm({ ...form, odometer_start: e.target.value })} /></label>
           </div>
           <button type="button" className="primary-button" disabled={busy || !form.purpose.trim()} onClick={() => run(() => api.post(`/vehicles/${vehicle.vehicle_id}/usage`, clean(form)))}>Dispatch</button>
         </div>
