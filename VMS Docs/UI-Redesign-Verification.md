@@ -83,3 +83,18 @@ Increased the branded header to a 140px desktop minimum with a 28px title, and a
 Dashboard panels now flow in independent columns with consistent 16px spacing. The Administrator Action Queue follows Fleet Condition directly, without waiting for the taller Maintenance Status chart. Maintenance Personnel's completed-work list similarly follows assigned work in its own column. All existing dashboard content, role scoping, charts, and actions are retained.
 
 Production build, scoped ESLint, and whitespace checks passed. Browser fixture checks passed at desktop, tablet, and mobile widths, including exact 16px gaps within each column and a deliberately taller sibling chart to verify the Action Queue is no longer pushed down. Existing role-chart and Super Admin interaction checks also passed.
+
+## Dark-mode visibility — 14 October 2026
+
+Added a shared dark-mode stylesheet with brighter text, secondary labels, links, form borders, and semantic status colors on consistent dark surfaces. Removed the active sidebar item's inset/drop shadow while retaining its selected state and visible keyboard focus. The existing blue dashboard headers and role-based layouts are preserved.
+
+Covered dashboard actions and chart labels, topbar selectors, tables, menus, ticket filters and detail summaries, repair methods and validation messages, schedules, condition forms, profile details/password fields, reports, and Super Admin controls and status badges. Ticket status filter chips now expose their existing status through a data attribute so dark colors preserve their meaning. Light-mode styles and backend permissions are unchanged.
+
+Validation:
+
+- Production build, scoped ESLint for App.jsx, and Git whitespace check passed. The existing large JavaScript bundle advisory remains.
+- Disposable Playwright checks used intercepted fixture APIs against the actual Workspace and Super Admin components. Representative visible HTML text met 4.5:1 contrast for ordinary text and 3:1 for large text across all three fleet dashboards, ticket lists/details/creation/validation, schedule and condition lists, vehicle/user lists, reports, activity log, Custodian tasks, mechanic work orders, profile/account menu, and condition forms. Chart labels use the brighter shared text tokens; branded gradients and graphical chart marks were reviewed separately rather than treated as plain text backgrounds.
+- All seven Super Admin pages and a confirmation dialog passed the same rendered-text contrast checks. Existing approval, role editing, code lookup/regeneration, concern management, audit pagination, and impersonation selection checks passed with synthetic data and intercepted mutations.
+- Dashboard desktop/tablet/mobile checks passed at 1440px, 768px, and 390px, retaining column spacing, role-scoped chart counts, multi-role switching, empty/error states, and light-mode layouts. Mobile ticket creation had no page overflow. Active sidebar items were checked for no box shadow, and no JavaScript page errors occurred in the passing runs.
+
+These checks cover representative rendered states, not every possible uploaded image, map tile, record, or third-party embedded surface. No real account data was changed by the browser fixtures.

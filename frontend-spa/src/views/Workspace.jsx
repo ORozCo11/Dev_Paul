@@ -9691,7 +9691,7 @@ function TicketFilterPanel({
         <div className="issue-filter-status-grid" role="group" aria-label="Ticket status">
           {statuses.map((status) => {
             const card = TICKET_STAT_CARDS.find((item) => item.key === status);
-            return <label key={status} className="issue-filter-status-chip" style={{ background: card?.bg ?? '#ede9fe', color: card?.color ?? '#6d28d9' }}>
+            return <label key={status} className="issue-filter-status-chip" data-status={status} style={{ background: card?.bg ?? '#ede9fe', color: card?.color ?? '#6d28d9' }}>
               <input type="checkbox" checked={!draft.status.length || draft.status.includes(status)} onChange={() => toggleStatus(status)} />
               <span>{card?.label ?? status}</span>
             </label>;

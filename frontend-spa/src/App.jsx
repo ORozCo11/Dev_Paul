@@ -11,6 +11,7 @@ import Support from './views/Support';
 import Workspace from './views/Workspace';
 import SuperAdminWorkspace from './views/SuperAdminWorkspace';
 import './App.css';
+import './DarkMode.css';
 
 function Unauthorized() {
   return (
