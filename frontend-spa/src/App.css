@@ -38,11 +38,15 @@
 }
 .auth-page-header-inner {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 20px;
   /* Taller bar — the reference gives the logo/nav noticeably more vertical
      breathing room than a typical compact toolbar. */
   padding: 26px 32px;
+  /* Align the logo with the public content area on wide screens. */
+  padding-left: max(32px, calc((100% - 1040px) / 2));
 }
 .auth-page-header-brand {
   display: flex;
@@ -85,12 +89,12 @@
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.82);
 }
-/* vms brand pinned far left (via space-between on the parent row); nav +
-   Login button grouped together and pinned far right as one unit. */
+/* Keep navigation and account links together at the right edge. */
 .auth-page-header-right {
   display: flex;
   align-items: center;
   gap: 28px;
+  margin-left: auto;
 }
 .auth-page-nav {
   display: flex;
