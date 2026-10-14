@@ -24,7 +24,7 @@ The frontend is almost entirely one large component tree (`frontend-spa/src/view
 
 | Role | Scope | What they do |
 |---|---|---|
-| **Admin** | One Barangay | Runs the fleet: reviews and approves/declines Custodian-proposed tickets, assigns mechanics, gives final confirmation, closes tickets, approves accounts, manages vehicle types/locations/master data, generates reports. Admin does **not** create a ticket directly — see §5. |
+| **Admin** | One Barangay | Runs the fleet: reviews and approves/declines Custodian-proposed tickets and schedules, assigns mechanics, handles external-shop work, approves accounts, manages vehicle types/locations/master data, and generates reports. Admin does **not** create tickets directly or verify repairs — see §5. |
 | **Custodian** | One Barangay | Files Issue Reports, is the **only** role that creates a Maintenance Ticket (by proposing one for Admin's approval), registers vehicles when delegated to, verifies a mechanic's completed repair, records preventive-maintenance checks and schedules. |
 | **Maintenance Personnel** | One Barangay | Can file a technical Issue Report (routed to the Custodian, who still owns ticket creation), repairs assigned sub-issues, logs work and parts used. |
 | **Super Admin** | Platform-wide | Manages Barangays and their user accounts, approves each Barangay's first-ever Admin, regenerates registration codes, handles concern reports, can impersonate accounts for support. Sees **no** fleet data — vehicles, tickets, and issues are intentionally out of its scope. |
@@ -46,11 +46,11 @@ The workflow end to end:
 
 1. **Report** — a Custodian or Maintenance Personnel files an Issue Report (a Maintenance Personnel account is notified-forward to the Custodian, since they still can't create the ticket themselves — see §3).
 2. **Propose** — the Custodian proposes a ticket (optionally linked to that report), entering **Pending Approval**.
-3. **Approve** — the Admin reviews, can edit ticket/sub-issue fields, and approves (the ticket becomes **Active**, dispatching any suggested mechanic) or declines (the proposal is removed).
-4. **Repair** — the Admin assigns/reassigns a mechanic per sub-issue if not already dispatched; the assigned Maintenance Personnel logs the repair once done.
+3. **Approve** — the Admin reviews, can edit ticket/sub-issue fields, and approves (the ticket becomes **Active**, assigning its mechanic) or declines (the proposal remains traceable as **Declined**).
+4. **Repair** — the assigned Maintenance Personnel logs work on the ticket's sub-issues. Admin handles external-shop dispatch and return details; the handler cannot verify that work.
 5. **Verify** — the assigned Custodian runs a functional test. A user can never verify their own repair — enforced server-side even for a dual-role (Custodian + Maintenance Personnel) account on the same sub-issue. Verification is Custodian-only, with no Admin fallback; if the assigned Custodian is unavailable, the ticket is reassigned to a different Custodian instead.
-6. **Confirm** — the Admin gives the final verdict (Confirmed / Reopened) per sub-issue. A sub-issue can also be **Deferred** instead of fixed (e.g. no budget, waiting on a part) — this opens a follow-up Issue Report automatically so the defect isn't forgotten.
-7. **Close** — once every sub-issue is resolved (Done or Deferred), the Admin closes the ticket. If there are still unresolved sub-issues, the Admin can force a **decision close**, which requires a written reason and an explicit call on whether the vehicle is safe to return to service.
+6. **Decide** — the assigned Custodian uses the verification popup to Approve or Disapprove. Disapproval requires a reason and returns the ticket for repair. The former Admin confirmation and decision-close flow is not the current closure path.
+7. **Close** — successful Custodian verification closes the ticket and notifies the Admin. The server checks assignment, repair readiness, and self-verification restrictions before accepting the decision.
 
 Extra signals layered on top: **recurrence detection** (the same fault reported again soon after a "fix" flags as a likely rework) and **aging** (a ticket open more than 30 days is flagged).
 
@@ -71,13 +71,13 @@ Extra signals layered on top: **recurrence detection** (the same fault reported 
 
 The one-line version of each role, for quick reference:
 
-- **Custodian**: Report → Create Ticket → Inspect → Verify.
-- **Admin**: Manage → Assign → Monitor → Confirm → Close.
+- **Custodian**: Report → Propose → Check → Verify → Close.
+- **Admin**: Manage → Review → Assign → Monitor.
 - **Maintenance Personnel**: Diagnose → Repair → Record → Complete.
 
 Four navigation decisions are deliberate and final — not oversights to "fix" in a future pass:
 
-1. **Custodian's "My Tasks" stays one tabbed sidebar entry** (Assigned Inspections / Repair Verification / Work Tracker), not three separate rows. Both inspection and verification are task-oriented work for the same Custodian; one consolidated entry reduces sidebar clutter for the same functionality.
+1. **Custodian's "My Tasks" stays one tabbed sidebar entry** (My Tickets / History), rather than separate entries for verification and prior work. Independent repair verification is reached from the assigned ticket or the ready-to-close queue.
 2. **Maintenance Personnel's "Vehicle Issues" and "Report Technical Issue" are one combined module** — the report action lives inline in the issue list's header, not as a second sidebar item. Reporting is an action performed from that list, so combining them avoids duplicate navigation.
 3. **Readiness Check has no standalone sidebar item.** It stays a contextual action on the relevant vehicle (View Vehicles / vehicle profile), since a readiness check is always about one specific vehicle — a separate module would just make the user pick the vehicle a second time.
 4. **Maintenance Personnel's repair evidence stays inside the repair/work-order workflow** (the repair log's own photo field), not the generic Vehicle Documents store. The repair already knows the vehicle, ticket, sub-issue, and mechanic — attaching evidence there avoids a duplicate upload with none of that context.
@@ -94,7 +94,9 @@ Four navigation decisions are deliberate and final — not oversights to "fix" i
 | Concern | File |
 |---|---|
 | Nearly all fleet-facing UI | `frontend-spa/src/views/Workspace.jsx` |
+| Role-specific dashboard summaries | `frontend-spa/src/components/RoleDashboard.jsx` |
 | Super Admin UI | `frontend-spa/src/views/SuperAdminWorkspace.jsx` |
+| Shared mechanical brand gear | `frontend-spa/src/components/VMSLogo.jsx` |
 | Shared styling | `frontend-spa/src/App.css` |
 | Auth, registration, impersonation | `backend-api/app/Http/Controllers/AuthController.php` |
 | Vehicles, issues, conditions, schedules, maintenance records | `backend-api/app/Http/Controllers/FleetController.php` |
@@ -117,6 +119,8 @@ Four navigation decisions are deliberate and final — not oversights to "fix" i
 
 ## Recent changes (see `System-Capabilities.md` §5.3, §5.4, §14b for detail)
 
+- Focused role dashboards; separate Super Admin platform overview and Barangay Management; flat Super Admin navigation and Province → City/Municipality → Barangay → Staff impersonation selection.
+- Three-step registration, clearer ticket-creation layout, compact schedule summaries, and shared blue/white mechanical gear branding. See `Must-Haves.md` for the supplied academic requirement baseline, implementation mapping, and role-alignment items requiring adviser review.
 - Cannibalized repairs have **no Admin approval**: the mechanic records one donor vehicle and a CRUD list of donor parts on the Record Repair Work page; submitting goes straight to the Custodian and files one donor Issue Report. Standalone Cannibalization records live on the vehicle profile (no sidebar item).
 - External-shop repairs are handled by the Admin (dispatch and return details); the handler can't verify.
 - The Custodian closes tickets: verification is a popup (Approve / Disapprove with reason); "Tickets Ready to Close" is on the Custodian page; closing notifies the Admin. Verification is never done by Admin or by the repairer.

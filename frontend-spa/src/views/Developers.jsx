@@ -51,7 +51,7 @@ export default function Developers() {
         <DecoArrow className="dev-team-deco-arrow dev-team-deco-arrow-right" gradientId="devArrowRight" />
         <div className="auth-hero-inner">
           <p className="auth-hero-eyebrow">Barangay VMS</p>
-          <h1 className="auth-hero-title">Meet the Developers</h1>
+          <h1 className="auth-hero-title">Meet the Team</h1>
           <p className="auth-hero-subtitle">
             This system was built as a capstone project by a small, dedicated team
             committed to giving barangays a better way to manage their vehicle fleet.

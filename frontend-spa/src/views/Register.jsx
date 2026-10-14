@@ -1,4 +1,5 @@
-import { useContext, useEffect, useState } from 'react';
+import './Register.css';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import api from '../api/axios';
 import Icon from '../components/Icon';
@@ -41,6 +42,9 @@ const PHONE_PATTERN = /^09\d{9}$/;
 
 function Register() {
   const { token, user } = useContext(AuthContext);
+  const [step, setStep] = useState(0);
+  const stepHeading = useRef(null);
+  useEffect(() => { stepHeading.current?.focus(); }, [step]);
   const [form, setForm] = useState(emptyForm);
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
@@ -120,6 +124,7 @@ function Register() {
     }));
     setCities([]);
     setBarangays([]);
+    setIsFirstForBarangay(null);
   };
 
   const handleCityChange = (event) => {
@@ -131,6 +136,7 @@ function Register() {
       barangay_name: '',
     }));
     setBarangays([]);
+    setIsFirstForBarangay(null);
   };
 
   // Strips anything that isn't a letter/space/name-punctuation as the user
@@ -150,6 +156,15 @@ function Register() {
     event.preventDefault();
     if (submitting) return;
     setError('');
+    if (step < 2) {
+      const fields = event.currentTarget.querySelectorAll('fieldset:not([hidden]) input, fieldset:not([hidden]) select');
+      for (const field of fields) { if (!field.reportValidity()) return; }
+      if (step === 0 && (!NAME_PATTERN.test(form.first_name.trim()) || !NAME_PATTERN.test(form.last_name.trim()))) { setError('Enter your first and last name.'); return; }
+      if (step === 0 && !PHONE_PATTERN.test(form.phone)) { setError('Enter an 11-digit mobile number starting with 09.'); return; }
+      if (step === 1 && !form.address.trim()) { setError('Street address is required.'); return; }
+      setStep((current) => current + 1);
+      return;
+    }
 
     if (!NAME_PATTERN.test(form.first_name.trim())) {
       setError('First name may only contain letters.');
@@ -215,6 +230,9 @@ function Register() {
       setSubmitted(true);
     } catch (requestError) {
       const messages = requestError.response?.data?.errors;
+      const failed = Object.keys(messages ?? {});
+      if (failed.some((key) => ['name','first_name','middle_name','last_name','email','phone'].includes(key))) setStep(0);
+      else if (failed.some((key) => ['province_id','city_id','barangay_id','barangay_name','address'].includes(key))) setStep(1);
 
       // If we thought we'd be the first (and so hid the role/staff-code
       // requirement) but the backend disagrees, someone else just claimed
@@ -245,13 +263,14 @@ function Register() {
   };
 
   return (
-    <div className="auth-page-shell slide-in">
+    <div className="auth-page-shell register-page slide-in">
       <AuthHeader />
 
       <main className="auth-split-page">
       <section className="auth-split-panel" aria-labelledby="register-title">
         <div className="auth-logo-header">
-          <h1 id="register-title" className="auth-login-heading">Register</h1>
+          <h1 id="register-title" className="auth-login-heading">Create your account</h1>
+          <p className="register-intro">Join your barangay's vehicle management team.</p>
         </div>
 
         {submitted ? (
@@ -267,6 +286,10 @@ function Register() {
           </div>
         ) : (
           <form className="auth-form auth-form-grid" autoComplete="off" onSubmit={handleSubmit} noValidate>
+            <ol className="register-progress" aria-label="Registration progress">{['Your details', 'Your barangay', 'Account access'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={step >= index ? 'is-current' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
+            <h2 className="register-step-title" ref={stepHeading} tabIndex={-1}>{['Tell us about yourself', 'Where are you based?', 'Secure your account'][step]}</h2>
+            <p className="register-step-help">Step {step + 1} of 3 · {['Enter your name and contact information.', 'Choose your barangay and enter your street address.', 'Enter your registration code and choose a strong password.'][step]}</p>
+            <fieldset className="register-fields" hidden={step !== 0} disabled={step !== 0}><legend className="sr-only">Personal details</legend>
             <label className="auth-field">
               <span>First Name</span>
               <div className="auth-input-wrapper auth-input-plain">
@@ -346,6 +369,7 @@ function Register() {
               </div>
             </label>
 
+            </fieldset><fieldset className="register-fields" hidden={step !== 1} disabled={step !== 1}><legend className="sr-only">Barangay and address</legend>
             <label className="auth-field">
               <span>Province</span>
               <div className="auth-input-wrapper auth-input-plain">
@@ -434,6 +458,8 @@ function Register() {
               </div>
             </label>
 
+            </fieldset><fieldset className="register-fields" hidden={step !== 2} disabled={step !== 2}><legend className="sr-only">Account access</legend>
+            {isFirstForBarangay === true && <p className="notice success auth-field-full">First Administrator registration. Super Admin approval is required before sign-in.</p>}
             {isFirstForBarangay !== true && (
               <label className="auth-field">
                 <span>I am a...</span>
@@ -506,7 +532,9 @@ function Register() {
               </div>
             </label>
 
-            {error ? <p className="notice error auth-field-full">{error}</p> : null}
+            </fieldset>
+            {error ? <p role="alert" className="notice error auth-field-full">{error}</p> : null}
+            <div className="register-actions">{step > 0 && <button type="button" className="ghost-button" disabled={submitting} onClick={() => { setStep((current) => current - 1); setError(''); }}>Back</button>}
 
             <button className="primary-button auth-submit-btn auth-field-full" disabled={submitting} type="submit">
               {submitting ? (
@@ -514,8 +542,9 @@ function Register() {
                   <span className="btn-spinner" aria-hidden="true" />
                   Submitting…
                 </span>
-              ) : 'Create account'}
+              ) : step < 2 ? 'Continue' : 'Create account'}
             </button>
+            </div>
           </form>
         )}
 

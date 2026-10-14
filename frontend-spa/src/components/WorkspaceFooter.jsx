@@ -1,5 +1,5 @@
+import VMSLogo from './VMSLogo';
 import { Link } from 'react-router-dom';
-import Icon from './Icon';
 
 // Footer for the authenticated app shell (Workspace, Super Admin) — its own
 // "Visit Support Center" / "Contact Us" buttons live here since a logged-in
@@ -10,7 +10,7 @@ export default function WorkspaceFooter() {
     <footer className="workspace-footer">
       <div className="workspace-footer-brand">
         <div className="workspace-footer-wordmark">
-          <Icon name="gear" size={36} className="workspace-footer-gear-icon" filled />
+          <VMSLogo variant="white" size={28} className="workspace-footer-gear-icon" />
           <span className="vms-wordmark vms-wordmark-md workspace-footer-vms-text">vms</span>
         </div>
         <p className="workspace-footer-tagline">A System to Manage Your Barangay's Fleet.</p>

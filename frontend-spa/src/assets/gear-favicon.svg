@@ -1,14 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <g fill="#2563eb">
-    <circle cx="12" cy="12" r="7.6" />
-    <rect x="9.5" y="0.4" width="5" height="6.6" rx="2" />
-    <rect x="9.5" y="0.4" width="5" height="6.6" rx="2" transform="rotate(45 12 12)" />
-    <rect x="9.5" y="0.4" width="5" height="6.6" rx="2" transform="rotate(90 12 12)" />
-    <rect x="9.5" y="0.4" width="5" height="6.6" rx="2" transform="rotate(135 12 12)" />
-    <rect x="9.5" y="0.4" width="5" height="6.6" rx="2" transform="rotate(180 12 12)" />
-    <rect x="9.5" y="0.4" width="5" height="6.6" rx="2" transform="rotate(225 12 12)" />
-    <rect x="9.5" y="0.4" width="5" height="6.6" rx="2" transform="rotate(270 12 12)" />
-    <rect x="9.5" y="0.4" width="5" height="6.6" rx="2" transform="rotate(315 12 12)" />
-  </g>
-  <circle cx="12" cy="12" r="4.3" fill="none" stroke="#ffffff" stroke-width="1.8" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100"><path d="M -10.800 -36.954 L -7.300 -48.000 L 7.300 -48.000 L 10.800 -36.954 A 38.5 38.5 0 0 1 18.494 -33.767 L 28.779 -39.103 L 39.103 -28.779 L 33.767 -18.494 A 38.5 38.5 0 0 1 36.954 -10.800 L 48.000 -7.300 L 48.000 7.300 L 36.954 10.800 A 38.5 38.5 0 0 1 33.767 18.494 L 39.103 28.779 L 28.779 39.103 L 18.494 33.767 A 38.5 38.5 0 0 1 10.800 36.954 L 7.300 48.000 L -7.300 48.000 L -10.800 36.954 A 38.5 38.5 0 0 1 -18.494 33.767 L -28.779 39.103 L -39.103 28.779 L -33.767 18.494 A 38.5 38.5 0 0 1 -36.954 10.800 L -48.000 7.300 L -48.000 -7.300 L -36.954 -10.800 A 38.5 38.5 0 0 1 -33.767 -18.494 L -39.103 -28.779 L -28.779 -39.103 L -18.494 -33.767 A 38.5 38.5 0 0 1 -10.800 -36.954 Z" fill="#2563eb" stroke="none"/><circle r="24" fill="none" stroke="#ffffff" stroke-width="4.5"/></svg>

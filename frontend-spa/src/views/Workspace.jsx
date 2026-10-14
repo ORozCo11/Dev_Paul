@@ -1,3 +1,6 @@
+import EndImpersonationAction from '../components/EndImpersonationAction';
+import './TicketCreation.css';
+import VMSLogo from '../components/VMSLogo';
 import { Children, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -6,12 +9,12 @@ import LocationDensityMap from '../components/LocationDensityMap';
 import VehicleLocationMap from '../components/VehicleLocationMap';
 import AddLocationMap from '../components/AddLocationMap';
 import Icon from '../components/Icon';
-import TextType from '../components/TextType';
+import RoleDashboard from '../components/RoleDashboard';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { DonutChart, SolidPieChart, HorizontalBarChart, ColumnChart, StackedBarChart } from '../components/charts';
+import { DonutChart, SolidPieChart, StackedBarChart } from '../components/charts';
 import { AuthContext } from '../context/AuthContextObject';
-import { groupLocationRowsByHub, PAKNAAN_POLYGON } from '../data/paknaanLocationDensity';
+import { PAKNAAN_POLYGON } from '../data/paknaanLocationDensity';
 import { geoJsonToRings, isPointWithinBoundaryRings } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 
@@ -2444,8 +2447,9 @@ function Workspace() {
       // otherwise there was no way back into it short of logging out and back
       // in. Keyed off role so "Return to..." can route straight to the right
       // dashboard without an extra round-trip to figure out who they were.
-      const ownToken = localStorage.getItem('token');
-      if (ownToken) {
+      const ownToken = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (ownToken && !localStorage.getItem('impersonator_token')) {
+        localStorage.setItem('impersonator_storage', localStorage.getItem('token') ? 'local' : 'session');
         localStorage.setItem('impersonator_token', ownToken);
         localStorage.setItem('impersonator_name', user.name);
         localStorage.setItem('impersonator_role', user.role);
@@ -2711,7 +2715,7 @@ function Workspace() {
             >
               <Icon name="menu" size={24} />
             </button>
-            <Icon name="gear" size={28} className="topbar-gear-icon" filled />
+            <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
           <div className="map-boundary-selector" title="Choose which registered barangay outline the Vehicle Location map draws.">
@@ -3461,7 +3465,7 @@ function Workspace() {
         >
           My Tickets
           {(dashboard?.badge_counts?.ticketVerifications ?? 0) > 0 && (
-            <span className="count-badge">{dashboard.badge_counts.ticketVerifications}</span>
+            <span className="my-tasks-verification-count" title="Assigned tickets awaiting your repair verification">{dashboard.badge_counts.ticketVerifications} to verify</span>
           )}
         </button>
         <button
@@ -3562,6 +3566,15 @@ function Workspace() {
             />
           }
         >
+          {(hasRole(user, 'Admin') || hasRole(user, 'Custodian')) && dashboard && (
+            <details className="fleet-context-details">
+              <summary>Fleet readiness and capability details</summary>
+              <div className="fleet-context-grid">
+                <CriticalityWatchCard items={dashboard.criticality_watch ?? []} onNavigate={navigate} basePath={roleRoutes[user.role]} />
+                <CapabilityImpactCard items={dashboard.capability_impact ?? []} onNavigate={navigate} basePath={roleRoutes[user.role]} />
+              </div>
+            </details>
+          )}
           <div className="panel-header-bar">
             <h3>All Vehicles <span className="count-badge">{visibleRows.length}</span></h3>
             <LocalSearchInput
@@ -4463,7 +4476,7 @@ function Workspace() {
                   <p>Printed on {formatDate(new Date().toISOString())}</p>
                 </div>
                 <div className="veh-print-header-right">
-                  <Icon name="gear" size={48} className="topbar-gear-icon" filled />
+                  <VMSLogo variant="blue" size={48} className="topbar-gear-icon" />
                   <span className="vms-wordmark">vms</span>
                 </div>
               </div>
@@ -4887,1114 +4900,8 @@ function Workspace() {
 
 // Maps an Action Queue item's type to where clicking it should go, and what
 // it should look like — one place to keep type/icon/route in sync.
-const ACTION_QUEUE_META = {
-  issue_pending:           { icon: 'alert',       color: '#b45309', route: (basePath, id) => `${basePath}/issues/${id}` },
-  subissue_needs_mechanic: { icon: 'wrench',      color: '#7c3aed', route: (basePath, id) => `${basePath}/tickets/${id}` },
-  ticket_confirm:          { icon: 'checkCircle', color: '#9d174d', route: (basePath, id) => `${basePath}/tickets/${id}` },
-  ticket_close:            { icon: 'checkCircle', color: '#16a34a', route: (basePath, id) => `${basePath}/tickets/${id}` },
-  recurring_fault_review:  { icon: 'undo',        color: '#c2410c', route: (basePath, id) => `${basePath}/tickets/${id}` },
-  readiness_check:         { icon: 'search',      color: '#0369a1', route: (basePath, id) => `${basePath}/vehicles/${id}` },
-  schedule_overdue:        { icon: 'wrench',      color: '#b91c1c', route: null },
-};
-
-function ActionQueueRow({ item, basePath, onNavigate, onGoToSchedules }) {
-  const meta = ACTION_QUEUE_META[item.type] ?? ACTION_QUEUE_META.issue_pending;
-  const goTo = () => (meta.route ? onNavigate(meta.route(basePath, item.id)) : onGoToSchedules());
-  return (
-    <button
-      type="button"
-      onClick={goTo}
-      className="action-queue-row"
-      style={{ '--aq-color': meta.color }}
-    >
-      <span className="action-queue-row-icon"><Icon name={meta.icon} size={15} /></span>
-      <span className="action-queue-row-body">
-        <span className="action-queue-row-label">{item.label}</span>
-        {item.vehicle_name && <span className="action-queue-row-vehicle">{item.vehicle_name}</span>}
-      </span>
-      {item.severity && <span className="action-queue-row-severity">{item.severity}</span>}
-      <Icon name="chevronRight" size={14} className="action-queue-row-chevron" />
-    </button>
-  );
-}
-
-// A mechanic's personal task list — the counterpart to the Admin's Action
-// Queue, but scoped to "what's assigned to ME" instead of "what needs an
-// Admin decision". Same visual language (reuses .action-queue-* styles) so
-// it reads as part of the same "here's what to do" pattern on the dashboard.
-function MyScheduledWorkRow({ item, onClick }) {
-  const overdue = isScheduleOverdue(item);
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="action-queue-row"
-      style={{ '--aq-color': overdue ? '#b91c1c' : '#0369a1' }}
-    >
-      <span className="action-queue-row-icon"><Icon name="wrench" size={15} /></span>
-      <span className="action-queue-row-body">
-        <span className="action-queue-row-label">{item.maintenance_type}</span>
-        {item.vehicle && <span className="action-queue-row-vehicle">{item.vehicle.vehicle_name}</span>}
-      </span>
-      <span className="action-queue-row-severity">{overdue ? 'OVERDUE' : item.scheduled_date}</span>
-      <Icon name="chevronRight" size={14} className="action-queue-row-chevron" />
-    </button>
-  );
-}
-
-// A compact "tap to see everything" tile — Action Queue, Emergency
-// Readiness, and Risk & Readiness Watch used to each be a full list
-// permanently on the dashboard; now they're one glance-able number that
-// opens the full list in a popup instead of claiming that much vertical
-// space all the time.
-function DashboardQuickCard({ icon, title, stat, tone, preview, onClick }) {
-  return (
-    <button type="button" className="dashboard-quick-card" onClick={onClick}>
-      <div className="dashboard-quick-card-head">
-        <span className="dashboard-quick-card-icon"><Icon name={icon} size={16} /></span>
-        <span className="dashboard-quick-card-title">{title}</span>
-        <Icon name="chevronRight" size={14} className="dashboard-quick-card-chevron" />
-      </div>
-      <strong className={`dashboard-quick-card-stat${tone ? ` is-${tone}` : ''}`}>{stat}</strong>
-      {preview && <span className="dashboard-quick-card-preview">{preview}</span>}
-    </button>
-  );
-}
-
-// Lightweight read-only popup — no form/notice machinery like FormModal,
-// just the same modal-overlay/modal-box chrome so it looks consistent with
-// every other modal in the app.
-function DashboardListModal({ title, tag, onClose, children }) {
-  return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box modal-box-wide" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>{title}</h3>
-          <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
-        </div>
-        {tag && <div className="dashboard-list-modal-tag">{tag}</div>}
-        <div className="modal-body dashboard-list-modal-body">{children}</div>
-      </div>
-    </div>,
-    document.body
-  );
-}
-
-// Shared row for both the Emergency Readiness modal and the compact
-// "Readiness by Vehicle Type" dashboard panel — a status dot + fill bar so
-// which categories are covered is readable at a glance, not just from text.
-function ReadinessRow({ r }) {
-  const verifiedReady = typeof r.verified_ready === 'number' ? r.verified_ready : r.ready;
-  const unverified = r.ready - verifiedReady;
-  const state = verifiedReady > 0 ? 'ready' : r.ready > 0 ? 'unverified' : 'none';
-  const pct = r.total > 0 ? Math.max(4, Math.round((verifiedReady / r.total) * 100)) : 0;
-
-  return (
-    <div className={`emergency-readiness-row is-${state}`}>
-      <span className={`emergency-readiness-row-dot is-${state}`} />
-      <div className="emergency-readiness-row-main">
-        <span className="emergency-readiness-row-name">{r.category}</span>
-        <span className="emergency-readiness-row-detail">
-          {r.ready} available
-          {unverified > 0 && <> · <span className="emergency-readiness-row-unverified">{unverified} unverified</span></>}
-        </span>
-      </div>
-      <div className="emergency-readiness-row-stat">
-        <span className={`emergency-readiness-row-tag${verifiedReady > 0 ? ' is-ready' : ''}`}>
-          {verifiedReady}/{r.total} READY
-        </span>
-        <span className="emergency-readiness-row-bar">
-          <span className={`emergency-readiness-row-bar-fill is-${state}`} style={{ width: `${pct}%` }} />
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function clampPercent(value) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
-function DashboardSignalCard({ icon, label, value, detail, tone = 'neutral', meter = 0, onClick }) {
-  const content = (
-    <>
-      <div className="dashboard-signal-card-head">
-        <span className="dashboard-signal-card-icon"><Icon name={icon} size={16} /></span>
-        <span>{label}</span>
-        {onClick && <Icon name="chevronRight" size={14} className="dashboard-signal-card-chevron" />}
-      </div>
-      <strong>{value}</strong>
-      <p>{detail}</p>
-      <span className="dashboard-signal-meter" aria-hidden="true">
-        <span style={{ width: `${clampPercent(meter)}%` }} />
-      </span>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button type="button" className={`dashboard-signal-card is-${tone}`} onClick={onClick}>
-        {content}
-      </button>
-    );
-  }
-
-  return <article className={`dashboard-signal-card is-${tone}`}>{content}</article>;
-}
-
-function DashboardKpiStrip({ items, label = 'Key metrics' }) {
-  if (!items?.length) return null;
-
-  return (
-    <section className="dashboard-role-kpis full-span" aria-label={label} style={{ '--dashboard-kpi-count': Math.min(items.length, 6) }}>
-      {items.map((item) => {
-        const content = (
-          <>
-            <span className={`dashboard-role-kpi-icon is-${item.tone ?? 'blue'}`}><Icon name={item.icon ?? 'chart'} size={16} /></span>
-            <span className="dashboard-role-kpi-copy">
-              <span className="dashboard-role-kpi-label">{item.label}</span>
-              <strong>{item.value ?? 0}</strong>
-              {item.detail && <small>{item.detail}</small>}
-            </span>
-            {item.onClick && <Icon name="chevronRight" size={14} className="dashboard-role-kpi-chevron" />}
-          </>
-        );
-
-        return item.onClick ? (
-          <button key={item.label} type="button" className="dashboard-role-kpi is-clickable" onClick={item.onClick}>
-            {content}
-          </button>
-        ) : (
-          <article key={item.label} className="dashboard-role-kpi">{content}</article>
-        );
-      })}
-    </section>
-  );
-}
-
-function DashboardStatusStrip({ rows }) {
-  return (
-    <div className="dashboard-status-strip">
-      {rows.map((row) => (
-        <div key={row.label} style={{ '--strip-color': row.color }}>
-          <span>{row.label}</span>
-          <strong>{row.value}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Dashboard({ data, hubs = null, user, basePath, onNavigate, onGoToSchedules, onGoToModule }) {
-  const [weather, setWeather] = useState(null);
-  const [greeting, setGreeting] = useState(() => buildLocalGreeting(user?.name));
-  const [greetingRole, setGreetingRole] = useState(() => dashboardRoleLabel(user?.role));
-  const [now, setNow] = useState(() => new Date());
-  // Dashboard = summary, not the complete list — Action Queue, Emergency
-  // Readiness, and Risk & Readiness Watch each collapse to one glance-able
-  // card; tapping one opens its full list in a popup instead of the list
-  // living permanently on the page. null = no modal open.
-  const [openDashboardModal, setOpenDashboardModal] = useState(null);
-
-  useEffect(() => {
-    // Displayed time is minute-precision (no seconds), so a 1s tick would
-    // just be wasted re-renders — once a minute is enough to stay current.
-    const interval = setInterval(() => setNow(new Date()), 60000);
-
-    // Fetch Mandaue City, Cebu, Philippines (10.3446, 123.9392) weather
-    fetch('https://api.open-meteo.com/v1/forecast?latitude=10.3446&longitude=123.9392&current=temperature_2m,relative_humidity_2m,weather_code')
-      .then((res) => res.json())
-      .then((resData) => {
-        if (resData && resData.current) {
-          const temp = Math.round(resData.current.temperature_2m);
-          const code = resData.current.weather_code;
-          const humidity = resData.current.relative_humidity_2m;
-          
-          let desc = 'Sunny';
-          let icon = '☀️';
-          
-          if (code === 0) { desc = 'Clear Sky'; icon = '☀️'; }
-          else if ([1, 2, 3].includes(code)) { desc = 'Partly Cloudy'; icon = '⛅'; }
-          else if ([45, 48].includes(code)) { desc = 'Foggy'; icon = '🌫️'; }
-          else if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) { desc = 'Rainy'; icon = '🌧️'; }
-          else if ([95, 96, 99].includes(code)) { desc = 'Thunderstorm'; icon = '⛈️'; }
-          
-          setWeather({ temp, desc, icon, humidity });
-        }
-      })
-      .catch(() => {
-        setWeather({ temp: 33, desc: 'Partly Cloudy', icon: '⛅', humidity: 68 });
-      });
-
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadGreeting = async () => {
-      try {
-        const response = await api.get('/greeting');
-        if (!cancelled) {
-          setGreeting(response.data.greeting ?? buildLocalGreeting(user?.name));
-          setGreetingRole(response.data.role_label ?? dashboardRoleLabel(user?.role));
-        }
-      } catch {
-        if (!cancelled) {
-          setGreeting(buildLocalGreeting(user?.name));
-          setGreetingRole(dashboardRoleLabel(user?.role));
-        }
-      }
-    };
-
-    loadGreeting();
-    const interval = setInterval(loadGreeting, 60000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [user?.name, user?.role]);
-
-  if (!data) {
-    return <p className="empty-state">No dashboard data available yet.</p>;
-  }
-
-  const metricValue = (label) => dashboardMetricValue(data.metrics, label);
-  const totalVehicles = metricValue('Total Vehicles');
-  const availableVehicles = metricValue('Available Vehicles');
-  const underMaintenanceVehicles = metricValue('Vehicles Under Maintenance');
-  const inactiveVehicles = metricValue('Inactive Vehicles');
-  const reportedIssues = metricValue('Reported Issues');
-  const upcomingMaintenance = metricValue('Upcoming Maintenance');
-  const overdueMaintenanceCount = metricValue('Overdue Maintenance');
-  const maintenanceExpenses = data.metrics.find((metric) => metric.label === 'Total Maintenance Expenses')?.value ?? '0';
-
-  // Re-group raw location rows into the same hubs the map shows, so the
-  // "Vehicles by Location" chart always matches the map's pins.
-  const locationsByHub = groupLocationRowsByHub(data.vehicles_by_location ?? [], hubs);
-
-  // Availability Forecast — vehicles currently out and when they're due back.
-  const forecast = data.availability_forecast ?? { available_now: availableVehicles, under_maintenance: [] };
-  const forecastOut = forecast.under_maintenance ?? [];
-  const overdueSchedules = data.overdue_schedules ?? [];
-
-  // Gap 1 — readiness/coverage by vehicle type; Gap 2 — preventive watch.
-  const readiness = data.readiness ?? [];
-  const noCoverage = readiness.filter((r) => r.no_coverage);
-  const fleetSummary = data.fleet_readiness_summary ?? null;
-  const preventiveWatch = data.preventive_watch ?? [];
-  // Gap A — readiness watch; Gap B — fragility; Gap C — failure patterns.
-  const readinessWatch = data.readiness_watch ?? [];
-  const criticalityWatch = data.criticality_watch ?? [];
-  // Final feature pass — Fleet Capability & Readiness Impact: the same
-  // signals above, rolled up to "which emergency capability is at risk?".
-  const capabilityImpact = data.capability_impact ?? [];
-  const fragility = data.fragility ?? [];
-  const failurePatterns = data.failure_patterns ?? [];
-  const showBreakingMost = hasRole(user, 'Admin') && failurePatterns.length > 0;
-
-  // Action Queue — everything currently waiting on an Admin decision,
-  // ranked and pulled from across the whole system, so the dashboard
-  // answers "what do I do right now" instead of just "what's currently
-  // true". Admin-only (the backend already returns [] for other roles).
-  const actionQueue = data.action_queue ?? [];
-  const criticalActionCount = actionQueue.filter((item) => item.severity === 'Critical').length;
-
-  // My Scheduled Work — a mechanic's own assigned schedules, surfaced right
-  // on their dashboard instead of only living in the shared schedule table.
-  const myScheduledWork = data.my_scheduled_work ?? [];
-
-  // Fleet health (Good/Needs Inspection/Needs Repair) — a different
-  // signal than Available/Under Maintenance/Inactive, which already have
-  // their own KPI tiles just below this card, so this donut wouldn't just
-  // be re-drawing the same three numbers. Colors match the same condition
-  // badges used everywhere else (Condition Monitoring's stat cards, etc).
-  const vehicleCondition = (data.vehicles_by_condition ?? []).map((row) => ({
-    label: row.label,
-    value: row.value,
-    color: CONDITION_STAT_CARDS.find((c) => c.key === row.label)?.color ?? '#94a3b8',
-  }));
-  const goodConditionCount = vehicleCondition.find((c) => c.label === 'Good')?.value ?? 0;
-  const goodConditionRate = totalVehicles ? Math.round((goodConditionCount / totalVehicles) * 100) : 0;
-
-  const operationalTotal = fleetSummary?.operational_total ?? totalVehicles;
-  const verifiedReady = fleetSummary?.verified_ready ?? Math.max(0, availableVehicles - readinessWatch.length);
-  const readinessRate = operationalTotal ? clampPercent((verifiedReady / operationalTotal) * 100) : 0;
-  const atRiskCount = noCoverage.length + readinessWatch.length + fragility.length + forecastOut.length + preventiveWatch.length + overdueMaintenanceCount;
-  const notReadyVehicles = Math.max(0, totalVehicles - availableVehicles);
-  const opsTone = notReadyVehicles === 0 ? 'ok' : availableVehicles === 0 ? 'alert' : 'warn';
-  const maintenanceLoad = underMaintenanceVehicles + upcomingMaintenance + overdueMaintenanceCount;
-  const statusSegments = [
-    { label: 'Available', value: availableVehicles, color: '#16a34a' },
-    { label: 'In shop', value: underMaintenanceVehicles, color: '#d97706' },
-    { label: 'Inactive', value: inactiveVehicles, color: '#64748b' },
-  ];
-  const operationsQueue = [
-    { label: 'Open Issues', value: reportedIssues, color: '#ef4444' },
-    { label: 'In Shop', value: underMaintenanceVehicles, color: '#d97706' },
-    { label: 'Upcoming', value: upcomingMaintenance, color: '#f59e0b' },
-    { label: 'Overdue', value: overdueMaintenanceCount, color: '#dc2626' },
-  ];
-  const topFailurePattern = failurePatterns[0];
-  const visibleReadiness = readiness.slice(0, 5);
-  const visibleLocationRows = locationsByHub.slice(0, 4);
-  const visibleTypeRows = (data.vehicles_by_type ?? []).slice(0, 5);
-  const isAdminDashboard = hasRole(user, 'Admin');
-  const isMaintenanceDashboard = hasRole(user, 'Maintenance Personnel') && !isAdminDashboard;
-  const hasMaintenanceRole = hasRole(user, 'Maintenance Personnel');
-  // Phase A4 — one departure away from an orphaned barangay (nobody left
-  // who can manage users, vehicles, or approvals). GuardsLastAdmin blocks
-  // that departure from happening through deactivate/role-change, but not
-  // e.g. this Admin simply leaving with no successor ever promoted — this
-  // is the "before it happens" half of that protection.
-  const primaryActionCount = isAdminDashboard
-    ? actionQueue.length
-    : isMaintenanceDashboard
-      ? myScheduledWork.length
-      : reportedIssues;
-  const primaryActionLabel = isAdminDashboard
-    ? (actionQueue[0]?.label ?? 'No urgent action')
-    : isMaintenanceDashboard
-      ? (myScheduledWork[0]?.maintenance_type ?? 'Nothing assigned')
-      : (reportedIssues > 0 ? 'Open reports need follow-up' : 'No open reported issues');
-  const primaryActionTitle = isAdminDashboard ? 'Action Queue' : isMaintenanceDashboard ? 'My Work' : 'My Reports';
-  const primaryActionIcon = isMaintenanceDashboard ? 'wrench' : reportedIssues > 0 ? 'alert' : 'checkCircle';
-  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const timeStr = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-  // Custodian / Maintenance Personnel get their own, leaner dashboard: their
-  // own queues first, then only the fleet context their job actually uses.
-  // The fleet-wide analytics (expenses, risk watch, sites/types, maintenance
-  // load) are Admin's — the backend doesn't even send those numbers to these
-  // roles, so they used to render as misleading zeroes.
-  if (!isAdminDashboard) {
-    const badges = data.badge_counts ?? {};
-    const isCustodianView = hasRole(user, 'Custodian');
-    const failedReadinessCount = readinessWatch.filter((row) => row.state === 'not_ready').length;
-    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const overdueAssignedWork = myScheduledWork.filter((item) => item.scheduled_date && item.scheduled_date < todayIso).length;
-    const needsCheck = readinessWatch.slice(0, 5);
-    const toneFor = (n, hot = 'warn') => (n > 0 ? hot : 'ok');
-    const roleKpis = [];
-    if (isCustodianView) {
-      roleKpis.push(
-        { icon: 'checkCircle', label: 'Pending Verification', value: badges.ticketVerifications ?? 0, tone: toneFor(badges.ticketVerifications ?? 0), onClick: () => onGoToModule('ticketVerifications', []) },
-        { icon: 'alert', label: 'Open Issues', value: badges.issues ?? 0, tone: toneFor(badges.issues ?? 0, 'alert'), onClick: () => onGoToModule('issues', []) },
-        { icon: 'checkCircle', label: 'Need Readiness Check', value: readinessWatch.length, tone: toneFor(readinessWatch.length), onClick: () => onGoToModule('vehicles', []) },
-        { icon: 'alert', label: 'Failed Readiness', value: failedReadinessCount, tone: toneFor(failedReadinessCount, 'alert'), onClick: () => onGoToModule('vehicles', []) },
-        { icon: 'vehicle', label: 'Available Vehicles', value: availableVehicles, tone: 'blue', onClick: () => onGoToModule('vehicles', ['Available']) },
-      );
-    }
-    if (hasMaintenanceRole) {
-      roleKpis.push(
-        { icon: 'wrench', label: 'My Open Work Orders', value: badges.ticketWorkOrders ?? 0, tone: toneFor(badges.ticketWorkOrders ?? 0), onClick: () => onGoToModule('ticketWorkOrders', []) },
-        { icon: 'calendar', label: 'My Scheduled Work', value: myScheduledWork.length, tone: 'blue', onClick: onGoToSchedules },
-        { icon: 'alert', label: 'Overdue Assigned', value: overdueAssignedWork, tone: toneFor(overdueAssignedWork, 'alert'), onClick: onGoToSchedules },
-        { icon: 'alert', label: 'Vehicles Need Attention', value: metricValue('Vehicles Needing Attention'), tone: toneFor(metricValue('Vehicles Needing Attention'), 'alert'), onClick: () => onGoToModule('vehicles', []) },
-        { icon: 'checkCircle', label: 'Recently Completed', value: metricValue('Recently Completed Maintenance'), detail: 'Last 30 days', tone: 'good', onClick: () => onGoToModule('maintenance', []) },
-      );
-    }
-
-    return (
-      <div className="dashboard-grid dashboard-grid-smart">
-        <section className={`dashboard-command-center full-span is-${opsTone}`}>
-          <div className="dashboard-command-copy">
-            <span className="dashboard-command-role">{greetingRole}</span>
-            <TextType
-              key={greeting}
-              as="h2"
-              text={[greeting]}
-              typingSpeed={150}
-              pauseDuration={1500}
-              loop={false}
-              showCursor={true}
-              cursorCharacter="|"
-            />
-            <p>{dateStr || 'Today'}</p>
-          </div>
-
-          <div className="dashboard-ready-split">
-            <div className="dashboard-ready-stat" style={{ '--ready-pct': `${totalVehicles ? (availableVehicles / totalVehicles) * 100 : 0}%` }}>
-              <span className="dashboard-hologram-scan" />
-              <div className="dashboard-ready-stat-inner">
-                <div className="dashboard-ready-row is-ready">
-                  <strong>{availableVehicles}</strong>
-                  <span>Available</span>
-                </div>
-                <div className="dashboard-ready-row is-not-ready">
-                  <strong>{notReadyVehicles}</strong>
-                  <span>Unavailable</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="dashboard-command-side">
-            <div className="dashboard-live-chips">
-              <div>
-                <span>Local time</span>
-                <strong>{timeStr}</strong>
-              </div>
-              {weather && (
-                <div>
-                  <span>Mandaue City, Cebu</span>
-                  <strong><span className="dashboard-weather-mark">{weather.icon}</span>{weather.temp}C</strong>
-                  <small>{weather.desc} / {weather.humidity}% humidity</small>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-      <DashboardKpiStrip items={roleKpis} label={`${greetingRole} dashboard metrics`} />
-
-        {hasMaintenanceRole && (
-          <section className="panel col-span-7 action-queue-panel dashboard-lean-panel">
-            <div className="panel-header-bar">
-              <h3><Icon name="wrench" size={16} /> My Scheduled Work</h3>
-              {myScheduledWork.length > 0 && <span className="area-chart-tag">{myScheduledWork.length} assigned to you</span>}
-            </div>
-            {myScheduledWork.length === 0 ? (
-              <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> Nothing scheduled for you right now.</p>
-            ) : (
-              <div className="action-queue-list action-queue-list-compact">
-                {myScheduledWork.map((item) => (
-                  <MyScheduledWorkRow key={item.schedule_id} item={item} onClick={onGoToSchedules} />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {isCustodianView && (
-          <section className="panel col-span-7 dashboard-lean-panel">
-            <div className="panel-header-bar">
-              <h3><Icon name="checkCircle" size={16} /> Needs a Readiness Check</h3>
-              {readinessWatch.length > 0 && <span className="area-chart-tag">{readinessWatch.length} vehicle{readinessWatch.length === 1 ? '' : 's'}</span>}
-            </div>
-            {needsCheck.length === 0 ? (
-              <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> Every available vehicle has a current readiness check.</p>
-            ) : (
-              <div className="risk-watch-col">
-                {needsCheck.map((r) => (
-                  <button
-                    key={r.vehicle_id}
-                    type="button"
-                    className={`risk-watch-item risk-watch-item-clickable${r.state === 'not_ready' ? ' is-critical' : ''}`}
-                    onClick={() => onNavigate(`${basePath}/vehicles/${r.vehicle_id}`)}
-                  >
-                    <span className={`risk-watch-item-dot${r.state === 'not_ready' ? ' is-critical' : ''}`} />
-                    <div className="risk-watch-item-body">
-                      <span className="risk-watch-item-top">
-                        <span className="risk-watch-item-title">{r.vehicle_name}</span>
-                        <span className={`risk-watch-tag${r.state === 'not_ready' ? ' is-critical' : ''}`}>
-                          {(READINESS_BADGE[r.state]?.label ?? r.state).toUpperCase()}
-                        </span>
-                      </span>
-                      <span className="risk-watch-item-sub">{r.category ?? '—'}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-            {readinessWatch.length > needsCheck.length && (
-              <p className="muted" style={{ margin: '8px 0 0', fontSize: '0.78rem' }}>+ {readinessWatch.length - needsCheck.length} more — open Vehicles to see them all.</p>
-            )}
-          </section>
-        )}
-
-        {isCustodianView && (
-          <section className="panel col-span-5 dashboard-lean-panel">
-            <div className="panel-header-bar">
-              <h3><Icon name="vehicle" size={16} /> Readiness by Vehicle Type</h3>
-              {readiness.length > 0 && <span className="area-chart-tag">{readiness.length} types</span>}
-            </div>
-            {readiness.length === 0 ? (
-              <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> No vehicle types to assess yet.</p>
-            ) : (
-              <div className="dashboard-readiness-compact-list">
-                {visibleReadiness.map((r) => <ReadinessRow key={r.category} r={r} />)}
-              </div>
-            )}
-            {readiness.length > visibleReadiness.length && (
-              <button type="button" className="dashboard-inline-action" onClick={() => onNavigate(`${basePath}/vehicles`)}>
-                Review all {readiness.length} types
-              </button>
-            )}
-          </section>
-        )}
-
-        <CriticalityWatchCard items={criticalityWatch} onNavigate={onNavigate} basePath={basePath} />
-        <CapabilityImpactCard items={capabilityImpact} onNavigate={onNavigate} basePath={basePath} />
-
-        <section className="panel col-span-5 dashboard-lean-panel">
-          <div className="panel-header-bar">
-            <h3>Fleet Condition</h3>
-            <span className="area-chart-tag">{goodConditionRate}% in good condition</span>
-          </div>
-          <div className="fleet-status-compact">
-            <div className="donut-chart-small">
-              <DonutChart centerLabel={totalVehicles} centerSubLabel="Vehicles" segments={vehicleCondition} />
-            </div>
-            <div className="fleet-status-legend-col">
-              <ChartLegend rows={vehicleCondition} />
-            </div>
-          </div>
-        </section>
-
-        {/* Same vehicle-condition data as the donut above, as a bar graph —
-            the donut reads the share (percent in good condition), this
-            reads the actual counts per bucket at a glance. */}
-        <section className="panel col-span-7 dashboard-lean-panel">
-          <div className="panel-header-bar">
-            <h3>Fleet Condition by Count</h3>
-          </div>
-          <ColumnChart rows={vehicleCondition} />
-        </section>
-      </div>
-    );
-  }
-
-  const adminBadges = data.badge_counts ?? {};
-  const adminKpis = [
-    { icon: 'vehicle', label: 'Total Fleet Units', value: totalVehicles, tone: 'blue', onClick: () => onGoToModule('vehicles', []) },
-    { icon: 'checkCircle', label: 'Available', value: availableVehicles, tone: 'good', onClick: () => onGoToModule('vehicles', ['Available']) },
-    { icon: 'wrench', label: 'In Shop', value: underMaintenanceVehicles, tone: underMaintenanceVehicles > 0 ? 'warn' : 'good', onClick: () => onGoToModule('vehicles', ['Under Maintenance']) },
-    { icon: 'alert', label: 'Open Issues', value: reportedIssues, tone: reportedIssues > 0 ? 'alert' : 'good', onClick: () => onGoToModule('issues', []) },
-    { icon: 'calendar', label: 'Overdue Maintenance', value: overdueMaintenanceCount, tone: overdueMaintenanceCount > 0 ? 'alert' : 'good', onClick: onGoToSchedules },
-    { icon: 'clipboard', label: 'Pending Proposals', value: adminBadges.ticketProposals ?? 0, tone: (adminBadges.ticketProposals ?? 0) > 0 ? 'warn' : 'good', onClick: () => onGoToModule('tickets', []) },
-  ];
-
-  return (
-    <div className="dashboard-grid dashboard-grid-smart">
-      <section className={`dashboard-command-center full-span is-${opsTone}`}>
-        <div className="dashboard-command-copy">
-          <span className="dashboard-command-role">{greetingRole}</span>
-          <TextType
-            key={greeting}
-            as="h2"
-            text={[greeting]}
-            typingSpeed={150}
-            pauseDuration={1500}
-            loop={false}
-            showCursor={true}
-            cursorCharacter="|"
-          />
-          <p>{dateStr || 'Today'}</p>
-          <div className="dashboard-command-pills">
-            <button type="button" onClick={() => onGoToModule('vehicles', [])}>{totalVehicles} fleet units</button>
-            <button type="button" onClick={() => onGoToModule('locations', [])}>{locationsByHub.length} active sites</button>
-            <button type="button" onClick={() => onGoToModule('categories', [])}>{data.vehicles_by_type?.length ?? 0} vehicle types</button>
-          </div>
-        </div>
-
-        <div className="dashboard-ready-split">
-          <div className="dashboard-ready-stat" style={{ '--ready-pct': `${totalVehicles ? (availableVehicles / totalVehicles) * 100 : 0}%` }}>
-            <span className="dashboard-hologram-scan" />
-            <div className="dashboard-ready-stat-inner">
-              <div className="dashboard-ready-row is-ready">
-                <strong>{availableVehicles}</strong>
-                <span>Available</span>
-              </div>
-              <div className="dashboard-ready-row is-not-ready">
-                <strong>{notReadyVehicles}</strong>
-                <span>Unavailable</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="dashboard-command-side">
-          <div className="dashboard-live-chips">
-            <div>
-              <span>Local time</span>
-              <strong>{timeStr}</strong>
-            </div>
-            {weather && (
-              <div>
-                <span>Mandaue City, Cebu</span>
-                <strong><span className="dashboard-weather-mark">{weather.icon}</span>{weather.temp}C</strong>
-                <small>{weather.desc} / {weather.humidity}% humidity</small>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <DashboardKpiStrip items={adminKpis} label="Administrator dashboard metrics" />
-
-      <section className="dashboard-signal-grid full-span" aria-label="Dashboard signals">
-        <DashboardSignalCard
-          icon={primaryActionIcon}
-          label={primaryActionTitle}
-          value={primaryActionCount === 0 ? 'Clear' : primaryActionCount}
-          detail={primaryActionLabel}
-          tone={criticalActionCount > 0 ? 'alert' : primaryActionCount > 0 ? 'warn' : 'ok'}
-          meter={primaryActionCount > 0 ? Math.min(100, primaryActionCount * 18) : 100}
-          onClick={isAdminDashboard ? () => setOpenDashboardModal('actionQueue') : undefined}
-        />
-        <DashboardSignalCard
-          icon="checkCircle"
-          label="Emergency Coverage"
-          value={operationalTotal ? `${verifiedReady}/${operationalTotal}` : '0/0'}
-          detail={noCoverage.length > 0 ? `No coverage: ${noCoverage.map((r) => r.category).join(', ')}` : `${readinessRate}% verified ready`}
-          tone={noCoverage.length > 0 ? 'alert' : readinessRate >= 75 ? 'ok' : 'warn'}
-          meter={readinessRate}
-          onClick={readiness.length > 0 ? () => setOpenDashboardModal('emergencyReadiness') : undefined}
-        />
-        <DashboardSignalCard
-          icon="flag"
-          label="Risk Watch"
-          value={atRiskCount === 0 ? 'Stable' : atRiskCount}
-          detail={fragility.length > 0 ? `${fragility.length} no-backup categories` : `${readinessWatch.length} available but unverified`}
-          tone={atRiskCount > 0 ? 'alert' : 'ok'}
-          meter={atRiskCount > 0 ? Math.min(100, atRiskCount * 12) : 100}
-          onClick={atRiskCount > 0 ? () => setOpenDashboardModal('riskWatch') : undefined}
-        />
-        <DashboardSignalCard
-          icon="calendar"
-          label="Maintenance Load"
-          value={maintenanceLoad}
-          detail={`${underMaintenanceVehicles} in shop / ${upcomingMaintenance} upcoming / ${overdueMaintenanceCount} overdue`}
-          tone={overdueMaintenanceCount > 0 ? 'alert' : maintenanceLoad > 0 ? 'warn' : 'ok'}
-          meter={totalVehicles ? Math.min(100, (maintenanceLoad / Math.max(totalVehicles, 1)) * 100) : 0}
-          onClick={onGoToSchedules}
-        />
-      </section>
-
-      <section className="dashboard-intelligence-grid full-span">
-        <article className="dashboard-smart-panel dashboard-readiness-matrix">
-          <div className="dashboard-smart-panel-head">
-            <div>
-              <span>Response Matrix</span>
-              <h3>Readiness by Vehicle Type</h3>
-            </div>
-            <strong>{readinessRate}%</strong>
-          </div>
-          {readiness.length === 0 ? (
-            <p className="empty-state">No vehicle types to show yet.</p>
-          ) : (
-            <div className="dashboard-readiness-compact-list">
-              {visibleReadiness.map((r) => <ReadinessRow key={r.category} r={r} />)}
-            </div>
-          )}
-          {readiness.length > visibleReadiness.length && (
-            <button type="button" className="dashboard-inline-action" onClick={() => setOpenDashboardModal('emergencyReadiness')}>
-              View all {readiness.length} types
-            </button>
-          )}
-        </article>
-
-        <article className="dashboard-smart-panel dashboard-condition-matrix">
-          <div className="dashboard-smart-panel-head">
-            <div>
-              <span>Fleet Health</span>
-              <h3>Condition and Status</h3>
-            </div>
-            <strong>{goodConditionRate}%</strong>
-          </div>
-          <div className="dashboard-condition-core">
-            <div className="dashboard-condition-donut">
-              <DonutChart centerLabel={totalVehicles} centerSubLabel="Vehicles" segments={vehicleCondition} />
-            </div>
-            <ChartLegend rows={vehicleCondition} />
-          </div>
-          <DashboardStatusStrip rows={statusSegments} />
-        </article>
-
-        <article className="dashboard-smart-panel dashboard-operations-matrix">
-          <div className="dashboard-smart-panel-head">
-            <div>
-              <span>Operations Pulse</span>
-              <h3>Workload Pressure</h3>
-            </div>
-            <strong>{maintenanceExpenses}</strong>
-          </div>
-          <ColumnChart rows={operationsQueue} />
-          <p className="dashboard-panel-note">
-            {topFailurePattern
-              ? `${topFailurePattern.type} leads the last 12 months with ${topFailurePattern.count} case${topFailurePattern.count === 1 ? '' : 's'}.`
-              : 'No recurring failure pattern logged yet.'}
-          </p>
-        </article>
-
-        <article className="dashboard-smart-panel dashboard-distribution-matrix">
-          <div className="dashboard-smart-panel-head">
-            <div>
-              <span>Fleet Distribution</span>
-              <h3>Sites and Types</h3>
-            </div>
-            <strong>{totalVehicles}</strong>
-          </div>
-          <div className="dashboard-dual-bars">
-            <div>
-              <h4>Sites</h4>
-              <HorizontalBarChart rows={visibleLocationRows} />
-            </div>
-            <div>
-              <h4>Types</h4>
-              <HorizontalBarChart rows={visibleTypeRows} />
-            </div>
-          </div>
-        </article>
-      </section>
-      {/* SECTION 1: Welcome Header — compressed, and paired with Fleet
-          Status instead of stretching full-width alone at the top. */}
-      <div className="dashboard-banner dashboard-banner-compact col-span-7">
-        <div className="dashboard-banner-welcome">
-          <span className="dashboard-greeting-role">{greetingRole}</span>
-          <TextType
-            key={greeting}
-            as="h2"
-            text={[greeting]}
-            typingSpeed={150}
-            pauseDuration={1500}
-            loop={false}
-            showCursor={true}
-            cursorCharacter="|"
-          />
-          <p>{dateStr || 'Today'}</p>
-        </div>
-        <div className="dashboard-banner-widgets">
-          <div className="dashboard-banner-time">
-            <span className="time-label">Local time</span>
-            <strong>{timeStr}</strong>
-          </div>
-          {weather && (
-            <div className="dashboard-banner-weather">
-              <span className="weather-icon">{weather.icon}</span>
-              <div className="weather-details">
-                <span className="weather-city">Mandaue City, Cebu</span>
-                <span className="weather-desc">{weather.desc}</span>
-                <span className="weather-extra">Humidity: {weather.humidity}%</span>
-              </div>
-              <p className="weather-temp">{weather.temp}°C</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <section className="panel col-span-5 dashboard-fleet-status-panel">
-        <div className="panel-header-bar">
-          <h3>Fleet Condition</h3>
-          <span className="area-chart-tag">{goodConditionRate}% in good condition</span>
-        </div>
-        <div className="fleet-status-compact">
-          <div className="donut-chart-small">
-            <DonutChart centerLabel={totalVehicles} centerSubLabel="Vehicles" segments={vehicleCondition} />
-          </div>
-          <div className="fleet-status-legend-col">
-            {/* Verified-ready deliberately lives only in the Action Center's
-                Emergency Readiness card below — it was previously repeated
-                here, in an alert tile, in a quick card, and twice more in the
-                Readiness section, so the same 0/7 read five times on one page. */}
-            <ChartLegend rows={vehicleCondition} />
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 2 — Action Center: what needs a decision right now, placed
-          directly under the banner instead of below eight KPI tiles, since
-          "what do I do" outranks "what is currently true". This absorbs the
-          old Critical Action / Emergency Ready alert strip, which showed
-          these same two numbers one row higher in a different card style. */}
-      {hasRole(user, 'Admin') && (
-        <div className="dashboard-quick-cards full-span">
-          <DashboardQuickCard
-            icon="alert"
-            title="Action Queue"
-            stat={actionQueue.length === 0 ? 'All clear' : `${actionQueue.length} need${actionQueue.length === 1 ? 's' : ''} you`}
-            tone={criticalActionCount > 0 ? 'alert' : actionQueue.length > 0 ? 'warn' : 'ok'}
-            preview={criticalActionCount > 0
-              ? `${criticalActionCount} critical · ${actionQueue[0]?.label ?? ''}`
-              : actionQueue[0]?.label}
-            onClick={() => setOpenDashboardModal('actionQueue')}
-          />
-          {readiness.length > 0 && (
-            <DashboardQuickCard
-              icon="checkCircle"
-              title="Emergency Readiness"
-              stat={fleetSummary ? `${fleetSummary.verified_ready}/${fleetSummary.operational_total} ready` : '—'}
-              tone={fleetSummary?.coverage_alert ? 'alert' : fleetSummary && fleetSummary.verified_ready < fleetSummary.operational_total ? 'warn' : 'ok'}
-              preview={noCoverage.length > 0
-                ? `No coverage: ${noCoverage.map((r) => r.category).join(', ')}`
-                : `Across ${readiness.length} vehicle type${readiness.length === 1 ? '' : 's'}`}
-              onClick={() => setOpenDashboardModal('emergencyReadiness')}
-            />
-          )}
-          {(fragility.length > 0 || readinessWatch.length > 0 || forecastOut.length > 0 || preventiveWatch.length > 0 || overdueSchedules.length > 0) && (
-            <DashboardQuickCard
-              icon="alert"
-              title="Risk & Readiness Watch"
-              stat={fragility.length > 0 ? `${fragility.length} single point${fragility.length === 1 ? '' : 's'} of failure` : `${readinessWatch.length} unverified`}
-              tone={fragility.length > 0 ? 'alert' : 'warn'}
-              preview={forecastOut.length > 0 ? `${forecastOut.length} vehicle${forecastOut.length === 1 ? '' : 's'} in the shop` : undefined}
-              onClick={() => setOpenDashboardModal('riskWatch')}
-            />
-          )}
-        </div>
-      )}
-
-      {/* SECTION 3 — Fleet KPIs. Every headline number in one consistent tile
-          style, including the three "watch" counts (issues / upcoming /
-          overdue) that used to sit right below in a third, slimmer card style
-          for no reason other than to de-emphasise them. */}
-      {hasRole(user, 'Maintenance Personnel') && (
-        <section className="panel col-span-7 action-queue-panel">
-          <div className="panel-header-bar">
-            <h3><Icon name="wrench" size={16} /> My Scheduled Work</h3>
-            {myScheduledWork.length > 0 && <span className="area-chart-tag">{myScheduledWork.length} assigned to you</span>}
-          </div>
-          {myScheduledWork.length === 0 ? (
-            <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> Nothing scheduled for you right now.</p>
-          ) : (
-            <div className="action-queue-list action-queue-list-compact">
-              {myScheduledWork.map((item) => (
-                <MyScheduledWorkRow
-                  key={item.schedule_id}
-                  item={item}
-                  onClick={onGoToSchedules}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {openDashboardModal === 'actionQueue' && (
-        <DashboardListModal
-          title="Action Queue"
-          tag={actionQueue.length > 0 ? `${actionQueue.length} need${actionQueue.length === 1 ? 's' : ''} you` : undefined}
-          onClose={() => setOpenDashboardModal(null)}
-        >
-          {actionQueue.length === 0 ? (
-            <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> All clear — nothing needs your attention right now.</p>
-          ) : (
-            <div className="action-queue-list">
-              {actionQueue.map((item) => (
-                <ActionQueueRow
-                  key={`${item.type}-${item.id}`}
-                  item={item}
-                  basePath={basePath}
-                  onNavigate={(path) => { setOpenDashboardModal(null); onNavigate(path); }}
-                  onGoToSchedules={() => { setOpenDashboardModal(null); onGoToSchedules(); }}
-                />
-              ))}
-            </div>
-          )}
-        </DashboardListModal>
-      )}
-
-      {openDashboardModal === 'emergencyReadiness' && (
-        <DashboardListModal
-          title="Emergency Readiness"
-          tag={fleetSummary ? `${fleetSummary.verified_ready} of ${fleetSummary.operational_total} verified ready` : undefined}
-          onClose={() => setOpenDashboardModal(null)}
-        >
-          <div className="emergency-readiness-rows">
-            {readiness.map((r) => <ReadinessRow key={r.category} r={r} />)}
-          </div>
-          {fragility.length > 0 && fragility.length === readiness.length && (
-            <p className="emergency-readiness-note">
-              <Icon name="alert" size={13} /> Every emergency type has exactly one vehicle — no backup if any of the {readiness.length} goes down. Verify all {readiness.length} to clear this panel.
-            </p>
-          )}
-          {noCoverage.length > 0 && (
-            <p className="emergency-readiness-alert"><Icon name="alert" size={13} /> No coverage: {noCoverage.map((r) => r.category).join(', ')}</p>
-          )}
-        </DashboardListModal>
-      )}
-
-      {openDashboardModal === 'riskWatch' && (
-        <DashboardListModal
-          title="Risk & Readiness Watch"
-          tag={fragility.length > 0 ? `${fragility.length} single point${fragility.length === 1 ? '' : 's'} of failure` : undefined}
-          onClose={() => setOpenDashboardModal(null)}
-        >
-          <div className="risk-watch-columns">
-            {criticalityWatch.some((r) => r.criticality !== 'Normal') && (
-              <div className="risk-watch-col">
-                <h4>Critical &amp; high-priority vehicles not ready</h4>
-                {criticalityWatch.filter((r) => r.criticality !== 'Normal').map((r) => (
-                  <div key={r.vehicle_id} className={`risk-watch-item${r.criticality === 'Critical' ? ' is-critical' : ''}`}>
-                    <span className={`risk-watch-item-dot${r.criticality === 'Critical' ? ' is-critical' : ''}`} />
-                    <div className="risk-watch-item-body">
-                      <span className="risk-watch-item-top">
-                        <span className="risk-watch-item-title">{r.vehicle_name}</span>
-                        <span className={`risk-watch-tag${r.criticality === 'Critical' ? ' is-critical' : ''}`}>{r.criticality.toUpperCase()}</span>
-                      </span>
-                      <span className="risk-watch-item-sub">{r.category ?? '—'} · {r.reason}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {fragility.length > 0 && (
-              <div className="risk-watch-col">
-                <h4>No backup if it goes down</h4>
-                {fragility.map((f) => (
-                  <div key={f.category} className={`risk-watch-item${f.critical ? ' is-critical' : ''}`}>
-                    <span className={`risk-watch-item-dot${f.critical ? ' is-critical' : ''}`} />
-                    Only 1 {f.category}
-                  </div>
-                ))}
-              </div>
-            )}
-            {capabilityImpact.length > 0 && (
-              <div className="risk-watch-col">
-                <h4>Capability impact by type</h4>
-                {capabilityImpact.map((row) => (
-                  <button
-                    key={row.category}
-                    type="button"
-                    className={`risk-watch-item risk-watch-item-clickable${row.criticality === 'Critical' ? ' is-critical' : ''}`}
-                    onClick={() => { setOpenDashboardModal(null); onNavigate(`${basePath}/vehicles`); }}
-                  >
-                    <span className={`risk-watch-item-dot${row.criticality === 'Critical' ? ' is-critical' : ''}`} />
-                    <div className="risk-watch-item-body">
-                      <span className="risk-watch-item-top">
-                        <span className="risk-watch-item-title">{row.category}</span>
-                        <span className={`risk-watch-tag${row.coverage_state === 'NO_COVERAGE' ? ' is-critical' : ''}`}>
-                          {CAPABILITY_STATE_LABEL[row.coverage_state] ?? row.coverage_state}
-                        </span>
-                      </span>
-                      <span className="risk-watch-item-sub">{row.ready}/{row.total} ready · {row.primary_reason ?? 'Based on current records.'}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-            {readinessWatch.length > 0 && (
-              <div className="risk-watch-col">
-                <h4>Available, not verified</h4>
-                {readinessWatch.map((r) => (
-                  <button
-                    key={r.vehicle_id}
-                    type="button"
-                    className={`risk-watch-item risk-watch-item-clickable${r.state === 'not_ready' ? ' is-critical' : ''}`}
-                    onClick={() => { setOpenDashboardModal(null); onNavigate(`${basePath}/vehicles/${r.vehicle_id}`); }}
-                  >
-                    <span className={`risk-watch-item-dot${r.state === 'not_ready' ? ' is-critical' : ''}`} />
-                    <div className="risk-watch-item-body">
-                      <span className="risk-watch-item-top">
-                        <span className="risk-watch-item-title">{r.vehicle_name}</span>
-                        <span className={`risk-watch-tag${r.state === 'not_ready' ? ' is-critical' : ''}`}>
-                          {(READINESS_BADGE[r.state]?.label ?? r.state).toUpperCase()}
-                        </span>
-                      </span>
-                      <span className="risk-watch-item-sub">{r.category ?? '—'}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {forecastOut.length === 0 && preventiveWatch.length === 0 && overdueSchedules.length === 0 ? (
-            <p className="risk-watch-footer-ok">
-              <Icon name="checkCircle" size={13} /> All vehicles available — nothing out for maintenance.
-              <span className="area-chart-tag">{forecast.available_now} ready</span>
-            </p>
-          ) : (
-            <div className="risk-watch-footer-list">
-              {forecastOut.map((v) => (
-                <div key={v.vehicle_id} className="risk-watch-footer-row">
-                  <span>{v.vehicle_name}</span>
-                  <span>{v.estimated_return_date ? `Ready by ${formatForecastDate(v.estimated_return_date)}` : 'No estimate yet'}</span>
-                </div>
-              ))}
-              {(preventiveWatch.length > 0 ? preventiveWatch : overdueSchedules).map((s) => (
-                <div key={s.schedule_id} className="risk-watch-footer-row">
-                  <span>{s.vehicle_name ?? s.vehicle?.vehicle_name ?? '—'} · {s.maintenance_type}</span>
-                  <span className={(s.state ? s.state === 'overdue' : true) ? 'is-overdue' : ''}>
-                    {(s.state ? s.state === 'overdue' : true) ? 'OVERDUE' : 'DUE SOON'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </DashboardListModal>
-      )}
-
-      {/* SECTION 4 — Can we respond, and why do vehicles keep going down?
-          Readiness used to be a full-width band with a half-empty right
-          side; pairing it with the failure-cause chart fills the row and
-          puts the cause right next to the consequence. */}
-      <section className="panel col-span-7">
-        <div className="panel-header-bar">
-          <h3><Icon name="checkCircle" size={16} /> Readiness by Vehicle Type</h3>
-          {fleetSummary && (
-            <span className="area-chart-tag">
-              {fleetSummary.verified_ready} of {fleetSummary.operational_total} verified ready
-            </span>
-          )}
-        </div>
-        {readiness.length === 0 ? (
-          <p className="empty-state">No vehicle types to show yet.</p>
-        ) : (
-          <div className="emergency-readiness-rows">
-            {readiness.map((r) => <ReadinessRow key={r.category} r={r} />)}
-          </div>
-        )}
-        {noCoverage.length > 0 && (
-          <p className="emergency-readiness-alert">
-            <Icon name="alert" size={13} /> No coverage: {noCoverage.map((r) => r.category).join(', ')}
-          </p>
-        )}
-      </section>
-
-      {showBreakingMost ? (
-        <section className="panel col-span-5">
-          <div className="panel-header-bar">
-            <h3><Icon name="wrench" size={16} /> What's Breaking Most</h3>
-            <span className="area-chart-tag">Last 12 months</span>
-          </div>
-          <div className="dashboard-panel-chart-body">
-            <HorizontalBarChart rows={failurePatterns.map((p) => ({ label: p.type, value: p.count }))} />
-            <p className="muted" style={{ marginTop: 8, fontSize: '0.78rem' }}>{failurePatterns[0]?.type ?? 'This'} affects {failurePatterns[0]?.count ?? 0} vehicles — a common cause worth fixing at the root.</p>
-          </div>
-        </section>
-      ) : (
-        <section className="panel col-span-5">
-          <div className="panel-header-bar">
-            <h3>Operations Queue</h3>
-            <span className="area-chart-tag">{maintenanceExpenses}</span>
-          </div>
-          <div className="dashboard-panel-chart-body">
-            <ColumnChart rows={operationsQueue} />
-            <div className="graph-footnote">
-              <span>Total maintenance expenses</span>
-              <strong>{maintenanceExpenses}</strong>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* SECTION 5 — Fleet composition: where the vehicles are, and what
-          kinds exist. Two halves of one question, so they share a row
-          instead of stacking as two more full-width bands. */}
-      <section className="panel col-span-6">
-        <div className="panel-header-bar">
-          <h3><Icon name="pin" size={16} /> Vehicles by Location</h3>
-          <span className="area-chart-tag">{locationsByHub.length} sites</span>
-        </div>
-        <div className="dashboard-panel-chart-body">
-          <HorizontalBarChart rows={locationsByHub} />
-        </div>
-      </section>
-
-      <section className="panel col-span-6">
-        <div className="panel-header-bar">
-          <h3><Icon name="vehicle" size={16} /> Vehicles by Type</h3>
-          <span className="area-chart-tag">{data.vehicles_by_type?.length ?? 0} types</span>
-        </div>
-        <div className="dashboard-panel-chart-body">
-          <HorizontalBarChart rows={data.vehicles_by_type} />
-        </div>
-      </section>
-    </div>
-  );
+function Dashboard(props) {
+  return <RoleDashboard {...props} isScheduleOverdue={isScheduleOverdue} />;
 }
 
 // Formats a plain YYYY-MM-DD date for the Availability Forecast (e.g. "Jul 14, 2026").
@@ -6003,90 +4910,6 @@ function formatForecastDate(dateStr) {
   const d = new Date(`${dateStr}T00:00:00`);
   if (Number.isNaN(d.getTime())) return dateStr;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function buildLocalGreeting(name = 'User', date = new Date()) {
-  const displayName = firstName(name);
-  const hour = date.getHours();
-
-  if (hour >= 5 && hour < 12) {
-    return randomGreeting([
-      `Rise and shine, ${displayName}!`,
-      `A bright morning to you, ${displayName}!`,
-      `Fresh start, ${displayName}! Let's keep the fleet moving.`,
-      `Morning momentum is here, ${displayName}!`,
-    ]);
-  }
-
-  if (hour === 12) {
-    return randomGreeting([
-      `Happy noon, ${displayName}!`,
-      `Midday check-in, ${displayName}! The fleet is ready.`,
-      `It's noon, ${displayName}! Keep the day rolling.`,
-      `A steady noon to you, ${displayName}!`,
-    ]);
-  }
-
-  if (hour >= 13 && hour < 15) {
-    return randomGreeting([
-      `A pleasant afternoon, ${displayName}!`,
-      `Good energy this afternoon, ${displayName}!`,
-      `Afternoon focus is on, ${displayName}!`,
-      `Keep the dashboard sharp this afternoon, ${displayName}!`,
-    ]);
-  }
-
-  if (hour >= 15 && hour < 18) {
-    return randomGreeting([
-      `It's late afternoon, ${displayName}!`,
-      `Late afternoon focus, ${displayName}!`,
-      `A strong late afternoon to you, ${displayName}!`,
-      `The day is still moving, ${displayName}!`,
-    ]);
-  }
-
-  if (hour >= 18 && hour < 22) {
-    return randomGreeting([
-      `A calm evening to you, ${displayName}!`,
-      `Evening check-in, ${displayName}! The fleet is in view.`,
-      `Good evening, ${displayName}! Keep things steady.`,
-      `The evening shift is looking sharp, ${displayName}!`,
-    ]);
-  }
-
-  return randomGreeting([
-    `Working late, ${displayName}? The dashboard is ready.`,
-    `Quiet night watch, ${displayName}!`,
-    `Late-night focus, ${displayName}!`,
-    `The fleet rests easier with you here, ${displayName}!`,
-  ]);
-}
-
-function randomGreeting(messages) {
-  return messages[Math.floor(Math.random() * messages.length)];
-}
-
-function firstName(name = 'User') {
-  return (String(name || 'User').trim().split(/\s+/)[0] || 'User').toUpperCase();
-}
-
-function dashboardRoleLabel(role = 'User') {
-  const labels = {
-    Admin: 'Administrator',
-    Custodian: 'Custodian',
-    'Maintenance Personnel': 'Maintenance',
-  };
-
-  return labels[role] ?? role;
-}
-
-function dashboardMetricValue(metrics, label) {
-  const rawValue = metrics.find((metric) => metric.label === label)?.value ?? 0;
-  if (typeof rawValue === 'number') {
-    return rawValue;
-  }
-  const parsed = Number.parseFloat(String(rawValue).replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 // One filled horizontal bar split proportionally into colored segments (e.g.
@@ -6116,6 +4939,8 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           max={lastIndex}
           step={1}
           value={minIndex}
+          aria-label="Minimum priority"
+          aria-valuetext={labels[minIndex]}
           // Stacked on top of the max thumb once they meet at the same stop
           // (e.g. narrowing the filter down to "Medium" only) — otherwise,
           // since it's first in the DOM, the max thumb always paints over it
@@ -6131,6 +4956,8 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           max={lastIndex}
           step={1}
           value={maxIndex}
+          aria-label="Maximum priority"
+          aria-valuetext={labels[maxIndex]}
           style={{ zIndex: minIndex >= maxIndex ? 1 : 2 }}
           onChange={(e) => onChange(minIndex, Math.max(Number(e.target.value), minIndex))}
         />
@@ -6581,6 +5408,8 @@ function ProfileMenu({ user, open, setOpen, onLogout, onOpenNotifications, onOpe
             <Icon name="bell" size={15} /> Notifications
           </button>
 
+          <EndImpersonationAction />
+
           <div className="profile-menu-divider" />
 
           <button className="profile-menu-item profile-menu-item-danger" type="button" onClick={onLogout}>
@@ -6637,13 +5466,6 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
 
   return (
     <ModulePanel description="Your account details and password.">
-      <div className="vehicle-profile-header">
-        <div className="vehicle-profile-identity">
-          <span className="ticket-detail-id">My Profile</span>
-          <h3 className="ticket-detail-title">{user.name}</h3>
-        </div>
-      </div>
-
       <div className="profile-page">
         <div className="profile-hero">
           <div className="profile-hero-avatar">
@@ -6658,7 +5480,7 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
           </div>
         </div>
 
-        <div className="profile-section">
+        <section className="profile-section" aria-label="Edit profile details">
           <h4 className="profile-section-title"><Icon name="edit" size={15} /> Edit Details</h4>
           <p className="muted profile-section-hint">Keep your contact information up to date.</p>
           <div className="form-grid-2col user-form-grid">
@@ -6673,9 +5495,9 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
               title=""
             />
           </div>
-        </div>
+        </section>
 
-        <div className="profile-section">
+        <section className="profile-section" aria-label="Change password">
           <h4 className="profile-section-title"><Icon name="key" size={15} /> Change Password</h4>
           <p className="muted profile-section-hint">Use a strong password you don't reuse on other sites.</p>
           <div className="profile-form">
@@ -6689,7 +5511,7 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
               title=""
             />
           </div>
-        </div>
+        </section>
       </div>
     </ModulePanel>
   );
@@ -10045,7 +8867,17 @@ const WORK_TRACKER_STAT_CARDS = [
 // module's table, matching the Vehicle Management stat cards exactly.
 // `cards` is [{ key, label, icon, bg, color }]; `counts` maps key -> number;
 // clicking a card toggles `activeFilter` via `onFilterChange`.
-function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFilter, onFilterChange, gridClassName = '' }) {
+function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFilter, onFilterChange, gridClassName = '', readOnly = false }) {
+  if (readOnly) return (
+    <section className={`metric-grid stat-one-line ${gridClassName}`} aria-label="Status summary" style={{ marginBottom: 16, '--stat-cols': cards.length + 1 }}>
+      {[{ key: 'total', label: totalLabel, icon: 'grid', bg: '#dbeafe', color: '#1d4ed8' }, ...cards].map(({ key, label, icon, bg, color }) => (
+        <div key={key} className="metric-card metric-card-iconic ticket-summary-metric">
+          <span className="metric-card-icon" style={{ background: bg, color }}><Icon name={icon} size={18} /></span>
+          <div className="metric-card-body"><span>{label}</span><strong>{key === 'total' ? total : counts[key] ?? 0}</strong></div>
+        </div>
+      ))}
+    </section>
+  );
   const isFilterMulti = Array.isArray(activeFilter);
   const isTotalActive = isFilterMulti ? activeFilter.length === 0 : !activeFilter;
   return (
@@ -10407,13 +9239,13 @@ function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromConditio
         // no record yet to create a ticket from, suggest a schedule against,
         // edit, or delete. Its only real action is filing the first check.
         !row.condition_check_id ? (
-          <div className="row-actions">
+          <div className="row-actions condition-record-actions">
             {onAddCondition && (
               <button className="btn-confirm-action icon-btn" onClick={() => onAddCondition(row)} type="button" title="Record Condition" aria-label="Record Condition"><Icon name="plus" size={14} /></button>
             )}
           </div>
         ) : (
-        <div className="row-actions">
+        <div className="row-actions condition-record-actions">
           {/* #2 — Admin can turn a problem-finding condition check (Needs
               Repair OR Needs Inspection — anything short of Good) into a
               pre-diagnosed ticket in one click, instead of someone having to
@@ -10723,6 +9555,13 @@ function TicketFilterPanel({
   filterDateEnd,
   setFilterDateEnd,
 }) {
+  const priorities = ['Low', 'Medium', 'High'].filter((value) => !priorityLevels.length || priorityLevels.includes(value));
+  const statuses = [...new Set([...TICKET_STAT_CARDS.map((card) => card.key), 'For Verification', ...statusOptions])];
+  const toggleStatus = (status) => setDraft((current) => {
+    const selected = current.status.length ? current.status.filter((value) => value !== '__none__') : statuses;
+    const next = selected.includes(status) ? selected.filter((value) => value !== status) : [...selected, status];
+    return { ...current, status: next.length === statuses.length ? [] : next.length ? next : ['__none__'] };
+  });
   const capacities = useMemo(() => {
     const caps = new Set();
     vehicles.forEach((v) => { if (v.capacity) caps.add(v.capacity.trim()); });
@@ -10835,27 +9674,31 @@ function TicketFilterPanel({
           onChange={(vals) => setDraft((d) => ({ ...d, custodian: vals }))}
         />
       </div>
-      {/* The status chips and the Priority slider lived here too; statuses are
-          already the stat cards above, so they're gone. Priority stays as a
-          dropdown like every other filter. */}
-      <div className="filter-date-group">
-        <span>Priority</span>
-        <MultiSelectDropdown
-          placeholder="All Priorities"
-          options={priorityLevels}
-          selected={draft.priority}
-          onChange={(vals) => setDraft((d) => ({ ...d, priority: vals.length === priorityLevels.length ? [] : vals }))}
-        />
-      </div>
+
       <div className="filter-date-group">
         <span>From Date</span>
-        <DateFilterInput value={draft.dateStart} onChange={(val) => setDraft((d) => ({ ...d, dateStart: val }))} />
+        <DateFilterInput value={draft.dateStart} onChange={(value) => setDraft((current) => ({ ...current, dateStart: value }))} />
       </div>
       <div className="filter-date-group">
         <span>To Date</span>
-        <DateFilterInput value={draft.dateEnd} onChange={(val) => setDraft((d) => ({ ...d, dateEnd: val }))} />
+        <DateFilterInput value={draft.dateEnd} onChange={(value) => setDraft((current) => ({ ...current, dateEnd: value }))} />
       </div>
-      <button type="button" className="filter-apply-btn issue-filter-apply-btn is-inline" onClick={applyFilters} disabled={!isDirty}>Filter</button>
+      <div className="ticket-filter-controls">
+        <div className="issue-filter-severity-card">
+          <span className="issue-filter-severity-label">Priority</span>
+          <DualRangeSlider labels={priorities} minIndex={severityRangeFromSelection(draft.priority, priorities)[0]} maxIndex={severityRangeFromSelection(draft.priority, priorities)[1]} onChange={(min, max) => setDraft((current) => ({ ...current, priority: min === 0 && max === priorities.length - 1 ? [] : priorities.slice(min, max + 1) }))} />
+        </div>
+        <div className="issue-filter-status-grid" role="group" aria-label="Ticket status">
+          {statuses.map((status) => {
+            const card = TICKET_STAT_CARDS.find((item) => item.key === status);
+            return <label key={status} className="issue-filter-status-chip" style={{ background: card?.bg ?? '#ede9fe', color: card?.color ?? '#6d28d9' }}>
+              <input type="checkbox" checked={!draft.status.length || draft.status.includes(status)} onChange={() => toggleStatus(status)} />
+              <span>{card?.label ?? status}</span>
+            </label>;
+          })}
+        </div>
+        <button type="button" className="filter-apply-btn" onClick={applyFilters} disabled={!isDirty}>Filter</button>
+      </div>
     </div>
   );
 }
@@ -11765,7 +10608,6 @@ function MaintenanceScheduleActions({ row, currentUser, onComplete, onEdit, onDe
 }
 
 function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onViewVehicle, onViewSchedule, onApprove, onDecline }) {
-  const [notesExpanded, setNotesExpanded] = useState(false);
   const currentUserId = currentUser?.id;
   const isMine = currentUserId != null && String(row.assigned_to) === String(currentUserId);
   const overdue = isScheduleOverdue(row);
@@ -11822,37 +10664,12 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
         </button>
       </div>
 
-      <div className={`sch-card-date${overdue ? ' is-overdue' : ''}`}>
-        <span className="sch-detail-icon"><Icon name="calendar" size={15} /></span>
-        <div><span className="sch-card-detail-label">Scheduled date &amp; time</span><strong>{formatDate(row.scheduled_date)}{row.scheduled_time ? ` · ${String(row.scheduled_time).slice(0, 5)}` : ''}</strong></div>
-      </div>
-
-      <dl className="sch-card-meta">
-        <div>
-          <dt><Icon name="undo" size={14} /> Recurrence</dt>
-          <dd>{row.recurrence_months ? (RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} months`) : 'One-time'}</dd>
-        </div>
-        <div className="sch-mechanic-detail">
-          <dt><Icon name="wrench" size={14} /> Assigned mechanic</dt>
-          <dd>
-            {row.assigned_to_user?.name
-              ? <><TicketPersonnelAvatars people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} /><span>{row.assigned_to_user.name}</span>{isMine && <span className="sch-you-tag">You</span>}</>
-              : <span className="muted">Unassigned</span>}
-          </dd>
-        </div>
-        <div>
-          <dt><Icon name="pin" size={14} /> Service location</dt>
-          <dd>{row.service_location || <span className="muted">Not set</span>}</dd>
+      <dl className="sch-card-meta sch-card-meta-summary">
+        <div className={`sch-card-date${overdue ? ' is-overdue' : ''}`}>
+          <dt><Icon name="calendar" size={14} /> Scheduled date &amp; time</dt>
+          <dd>{formatDate(row.scheduled_date)}{row.scheduled_time ? ` · ${String(row.scheduled_time).slice(0, 5)}` : ''}</dd>
         </div>
       </dl>
-
-      <div className="sch-card-notes">
-        <strong>Schedule notes</strong>
-        {row.notes ? <>
-          <p className={notesExpanded ? 'is-expanded' : ''}>{row.notes}</p>
-          {(row.notes.length > 80 || row.notes.includes('\n')) && <button type="button" aria-expanded={notesExpanded} onClick={(event) => { event.stopPropagation(); setNotesExpanded((expanded) => !expanded); }}>{notesExpanded ? 'Show less' : 'Show more'}</button>}
-        </> : <p className="sch-no-notes">No notes provided</p>}
-      </div>
 
       {/* Traceability, same as the table's Status column: "Completed" alone
           doesn't say whether the record it produced was ever verified. */}
@@ -11869,8 +10686,6 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
           )}
         </div>
       )}
-
-      {row.status === 'Declined' && row.decline_reason && <p className="sch-decline-reason"><strong>Declined:</strong> {row.decline_reason}</p>}
 
       {/* ticket-card-bottom pins this to the bottom of the card (margin-top:
           auto) the same way TicketCard's own footer does, so action buttons
@@ -13927,7 +12742,7 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
 // TICKET DETAIL PANEL — shown when admin clicks a ticket row
 // =========================================================================
 
-function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEditSubIssue, onDeleteSubIssue, onAssignTicketMechanic, onReassignCustodian, onReopenDone, onLogRepairs, onSubmitForVerification, onVerifyTicket, onViewIssue, onCancel, onUncancel, onDelete, onRequestConfirmation, onApproveCannibalization, onRejectCannibalization, onApproveProposal, onDeclineProposal, onUndeclineProposal, onClose, asPage = false }) {
+function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEditSubIssue, onDeleteSubIssue, onAssignTicketMechanic, onReassignCustodian, onReopenDone, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onApproveCannibalization, onRejectCannibalization, onApproveProposal, onDeclineProposal, onUndeclineProposal, onClose, asPage = false }) {
   const [subDraft, setSubDraft] = useState(null); // { id|null, title, maintenance_type }
   // Cannibalization approval — tracks which sub-issue's reject form is
   // open; Approve has no form of its own (it needs no input beyond the
@@ -14165,11 +12980,6 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
                 <span className="ticket-detail-label">Description</span>
                 <ExpandableText text={ticket.ticket_description} className="muted" lines={3} />
               </div>
-              {ticket.issue_report_id && onViewIssue && canDo(user, 'issue.view') && (
-                <button className="ghost-button" type="button" style={{ marginTop: 10 }} onClick={() => onViewIssue(ticket.issue_report_id)}>
-                  <Icon name="alert" size={13} /> View Issue Details
-                </button>
-              )}
             </section>
 
             {ticket.assigned_custodian_id && (
@@ -14904,7 +13714,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
     e.preventDefault();
     // The submit button used to just stay disabled until every required
     // field (entry mode included) was filled — silent and easy to miss,
-    // especially "How Is This Being Reported?", which isn't a native form
+    // especially "1. Choose a repair method", which isn't a native form
     // control the browser could nudge about on its own. Clicking now
     // always works; a toast spells out exactly what's still needed instead.
     const errors = [];
@@ -15047,7 +13857,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
             form; it's folded in here now instead of asking for it twice —
             "Pre-Diagnosed" as a generic option is gone, since picking a
             specific repair type already implies the issue is diagnosed. */}
-        <section className="veh-card">
+        <section className="veh-card ticket-method-section">
           <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>How Is This Being Reported?</h4></div>
           <div className="ticket-method-body">
             <div className="entry-mode-toggle" role="radiogroup" aria-label="Entry mode">
@@ -15119,7 +13929,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
           </div>
         </section>
 
-        <section className="veh-card">
+        <section className="veh-card ticket-vehicle-section">
           <div className="veh-card-head"><Icon name="vehicle" size={16} /><h4>Vehicle & Assignment</h4></div>
           <div className="ticket-form-grid-2 ticket-vehicle-grid">
             <label>
@@ -15168,8 +13978,8 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
           )}
         </section>
 
-        <section className="veh-card veh-card-form">
-          <div className="veh-card-head"><Icon name="alert" size={16} /><h4>Issue Details</h4></div>
+        <section className="veh-card veh-card-form ticket-issue-section">
+          <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
           <div className="ticket-issue-fields">
             <div className="ticket-form-grid-2" style={{ padding: 0 }}>
               <label style={{ gridColumn: '1 / -1' }}>
@@ -15482,8 +14292,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           </div>
         )}
 
-        <section className="veh-card">
-          <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>How Is This Being Reported?</h4></div>
+        <section className="veh-card ticket-method-section">
+          <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>1. Choose a repair method</h4></div>
           <div className="ticket-method-body">
             <div className="entry-mode-toggle" role="radiogroup" aria-label="Entry mode">
               {modeOptions.map((opt) => {
@@ -15512,8 +14322,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           </div>
         </section>
 
-        <section className="veh-card">
-          <div className="veh-card-head"><Icon name="vehicle" size={16} /><h4>Vehicle</h4></div>
+        <section className="veh-card ticket-vehicle-section">
+          <div className="veh-card-head"><Icon name="vehicle" size={16} /><h4>2. Select the vehicle</h4></div>
           {/* The picker and the selected vehicle's info now sit side by side
               (one .ticket-form-grid-2 row) instead of the preview stacking
               full-width underneath — picker on the left, info on the right. */}
@@ -15580,8 +14390,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           )}
         </section>
 
-        <section className="veh-card veh-card-form">
-          <div className="veh-card-head"><Icon name="alert" size={16} /><h4>Issue Details</h4></div>
+        <section className="veh-card veh-card-form ticket-issue-section">
+          <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
           <div className="ticket-issue-fields">
             {/* No Ticket Title field — it's automatic (vehicle + repair type),
                 and the Admin folds the ticket's own # into it on approval. */}
@@ -15592,7 +14402,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
             <label className="ticket-priority-field">
               <span>Priority <span className="required-asterisk">*</span></span>
               <select required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
-                <option value="">{' '}</option>
+                <option value="">Select an option</option>
                 {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
               </select>
             </label>
@@ -15787,8 +14597,7 @@ function TicketModule({
         total={ticketStats.total}
         cards={TICKET_STAT_CARDS}
         counts={ticketStats}
-        activeFilter={filterStatus}
-        onFilterChange={setFilterStatus}
+        readOnly
       />
       {/* Same layout as the Issue Reports page: the priority bar and the
           filters stack on the left, Latest Reports spans both on the right.
@@ -15796,7 +14605,8 @@ function TicketModule({
       <div className={`ticket-summary-grid${recentIssues && recentIssues.length > 0 ? '' : ' no-side'}`}>
         <div className="ticket-summary-chart">
           <StackedBarChart
-            title="Maintenance Tickets"
+            title="Maintenance Tickets by Priority"
+            showPercentages
             segments={[
               { label: 'High', value: ticketPriorityStats.High, color: '#dc2626' },
               { label: 'Medium', value: ticketPriorityStats.Medium, color: '#f59e0b' },
@@ -16697,7 +15507,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
               <p>{vehicle.category?.domain ?? 'Land'}.{vehicle.plate_number}</p>
             </div>
             <div className="veh-print-header-right">
-              <Icon name="gear" size={48} className="topbar-gear-icon" filled />
+              <VMSLogo variant="blue" size={48} className="topbar-gear-icon" />
               <span className="vms-wordmark">vms</span>
             </div>
           </div>
@@ -17318,7 +16128,7 @@ function CustodianVerificationModule({
         onFilterChange={onFilterChange}
       />
       {tabBar}
-      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} />
+      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
       <section className="panel module-filter-panel">
         <FilterBar
           categories={categories}
@@ -18168,7 +16978,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 // an Admin/Custodian can spot and act on them without hunting through the
 // full list below. Always visible (even at a count of 0) so it reads as a
 // permanent fixture of the page, not something that randomly appears.
-function readyToCloseColumns() {
+function readyToCloseColumns(onCloseTicket) {
   return [
     { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => <span className="row-title-text">#{r.ticket_id}</span> },
     { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> },
@@ -18176,13 +16986,18 @@ function readyToCloseColumns() {
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     { key: 'progress', label: 'Sub-Issues', className: 'cell-center', render: (r) => `${r.progress?.done ?? 0}/${r.progress?.total ?? 0} done` },
     { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
+    ...(onCloseTicket ? [{ key: 'action', label: 'Action', className: 'cell-center', render: (r) => (
+      <button type="button" className="ready-to-close-action" aria-label={`Close ticket #${r.ticket_id}`} title="Verify the repair before closing this ticket" onClick={(event) => { event.stopPropagation(); onCloseTicket(r); }} onKeyDown={(event) => event.stopPropagation()}>
+        <Icon name="checkCircle" size={15} /> Close Ticket
+      </button>
+    ) }] : []),
   ];
 }
 
-function TicketsReadyToClosePanel({ tickets, onViewTicket }) {
+function TicketsReadyToClosePanel({ tickets, onViewTicket, onCloseTicket }) {
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState('');
-  const columns = useMemo(() => readyToCloseColumns(), []);
+  const columns = useMemo(() => readyToCloseColumns(onCloseTicket), [onCloseTicket]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -19384,7 +18199,7 @@ function CategoryFieldsManager({ categoryId, onChanged }) {
 // verified ready, Critical first. Shown on the lean (Custodian/Maintenance)
 // dashboard; Admin sees the same list inside Risk & Readiness Watch.
 function CriticalityWatchCard({ items, onNavigate, basePath }) {
-  const shown = (items ?? []).slice(0, 6);
+  const shown = items ?? [];
 
   return (
     <section className="panel col-span-7 dashboard-lean-panel">

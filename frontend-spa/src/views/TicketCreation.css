@@ -1,0 +1,43 @@
+html .smart-form.ticket-create-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; max-width: 1200px; margin: 0 auto; padding: 12px; align-items: start; }
+.ticket-create-form > .ticket-create-header,
+.ticket-create-form > .ticket-method-section,
+.ticket-create-form > .ticket-create-actions,
+.ticket-create-form > .veh-card:not(.ticket-vehicle-section):not(.ticket-issue-section) { grid-column: 1 / -1; }
+html .ticket-create-form > .ticket-create-header h2 { font-size: 26px; line-height: 1.3; }
+html .ticket-create-form > .veh-card { margin: 0; border: 1px solid var(--border, #dbe3ef); border-radius: 12px; box-shadow: 0 2px 6px #0f172a06; }
+html .ticket-create-form > .veh-card > .veh-card-head { background: var(--surface, #fff); border-bottom: 1px solid var(--border, #e2e8f0); padding: 15px 18px; }
+html .ticket-create-form .veh-card-head h4 { font-size: 15px; color: var(--text-strong, #0f172a); }
+html .ticket-create-form .ticket-method-card { padding: 14px; min-height: 74px; }
+html .ticket-create-form .ticket-vehicle-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 18px; }
+html .ticket-create-form .ticket-preview-card--lg { min-height: 90px; margin: 0; background: var(--surface-2, #f8fafc); box-shadow: none; }
+html .ticket-create-form .ticket-preview-photo--lg { width: 94px; height: 76px; flex-basis: 94px; }
+html .ticket-create-form .ticket-preview-card--lg.is-empty { min-height: 90px; }
+html .ticket-create-form .ticket-issue-fields { grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+html .ticket-create-form .ticket-priority-field { grid-column: auto; }
+html .ticket-create-form .ticket-issue-fields textarea { min-height: 110px; }
+html .ticket-create-form input:not([type="checkbox"]),
+html .ticket-create-form select { min-height: 42px; width: 100%; max-width: none; box-sizing: border-box; }
+html .ticket-create-form .subissue-two-col { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+html .ticket-create-form .subissue-editor-panel > label { display: flex; flex-direction: column; }
+html .ticket-create-form .ticket-create-actions { position: static; box-shadow: none; backdrop-filter: none; padding: 14px 0 0; border: 0; border-top: 1px solid var(--border, #e2e8f0); border-radius: 0; margin: 0; }
+@media (max-width: 900px) {
+  html .smart-form.ticket-create-form { grid-template-columns: minmax(0, 1fr); padding: 0; }
+  .ticket-create-form > .veh-card { grid-column: 1; }
+  html .ticket-create-form .subissue-two-col { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  html:has(.ticket-create-form) { --topbar-height: 128px; }
+  html:has(.ticket-create-form) .topbar { box-sizing: border-box; flex-wrap: wrap; padding: 10px 14px; }
+  html:has(.ticket-create-form) .topbar-left { min-width: 0; flex-wrap: wrap; max-width: 100%; }
+  html:has(.ticket-create-form) .map-boundary-selector { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+  html:has(.ticket-create-form) .map-boundary-selector select { min-width: 0; max-width: 100%; }
+  html .content-area:has(.ticket-create-form) { padding: 12px; min-width: 0; }
+  html .panel:has(> .ticket-create-form) { padding: 12px; min-width: 0; }
+  html .ticket-create-form .entry-mode-toggle { grid-template-columns: minmax(0, 1fr); }
+  html .ticket-create-form .ticket-preview-card--lg { flex-direction: column; align-items: flex-start; }
+  html .ticket-create-form .ticket-preview-photo--lg { flex-basis: auto; }
+  html .ticket-create-form .ticket-preview-body--lg { min-width: 0; width: 100%; }
+  html .ticket-create-form .ticket-preview-body--lg strong { font-size: 15px; overflow-wrap: anywhere; }
+  html .ticket-create-form .ticket-preview-body--lg span { font-size: 13px; overflow-wrap: anywhere; }
+  html .ticket-create-form .veh-card-head, html .ticket-create-form .ticket-vehicle-grid, html .ticket-create-form .ticket-issue-fields, html .ticket-create-form .ticket-external-fields, html .ticket-create-form .ticket-subissue-body { padding: 14px; }
+}
