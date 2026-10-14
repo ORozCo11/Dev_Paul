@@ -15730,3 +15730,19 @@ html .ticket-card-grid .sch-card .sch-action.is-primary:hover { background: #dbe
 .ticket-overview-progress > span { max-width: 100%; white-space: normal; }
 td:has(> .row-actions-visible) { min-width: 140px; }
 .row-actions-visible .icon-btn { flex-shrink: 0; }
+
+/* Keep issue actions in the same slots even when a row has fewer actions. */
+.module-grid:has(> .issue-summary-grid) .table-shell.is-fixed table { table-layout: auto; }
+.module-grid:has(> .issue-summary-grid) td:has(> .row-actions-visible) { min-width: 150px; }
+.module-grid:has(> .issue-summary-grid) .row-actions-visible {
+  display: inline-grid;
+  grid-template-columns: repeat(4, 28px);
+  gap: 6px;
+  align-items: center;
+  min-width: 130px;
+}
+.module-grid:has(> .issue-summary-grid) .row-actions-visible .icon-btn { grid-row: 1; margin: 0; }
+.module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-view-action { grid-column: 1; }
+.module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-confirm-action { grid-column: 2; }
+.module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-edit-action { grid-column: 3; }
+.module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-delete-action { grid-column: 4; }
