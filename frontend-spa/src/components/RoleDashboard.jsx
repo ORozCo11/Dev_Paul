@@ -129,10 +129,23 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
     <header className="focus-heading focus-branded-heading"><div><h2>{roleCopy[role][0]}</h2><p>{roleCopy[role][1]}</p></div>{roles.length > 1 && <label>Responsibility<select aria-label="Dashboard responsibility" value={role} onChange={(e) => setSelectedRole(e.target.value)}>{roles.map((r) => <option key={r}>{r}</option>)}</select></label>}</header>
     {error && <div role="alert" className="focus-error">{error}<button type="button" onClick={() => setRetry((n) => n + 1)}>Retry</button></div>}
     <div className="focus-kpis" style={{ '--kpi-count': kpis.length }}>{kpis.map((k) => <button type="button" key={k.label} onClick={k.open}><span className="focus-kpi-icon"><Icon name={k.icon} size={19} /></span><span>{k.label}<strong>{k.value}</strong>{k.detail && <small>{k.detail}</small>}</span><Icon name="chevronRight" size={14} /></button>)}</div>
-    {admin ? <>
-      <div className="focus-columns focus-columns-even">{conditionChart}{workload}</div>
-      <div className={(data.sole_active_admin || readiness.some((r) => r.verified_ready === 0)) ? 'focus-columns' : 'focus-dashboard'}><TaskList key={role} title={admin ? 'Action Queue' : custodian ? 'My Tasks' : 'My Assigned Work'} items={tasks} loading={loading} error={error} onViewAll={() => go(admin ? 'tickets' : custodian ? 'ticketVerifications' : 'ticketWorkOrders')} />{(data.sole_active_admin || readiness.some((r) => r.verified_ready === 0)) && <section className="focus-card"><header><h3>Operational Risks</h3><button type="button" onClick={() => go('vehicles')}>View fleet</button></header><ul className="focus-risk-list">{data.sole_active_admin && <li><Icon name="alert" size={16} /><span><strong>Only one active Administrator</strong>Arrange a backup Administrator to keep account management covered. <button type="button" onClick={() => go('users')}>Manage users</button></span></li>}{readiness.filter((r) => r.verified_ready === 0).map((r) => <li key={r.category}><Icon name="alert" size={16} /><span><strong>{r.category}</strong> No verified-ready coverage. Review available vehicles and maintenance priorities.</span></li>)}</ul></section>}</div>
-    </> : <div className="focus-columns"><TaskList key={role} title={custodian ? 'My Tasks' : 'My Assigned Work'} items={tasks} loading={loading} error={error} onViewAll={() => go(custodian ? 'ticketVerifications' : 'ticketWorkOrders')} /><div className="focus-chart-stack">{custodian ? <>{conditionChart}{attentionChart}</> : <>{workload}{scheduleChart}</>}</div></div>}
-    {!admin && !custodian && completed.length > 0 && <TaskList title="Recent Completed Work" items={completed.slice(0, 5)} onViewAll={() => go('workTracker')} />}
+    <div className={admin ? 'focus-columns focus-columns-even' : 'focus-columns'}>
+      <div className="focus-panel-stack">
+        {admin && conditionChart}
+        <TaskList key={role} title={admin ? 'Action Queue' : custodian ? 'My Tasks' : 'My Assigned Work'} items={tasks} loading={loading} error={error} onViewAll={() => go(admin ? 'tickets' : custodian ? 'ticketVerifications' : 'ticketWorkOrders')} />
+        {!admin && !custodian && completed.length > 0 && <TaskList title="Recent Completed Work" items={completed.slice(0, 5)} onViewAll={() => go('workTracker')} />}
+      </div>
+      <div className="focus-panel-stack">
+        {custodian ? <>{conditionChart}{attentionChart}</> : workload}
+        {!admin && !custodian && scheduleChart}
+        {admin && (data.sole_active_admin || readiness.some((row) => row.verified_ready === 0)) && <section className="focus-card">
+          <header><h3>Operational Risks</h3><button type="button" onClick={() => go('vehicles')}>View fleet</button></header>
+          <ul className="focus-risk-list">
+            {data.sole_active_admin && <li><Icon name="alert" size={16} /><span><strong>Only one active Administrator</strong>Arrange a backup Administrator to keep account management covered. <button type="button" onClick={() => go('users')}>Manage users</button></span></li>}
+            {readiness.filter((row) => row.verified_ready === 0).map((row) => <li key={row.category}><Icon name="alert" size={16} /><span><strong>{row.category}</strong> No verified-ready coverage. Review available vehicles and maintenance priorities.</span></li>)}
+          </ul>
+        </section>}
+      </div>
+    </div>
   </div>;
 }

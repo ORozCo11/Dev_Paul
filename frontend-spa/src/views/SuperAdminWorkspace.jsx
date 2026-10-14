@@ -887,7 +887,7 @@ export default function SuperAdminWorkspace() {
         </aside>
 
         <section className="content-area">
-          <div className="page-heading-row">
+          <div className={`page-heading-row${activeTab === 'dashboard' ? ' focus-branded-heading' : ''}`}>
             <div className="page-heading-text">
               <h1>{TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h1>
               <p>{TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>

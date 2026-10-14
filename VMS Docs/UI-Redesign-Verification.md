@@ -75,3 +75,11 @@ Validation passed: production build, scoped ESLint, whitespace check, and dispos
 Removed the full-width support banner and its styling at the user's request. End Impersonation now appears in the Workspace account menu during an impersonated session. Token revocation, audit endpoint, original-token restoration, storage choice, and return route are preserved. Updated the requirement and regenerated the four-page Word/PDF exports.
 
 Browser checks against the real Workspace component with intercepted fixture APIs passed for menu placement, absence of the banner, failure/retry behavior, and successful return to the original account with both local and session storage. Production build and scoped lint passed. The selected Super Admin, impersonation, boundary, and multi-role backend tests passed: **43 tests, 169 assertions**.
+
+## Dashboard header height and panel flow — 14 October 2026
+
+Increased the branded header to a 140px desktop minimum with a 28px title, and a responsive 128px minimum on mobile. Applied this treatment to Administrator, Custodian, Maintenance Personnel, and the Super Admin Platform Overview. Other Super Admin management-page headers retain their existing style.
+
+Dashboard panels now flow in independent columns with consistent 16px spacing. The Administrator Action Queue follows Fleet Condition directly, without waiting for the taller Maintenance Status chart. Maintenance Personnel's completed-work list similarly follows assigned work in its own column. All existing dashboard content, role scoping, charts, and actions are retained.
+
+Production build, scoped ESLint, and whitespace checks passed. Browser fixture checks passed at desktop, tablet, and mobile widths, including exact 16px gaps within each column and a deliberately taller sibling chart to verify the Action Queue is no longer pushed down. Existing role-chart and Super Admin interaction checks also passed.
