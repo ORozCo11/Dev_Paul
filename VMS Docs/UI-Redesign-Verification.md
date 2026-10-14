@@ -124,3 +124,9 @@ Production build and Git whitespace checks passed. Playwright fixture checks cov
 Restored the earlier solid green In-House Repair and purple Sent to External Shop controls, replacing the white choice cards. Both retain the existing radio semantics and repair-mode handlers. A matching outline and check icon identify the selected option. The full-width blue page layout remains; green is slightly darker than the historical shade to keep white labels readable.
 
 Production build and whitespace checks passed. Browser fixture checks verified both colors in light/dark mode, switching between repair-work and external-shop fields, retained vehicle/issue details, keyboard selection, selected styling, full-width desktop/tablet/mobile layout, and no horizontal overflow after layout transitions. The expanded dark-mode form passed representative text contrast checks. No backend workflow or permission rules changed.
+
+## Softer notice colors — 14 October 2026
+
+Matched the requested pink/red alert tone with a pale pink error background and dark rose text. Success, warning, and info notices use coordinated soft green, amber, and blue palettes. Shared CSS tokens apply these tones to validation summaries, floating toasts, inline notices, and map notices, with muted dark-theme equivalents and neutral toast shadows. Message content, placement, dismissal, and validation behavior remain unchanged.
+
+Production build and whitespace checks passed. Browser fixture checks verified computed colors and at least 4.5:1 text contrast for all four palettes plus the danger alias across toast/inline/map notice classes in light and dark themes. Actual ticket validation retained its messages and Dismiss action, the popup fit the mobile viewport, and no JavaScript page errors occurred. These contrast assertions cover the notices, not every element elsewhere on the page.

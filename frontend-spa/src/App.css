@@ -15746,3 +15746,34 @@ td:has(> .row-actions-visible) { min-width: 140px; }
 .module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-confirm-action { grid-column: 2; }
 .module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-edit-action { grid-column: 3; }
 .module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-delete-action { grid-column: 4; }
+
+/* Soft alert tones shared by validation summaries, toasts and inline notices. */
+:root {
+  --notice-error-bg: #f8d7da; --notice-error-border: #efb5be; --notice-error-text: #a61b3d;
+  --notice-success-bg: #d4edda; --notice-success-border: #b4d8bf; --notice-success-text: #155724;
+  --notice-warning-bg: #fff3cd; --notice-warning-border: #e9d69a; --notice-warning-text: #664d03;
+  --notice-info-bg: #d9eafc; --notice-info-border: #b7d2ef; --notice-info-text: #174a79;
+}
+html[data-theme="dark"] {
+  --notice-error-bg: #422631; --notice-error-border: #80505f; --notice-error-text: #fecdd3;
+  --notice-success-bg: #1c382d; --notice-success-border: #446e5a; --notice-success-text: #bbf7d0;
+  --notice-warning-bg: #3d321e; --notice-warning-border: #7f6b39; --notice-warning-text: #fde68a;
+  --notice-info-bg: #20364f; --notice-info-border: #4d6c90; --notice-info-text: #bfdbfe;
+}
+html:root :is(.notice, .toast-notice, .location-density-notice) {
+  --notice-bg: var(--notice-info-bg); --notice-border: var(--notice-info-border); --notice-text: var(--notice-info-text);
+  background: var(--notice-bg); border: 1px solid var(--notice-border); color: var(--notice-text);
+}
+html:root :is(.notice, .toast-notice, .location-density-notice):is(.error, .danger) {
+  --notice-bg: var(--notice-error-bg); --notice-border: var(--notice-error-border); --notice-text: var(--notice-error-text);
+}
+html:root :is(.notice, .toast-notice, .location-density-notice).success {
+  --notice-bg: var(--notice-success-bg); --notice-border: var(--notice-success-border); --notice-text: var(--notice-success-text);
+}
+html:root :is(.notice, .toast-notice, .location-density-notice).warning {
+  --notice-bg: var(--notice-warning-bg); --notice-border: var(--notice-warning-border); --notice-text: var(--notice-warning-text);
+}
+html:root :is(.notice, .toast-notice, .location-density-notice):is(.error, .danger, .success, .warning, .info) {
+  background: var(--notice-bg); border: 1px solid var(--notice-border); color: var(--notice-text);
+}
+html:root .toast-notice:is(.error, .danger, .success, .warning, .info) { box-shadow: 0 3px 9px #0f172a18; }
