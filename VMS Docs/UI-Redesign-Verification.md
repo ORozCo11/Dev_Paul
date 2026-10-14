@@ -130,3 +130,9 @@ Production build and whitespace checks passed. Browser fixture checks verified b
 Matched the requested pink/red alert tone with a pale pink error background and dark rose text. Success, warning, and info notices use coordinated soft green, amber, and blue palettes. Shared CSS tokens apply these tones to validation summaries, floating toasts, inline notices, and map notices, with muted dark-theme equivalents and neutral toast shadows. Message content, placement, dismissal, and validation behavior remain unchanged.
 
 Production build and whitespace checks passed. Browser fixture checks verified computed colors and at least 4.5:1 text contrast for all four palettes plus the danger alias across toast/inline/map notice classes in light and dark themes. Actual ticket validation retained its messages and Dismiss action, the popup fit the mobile viewport, and no JavaScript page errors occurred. These contrast assertions cover the notices, not every element elsewhere on the page.
+
+## Schedule action colors — 14 October 2026
+
+Schedule card border styling now targets cards anywhere inside the card grid, retaining the ticket-style 2px outline and 5px status-colored top edge. Edit uses amber with white text; Cancel uses solid red with white text; View retains blue. Hover colors stay in the same action family, including dark mode. This change is CSS only.
+
+Production build and whitespace checks passed. Browser fixture checks covered all seven border states and hover colors for Admin and Custodian card views, Edit/Cancel button colors in both themes, and desktop/tablet/mobile layouts without page overflow. Edit still opens the schedule form, and Cancel still requires its existing confirmation. Tests dismissed that confirmation; no real schedules were changed.
