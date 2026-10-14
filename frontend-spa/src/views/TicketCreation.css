@@ -14,6 +14,14 @@ html .smart-form.ticket-create-form .veh-card-head h4 { font-size: 15px; color: 
 html .smart-form.ticket-create-form .veh-card-head > svg { color: #fff; stroke: currentColor; }
 html .ticket-create-form > :is(.ticket-vehicle-section, .ticket-issue-section) { align-self: stretch; }
 html .ticket-create-form .ticket-method-card { padding: 14px; min-height: 74px; }
+html .smart-form.ticket-create-form .ticket-method-tab { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 56px; padding: 14px 18px; border-radius: 8px; color: #fff; font-size: 15px; font-weight: 700; line-height: 1.4; white-space: normal; }
+html .smart-form.ticket-create-form .ticket-method-tab > svg { flex-shrink: 0; color: #fff; }
+html .smart-form.ticket-create-form .ticket-method-tab.entry-mode-btn--in_house { --entry-mode-color: #15803d; --entry-mode-shadow: #15803d33; }
+html .smart-form.ticket-create-form .ticket-method-tab.entry-mode-btn--external { --entry-mode-color: #7c3aed; --entry-mode-shadow: #7c3aed33; }
+html[data-theme] .smart-form.ticket-create-form .ticket-method-tab,
+html[data-theme] .smart-form.ticket-create-form .ticket-method-tab:hover { background: var(--entry-mode-color) !important; color: #fff !important; }
+html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="true"],
+html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="true"]:hover { box-shadow: 0 0 0 3px var(--ticket-section-bg), 0 0 0 5px var(--entry-mode-color) !important; }
 html .ticket-create-form .ticket-vehicle-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 18px; }
 html .ticket-create-form .ticket-preview-card--lg { min-height: 90px; margin: 0; background: var(--surface-2, #f8fafc); box-shadow: none; }
 html .ticket-create-form .ticket-preview-photo--lg { width: 94px; height: 76px; flex-basis: 94px; }

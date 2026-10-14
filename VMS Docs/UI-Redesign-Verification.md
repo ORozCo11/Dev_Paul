@@ -118,3 +118,9 @@ Production build and Git whitespace checks passed. Playwright fixture checks ver
 Removed the ticket form's centered width cap and enclosing white panel border/shadow. The form fills its available workspace, with a pale blue page background, blue section headers with white text/icons, lightly tinted section bodies, and matching dark-mode colors. Vehicle and issue sections share the desktop row height; smaller screens retain the stacked layout. The footer actions span the form width.
 
 Production build and Git whitespace checks passed. Playwright fixture checks covered full-width geometry, absence of the enclosing panel border/shadow, blue/white section headers, and no page overflow at 1890px, 1440px, 768px, and 390px in both themes. In-house selection, vehicle preview, and repair-work fields remained functional, and the selected dark-mode form passed representative text contrast checks. This pass changes CSS only.
+
+## Restore the two colored repair selectors — 14 October 2026
+
+Restored the earlier solid green In-House Repair and purple Sent to External Shop controls, replacing the white choice cards. Both retain the existing radio semantics and repair-mode handlers. A matching outline and check icon identify the selected option. The full-width blue page layout remains; green is slightly darker than the historical shade to keep white labels readable.
+
+Production build and whitespace checks passed. Browser fixture checks verified both colors in light/dark mode, switching between repair-work and external-shop fields, retained vehicle/issue details, keyboard selection, selected styling, full-width desktop/tablet/mobile layout, and no horizontal overflow after layout transitions. The expanded dark-mode form passed representative text contrast checks. No backend workflow or permission rules changed.

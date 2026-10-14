@@ -13869,15 +13869,12 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
                     type="button"
                     role="radio"
                     aria-checked={checked}
-                    className={`entry-mode-btn ticket-method-card ${checked ? 'is-selected' : ''}`}
+                    className={`entry-mode-btn entry-mode-btn--${opt.value} ticket-method-tab ${checked ? 'primary-button' : 'ghost-button'}`}
                     onClick={() => selectEntryMode(opt.value)}
                   >
-                    <span className="ticket-method-icon"><Icon name="wrench" size={17} /></span>
-                    <span className="ticket-method-copy">
-                      <strong>{opt.label}</strong>
-                      <small>{opt.value === 'external' ? 'Send the vehicle to an outside service provider.' : 'Assigned maintenance personnel will handle the repair.'}</small>
-                    </span>
-                    <span className="ticket-method-radio" aria-hidden="true" />
+                    <Icon name="wrench" size={18} />
+                    <span>{opt.label}</span>
+                    {checked && <Icon name="checkCircle" size={18} />}
                   </button>
                 );
               })}
@@ -14304,12 +14301,12 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
                     type="button"
                     role="radio"
                     aria-checked={checked}
-                    className={`entry-mode-btn ticket-method-card ${checked ? 'is-selected' : ''}`}
+                    className={`entry-mode-btn entry-mode-btn--${opt.value} ticket-method-tab ${checked ? 'primary-button' : 'ghost-button'}`}
                     onClick={() => selectEntryMode(opt.value)}
                   >
-                    <span className="ticket-method-icon"><Icon name="wrench" size={17} /></span>
-                    <span className="ticket-method-copy"><strong>{opt.label}</strong><small>{opt.value === 'external' ? 'Send the vehicle to an outside service provider.' : 'Assigned maintenance personnel will handle the repair.'}</small></span>
-                    <span className="ticket-method-radio" aria-hidden="true" />
+                    <Icon name="wrench" size={18} />
+                    <span>{opt.label}</span>
+                    {checked && <Icon name="checkCircle" size={18} />}
                   </button>
                 );
               })}
