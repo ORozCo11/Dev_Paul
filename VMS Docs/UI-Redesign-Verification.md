@@ -112,3 +112,9 @@ Validation passed: production build, ESLint for Register.jsx, and Git whitespace
 CSS assigns issue-report buttons to fixed View / Propose Ticket / Edit / Delete-or-Dismiss slots, leaving space for unavailable actions so the remaining buttons align across rows. The issue table reserves sufficient action-cell width and uses automatic column layout to contain the controls. Existing action visibility, permissions, handlers, and other modules are unchanged.
 
 Production build and Git whitespace checks passed. Playwright fixture checks verified aligned slots and contained buttons across rows with one, two, and four actions in light/dark mode at 1890px, 1024px, and 390px. Table overflow stays within its scroll container, issue View navigation still opens the expected report, and no JavaScript page errors occurred. Browser checks used synthetic records.
+
+## Full-width ticket creation — 14 October 2026
+
+Removed the ticket form's centered width cap and enclosing white panel border/shadow. The form fills its available workspace, with a pale blue page background, blue section headers with white text/icons, lightly tinted section bodies, and matching dark-mode colors. Vehicle and issue sections share the desktop row height; smaller screens retain the stacked layout. The footer actions span the form width.
+
+Production build and Git whitespace checks passed. Playwright fixture checks covered full-width geometry, absence of the enclosing panel border/shadow, blue/white section headers, and no page overflow at 1890px, 1440px, 768px, and 390px in both themes. In-house selection, vehicle preview, and repair-work fields remained functional, and the selected dark-mode form passed representative text contrast checks. This pass changes CSS only.
