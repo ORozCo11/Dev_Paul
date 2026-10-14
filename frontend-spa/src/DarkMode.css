@@ -98,8 +98,15 @@ html[data-theme="dark"] .ticket-method-card.is-selected .ticket-method-radio { b
 html[data-theme="dark"] :is(.ticket-preview-plate, .ticket-preview-empty-copy svg, .ticket-role-tag) { color: var(--dark-link); }
 
 /* Schedule cards and their selected/hover states had fixed light colors. */
-html[data-theme="dark"] .ticket-card-grid > div > .sch-card { --schedule-wash: #182f50; background: var(--surface); border-color: var(--border); box-shadow: none; }
-html[data-theme="dark"] .ticket-card-grid > div > .sch-card:hover { background: #1b293c; border-color: #6a85a9; box-shadow: none; }
+html[data-theme="dark"] .ticket-card-grid > div > .sch-card { --schedule-wash: #182f50; background: var(--surface); border-color: var(--schedule-color, #94a3b8); box-shadow: none; }
+html[data-theme="dark"] .ticket-card-grid > div > .sch-card:hover { background: #1b293c; border-color: var(--schedule-color, #94a3b8); box-shadow: none; }
+html[data-theme="dark"] .sch-card.sch-scheduled { --schedule-color: #60a5fa; }
+html[data-theme="dark"] .sch-card.sch-pending-approval { --schedule-color: #fbbf24; }
+html[data-theme="dark"] .sch-card.sch-completed { --schedule-color: #4ade80; }
+html[data-theme="dark"] .sch-card.sch-cancelled { --schedule-color: #94a3b8; }
+html[data-theme="dark"] .sch-card.sch-declined,
+html[data-theme="dark"] .sch-card.is-overdue { --schedule-color: #fb7185; }
+html[data-theme="dark"] .sch-card.sch-awaiting-verification { --schedule-color: #a78bfa; }
 html[data-theme="dark"] :is(.schedule-panel-header, .sch-card-date, .sch-card-photo, .sch-detail-icon, .ticket-card-stage, .ticket-card-progress-track) { background: var(--surface-2); border-color: var(--border); color: var(--text); }
 html[data-theme="dark"] :is(.schedule-panel-header h3, .sch-card .sch-card-title, .sch-card-vehicle-name, .ticket-card-title, .ticket-card-vehicle-name) { color: var(--text-strong); }
 html[data-theme="dark"] :is(.schedule-panel-heading p, .sch-card .sch-card-id, .sch-card-plate, .sch-card-notes strong, .sch-card-meta dt, .sch-card-meta dt svg, .ticket-card-subline, .ticket-card-date-label) { color: var(--text-muted); }

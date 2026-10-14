@@ -98,3 +98,11 @@ Validation:
 - Dashboard desktop/tablet/mobile checks passed at 1440px, 768px, and 390px, retaining column spacing, role-scoped chart counts, multi-role switching, empty/error states, and light-mode layouts. Mobile ticket creation had no page overflow. Active sidebar items were checked for no box shadow, and no JavaScript page errors occurred in the passing runs.
 
 These checks cover representative rendered states, not every possible uploaded image, map tile, record, or third-party embedded surface. No real account data was changed by the browser fixtures.
+
+## Schedule status borders and registration errors — 14 October 2026
+
+Schedule cards now match ticket cards with a 2px status-colored outline and a 5px top border. Existing status classes drive the CSS: blue Scheduled, amber Pending Approval, green Completed, gray Cancelled, red Declined/Overdue, and purple Awaiting Verification. Dark mode uses brighter equivalents, and hover retains the status color. Status text and overdue/verification badges remain available alongside color.
+
+Registration no longer calls reportValidity() to display a browser popup. Required, email, phone, location, registration-code, and password errors appear beneath their fields with aria-invalid/aria-describedby and focus on the first invalid field. Server validation errors return to the relevant step with entered values retained. General service errors remain in the form's alert. First-Administrator approval, mandatory staff codes, role selection, and the existing registration API remain unchanged.
+
+Validation passed: production build, ESLint for Register.jsx, and Git whitespace checks. Disposable Playwright fixture checks covered all seven schedule color states and hover behavior in light/dark mode at 1440px, 768px, and 390px without page overflow. Registration checks covered required/format/password errors, accessible error links/focus, absence of native validation calls, retained step values, backend email errors, free-text barangays, first-Administrator registration and a concurrent-registration race, service failure/retry, intercepted successful submissions, and desktop/mobile layouts. No JavaScript page errors occurred; no real accounts were created.

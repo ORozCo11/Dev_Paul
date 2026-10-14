@@ -15661,10 +15661,12 @@ html .schedule-panel-header .icon-add-btn { border-color: #fff; background: #fff
 
 html .ticket-card-grid > div > .sch-card {
   background: #fff;
-  border: 1px solid #dbe3ed;
+  border: 2px solid var(--schedule-color, #64748b);
+  border-top-width: 5px;
   padding: 16px;
   gap: 12px;
 }
+html .ticket-card-grid > div > .sch-card:hover { border-color: var(--schedule-color, #64748b); }
 html .sch-card.sch-scheduled { --schedule-color: #2563eb; --schedule-wash: #f4f8ff; }
 html .sch-card.sch-pending-approval { --schedule-color: #d97706; --schedule-wash: #fffbeb; }
 html .sch-card.sch-completed { --schedule-color: #16a34a; --schedule-wash: #f0fdf4; }

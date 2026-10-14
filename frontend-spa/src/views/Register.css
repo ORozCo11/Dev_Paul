@@ -16,6 +16,10 @@
 .register-page .auth-field { min-width: 0; }
 .register-page .auth-field > span { font-size: 12px; text-transform: none; letter-spacing: normal; color: #334155; }
 .register-page .auth-input-wrapper input, .register-page .auth-input-wrapper select { min-height: 46px; font-size: 14px; }
+.register-page .register-field-error { display: block; margin-top: 6px; color: #b91c1c; font-size: 12px; line-height: 1.5; }
+.register-page .auth-input-wrapper:has([aria-invalid="true"]) { border-color: #b91c1c; }
+.register-page .auth-input-wrapper :is(input, select)[aria-invalid="true"] { border-color: #b91c1c; }
+.register-page .auth-input-wrapper :is(input, select)[aria-invalid="true"]:focus { outline: 2px solid #b91c1c; outline-offset: 2px; box-shadow: none; }
 .register-page .register-actions { display: flex; gap: 12px; margin-top: 26px; }
 .register-page .register-actions button { min-height: 44px; }
 .register-page .register-actions .auth-submit-btn { flex: 1; margin: 0; }

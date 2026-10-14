@@ -40,6 +40,45 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // PH mobile format: 09 + 9 digits = 11 digits total.
 const PHONE_PATTERN = /^09\d{9}$/;
 
+const STEP_FIELDS = [
+  ['first_name', 'middle_name', 'last_name', 'email', 'phone'],
+  ['province_id', 'city_id', 'barangay_id', 'barangay_name', 'address'],
+  ['requested_role', 'staff_code', 'password', 'password_confirmation'],
+];
+
+function validateStep(values, step, isFirstForBarangay, hasBarangayList) {
+  const errors = {};
+  if (step === 0) {
+    for (const [name, label] of [['first_name', 'First name'], ['middle_name', 'Middle name'], ['last_name', 'Last name']]) {
+      const value = values[name].trim();
+      if (!value && name !== 'middle_name') errors[name] = `${label} is required.`;
+      else if (value && !NAME_PATTERN.test(value)) errors[name] = `${label} may only contain letters and name punctuation.`;
+    }
+    if (!values.email.trim()) errors.email = 'Email address is required.';
+    else if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = 'Enter a valid email address.';
+    if (!values.phone) errors.phone = 'Phone number is required.';
+    else if (!PHONE_PATTERN.test(values.phone)) errors.phone = 'Enter an 11-digit mobile number starting with 09.';
+  } else if (step === 1) {
+    if (!values.province_id) errors.province_id = 'Select your province.';
+    if (!values.city_id) errors.city_id = 'Select your city or municipality.';
+    if (hasBarangayList && !values.barangay_id) errors.barangay_id = 'Select your barangay.';
+    else if (!hasBarangayList && !values.barangay_name.trim()) errors.barangay_name = 'Enter your barangay name.';
+    if (!values.address.trim()) errors.address = 'Street address is required.';
+  } else {
+    if (!isFirstForBarangay && !values.requested_role) errors.requested_role = 'Select your role.';
+    if (!values.staff_code.trim()) errors.staff_code = 'Enter the staff registration code from your barangay office.';
+    if (!values.password) errors.password = 'Password is required.';
+    else if (values.password.length < 8) errors.password = 'Use at least 8 characters.';
+    if (!values.password_confirmation) errors.password_confirmation = 'Confirm your password.';
+    else if (values.password !== values.password_confirmation) errors.password_confirmation = 'Passwords do not match.';
+  }
+  return errors;
+}
+
+function RegistrationFieldError({ name, errors }) {
+  return errors[name] ? <small id={`register-error-${name}`} className="register-field-error">{errors[name]}</small> : null;
+}
+
 function Register() {
   const { token, user } = useContext(AuthContext);
   const [step, setStep] = useState(0);
@@ -50,6 +89,15 @@ function Register() {
   const [cities, setCities] = useState([]);
   const [barangays, setBarangays] = useState([]);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
+  const formRef = useRef(null);
+  const errorFocus = useRef(null);
+  useEffect(() => {
+    if (errorFocus.current) {
+      formRef.current?.elements.namedItem(errorFocus.current)?.focus();
+      errorFocus.current = null;
+    }
+  }, [fieldErrors, step]);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -89,7 +137,6 @@ function Register() {
   // doesn't fire on every keystroke.
   useEffect(() => {
     if (!form.city_id || (!form.barangay_id && !form.barangay_name.trim())) {
-      setIsFirstForBarangay(null);
       return;
     }
     let cancelled = false;
@@ -111,6 +158,28 @@ function Register() {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
+    if (name === 'barangay_id' || name === 'barangay_name') setIsFirstForBarangay(null);
+    clearFieldErrors(name, ...(name === 'password' ? ['password_confirmation'] : []));
+  };
+
+  const clearFieldErrors = (...names) => {
+    setFieldErrors((current) => {
+      const next = { ...current };
+      names.forEach((name) => { delete next[name]; });
+      return next;
+    });
+  };
+
+  const fieldErrorProps = (name) => ({
+    'aria-invalid': fieldErrors[name] ? true : undefined,
+    'aria-describedby': fieldErrors[name] ? `register-error-${name}` : undefined,
+  });
+
+  const showFieldErrors = (errors) => {
+    const nextStep = STEP_FIELDS.findIndex((fields) => fields.some((name) => errors[name]));
+    errorFocus.current = STEP_FIELDS.flat().find((name) => errors[name]) ?? null;
+    setFieldErrors(errors);
+    if (nextStep >= 0) setStep(nextStep);
   };
 
   const handleProvinceChange = (event) => {
@@ -125,6 +194,7 @@ function Register() {
     setCities([]);
     setBarangays([]);
     setIsFirstForBarangay(null);
+    clearFieldErrors('province_id', 'city_id', 'barangay_id', 'barangay_name');
   };
 
   const handleCityChange = (event) => {
@@ -137,6 +207,7 @@ function Register() {
     }));
     setBarangays([]);
     setIsFirstForBarangay(null);
+    clearFieldErrors('city_id', 'barangay_id', 'barangay_name');
   };
 
   // Strips anything that isn't a letter/space/name-punctuation as the user
@@ -144,78 +215,27 @@ function Register() {
   const handleNameChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value.replace(NAME_CHARS, '') }));
+    clearFieldErrors(name);
   };
 
   // Digits only, capped at 11 — the length of a PH mobile number.
   const handlePhoneChange = (event) => {
     const digits = event.target.value.replace(/\D/g, '').slice(0, 11);
     setForm((current) => ({ ...current, phone: digits }));
+    clearFieldErrors('phone');
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (submitting) return;
     setError('');
+    const errors = step < 2
+      ? validateStep(form, step, isFirstForBarangay, barangays.length > 0)
+      : Object.assign({}, ...STEP_FIELDS.map((_, index) => validateStep(form, index, isFirstForBarangay, barangays.length > 0)));
+    if (Object.keys(errors).length) { showFieldErrors(errors); return; }
+    setFieldErrors({});
     if (step < 2) {
-      const fields = event.currentTarget.querySelectorAll('fieldset:not([hidden]) input, fieldset:not([hidden]) select');
-      for (const field of fields) { if (!field.reportValidity()) return; }
-      if (step === 0 && (!NAME_PATTERN.test(form.first_name.trim()) || !NAME_PATTERN.test(form.last_name.trim()))) { setError('Enter your first and last name.'); return; }
-      if (step === 0 && !PHONE_PATTERN.test(form.phone)) { setError('Enter an 11-digit mobile number starting with 09.'); return; }
-      if (step === 1 && !form.address.trim()) { setError('Street address is required.'); return; }
       setStep((current) => current + 1);
-      return;
-    }
-
-    if (!NAME_PATTERN.test(form.first_name.trim())) {
-      setError('First name may only contain letters.');
-      return;
-    }
-    if (form.middle_name.trim() && !NAME_PATTERN.test(form.middle_name.trim())) {
-      setError('Middle name may only contain letters.');
-      return;
-    }
-    if (!NAME_PATTERN.test(form.last_name.trim())) {
-      setError('Last name may only contain letters.');
-      return;
-    }
-    if (!EMAIL_PATTERN.test(form.email.trim())) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-    if (!PHONE_PATTERN.test(form.phone)) {
-      setError('Phone number must be 11 digits starting with 09 (e.g. 09171234567).');
-      return;
-    }
-    if (!form.province_id) {
-      setError('Please select your province.');
-      return;
-    }
-    if (!form.city_id) {
-      setError('Please select your city/municipality.');
-      return;
-    }
-    if (!form.barangay_id && !form.barangay_name.trim()) {
-      setError('Please enter or select your barangay.');
-      return;
-    }
-    if (!form.address.trim()) {
-      setError('Street address is required.');
-      return;
-    }
-    if (!isFirstForBarangay && !form.requested_role) {
-      setError('Please select whether you are a Custodian or Maintenance Personnel.');
-      return;
-    }
-    if (!form.staff_code.trim()) {
-      setError('Please enter the staff registration code given to you by your barangay office.');
-      return;
-    }
-    if (form.password.length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
-    }
-    if (form.password !== form.password_confirmation) {
-      setError('Password and confirmation do not match.');
       return;
     }
 
@@ -230,6 +250,11 @@ function Register() {
       setSubmitted(true);
     } catch (requestError) {
       const messages = requestError.response?.data?.errors;
+      const inlineErrors = Object.fromEntries(Object.entries(messages ?? {}).map(([name, value]) => [
+        name === 'name' ? 'first_name' : name,
+        Array.isArray(value) ? value[0] : value,
+      ]));
+      showFieldErrors(inlineErrors);
       const failed = Object.keys(messages ?? {});
       if (failed.some((key) => ['name','first_name','middle_name','last_name','email','phone'].includes(key))) setStep(0);
       else if (failed.some((key) => ['province_id','city_id','barangay_id','barangay_name','address'].includes(key))) setStep(1);
@@ -250,9 +275,12 @@ function Register() {
           .then((response) => setIsFirstForBarangay(response.data.is_first))
           .catch(() => {});
       } else {
-        const allMessages = messages ? Object.values(messages).map((arr) => arr[0]).filter(Boolean) : [];
+        const allMessages = Object.entries(inlineErrors)
+          .filter(([name]) => !STEP_FIELDS.flat().includes(name))
+          .map(([, message]) => message).filter(Boolean);
         setError(
           allMessages.length ? allMessages.join(' ') :
+            Object.keys(inlineErrors).length ? 'Please check the highlighted fields.' :
             requestError.response?.data?.message ??
             'Unable to register. Please check your connection and try again.',
         );
@@ -285,7 +313,7 @@ function Register() {
             </Link>
           </div>
         ) : (
-          <form className="auth-form auth-form-grid" autoComplete="off" onSubmit={handleSubmit} noValidate>
+          <form ref={formRef} className="auth-form auth-form-grid" autoComplete="off" onSubmit={handleSubmit} noValidate>
             <ol className="register-progress" aria-label="Registration progress">{['Your details', 'Your barangay', 'Account access'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={step >= index ? 'is-current' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
             <h2 className="register-step-title" ref={stepHeading} tabIndex={-1}>{['Tell us about yourself', 'Where are you based?', 'Secure your account'][step]}</h2>
             <p className="register-step-help">Step {step + 1} of 3 · {['Enter your name and contact information.', 'Choose your barangay and enter your street address.', 'Enter your registration code and choose a strong password.'][step]}</p>
@@ -297,6 +325,7 @@ function Register() {
                   autoComplete="off"
                   maxLength={60}
                   name="first_name"
+                  {...fieldErrorProps('first_name')}
                   onChange={handleNameChange}
                   placeholder="First name"
                   required
@@ -304,6 +333,7 @@ function Register() {
                   value={form.first_name}
                 />
               </div>
+              <RegistrationFieldError name="first_name" errors={fieldErrors} />
             </label>
 
             <label className="auth-field">
@@ -313,12 +343,14 @@ function Register() {
                   autoComplete="off"
                   maxLength={60}
                   name="middle_name"
+                  {...fieldErrorProps('middle_name')}
                   onChange={handleNameChange}
                   placeholder="Middle name (optional)"
                   type="text"
                   value={form.middle_name}
                 />
               </div>
+              <RegistrationFieldError name="middle_name" errors={fieldErrors} />
             </label>
 
             <label className="auth-field auth-field-full">
@@ -328,6 +360,7 @@ function Register() {
                   autoComplete="off"
                   maxLength={60}
                   name="last_name"
+                  {...fieldErrorProps('last_name')}
                   onChange={handleNameChange}
                   placeholder="Last name"
                   required
@@ -335,6 +368,7 @@ function Register() {
                   value={form.last_name}
                 />
               </div>
+              <RegistrationFieldError name="last_name" errors={fieldErrors} />
             </label>
 
             <label className="auth-field auth-field-full">
@@ -343,6 +377,7 @@ function Register() {
                 <input
                   autoComplete="off"
                   name="email"
+                  {...fieldErrorProps('email')}
                   onChange={handleChange}
                   placeholder="Email address"
                   required
@@ -350,6 +385,7 @@ function Register() {
                   value={form.email}
                 />
               </div>
+              <RegistrationFieldError name="email" errors={fieldErrors} />
             </label>
 
             <label className="auth-field">
@@ -360,6 +396,7 @@ function Register() {
                   inputMode="numeric"
                   maxLength={11}
                   name="phone"
+                  {...fieldErrorProps('phone')}
                   onChange={handlePhoneChange}
                   placeholder="09XXXXXXXXX"
                   required
@@ -367,6 +404,7 @@ function Register() {
                   value={form.phone}
                 />
               </div>
+              <RegistrationFieldError name="phone" errors={fieldErrors} />
             </label>
 
             </fieldset><fieldset className="register-fields" hidden={step !== 1} disabled={step !== 1}><legend className="sr-only">Barangay and address</legend>
@@ -375,6 +413,7 @@ function Register() {
               <div className="auth-input-wrapper auth-input-plain">
                 <select
                   name="province_id"
+                  {...fieldErrorProps('province_id')}
                   onChange={handleProvinceChange}
                   required
                   value={form.province_id}
@@ -385,6 +424,7 @@ function Register() {
                   ))}
                 </select>
               </div>
+              <RegistrationFieldError name="province_id" errors={fieldErrors} />
             </label>
 
             <label className="auth-field">
@@ -393,6 +433,7 @@ function Register() {
                 <select
                   disabled={!form.province_id}
                   name="city_id"
+                  {...fieldErrorProps('city_id')}
                   onChange={handleCityChange}
                   required
                   value={form.city_id}
@@ -405,6 +446,7 @@ function Register() {
                   ))}
                 </select>
               </div>
+              <RegistrationFieldError name="city_id" errors={fieldErrors} />
             </label>
 
             <label className="auth-field auth-field-full">
@@ -413,6 +455,7 @@ function Register() {
                 {barangays.length > 0 ? (
                   <select
                     name="barangay_id"
+                    {...fieldErrorProps('barangay_id')}
                     onChange={handleChange}
                     required
                     value={form.barangay_id}
@@ -427,6 +470,7 @@ function Register() {
                     autoComplete="off"
                     disabled={!form.city_id}
                     name="barangay_name"
+                    {...fieldErrorProps('barangay_name')}
                     onChange={handleChange}
                     placeholder={form.city_id ? 'Barangay name' : 'Select a city/municipality first'}
                     required
@@ -435,6 +479,7 @@ function Register() {
                   />
                 )}
               </div>
+              <RegistrationFieldError name={barangays.length > 0 ? 'barangay_id' : 'barangay_name'} errors={fieldErrors} />
             </label>
 
             {isFirstForBarangay === true && (
@@ -449,6 +494,7 @@ function Register() {
                 <input
                   autoComplete="off"
                   name="address"
+                  {...fieldErrorProps('address')}
                   onChange={handleChange}
                   placeholder="House no. / street / purok"
                   required
@@ -456,6 +502,7 @@ function Register() {
                   value={form.address}
                 />
               </div>
+              <RegistrationFieldError name="address" errors={fieldErrors} />
             </label>
 
             </fieldset><fieldset className="register-fields" hidden={step !== 2} disabled={step !== 2}><legend className="sr-only">Account access</legend>
@@ -466,6 +513,7 @@ function Register() {
                 <div className="auth-input-wrapper auth-input-plain">
                   <select
                     name="requested_role"
+                    {...fieldErrorProps('requested_role')}
                     onChange={handleChange}
                     required
                     value={form.requested_role}
@@ -475,6 +523,7 @@ function Register() {
                     <option value="Maintenance Personnel">Maintenance Personnel</option>
                   </select>
                 </div>
+                <RegistrationFieldError name="requested_role" errors={fieldErrors} />
               </label>
             )}
 
@@ -484,6 +533,7 @@ function Register() {
                 <input
                   autoComplete="off"
                   name="staff_code"
+                  {...fieldErrorProps('staff_code')}
                   onChange={handleChange}
                   placeholder="Given to you by your barangay office"
                   required
@@ -491,6 +541,7 @@ function Register() {
                   value={form.staff_code}
                 />
               </div>
+              <RegistrationFieldError name="staff_code" errors={fieldErrors} />
             </label>
 
             <label className="auth-field">
@@ -499,6 +550,7 @@ function Register() {
                 <input
                   autoComplete="new-password"
                   name="password"
+                  {...fieldErrorProps('password')}
                   onChange={handleChange}
                   placeholder="Password"
                   required
@@ -515,6 +567,7 @@ function Register() {
                   <Icon name={showPassword ? 'eyeOff' : 'eye'} size={18} />
                 </button>
               </div>
+              <RegistrationFieldError name="password" errors={fieldErrors} />
             </label>
 
             <label className="auth-field">
@@ -523,6 +576,7 @@ function Register() {
                 <input
                   autoComplete="new-password"
                   name="password_confirmation"
+                  {...fieldErrorProps('password_confirmation')}
                   onChange={handleChange}
                   placeholder="Confirm password"
                   required
@@ -530,6 +584,7 @@ function Register() {
                   value={form.password_confirmation}
                 />
               </div>
+              <RegistrationFieldError name="password_confirmation" errors={fieldErrors} />
             </label>
 
             </fieldset>
