@@ -1,5 +1,8 @@
 import EndImpersonationAction from '../components/EndImpersonationAction';
 import './TicketCreation.css';
+import './ScheduleForm.css';
+import './MaintenanceDetails.css';
+import FileCabinet from '../components/FileCabinet';
 import VMSLogo from '../components/VMSLogo';
 import { Children, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
 import { createPortal } from 'react-dom';
@@ -3189,6 +3192,8 @@ function Workspace() {
               submitLabel={editScheduleId ? 'Update Schedule' : (canDo(user, 'schedule.create') ? 'Add Schedule' : 'Send Suggestion')}
               contextVehicles={lookups.vehicles}
               hubs={allHubs}
+              wrapperClassName="schedule-entry-form"
+              compactVehiclePreview
               onDirty={() => setHasUnsavedChanges(true)}
             />
           ) : viewIssueId ? (
@@ -4337,7 +4342,6 @@ function Workspace() {
           <div className="panel-header-bar schedule-panel-header">
             <div className="schedule-panel-heading">
               <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p></div>
-              <span className="schedule-count-badge">{visibleRows.length} schedules</span>
             </div>
             <div className="schedule-panel-tools">
               <ViewModeDropdown value={scheduleViewMode} onChange={changeScheduleViewMode} />
@@ -4517,7 +4521,6 @@ function Workspace() {
           <div className="panel-header-bar">
             <h3>Activity Log <span className="count-badge">{visibleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <GenerateReportButton rows={visibleRows} />
               <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search logs..." columnChooser={logsView === 'list' ? logColumnChooser : undefined} />
             </div>
           </div>
@@ -6007,10 +6010,11 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
         const fieldHasValue = Array.isArray(rawFieldValue)
           ? rawFieldValue.some((v) => String(v ?? '').trim() !== '')
           : rawFieldValue !== undefined && rawFieldValue !== null && String(rawFieldValue).trim() !== '';
+        const FieldWrapper = ['file', 'multi-file'].includes(field.type) ? 'div' : 'label';
         return (
         <Fragment key={field.name}>
-        <label
-          className={[field.compactFile ? 'file-inline' : null, fieldHasValue ? 'has-value' : null, fieldErrors[field.name] ? 'has-error' : null].filter(Boolean).join(' ') || undefined}
+        <FieldWrapper
+          className={[['file', 'multi-file'].includes(field.type) ? 'cabinet-field' : null, field.compactFile ? 'file-inline' : null, fieldHasValue ? 'has-value' : null, fieldErrors[field.name] ? 'has-error' : null].filter(Boolean).join(' ') || undefined}
           style={field.fullWidth ? { gridColumn: '1 / -1' } : undefined}
         >
           <span style={field.action ? { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 } : undefined}>
@@ -6273,142 +6277,25 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
               value={values[field.name] ?? ''}
             />
           ) : null}
-          {field.type === 'file' ? (
-            <div className={`photo-box${isFile(values[field.name]) || field.existingUrl ? ' has-file' : ''}`}>
-              <input
-                accept={field.accept}
-                className="photo-box-input"
-                id={`photo-box-input-${field.name}`}
-                name={field.name}
-                onChange={handleChange}
-                required={field.required}
-                type="file"
-              />
-              <label className="photo-box-add-btn" htmlFor={`photo-box-input-${field.name}`}>
-                <Icon name="plus" size={10} />
-                {isFile(values[field.name]) || field.existingUrl ? 'Change Image' : 'Add Image'}
-              </label>
-              {isFile(values[field.name]) ? (
-                <button
-                  type="button"
-                  className="photo-box-remove"
-                  onClick={() => {
-                    const next = { ...values, [field.name]: null };
-                    setValues(next);
-                    onValuesChange?.(next);
-                  }}
-                  title="Remove image"
-                  aria-label="Remove image"
-                >
-                  <Icon name="trash" size={13} />
-                </button>
-              ) : null}
-              {isFile(values[field.name]) ? (
-                values[field.name].type.startsWith('image/') ? (
-                  <img alt={field.label} className="photo-box-fill" src={URL.createObjectURL(values[field.name])} />
-                ) : (
-                  <div className="photo-box-file">
-                    <Icon name="clipboard" size={28} />
-                    <span>{values[field.name].name}</span>
-                  </div>
-                )
-              ) : field.existingUrl ? (
-                // Not a freshly-picked File — the vehicle's already-saved photo,
-                // shown so editing doesn't look like it wiped out the photo that
-                // was there all along. No remove button here: the backend only
-                // ever replaces photo_url when a new file is uploaded, it has no
-                // "clear the photo" path, so offering removal would be a lie.
-                <img alt={field.label} className="photo-box-fill" src={resolvePhotoUrl(field.existingUrl)} />
-              ) : (
-                <div className="photo-box-empty">
-                  <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="15" rx="2" />
-                    <circle cx="9" cy="10" r="1.8" />
-                    <path d="M4.5 17.5 9 13l3 3 4-4.5 3.5 4" />
-                  </svg>
-                  <span>No image available</span>
-                </div>
-              )}
-            </div>
+          {['file', 'multi-file'].includes(field.type) ? (
+            <FileCabinet
+              name={field.name}
+              accept={field.accept}
+              required={field.required}
+              multiple={field.type === 'multi-file'}
+              files={field.type === 'multi-file' ? (Array.isArray(values[field.name]) ? values[field.name] : []) : (isFile(values[field.name]) ? [values[field.name]] : [])}
+              existingFiles={field.type === 'multi-file'
+                ? (field.existingAttachments ?? []).map((att) => ({ id: att.attachment_id, name: att.original_name || 'File', url: resolvePhotoUrl(att.file_url), original: att }))
+                : (!isFile(values[field.name]) && field.existingUrl ? [{ name: 'Saved ' + field.label.toLowerCase(), url: resolvePhotoUrl(field.existingUrl) }] : [])}
+              onRemoveExisting={field.onRemoveExisting}
+              onChange={(files) => {
+                const next = { ...values, [field.name]: field.type === 'multi-file' ? files : (files[0] ?? null) };
+                setValues(next);
+                setFieldErrors((current) => ({ ...current, [field.name]: undefined }));
+                onValuesChange?.(next);
+              }}
+            />
           ) : null}
-          {field.type === 'multi-file' ? (() => {
-            const existingFiles = Array.isArray(field.existingAttachments) ? field.existingAttachments : [];
-            const pendingFiles = Array.isArray(values[field.name]) ? values[field.name] : [];
-            const addFiles = (incoming) => {
-              const list = Array.from(incoming ?? []).filter(Boolean);
-              if (!list.length) return;
-              const next = { ...values, [field.name]: [...pendingFiles, ...list] };
-              setValues(next);
-              onValuesChange?.(next);
-            };
-            const inputId = `multi-file-input-${field.name}`;
-            return (
-              <div className="multi-file-field file-card-like">
-                <div className="multi-file-body">
-                  {existingFiles.length || pendingFiles.length ? (
-                    <div className="multi-file-list">
-                      {existingFiles.map((att) => (
-                        <div key={`existing-${att.attachment_id}`} className="multi-file-item is-existing">
-                          <Icon name="clipboard" size={14} />
-                          <a className="multi-file-name" href={resolvePhotoUrl(att.file_url)} target="_blank" rel="noreferrer">
-                            {att.original_name || 'File'}
-                          </a>
-                          {field.onRemoveExisting && (
-                            <button type="button" className="multi-file-remove" onClick={() => field.onRemoveExisting(att)} title="Remove file" aria-label="Remove file">
-                              <Icon name="close" size={12} />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      {pendingFiles.map((file, i) => (
-                        <div key={`pending-${file.name}-${i}`} className="multi-file-item">
-                          <Icon name="clipboard" size={14} />
-                          <span className="multi-file-name">{file.name}</span>
-                          <button
-                            type="button"
-                            className="multi-file-remove"
-                            onClick={() => {
-                              const next = { ...values, [field.name]: pendingFiles.filter((_, fi) => fi !== i) };
-                              setValues(next);
-                              onValuesChange?.(next);
-                            }}
-                            title="Remove file"
-                            aria-label="Remove file"
-                          >
-                            <Icon name="close" size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="file-card-empty">No data</div>
-                  )}
-                  <label
-                    className="file-card-dropzone multi-file-dropzone"
-                    htmlFor={inputId}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}
-                  >
-                    <input
-                      accept={field.accept}
-                      className="multi-file-input"
-                      id={inputId}
-                      multiple
-                      name={field.name}
-                      onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }}
-                      type="file"
-                    />
-                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M7 18a4.5 4.5 0 0 1-1-8.9A5.5 5.5 0 0 1 16.7 7 4.5 4.5 0 0 1 18 18" />
-                      <path d="M12 12v7" />
-                      <path d="M9.5 14.5 12 12l2.5 2.5" />
-                    </svg>
-                    <span>Drag file here</span>
-                  </label>
-                </div>
-              </div>
-            );
-          })() : null}
           {field.inlineExtra ? (
             <div className="field-extra field-extra-inline">
               {typeof field.inlineExtra === 'function' ? field.inlineExtra(values) : field.inlineExtra}
@@ -6416,7 +6303,7 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
           ) : null}
           {fieldErrors[field.name] ? <small className="fx-error" role="alert">{fieldErrors[field.name]}</small> : null}
           {field.hint && !fieldErrors[field.name] ? <small className="field-hint">{field.hint}</small> : null}
-        </label>
+        </FieldWrapper>
         {field.extra ? (
           <div className="field-extra" style={{ gridColumn: field.extraGridColumn ?? '1 / -1' }}>
             {typeof field.extra === 'function' ? field.extra(values) : field.extra}
@@ -6903,7 +6790,7 @@ function ReportPreview({ report }) {
     <div className={`report-document${isLandscape ? ' is-landscape' : ''}`}>
       <header className="report-document-header">
         <div className="report-brand">
-          <span className="report-brand-mark"><Icon name="gear" size={22} filled /></span>
+          <span className="report-brand-mark"><VMSLogo variant="blue" size={28} /></span>
           <span><strong>VMS</strong><small>Barangay Vehicle Management System</small></span>
         </div>
         <div className="report-document-heading"><span>OFFICIAL FLEET REPORT</span><h2>{report.report_type?.toUpperCase()}</h2></div>
@@ -8067,7 +7954,7 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
   );
 }
 
-function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty, showDomainPreview = false, categoryVehicleCount = null }) {
+function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty, showDomainPreview = false, categoryVehicleCount = null, compactVehiclePreview = false }) {
   // Scoped to this exact route (new-X vs. editing record #N are different
   // paths) so a form's in-progress values survive clicking a "view" link
   // (e.g. the selected vehicle/custodian's name) and coming Back, instead of
@@ -8157,6 +8044,15 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
         <div><dt>Status</dt><dd><StatusBadge value={vehicle.status} /></dd></div>
         <div><dt>Condition</dt><dd><StatusBadge value={vehicle.condition} /></dd></div>
       </dl>
+    </section>
+  ) : null;
+
+  const vehicleLocationCard = vehicle && !showDomainPreview ? (
+    <section className="veh-card form-context-map-inline">
+      <div className="veh-card-head"><Icon name="pin" size={16} /><h4>{vehicle.current_location ?? 'Location unknown'}</h4></div>
+      <div className="veh-map-wrap form-context-map-expanded">
+        <VehicleLocationMap lat={hub?.lat} lng={hub?.lng} label={vehicle.current_location} />
+      </div>
     </section>
   ) : null;
 
@@ -8250,12 +8146,13 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
               vehicleInfoCard
             ) : (
               <section className="veh-card form-context-empty">
+                {compactVehiclePreview && <div className="veh-card-head"><Icon name="vehicle" size={16} /><h4>Vehicle preview</h4></div>}
                 <Icon name="vehicle" size={30} />
                 <p>Select a vehicle in the form and its photo, details, and location will show here.</p>
               </section>
             )}
 
-            {vehicle && !showDomainPreview && (
+            {vehicle && !showDomainPreview && !compactVehiclePreview && (
               <section className="veh-card">
                 <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>Entry Summary</h4></div>
                 <dl className="veh-kv">
@@ -8272,20 +8169,15 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
               </section>
             )}
 
+            {compactVehiclePreview && vehicleLocationCard}
+
           </div>
           <div className="form-context-form-col">
             <div className={`form-grid-2col form-context-form${wrapperClassName ? ` ${wrapperClassName}` : ''}`}>{form}</div>
             {/* Stacked below the form fields, inside the same column, so it
                 fills the free space the form's shorter height leaves behind
                 instead of floating full-width beneath both columns. */}
-            {vehicle && !showDomainPreview && (
-              <section className="veh-card form-context-map-inline">
-                <div className="veh-card-head"><Icon name="pin" size={16} /><h4>{vehicle.current_location ?? 'Location unknown'}</h4></div>
-                <div className="veh-map-wrap form-context-map-expanded">
-                  <VehicleLocationMap lat={hub?.lat} lng={hub?.lng} label={vehicle.current_location} />
-                </div>
-              </section>
-            )}
+            {!compactVehiclePreview && vehicleLocationCard}
           </div>
         </div>
       ) : (
@@ -8589,15 +8481,18 @@ function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = fal
   // what, roughly when, and why.
   const keep = suggestOnly ? ['vehicle_id', 'maintenance_type', 'scheduled_date', 'notes'] : null;
   const all = [
-    { label: 'Vehicle', name: 'vehicle_id', options: vehicleOptions(lookups), required: true, type: 'select' },
-    { label: 'Maintenance Type', name: 'maintenance_type', options: lookups.maintenance_types, required: true, type: 'creatable-select', newItemLabel: 'maintenance type', catalogEndpoint: '/maintenance-types' },
-    { label: 'Scheduled Date', name: 'scheduled_date', required: true, type: 'date' },
-    { label: 'Scheduled Time', name: 'scheduled_time', type: 'time' },
+    { label: 'Vehicle', name: 'vehicle_id', options: vehicleOptions(lookups), required: true, type: 'select', group: '1. Vehicle & maintenance' },
+    { label: 'Maintenance Type', name: 'maintenance_type', options: lookups.maintenance_types, required: true, type: 'creatable-select', newItemLabel: 'maintenance type', catalogEndpoint: '/maintenance-types', group: '1. Vehicle & maintenance' },
+    { label: 'Scheduled Date', name: 'scheduled_date', required: true, type: 'date', group: '2. Date & recurrence' },
+    { label: 'Scheduled Time', name: 'scheduled_time', type: 'time', group: '2. Date & recurrence' },
     // Recurring PM: completing this schedule auto-creates the next at the chosen
     // interval. Left blank = one-time (the default "Select" option).
     {
       label: 'Repeat Every (optional)',
       name: 'recurrence_months',
+      group: '2. Date & recurrence',
+      fullWidth: true,
+      hint: 'Leave blank for a one-time schedule.',
       type: 'select-or-other',
       options: [
         { value: 1, label: 'Month' },
@@ -8614,18 +8509,14 @@ function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = fal
       otherMax: 60,
     },
     // A known hub, or "Other" for an outside repair shop not in that list.
-    { label: 'Service Location', name: 'service_location', type: 'select-or-other', options: hubOptions, otherLabel: 'Other / External Shop', otherPlaceholder: 'e.g. Toyota Service Center' },
-    // Full-width only on create: with Status hidden there, it's the trailing
-    // odd-one-out in the 2-column grid — spanning the full row reads as
-    // intentional instead of leaving an empty cell beside it. On edit, Status
-    // sits next to it instead, making the pair even again.
-    { label: 'Assigned To', name: 'assigned_to', options: options(lookups.maintenance_personnel, 'id', 'name'), type: 'select', fullWidth: !isEdit },
+    { label: 'Service Location', name: 'service_location', type: 'select-or-other', options: hubOptions, otherLabel: 'Other / External Shop', otherPlaceholder: 'e.g. Toyota Service Center', group: '3. Location & assignment' },
+    { label: 'Assigned To', name: 'assigned_to', options: options(lookups.maintenance_personnel, 'id', 'name'), type: 'select', group: '3. Location & assignment' },
     // Completed is deliberately never offered here — marking a schedule done
     // goes through the dedicated "Mark Done" action (creates the proof-of-work
     // record and, if recurring, the next occurrence); this field only ever
     // needs to cancel an existing one. Not shown at all when creating new.
-    ...(isEdit ? [{ label: 'Status', name: 'status', options: ['Scheduled', 'Cancelled'], type: 'select' }] : []),
-    { label: 'Notes', name: 'notes', type: 'textarea' },
+    ...(isEdit ? [{ label: 'Status', name: 'status', options: ['Scheduled', 'Cancelled'], type: 'select', fullWidth: true, group: '3. Location & assignment' }] : []),
+    { label: 'Notes', name: 'notes', type: 'textarea', placeholder: 'Add preparation, symptoms, or instructions for the mechanic.', group: '4. Notes' },
   ];
   return keep ? all.filter((f) => keep.includes(f.name)) : all;
 }
@@ -10106,6 +9997,10 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
   return (
     <ModulePanel description={`Maintenance #${record.maintenance_id}`}>
       <div className="maintenance-record-detail">
+        <header className="maintenance-report-heading">
+          <div><span className="maintenance-detail-label">Service record #{record.maintenance_id}</span><h2>{record.maintenance_type || 'Maintenance record'}</h2><p>Repair details, completion evidence, and verification.</p></div>
+          <StatusBadge value={record.progress_status} />
+        </header>
         <div className="maintenance-record-hero">
           <VehicleCell vehicle={record.vehicle} />
           <span className="muted">{record.maintenance_type}</span>
@@ -10131,6 +10026,7 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
 
         <div className="maintenance-record-layout">
           <div className="maintenance-record-main">
+        <h3 className="maintenance-section-title">Work progress</h3>
         {/* Progress trail — where this record actually sits, not just a
             status word. Filled/checked nodes are stages already passed. */}
         <div className="maintenance-progress">
@@ -10153,6 +10049,7 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
           ))}
         </div>
 
+        <h3 className="maintenance-section-title">Service summary</h3>
         <div className="maintenance-detail-grid">
           <div>
             <span className="maintenance-detail-label">Problem / Reason</span>
@@ -10182,17 +10079,16 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
           </div>
 
           <aside className="maintenance-record-sidebar" aria-label="Verification and completion details">
+        <h3 className="maintenance-section-title">Completion & verification</h3>
         {/* Proof shown inline — the whole point of this view over the plain
             edit form is not having to click away just to see it. */}
         {record.receipt_url && (
-          <div>
-            <span className="muted" style={{ fontSize: '0.74rem', display: 'block', marginBottom: 6 }}>Proof of Completion</span>
-            <a href={resolvePhotoUrl(record.receipt_url)} target="_blank" rel="noopener noreferrer">
-              <img src={resolvePhotoUrl(record.receipt_url)} alt="Proof of completion" style={{ maxWidth: 360, maxHeight: 280, borderRadius: 8, border: '1px solid #e2e8f0', display: 'block' }} />
-            </a>
-          </div>
+          <a className="maintenance-proof-file" href={resolvePhotoUrl(record.receipt_url)} target="_blank" rel="noopener noreferrer">
+            <Icon name="clipboard" size={22} /><span><strong>Proof of completion</strong><small>Open attached receipt or repair evidence</small></span><Icon name="link" size={16} />
+          </a>
         )}
 
+        {!record.verification_result && <p className="muted" style={{ margin: 0, fontSize: '0.8rem' }}>No verification result recorded.</p>}
         {record.verification_result && (
           <div style={{ padding: '10px 12px', borderRadius: 8, maxWidth: 480, background: record.verification_result === 'Passed' ? '#ecfdf5' : '#fef2f2', border: `1px solid ${record.verification_result === 'Passed' ? '#a7f3d0' : '#fecaca'}` }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem', fontWeight: 700, color: record.verification_result === 'Passed' ? '#065f46' : '#991b1b' }}>
@@ -10871,91 +10767,6 @@ function logColumns(vehicles, onViewVehicle, onViewTicket) {
 // the table shows) — a raw chronological dump, and two rollups (by user, by
 // module) that are actually useful for "who's been doing what" questions a
 // raw log dump doesn't answer directly.
-function GenerateReportButton({ rows }) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef(null);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const handleOutsideClick = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [open]);
-
-  const runReport = (type) => {
-    setOpen(false);
-    const stamp = new Date().toISOString().slice(0, 10);
-
-    if (type === 'timeline') {
-      exportRowsToCsv(`activity-timeline-${stamp}.csv`, [
-        { label: 'Date and Time', value: (r) => formatLogDateTime(r.created_at) },
-        { label: 'User', value: (r) => r.user?.name ?? 'System' },
-        { label: 'Role', value: (r) => r.role ?? '-' },
-        { label: 'Module', value: (r) => r.module ?? '-' },
-        { label: 'Action', value: (r) => r.action },
-        { label: 'Details', value: (r) => r.details ?? '' },
-      ], rows);
-      return;
-    }
-
-    if (type === 'user') {
-      const byUser = new Map();
-      rows.forEach((r) => {
-        const key = r.user?.name ?? 'System';
-        const entry = byUser.get(key) ?? { user: key, role: r.role ?? '-', total: 0, last: r.created_at };
-        entry.total += 1;
-        if (r.created_at && (!entry.last || new Date(r.created_at) > new Date(entry.last))) entry.last = r.created_at;
-        byUser.set(key, entry);
-      });
-      exportRowsToCsv(`activity-by-user-${stamp}.csv`, [
-        { label: 'User', value: (r) => r.user },
-        { label: 'Role', value: (r) => r.role },
-        { label: 'Total Actions', value: (r) => r.total },
-        { label: 'Last Active', value: (r) => formatLogDateTime(r.last) },
-      ], [...byUser.values()].sort((a, b) => b.total - a.total));
-      return;
-    }
-
-    if (type === 'module') {
-      const byModule = new Map();
-      rows.forEach((r) => {
-        const key = r.module ?? 'Other';
-        byModule.set(key, (byModule.get(key) ?? 0) + 1);
-      });
-      exportRowsToCsv(`activity-by-module-${stamp}.csv`, [
-        { label: 'Module', value: (r) => r.module },
-        { label: 'Total Actions', value: (r) => r.total },
-      ], [...byModule.entries()].map(([module, total]) => ({ module, total })).sort((a, b) => b.total - a.total));
-    }
-  };
-
-  return (
-    <div className="column-chooser generate-report" ref={containerRef}>
-      <button type="button" className={`primary-button generate-report-btn${open ? ' is-active' : ''}`} onClick={() => setOpen((v) => !v)}>
-        Generate Report <Icon name="chevronDown" size={13} />
-      </button>
-      {open && (
-        <div className="column-chooser-panel generate-report-panel" role="menu">
-          <button type="button" className="generate-report-option" onClick={() => runReport('timeline')}>
-            <strong>Timeline Report</strong>
-            <span>Every action, in order, exactly as shown below.</span>
-          </button>
-          <button type="button" className="generate-report-option" onClick={() => runReport('user')}>
-            <strong>User Report</strong>
-            <span>Action counts per user, most active first.</span>
-          </button>
-          <button type="button" className="generate-report-option" onClick={() => runReport('module')}>
-            <strong>Module Report</strong>
-            <span>Action counts per module, busiest first.</span>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Same rows as the List View table, rendered as a connected vertical
 // timeline instead — its own pagination via the same usePagination hook, so
 // switching tabs doesn't lose your place in a 14,000-row activity log.
