@@ -1,0 +1,22 @@
+.file-cabinet { width: 100%; min-width: 0; border: 1px solid var(--border-subtle, #dbe5f1); border-radius: 8px; background: var(--surface, #fff); overflow: hidden; color: var(--text, #172b4d); }
+.file-cabinet-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border-subtle, #dbe5f1); }
+.file-cabinet-toolbar strong { font-size: .85rem; }
+.file-cabinet-tools { display: flex; gap: 5px; }
+.file-cabinet-tools button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: var(--primary, #2563eb); border: 1px solid var(--border-subtle, #dbe5f1); border-radius: 4px; background: transparent; cursor: pointer; }
+.file-cabinet-tools button:disabled { opacity: .35; cursor: default; }
+.file-cabinet-list { max-height: 170px; overflow: auto; }
+.file-cabinet.is-expanded .file-cabinet-list { max-height: 400px; }
+.file-cabinet-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--border-subtle, #e2e8f0); }
+html .smart-form .file-cabinet .file-cabinet-row input[type="checkbox"] { width: 14px; min-height: 14px; height: 14px; flex: 0 0 14px; margin: 0; padding: 0; }
+.file-cabinet-row > svg { flex-shrink: 0; color: var(--primary, #2563eb); }
+.file-cabinet-info { min-width: 0; display: grid; gap: 4px; }
+.file-cabinet-info a { font-size: .78rem; color: var(--primary, #2563eb); overflow-wrap: anywhere; }
+.file-cabinet-info small, .file-cabinet-empty { font-size: .69rem; color: var(--text-muted, #64748b); }
+.file-cabinet-empty { margin: 0; padding: 16px 12px; text-align: center; }
+.file-cabinet-drop { position: relative; padding: 10px; }
+.file-cabinet-drop > input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.file-cabinet-drop > button { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 100%; padding: 20px 12px; color: var(--primary, #2563eb); background: transparent; border: 1px dashed var(--border-subtle, #cbd5e1); border-radius: 6px; cursor: pointer; font: inherit; }
+.file-cabinet-drop small { font-size: .7rem; color: var(--text-muted, #64748b); }
+.file-cabinet.is-dragging .file-cabinet-drop > button { background: var(--surface-2, #eff6ff); border-color: var(--primary, #2563eb); }
+.file-cabinet button:focus-visible, .file-cabinet a:focus-visible { outline: 2px solid var(--primary, #2563eb); outline-offset: 2px; }
+.file-cabinet-error { margin: 0; padding: 0 12px 12px; font-size: .75rem; color: #b91c1c; }
