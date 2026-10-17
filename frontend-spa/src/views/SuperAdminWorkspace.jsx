@@ -3,7 +3,7 @@ import '../components/RoleDashboard.css';
 import './SuperAdminWorkspace.css';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, Polygon, TileLayer } from 'react-leaflet';
+import BoundaryReviewModal from '../components/BoundaryReviewModal';
 import api from '../api/axios';
 import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
@@ -11,7 +11,7 @@ import { AdminActionDrawer, AdminConfirmDialog, AdminFilterField, AdminManagemen
 import { formatDate } from '../utils/adminDate';
 import { ActivityLogTab, ConcernReportsTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
-import { geoJsonToRings } from '../utils/boundary';
+
 
 // Kept separate from every other role's landing route — a Super Admin never
 // lands on the fleet-oriented Workspace.jsx shell, since RestrictSuperAdminScope
@@ -117,7 +117,7 @@ function ProfileMenu({ user, open, setOpen, onOpenSettings, onLogout }) {
   );
 }
 
-function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, onRetryBoundary, onConfirmBoundary, onDiscardBoundary, initialFilter, showAddForm, onCloseAdd, onRegistrationCode, onRequestConfirmation }) {
+function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, onRetryBoundary, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, showAddForm, onCloseAdd, onRegistrationCode, onRequestConfirmation }) {
   const [activeFilter, setActiveFilter] = useState(initialFilter || 'all');
   const [search, setSearch] = useState('');
   const [provinceFilter, setProvinceFilter] = useState('');
@@ -155,59 +155,11 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
     {managing && <AdminActionDrawer title={managing.name} description={[managing.city_name, managing.province_name].filter(Boolean).join(', ')} onClose={() => setManagingId(null)}>
       <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd><dt>Boundary status</dt><dd><StatusBadge value={boundaryStatus(managing)} /></dd><dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
       <section className="sa-detail-section"><h3>Registration code</h3><p>View or regenerate this barangay's staff registration code.</p><button type="button" className="ghost-button" onClick={() => onRegistrationCode(managing)}><Icon name="key" size={15} />Manage Registration Code</button></section>
-      <section className="sa-detail-section"><h3>Boundary configuration</h3>{managing.boundary_status === 'needs_review' ? <><p>A candidate boundary needs verification before it becomes official.</p><button type="button" className="primary-button" onClick={() => { setReviewingBoundary(managing); setManagingId(null); }}>Review Boundary</button></> : managing.boundary_status === 'verified' ? <p>A verified boundary is on file.</p> : <><p>No matching boundary is on file. Retry the supported lookup.</p><button type="button" className="ghost-button" disabled={retryingId === managing.id} onClick={() => retryBoundary(managing)}>{retryingId === managing.id ? 'Checking…' : 'Retry Boundary Lookup'}</button></>}</section>
+      <section className="sa-detail-section"><h3>Boundary configuration</h3><button type="button" className="ghost-button" onClick={() => { setReviewingBoundary(managing); setManagingId(null); }}>Review / Replace Boundary</button>{managing.boundary_status === 'needs_review' ? <><p>A candidate boundary needs verification before it becomes official.</p><button type="button" className="primary-button" onClick={() => { setReviewingBoundary(managing); setManagingId(null); }}>Review Boundary</button></> : managing.boundary_status === 'verified' ? <p>A verified boundary is on file.</p> : <><p>No matching boundary is on file. Retry the supported lookup.</p><button type="button" className="ghost-button" disabled={retryingId === managing.id} onClick={() => retryBoundary(managing)}>{retryingId === managing.id ? 'Checking…' : 'Retry Boundary Lookup'}</button></>}</section>
       {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin. An inactive account will also be activated.</p><AdminFilterField label="Staff member"><select value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</select></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
     </AdminActionDrawer>}
-    {reviewingBoundary && <BoundaryReviewModal barangay={reviewingBoundary} onClose={() => setReviewingBoundary(null)} onConfirm={async () => { if (await onConfirmBoundary(reviewingBoundary)) setReviewingBoundary(null); }} onDiscard={async () => { if (await onDiscardBoundary(reviewingBoundary)) setReviewingBoundary(null); }} />}
+    {reviewingBoundary && <BoundaryReviewModal onSaved={onBoundarySaved} barangay={reviewingBoundary} onClose={() => setReviewingBoundary(null)} onConfirm={async () => { if (await onConfirmBoundary(reviewingBoundary)) setReviewingBoundary(null); }} onDiscard={async () => { if (await onDiscardBoundary(reviewingBoundary)) setReviewingBoundary(null); }} />}
   </div>;
-}
-
-function BoundaryReviewModal({ barangay, onClose, onConfirm, onDiscard }) {
-  const [busy, setBusy] = useState(false);
-  const rings = useMemo(() => geoJsonToRings(barangay.pending_boundary), [barangay.pending_boundary]);
-  const allPoints = rings.flat();
-  const center = allPoints.length
-    ? [allPoints.reduce((s, p) => s + p[0], 0) / allPoints.length, allPoints.reduce((s, p) => s + p[1], 0) / allPoints.length]
-    : [10.3, 123.9];
-
-  const run = async (fn) => {
-    setBusy(true);
-    try { await fn(); } finally { setBusy(false); }
-  };
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box boundary-review-dialog" role="dialog" aria-modal="true" aria-label="Review barangay boundary" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Review Boundary — {barangay.name}</h3>
-          <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
-        </div>
-        <div className="modal-body">
-          <p className="muted" style={{ margin: '0 0 10px' }}>
-            Matched via OpenStreetMap — this is NOT yet the barangay's official boundary. Confirm it only if the shape below actually looks like {barangay.name}.
-          </p>
-          {rings.length === 0 ? (
-            <p className="notice error">This candidate's geometry couldn't be rendered — discard it and try again later.</p>
-          ) : (
-            <div style={{ height: 280, borderRadius: 8, overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-              <MapContainer center={center} zoom={14} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
-                <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                {rings.map((ring, i) => (
-                  <Polygon key={i} positions={ring} pathOptions={{ color: '#d97706', fillColor: '#fbbf24', fillOpacity: 0.3 }} />
-                ))}
-              </MapContainer>
-            </div>
-          )}
-          <div className="form-actions" style={{ marginTop: 12 }}>
-            <button type="button" className="ghost-button" disabled={busy} onClick={() => run(onDiscard)}>Discard</button>
-            <button type="button" className="success-button" disabled={busy || rings.length === 0} onClick={() => run(onConfirm)}>
-              {busy ? 'Confirming…' : 'Confirm Boundary'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // Nationwide location cascade for adding a registered barangay.
@@ -916,6 +868,7 @@ export default function SuperAdminWorkspace() {
               <PlatformOverview barangays={barangays} approvals={pendingApprovals} concerns={concernReports} onNavigate={navigateTab} />
             ) : activeTab === 'barangays' ? (
               <BarangayManagementTab
+                onBoundarySaved={() => loadAll(true)}
                 key={barangayFilter}
                 initialFilter={barangayFilter}
                 showAddForm={showAddBarangay}

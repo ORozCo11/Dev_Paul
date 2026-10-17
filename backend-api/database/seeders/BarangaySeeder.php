@@ -61,8 +61,7 @@ class BarangaySeeder extends Seeder
         $mandaueCityId = City::where('name', 'Mandaue City')->value('id');
 
         foreach (self::BARANGAYS as $name) {
-            $barangay = Barangay::firstOrCreate(['name' => $name]);
-            $barangay->update(['city_id' => $mandaueCityId]);
+            $barangay = Barangay::firstOrCreate(['name' => $name, 'city_id' => $mandaueCityId]);
 
             $code = RegistrationSetting::for($barangay->id)->staff_code;
             $this->command?->info("{$name}: {$code}");

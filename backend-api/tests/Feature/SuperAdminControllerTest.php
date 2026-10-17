@@ -23,6 +23,38 @@ class SuperAdminControllerTest extends TestCase
     use RefreshDatabase;
 
     #[Test]
+    public function barangay_management_excludes_reference_only_rows_and_batches_admin_counts(): void
+    {
+        $province = \App\Models\Province::create(['code' => 'TEST', 'name' => 'Test Province']);
+        $city = \App\Models\City::create(['province_id' => $province->id, 'code' => 'TESTCITY', 'name' => 'Test City']);
+        $reference = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Reference only', 'psgc_code' => '0100000001']);
+        $tenant = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Registered', 'psgc_code' => '0100000002', 'boundary' => ['type' => 'Polygon', 'coordinates' => [[[0, 0], [1, 0], [1, 1], [0, 0]]]]]);
+        $provisioned = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Code provisioned', 'psgc_code' => '0100000003']);
+        $manual = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Manually added']);
+        \App\Models\RegistrationSetting::for($provisioned->id);
+        User::factory()->create(['barangay_id' => $tenant->id, 'role' => 'Custodian', 'roles' => ['Custodian', 'Admin'], 'is_active' => true]);
+        User::factory()->create(['barangay_id' => $tenant->id, 'role' => 'Admin', 'roles' => ['Admin'], 'is_active' => false]);
+        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
+        Sanctum::actingAs($superAdmin, ['*']);
+
+        \Illuminate\Support\Facades\DB::enableQueryLog();
+        $rows = collect($this->getJson('/api/superadmin/barangays')->assertOk()->json());
+        $queryCount = count(\Illuminate\Support\Facades\DB::getQueryLog());
+        \Illuminate\Support\Facades\DB::disableQueryLog();
+        $this->assertEqualsCanonicalizing([$tenant->id, $provisioned->id, $manual->id], $rows->pluck('id')->all());
+        $this->assertNotContains($reference->id, $rows->pluck('id')->all());
+        $registered = $rows->firstWhere('id', $tenant->id);
+        $this->assertSame(2, $registered['staff_count']);
+        $this->assertTrue($registered['has_active_admin']);
+        $this->assertTrue($registered['sole_active_admin']);
+        $this->assertTrue($registered['has_boundary']);
+        $this->assertArrayNotHasKey('boundary', $registered);
+        $this->assertFalse($rows->firstWhere('id', $manual->id)['has_boundary']);
+        $this->assertTrue($rows->firstWhere('id', $provisioned->id)['has_registration_code']);
+        $this->assertLessThanOrEqual(5, $queryCount, 'Admin counts must not issue a query per barangay.');
+    }
+
+    #[Test]
     public function super_admin_activity_log_excludes_fleet_detail_entries(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);

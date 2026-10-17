@@ -1,0 +1,171 @@
+[
+  {
+    "test": "Mechanic denied whole-ticket verification",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "Assigned Custodian verifies whole ticket",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "whole-ticket verified closes automatically",
+    "status": "Closed",
+    "pass": true
+  },
+  {
+    "test": "Generate Vehicle Report",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Generate Vehicle Issue Report",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Generate Vehicle Maintenance Report",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Generate Vehicle History Report",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Generate Vehicle Maintenance Schedule Report",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Generate Vehicle Location Report",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Custodian cannot generate reports",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "Custodian creates schedule",
+    "status": 201,
+    "expected": [
+      201
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin approves schedule",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Mechanic cannot edit vehicle",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "Custodian reports issue",
+    "status": 422,
+    "expected": [
+      201
+    ],
+    "pass": false,
+    "message": "The issue description field is required.",
+    "errors": {
+      "issue_description": [
+        "The issue description field is required."
+      ]
+    }
+  },
+  {
+    "test": "Custodian records condition",
+    "status": 422,
+    "expected": [
+      201
+    ],
+    "pass": false,
+    "message": "The condition result field is required.",
+    "errors": {
+      "condition_result": [
+        "The condition result field is required."
+      ]
+    }
+  },
+  {
+    "test": "admin impersonation candidates",
+    "status": 200,
+    "expected": [
+      200,
+      403
+    ],
+    "pass": true
+  },
+  {
+    "test": "custodian impersonation candidates",
+    "status": 403,
+    "expected": [
+      200,
+      403
+    ],
+    "pass": true,
+    "message": "Only an Admin or Super Admin can impersonate another account."
+  },
+  {
+    "test": "mechanic impersonation candidates",
+    "status": 403,
+    "expected": [
+      200,
+      403
+    ],
+    "pass": true,
+    "message": "Only an Admin or Super Admin can impersonate another account."
+  },
+  {
+    "test": "superadmin impersonation candidates",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  }
+]

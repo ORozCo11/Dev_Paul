@@ -1,3 +1,4 @@
+import LoadingOverlay from '../components/LoadingOverlay';
 import './Register.css';
 import { useContext, useEffect, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
@@ -25,7 +26,6 @@ const emptyForm = {
   province_id: '',
   city_id: '',
   barangay_id: '',
-  barangay_name: '',
   requested_role: '',
   staff_code: '',
   password: '',
@@ -42,11 +42,11 @@ const PHONE_PATTERN = /^09\d{9}$/;
 
 const STEP_FIELDS = [
   ['first_name', 'middle_name', 'last_name', 'email', 'phone'],
-  ['province_id', 'city_id', 'barangay_id', 'barangay_name', 'address'],
+  ['province_id', 'city_id', 'barangay_id', 'address'],
   ['requested_role', 'staff_code', 'password', 'password_confirmation'],
 ];
 
-function validateStep(values, step, isFirstForBarangay, hasBarangayList) {
+function validateStep(values, step, isFirstForBarangay) {
   const errors = {};
   if (step === 0) {
     for (const [name, label] of [['first_name', 'First name'], ['middle_name', 'Middle name'], ['last_name', 'Last name']]) {
@@ -61,8 +61,7 @@ function validateStep(values, step, isFirstForBarangay, hasBarangayList) {
   } else if (step === 1) {
     if (!values.province_id) errors.province_id = 'Select your province.';
     if (!values.city_id) errors.city_id = 'Select your city or municipality.';
-    if (hasBarangayList && !values.barangay_id) errors.barangay_id = 'Select your barangay.';
-    else if (!hasBarangayList && !values.barangay_name.trim()) errors.barangay_name = 'Enter your barangay name.';
+    if (!values.barangay_id) errors.barangay_id = 'Select your barangay from the list.';
     if (!values.address.trim()) errors.address = 'Street address is required.';
   } else {
     if (!isFirstForBarangay && !values.requested_role) errors.requested_role = 'Select your role.';
@@ -88,6 +87,10 @@ function Register() {
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
   const [barangays, setBarangays] = useState([]);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [barangaysLoading, setBarangaysLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [locationRetry, setLocationRetry] = useState(0);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const formRef = useRef(null);
@@ -115,41 +118,35 @@ function Register() {
       .catch(() => setProvinces([]));
   }, []);
 
-  // Cascading City/Municipality list, scoped to the chosen province.
+  // Ignore late responses after a parent selection changes.
   useEffect(() => {
     if (!form.province_id) return;
+    let cancelled = false;
     api.get('/cities', { params: { province_id: form.province_id } })
-      .then((response) => setCities(response.data))
-      .catch(() => setCities([]));
-  }, [form.province_id]);
+      .then((response) => { if (!cancelled) setCities(response.data); })
+      .catch(() => { if (!cancelled) setLocationError('Could not load cities. Please try again.'); })
+      .finally(() => { if (!cancelled) setCitiesLoading(false); });
+    return () => { cancelled = true; };
+  }, [form.province_id, locationRetry]);
 
-  // Only Mandaue City has a real barangay list today — everywhere else this
-  // comes back empty and the Barangay field falls back to free text.
   useEffect(() => {
     if (!form.city_id) return;
-    api.get('/barangays', { params: { city_id: form.city_id } })
-      .then((response) => setBarangays(response.data))
-      .catch(() => setBarangays([]));
-  }, [form.city_id]);
-
-  // Live "will I become this barangay's Admin?" preview. Instant for a
-  // dropdown pick (a discrete choice); debounced for free-typed names so it
-  // doesn't fire on every keystroke.
-  useEffect(() => {
-    if (!form.city_id || (!form.barangay_id && !form.barangay_name.trim())) {
-      return;
-    }
     let cancelled = false;
-    const timer = setTimeout(() => {
-      const params = { city_id: form.city_id };
-      if (form.barangay_id) params.barangay_id = form.barangay_id;
-      else params.barangay_name = form.barangay_name.trim();
-      api.get('/registration-status', { params })
-        .then((response) => { if (!cancelled) setIsFirstForBarangay(response.data.is_first); })
-        .catch(() => { if (!cancelled) setIsFirstForBarangay(null); });
-    }, form.barangay_id ? 0 : 500);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [form.city_id, form.barangay_id, form.barangay_name]);
+    api.get('/barangays', { params: { city_id: form.city_id } })
+      .then((response) => { if (!cancelled) setBarangays(response.data); })
+      .catch(() => { if (!cancelled) setLocationError('Could not load barangays. Please try again.'); })
+      .finally(() => { if (!cancelled) setBarangaysLoading(false); });
+    return () => { cancelled = true; };
+  }, [form.city_id, locationRetry]);
+
+  useEffect(() => {
+    if (!form.city_id || !form.barangay_id) return;
+    let cancelled = false;
+    api.get('/registration-status', { params: { city_id: form.city_id, barangay_id: form.barangay_id } })
+      .then((response) => { if (!cancelled) setIsFirstForBarangay(response.data.is_first); })
+      .catch(() => { if (!cancelled) setIsFirstForBarangay(null); });
+    return () => { cancelled = true; };
+  }, [form.city_id, form.barangay_id]);
 
   if (token && user) {
     return <Navigate to={roleRoutes[user.role] ?? '/unauthorized'} replace />;
@@ -158,7 +155,7 @@ function Register() {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
-    if (name === 'barangay_id' || name === 'barangay_name') setIsFirstForBarangay(null);
+    if (name === 'barangay_id') setIsFirstForBarangay(null);
     clearFieldErrors(name, ...(name === 'password' ? ['password_confirmation'] : []));
   };
 
@@ -189,12 +186,14 @@ function Register() {
       province_id: value,
       city_id: '',
       barangay_id: '',
-      barangay_name: '',
     }));
     setCities([]);
     setBarangays([]);
+    setCitiesLoading(Boolean(value));
+    setBarangaysLoading(false);
+    setLocationError('');
     setIsFirstForBarangay(null);
-    clearFieldErrors('province_id', 'city_id', 'barangay_id', 'barangay_name');
+    clearFieldErrors('province_id', 'city_id', 'barangay_id');
   };
 
   const handleCityChange = (event) => {
@@ -203,11 +202,12 @@ function Register() {
       ...current,
       city_id: value,
       barangay_id: '',
-      barangay_name: '',
     }));
     setBarangays([]);
+    setBarangaysLoading(Boolean(value));
+    setLocationError('');
     setIsFirstForBarangay(null);
-    clearFieldErrors('city_id', 'barangay_id', 'barangay_name');
+    clearFieldErrors('city_id', 'barangay_id');
   };
 
   // Strips anything that isn't a letter/space/name-punctuation as the user
@@ -230,8 +230,8 @@ function Register() {
     if (submitting) return;
     setError('');
     const errors = step < 2
-      ? validateStep(form, step, isFirstForBarangay, barangays.length > 0)
-      : Object.assign({}, ...STEP_FIELDS.map((_, index) => validateStep(form, index, isFirstForBarangay, barangays.length > 0)));
+      ? validateStep(form, step, isFirstForBarangay)
+      : Object.assign({}, ...STEP_FIELDS.map((_, index) => validateStep(form, index, isFirstForBarangay)));
     if (Object.keys(errors).length) { showFieldErrors(errors); return; }
     setFieldErrors({});
     if (step < 2) {
@@ -269,8 +269,7 @@ function Register() {
         setIsFirstForBarangay(false);
         setError('Someone else just registered as this barangay\'s first Administrator. Please select your role and enter the staff registration code below, then submit again.');
         const params = { city_id: form.city_id };
-        if (form.barangay_id) params.barangay_id = form.barangay_id;
-        else params.barangay_name = form.barangay_name.trim();
+        params.barangay_id = form.barangay_id;
         api.get('/registration-status', { params })
           .then((response) => setIsFirstForBarangay(response.data.is_first))
           .catch(() => {});
@@ -295,6 +294,7 @@ function Register() {
       <AuthHeader />
 
       <main className="auth-split-page">
+      {submitting && <LoadingOverlay />}
       <section className="auth-split-panel" aria-labelledby="register-title">
         <div className="auth-logo-header">
           <h1 id="register-title" className="auth-login-heading">Create your account</h1>
@@ -431,7 +431,7 @@ function Register() {
               <span>City / Municipality</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <select
-                  disabled={!form.province_id}
+                  disabled={!form.province_id || citiesLoading}
                   name="city_id"
                   {...fieldErrorProps('city_id')}
                   onChange={handleCityChange}
@@ -439,7 +439,7 @@ function Register() {
                   value={form.city_id}
                 >
                   <option value="" disabled>
-                    {form.province_id ? 'Select your city/municipality' : 'Select a province first'}
+                    {citiesLoading ? 'Loading cities?' : form.province_id ? 'Select your city/municipality' : 'Select a province first'}
                   </option>
                   {cities.map((city) => (
                     <option key={city.id} value={city.id}>{city.name}</option>
@@ -452,35 +452,23 @@ function Register() {
             <label className="auth-field auth-field-full">
               <span>Barangay</span>
               <div className="auth-input-wrapper auth-input-plain">
-                {barangays.length > 0 ? (
-                  <select
-                    name="barangay_id"
-                    {...fieldErrorProps('barangay_id')}
-                    onChange={handleChange}
-                    required
-                    value={form.barangay_id}
-                  >
-                    <option value="" disabled>Select your barangay</option>
-                    {barangays.map((barangay) => (
-                      <option key={barangay.id} value={barangay.id}>{barangay.name}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    autoComplete="off"
-                    disabled={!form.city_id}
-                    name="barangay_name"
-                    {...fieldErrorProps('barangay_name')}
-                    onChange={handleChange}
-                    placeholder={form.city_id ? 'Barangay name' : 'Select a city/municipality first'}
-                    required
-                    type="text"
-                    value={form.barangay_name}
-                  />
-                )}
+                <select
+                  name="barangay_id"
+                  {...fieldErrorProps('barangay_id')}
+                  onChange={handleChange}
+                  disabled={!form.city_id || barangaysLoading || !barangays.length}
+                  required
+                  value={form.barangay_id}
+                >
+                  <option value="" disabled>{barangaysLoading ? 'Loading barangays?' : !form.city_id ? 'Select a city/municipality first' : barangays.length ? 'Select your barangay' : 'No barangays available'}</option>
+                  {barangays.map((barangay) => <option key={barangay.id} value={barangay.id}>{barangay.name}</option>)}
+                </select>
               </div>
-              <RegistrationFieldError name={barangays.length > 0 ? 'barangay_id' : 'barangay_name'} errors={fieldErrors} />
+              <RegistrationFieldError name="barangay_id" errors={fieldErrors} />
             </label>
+            {locationError && <div className="notice error auth-field-full" role="alert">{locationError} <button type="button" className="link-button" onClick={() => { setLocationError(''); setCitiesLoading(Boolean(form.province_id)); setBarangaysLoading(Boolean(form.city_id)); setLocationRetry((value) => value + 1); }}>Try again</button></div>}
+            {form.city_id && !barangaysLoading && !barangays.length && !locationError && <p className="notice auth-field-full">No barangay reference is available for this city. Contact the system administrator.</p>}
+            {form.barangay_id && <p className="field-hint auth-field-full">Your selected barangay sets your account&apos;s service area. Its map outline may require administrator review.</p>}
 
             {isFirstForBarangay === true && (
               <p className="notice success auth-field-full">

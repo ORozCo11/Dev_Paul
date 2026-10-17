@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "test": "/privacy policy markup",
+      "nestedLists": 2,
+      "oldInlineLogo": true
+    },
+    {
+      "test": "/terms policy markup",
+      "nestedLists": 4,
+      "oldInlineLogo": true
+    }
+  ],
+  "messages": [
+    {
+      "url": "http://127.0.0.1:5185/privacy",
+      "type": "error",
+      "message": "In HTML, %s cannot be a descendant of <%s>.\nThis will cause a hydration error.%s <ul> p \n\n  ...\n    <App>\n      <BrowserRouter>\n        <Router basename={undefined} location={{pathname:\"...\", ...}} navigationType=\"POP\" ...>\n          <ErrorBoundary>\n            <Routes>\n              <RenderedRoute match={{params:{}, ...}} routeContext={{outlet:null, ...}}>\n                <Privacy>\n                  <div className=\"auth-page-...\">\n                    <AuthHeader>\n                    <main className=\"auth-page\" style={{...}}>\n                      <Aurora>\n                      <section className=\"auth-card ...\" style={{maxWidth:680, ...}}>\n                        <div>\n                        <h1>\n                        <p>\n                        <PolicySection>\n                        <PolicySection title=\"2. Informa...\">\n                          <div style={{...}}>\n                            <h3>\n>                           <p style={{fontSize:\"0.875rem\",lineHeight:1.7,opacity:0.8}}>\n>                             <ul>\n                        ...\n                    ...\n"
+    },
+    {
+      "url": "http://127.0.0.1:5185/privacy",
+      "type": "error",
+      "message": "<%s> cannot contain a nested %s.\nSee this log for the ancestor stack trace. p <ul>"
+    },
+    {
+      "url": "http://127.0.0.1:5185/terms",
+      "type": "error",
+      "message": "In HTML, %s cannot be a descendant of <%s>.\nThis will cause a hydration error.%s <ul> p \n\n  ...\n    <App>\n      <BrowserRouter>\n        <Router basename={undefined} location={{pathname:\"...\", ...}} navigationType=\"POP\" ...>\n          <ErrorBoundary>\n            <Routes>\n              <RenderedRoute match={{params:{}, ...}} routeContext={{outlet:null, ...}}>\n                <Terms>\n                  <div className=\"auth-page-...\">\n                    <AuthHeader>\n                    <main className=\"auth-page\" style={{...}}>\n                      <Aurora>\n                      <section className=\"auth-card ...\" style={{maxWidth:680, ...}}>\n                        <div>\n                        <h1>\n                        <p>\n                        <TermsSection>\n                        <TermsSection title=\"2. Authori...\">\n                          <div style={{...}}>\n                            <h3>\n>                           <p style={{fontSize:\"0.875rem\",lineHeight:1.7,opacity:0.8}}>\n>                             <ul>\n                              ...\n                        ...\n                    ...\n"
+    },
+    {
+      "url": "http://127.0.0.1:5185/terms",
+      "type": "error",
+      "message": "<%s> cannot contain a nested %s.\nSee this log for the ancestor stack trace. p <ul>"
+    }
+  ]
+}

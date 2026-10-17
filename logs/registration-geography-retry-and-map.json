@@ -1,0 +1,17 @@
+[
+  {
+    "test": "failed barangay lookup can retry",
+    "count": 80,
+    "noFreeText": true
+  },
+  {
+    "test": "updated map still defaults to registered city and barangay",
+    "city": "875",
+    "barangay": "34244",
+    "cityOptions": [
+      "Select city",
+      "Cebu City",
+      "Mandaue City"
+    ]
+  }
+]

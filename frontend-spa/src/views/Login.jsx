@@ -1,3 +1,4 @@
+import LoadingOverlay from '../components/LoadingOverlay';
 import { useContext, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
@@ -79,6 +80,7 @@ function Login() {
       <AuthHeader />
 
       <main className="auth-page">
+      {submitting && <LoadingOverlay />}
       <Aurora colorStops={['#0b1220', '#1e3a5f', '#0f172a']} amplitude={0.6} blend={0.55} />
       <section className="auth-card" aria-labelledby="login-title">
         <div className="auth-logo-header">

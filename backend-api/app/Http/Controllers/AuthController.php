@@ -17,27 +17,10 @@ class AuthController extends Controller
     use UploadsImages;
 
     /**
-     * Public self-registration. Residents/staff sign up naming their own
-     * barangay, but the account is created inactive — an Admin must approve
-     * (activate) it via the existing Users management screen before it can
-     * log in, the same gate `login()` already enforces for any deactivated
-     * account.
-     *
-     * Barangays are independent tenants (see BelongsToBarangay/
-     * ScopedThroughVehicle) — every barangay gets its own bootstrap, not
-     * just the very first account system-wide:
-     * - The first account to register under a GIVEN barangay becomes that
-     *   barangay's Admin immediately, active, no approval needed — there's
-     *   nobody else there yet who could review them. This can happen once
-     *   per barangay, whenever it happens to get its first registrant.
-     * - Everyone registering under a barangay — first person included —
-     *   must supply THAT barangay's own Staff Registration Code. Without
-     *   this, anyone could just claim to be "first" for a real barangay
-     *   whose Admin seat happens to still be empty and become its Admin
-     *   uncontested. The code for every real, pre-seeded barangay is
-     *   generated ahead of time (see BarangaySeeder) and handed to that
-     *   barangay's office outside the app, so only someone who actually
-     *   went through that office can ever complete this step.
+     * Register against a preloaded PSGC barangay ID. The barangay must belong
+     * to the selected city; free-text barangay creation is not a public flow.
+     * Staff code checks and inactive-until-approved routing remain mandatory.
+     * First Administrators await Super Admin approval; later staff await Admin approval.
      */
     public function register(Request $request)
     {
@@ -50,21 +33,22 @@ class AuthController extends Controller
             // PH mobile format: 09 + 9 digits = 11 digits total.
             'phone' => ['required', 'regex:/^09[0-9]{9}$/'],
             'address' => ['required', 'string', 'max:255'],
-            'city_id' => ['required', 'exists:cities,id'],
-            // Only cities with a real barangay list (Mandaue City today) get
-            // a dropdown (barangay_id); every other city falls back to free
-            // text (barangay_name) — exactly one of the two is required.
+            'city_id' => ['required', 'exists:cities,id', function ($attribute, $value, $fail) use ($request) {
+                if ($request->filled('province_id') && (int) \App\Models\City::find($value)?->province_id !== (int) $request->input('province_id')) {
+                    $fail('Selected city does not belong to the selected province.');
+                }
+            }],
+            'province_id' => ['nullable', 'exists:provinces,id'],
             'barangay_id' => [
-                'nullable',
-                'required_without:barangay_name',
-                'exists:barangays,id',
+                'required',
+                Rule::exists('barangays', 'id')->whereNotNull('psgc_code'),
                 function ($attribute, $value, $fail) use ($request) {
                     if ($value && (int) Barangay::find($value)?->city_id !== (int) $request->input('city_id')) {
                         $fail('Selected barangay does not belong to the selected city.');
                     }
                 },
             ],
-            'barangay_name' => ['nullable', 'required_without:barangay_id', 'string', 'max:255'],
+            'barangay_name' => ['prohibited'],
         ], [
             'name.regex' => 'Name may only contain letters.',
             'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
@@ -81,18 +65,8 @@ class AuthController extends Controller
         // registrations for a DIFFERENT barangay lock a different row and
         // proceed independently.
         [$user, $isFirstForBarangay] = DB::transaction(function () use ($data, $barangayId, $request) {
-            // No barangay picked from a dropdown (the city has no seeded
-            // list yet) — turn the free-typed name into a real Barangay
-            // row, scoped to this city. Resolved INSIDE the transaction
-            // (not before it) so that if registration fails later in this
-            // same closure (e.g. a bad staff code), the row creation rolls
-            // back with everything else instead of leaving an orphaned
-            // Barangay nobody ever actually registered under.
-            $barangayId = $barangayId ?: (!empty($data['barangay_name'])
-                ? Barangay::findOrCreateForCity((int) $data['city_id'], $data['barangay_name'])->id
-                : null);
-
-            Barangay::where('id', $barangayId)->lockForUpdate()->first();
+            $barangay = Barangay::where('id', $barangayId)->lockForUpdate()->firstOrFail();
+            app(\App\Services\BarangayGeography::class)->attachBoundary($barangay);
 
             // Deliberately unscoped (User carries no global scope) and looks
             // across every barangay — this is the one place that's supposed to.
@@ -136,7 +110,7 @@ class AuthController extends Controller
                 'address' => $data['address'],
                 'city_id' => $data['city_id'],
                 'barangay_id' => $barangayId,
-                'barangay_name' => $data['barangay_name'] ?? null,
+                'barangay_name' => $barangay->name,
                 'role' => $role,
                 'roles' => [$role],
                 'is_active' => false,
@@ -212,31 +186,15 @@ class AuthController extends Controller
         }
     }
 
-    /**
-     * Public, side-effect-free preview for the Register form: "if I submit
-     * with this barangay, will I become its first Admin?" Lets the
-     * frontend show that up front instead of only after submitting.
-     * Never creates anything — a free-typed barangay that doesn't exist
-     * yet is trivially "first" without touching the database.
-     */
+    /** Side-effect-free first-Administrator preview for a selected reference ID. */
     public function registrationStatus(Request $request)
     {
         $data = $request->validate([
             'city_id' => ['required', 'exists:cities,id'],
-            'barangay_id' => ['nullable', 'exists:barangays,id'],
-            'barangay_name' => ['nullable', 'string', 'max:255'],
+            'barangay_id' => ['required', Rule::exists('barangays', 'id')->where('city_id', $request->input('city_id'))->whereNotNull('psgc_code')],
+            'barangay_name' => ['prohibited'],
         ]);
-
-        $barangayId = $data['barangay_id'] ?? null;
-
-        if (!$barangayId && !empty($data['barangay_name'])) {
-            $barangayId = Barangay::where('city_id', $data['city_id'])
-                ->whereRaw('LOWER(name) = ?', [strtolower(trim($data['barangay_name']))])
-                ->value('id');
-        }
-
-        $isFirst = !$barangayId || !User::where('barangay_id', $barangayId)->exists();
-
+        $isFirst = !User::where('barangay_id', $data['barangay_id'])->exists();
         return response()->json(['is_first' => $isFirst]);
     }
 
@@ -369,6 +327,7 @@ class AuthController extends Controller
                 'province_id' => $u->barangay?->city?->province?->id,
                 'province_name' => $u->barangay?->city?->province?->name,
                 'city_name' => $u->barangay?->city?->name,
+                'city_id' => $u->barangay?->city?->id,
                 'barangay_name' => $u->barangay?->name,
             ]);
     }

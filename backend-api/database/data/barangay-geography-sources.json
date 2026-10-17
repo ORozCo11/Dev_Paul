@@ -1,0 +1,44 @@
+{
+  "retrieved": "2026-10-15",
+  "catalog": {
+    "url": "https://psgc.gitlab.io/api/barangays/",
+    "count": 42046,
+    "note": "PSGC mirror consistent with bundled city correspondence codes; not a claim of the latest PSA quarter."
+  },
+  "boundaries": {
+    "dataset": "https://data.humdata.org/dataset/cod-ab-phl",
+    "url": "https://data.humdata.org/dataset/caf116df-f984-4deb-85ca-41b349d3f313/resource/4e4067d6-3fc8-4d2c-91ea-330c3d4f8e8e/download/phl_admin_boundaries.shp.zip",
+    "source": "PSA/NAMRIA via OCHA Philippines/HDX",
+    "version": "v03",
+    "sampledRecordValidOn": "2025-02-13",
+    "resourceLastModified": "2026-05-28",
+    "shpSha256": "d68cda1f1e8e0e838f68b2a154fdea48cf69225396e0d35d6a9dd5d02e04f1fe",
+    "dbfSha256": "ec6879d720c7800b56d1493d3fa1edfefd5703fef0ef00b88d4b5711654d2dec",
+    "sourceRecords": 42048,
+    "matched": 40771,
+    "unmatched": 1275,
+    "cityShards": 1597,
+    "simplificationToleranceDegrees": 0,
+    "coordinateDecimalPlaces": 6,
+    "matchRule": "Unique canonical PSGC or explicit geographic correspondence-code alias from the bundled catalog; no name guessing; duplicate source or alias collisions rejected.",
+    "license": "CC BY-IGO 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/igo/legalcode",
+    "note": "Preserves source vertices, islands and holes, rounded to approximately 0.1m. Source package summary dates differ from record valid_on. Reference data, not a guarantee of current legal/cadastral boundaries."
+  },
+  "legacyBoundaries": {
+    "url": "https://github.com/bendlikeabamboo/barangay-boundaries-repository/releases/download/v2026.4.13.0/barangays.geojson",
+    "sha256": "10606e46cd7b4b34a61f4975f3568bb3c11a48fa355cbe3c4d78c3737e0fcfa9",
+    "snapshot": "2023-10-24",
+    "namriaVersion": "2023-11-06",
+    "toleranceDegrees": 0.005,
+    "attribution": {
+      "psgc": "Philippine Statistics Authority (PSA)",
+      "boundaries": "NAMRIA"
+    },
+    "matched": 41162,
+    "unmatched": 884,
+    "ambiguousCodesExcluded": 127,
+    "matchRule": "Exact PSGC code; upstream confidence 1; ambiguous duplicate codes excluded.",
+    "note": "Simplified reference polygons, not cadastral boundaries or a guarantee of current legal boundaries."
+  }
+}

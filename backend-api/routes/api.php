@@ -168,6 +168,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
     Route::post('/superadmin/barangays/{barangay}/registration-code/regenerate', [SuperAdminController::class, 'regenerateRegistrationCode']);
     Route::post('/superadmin/barangays/{barangay}/boundary/refresh', [SuperAdminController::class, 'refreshBarangayBoundary']);
     Route::post('/superadmin/barangays/{barangay}/boundary/confirm', [SuperAdminController::class, 'confirmBarangayBoundary']);
+    Route::post('/superadmin/barangays/{barangay}/boundary/candidate', [SuperAdminController::class, 'uploadBoundaryCandidate']);
     Route::delete('/superadmin/barangays/{barangay}/boundary/pending', [SuperAdminController::class, 'discardPendingBoundary']);
     Route::get('/superadmin/activity-log', [SuperAdminController::class, 'activityLog']);
     Route::get('/superadmin/concern-reports', [SuperAdminController::class, 'concernReports']);

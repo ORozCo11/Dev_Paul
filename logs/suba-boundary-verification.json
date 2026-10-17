@@ -1,0 +1,11 @@
+{
+  "source": "https://portal.georisk.gov.ph/arcgis/rest/services/PSA/Barangay/MapServer/4",
+  "sourceDescription": "Indicative PSA boundaries as of June 2016, based on 2015 census mapping",
+  "subaCode": "0702209022",
+  "subaVertices": 1281,
+  "geometryMatchesAtSixDecimals": true,
+  "finding": "The northern red-box vicinity is in the Binaobao reference polygon; Suba Barangay Hall and Saint Paul Academy are in the Suba reference polygon. Basemap place names are independent of these boundaries.",
+  "unchangedGeometry": true,
+  "legalBoundaryConfirmed": false,
+  "comparison": "Unique vertices match at six decimal places; ring starting point/winding and duplicated closure are ignored. Maximum nearest-vertex difference is approximately 0.078m."
+}

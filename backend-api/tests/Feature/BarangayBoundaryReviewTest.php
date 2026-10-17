@@ -46,6 +46,70 @@ class BarangayBoundaryReviewTest extends TestCase
         return [[123.9, 10.3], [123.91, 10.3], [123.91, 10.31], [123.9, 10.31], [123.9, 10.3]];
     }
 
+    #[Test]
+    public function uploaded_boundary_requires_confirmation_and_preserves_the_previous_geometry(): void
+    {
+        $barangay = $this->barangay();
+        $barangay->update(['psgc_code' => '0702222024', 'boundary' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]]]);
+        $old = $barangay->fresh()->boundary;
+        $replacement = ['type' => 'Polygon', 'coordinates' => [[[123.45, 9.81], [123.47, 9.81], [123.47, 9.83], [123.45, 9.81]]]];
+        Sanctum::actingAs($this->superAdmin, ['*']);
+        $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/candidate", ['geojson' => $replacement, 'source' => 'LGU approved map test', 'psgc_code' => $barangay->psgc_code])->assertOk();
+        $this->assertSame($old, $barangay->fresh()->boundary);
+        $this->assertSame($replacement, $barangay->fresh()->pending_boundary);
+        $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/confirm")->assertOk();
+        $this->assertSame($replacement, $barangay->fresh()->boundary);
+        $this->assertSame($this->superAdmin->id, $barangay->fresh()->boundary_verified_by);
+        $this->getJson('/api/barangays/'.$barangay->id)->assertJsonPath('boundary_verified', true);
+        app(\App\Services\BarangayGeography::class)->attachBoundary($barangay->fresh());
+        $this->assertSame($replacement, $barangay->fresh()->boundary);
+        $this->postJson('/api/register', [
+            'name' => 'Future registrant', 'email' => 'future-boundary@example.com', 'password' => 'password123', 'password_confirmation' => 'password123',
+            'phone' => '09171234567', 'address' => 'Test Street', 'city_id' => $barangay->city_id, 'barangay_id' => $barangay->id,
+            'staff_code' => \App\Models\RegistrationSetting::for($barangay->id)->staff_code,
+        ])->assertCreated();
+        $this->assertSame($replacement, $barangay->fresh()->boundary);
+        $this->assertSame($this->superAdmin->id, $barangay->fresh()->boundary_verified_by);
+    }
+
+    #[Test]
+    public function automatic_reference_cannot_become_verified_through_refresh_or_discard(): void
+    {
+        $barangay = $this->barangay();
+        $barangay->update(['boundary' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]], 'boundary_source' => \App\Services\BarangayGeography::SOURCE, 'boundary_status' => 'verified']);
+        $this->getJson('/api/barangays/'.$barangay->id)->assertJsonPath('boundary_verified', false);
+        Sanctum::actingAs($this->superAdmin, ['*']);
+        $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/refresh")->assertOk()->assertJsonPath('boundary_status', 'needs_review');
+        $this->deleteJson("/api/superadmin/barangays/{$barangay->id}/boundary/pending")->assertOk();
+        $this->assertSame('needs_review', $barangay->fresh()->boundary_status);
+        $this->assertNull($barangay->fresh()->boundary_verified_by);
+    }
+
+    #[Test]
+    public function uploaded_boundary_rejects_wrong_codes_invalid_holes_and_non_admin_access(): void
+    {
+        $barangay = $this->barangay();
+        $barangay->update(['psgc_code' => '0702222024']);
+        $url = "/api/superadmin/barangays/{$barangay->id}/boundary/candidate";
+        $payload = ['geojson' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]], 'source' => 'Test source', 'psgc_code' => $barangay->psgc_code];
+        Sanctum::actingAs(User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]), ['*']);
+        $this->postJson($url, $payload)->assertForbidden();
+        Sanctum::actingAs($this->superAdmin, ['*']);
+        $bad = $payload;
+        $bad['psgc_code'] = '0702222034';
+        $this->postJson($url, $bad)->assertUnprocessable();
+        $bad = $payload;
+        $bad['geojson']['coordinates'][] = [[123, 10], [124, 10]];
+        $this->postJson($url, $bad)->assertUnprocessable();
+        $bad['geojson']['coordinates'] = 'malformed';
+        $this->postJson($url, $bad)->assertUnprocessable();
+        $bad['geojson'] = ['type' => 'FeatureCollection', 'features' => 'malformed'];
+        $this->postJson($url, $bad)->assertUnprocessable();
+        $bad['geojson'] = ['type' => 'Feature', 'properties' => ['psgc_10d' => '0702222034'], 'geometry' => $payload['geojson']];
+        $this->postJson($url, $bad)->assertUnprocessable();
+        $this->assertNull($barangay->fresh()->pending_boundary);
+    }
+
     private function nominatimResult(array $ring, string $barangayName = 'Test Barangay', string $cityName = 'Test City'): array
     {
         return [[

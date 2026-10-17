@@ -1,0 +1,32 @@
+{
+  "date": "2026-10-15",
+  "timezone": "Asia/Manila",
+  "revision": "a1456fe plus existing uncommitted UI changes",
+  "backend": {
+    "tests": 397,
+    "passed": 397,
+    "assertions": 1585
+  },
+  "frontend": {
+    "build": "passed",
+    "lint": {
+      "errors": 56,
+      "warnings": 19
+    }
+  },
+  "observations": {
+    "browser": 68,
+    "api": 79,
+    "total": 147,
+    "notAllIndependentAcceptanceTests": true
+  },
+  "findings": {
+    "total": 19,
+    "high": 4,
+    "medium": 8,
+    "low": 7
+  },
+  "report": "VMS Docs/REGRESSION-REPORT-2026-10-15.md",
+  "isolation": "SQLite memory for PHPUnit; separate temporary SQLite snapshot and local upload disk for browser/API probes",
+  "productionAcceptance": "not established"
+}

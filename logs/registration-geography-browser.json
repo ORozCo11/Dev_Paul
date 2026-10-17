@@ -1,0 +1,43 @@
+{
+  "results": [
+    {
+      "test": "Cebu City populated selector",
+      "count": 80,
+      "noFreeText": true
+    },
+    {
+      "test": "Cebu City first Admin registration",
+      "status": 201,
+      "body": {
+        "message": "Registration submitted. A Super Admin must approve your account (as the first Admin for your barangay) before you can sign in.",
+        "user": {
+          "id": 12,
+          "name": "Regression Geography",
+          "email": "geobrowser@regression.example"
+        }
+      }
+    },
+    {
+      "test": "first Admin approval",
+      "status": 200
+    },
+    {
+      "test": "account defaults to exact city and barangay boundary",
+      "city": "875",
+      "barangay": "34244",
+      "boundaryType": "Polygon",
+      "boundarySource": "namria_psgc_reference_2023",
+      "psgcCode": "0730600007"
+    },
+    {
+      "test": "stale province response ignored",
+      "pass": true
+    },
+    {
+      "test": "no free-text fallback on empty reference",
+      "disabled": true,
+      "noFreeText": true
+    }
+  ],
+  "errors": []
+}

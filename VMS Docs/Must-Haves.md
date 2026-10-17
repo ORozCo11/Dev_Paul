@@ -85,6 +85,16 @@ Additional current responsibilities: propose maintenance tickets, record conditi
 
 ## 7. Acceptance checks and remaining work
 
+Registration geography, 15 October 2026: the cascading selectors now use **42,046 preloaded PSGC barangay references**, including Cebu City's **80 barangays**. Free-text barangay creation is rejected server-side; selected city/parent relationships are validated. Boundaries are resolved by PSGC code, with missing matches shown as unavailable instead of substituting another barangay. **403 backend tests passed (1,622 assertions)** after this change. See [registration geography](REGISTRATION-GEOGRAPHY.md) for source dates, boundary coverage, deployment steps, and evidence.
+
+Boundary correction, 15 October 2026: Suba (Pob.), Bantayan now uses a detailed 1,281-vertex PSA/NAMRIA reference instead of the coarse triangle. Existing automatic references and new registrations share the correction; map rendering and location checks preserve holes and islands. **406 backend tests passed (1,649 assertions)** plus three geometry tests. See [registration geography](REGISTRATION-GEOGRAPHY.md#boundary-detail-correction--15-october-2026).
+
+Suba verification follow-up: the government-hosted PSA/GeoRisk polygon agrees with the imported outline; the northern screenshot vicinity lies in Binaobao in that reference. Provider place labels are now optional, and the app labels the selected reference polygon internally. This verifies reference consistency, not current legal boundaries. See [comparison and evidence](REGISTRATION-GEOGRAPHY.md#suba-boundary-and-satellite-label-verification--15-october-2026). Five geometry tests and the build pass.
+
+Boundary accuracy follow-up: imported polygons are now **unverified references**, including during registration. Super Admins can upload, preview, and confirm a replacement GeoJSON with its source recorded. Two automatic assignments were marked for review; live polygon coordinates and account/fleet/code data were unchanged. **Mantalongon's exact current geographic outline remains unresolved** pending a reliable replacement map. See [boundary accuracy findings and fixes](BOUNDARY-ACCURACY-2026-10-15.md).
+
+Regression audit, 15 October 2026: **397 backend tests passed (1,585 assertions)** and the frontend build passed. Browser/API checks and source review identified **19 findings**; REG-05, REG-11, REG-12, and REG-16 were subsequently fixed locally and browser-verified, leaving **15 open findings**. Baseline frontend lint reports **56 errors and 19 warnings**. See [the regression report](REGRESSION-REPORT-2026-10-15.md) for reproduction steps, evidence, severity, and coverage limits. Passing backend tests do not close the remaining findings or establish deployment acceptance.
+
 - [ ] Demonstrate cloud image/file upload, authorized retrieval, and backup/recovery in the target deployment.
 - [ ] Obtain adviser review of the role-alignment differences in sections 2 and 4. These notes record current behavior; they do not claim approval to amend the original baseline.
 - [ ] Complete user acceptance with representative accounts and real operational records, including an empty barangay and multi-role staff.

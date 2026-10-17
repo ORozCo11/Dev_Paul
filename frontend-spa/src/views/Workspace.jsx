@@ -1,3 +1,4 @@
+import LoadingOverlay from '../components/LoadingOverlay';
 import EndImpersonationAction from '../components/EndImpersonationAction';
 import './TicketCreation.css';
 import './ScheduleForm.css';
@@ -17,8 +18,7 @@ import WorkspaceFooter from '../components/WorkspaceFooter';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { DonutChart, SolidPieChart, StackedBarChart } from '../components/charts';
 import { AuthContext } from '../context/AuthContextObject';
-import { PAKNAAN_POLYGON } from '../data/paknaanLocationDensity';
-import { geoJsonToRings, isPointWithinBoundaryRings } from '../utils/boundary';
+import { geoJsonToPolygons, isPointWithinBoundaryPolygons, isLocationPointAllowed } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 
 const FormNoticeContext = createContext(null);
@@ -143,7 +143,7 @@ const modulesByRole = {
     // no separate "Register Vehicle" row for the same page.
     { section: 'Vehicles', icon: 'vehicle', items: [
       ['vehicles', 'View Vehicles'],
-      ['histories', 'Vehicle History'],
+      ['conditions', 'Condition Monitoring'],
     ] },
     // 'reportOrPropose' ('issues' module under the hood) is the Issue
     // Reports list, with a "Report Vehicle Issue" action and a "Propose
@@ -156,7 +156,6 @@ const modulesByRole = {
     { section: 'Vehicle Operations', icon: 'checkCircle', items: [
       ['reportOrPropose', 'Report Vehicle Issue'],
       ['myTasks', 'My Tasks'],
-      ['conditions', 'Condition Monitoring'],
     ] },
     { section: 'Maintenance', icon: 'calendar', items: [
       ['schedules', 'Maintenance Schedule'],
@@ -166,6 +165,7 @@ const modulesByRole = {
       // record.verify branch), matching Admin's "no tabs" reference design.
       ['maintenance', 'Maintenance Records'],
     ] },
+    { section: 'History', items: [['histories', 'Vehicle History']] },
   ],
   'Maintenance Personnel': [
     // "View Vehicles" used to sit alone under its own collapsible "Vehicles"
@@ -2466,39 +2466,22 @@ function Workspace() {
       setNotice({ type: 'error', text: 'Could not impersonate that account.' });
     }
   };
-  // Vehicle Location map boundary selector — lets an Admin swap which
-  // barangay outline the map draws. Scoped to Province + Barangay only
-  // (no City/Municipality step) since Mandaue City is the only city with
-  // real per-barangay boundary data today — defaults to Cebu so the
-  // Barangay dropdown is immediately usable. This is purely cosmetic:
-  // hubs/vehicles aren't scoped by barangay, so switching only changes the
-  // drawn outline + camera framing, not which hubs/vehicles show.
+  // Registered province/city/barangay cascade. Defaults to the current account's exact tenant.
   const [mapProvinces, setMapProvinces] = useState([]);
   const [mapProvinceId, setMapProvinceId] = useState('');
+  const [mapCityId, setMapCityId] = useState('');
+  const mapBoundaryRequestRef = useRef(0);
+  const mapBarangaysRequestRef = useRef(0);
   const [mapBarangays, setMapBarangays] = useState([]);
   const [mapBarangayId, setMapBarangayId] = useState('');
-  const [mapBoundaryOverride, setMapBoundaryOverride] = useState(null);
-  // Same "what counts as inside the service area" boundary the map draws,
-  // recomputed here so the Add Location form can reject a geocoded address
-  // that falls outside it — mirrors LocationDensityMap's own fallback (the
-  // hardcoded Paknaan outline when no barangay override is selected, or the
-  // override has no boundary geometry on file).
-  const locationBoundaryRings = useMemo(() => {
-    const overrideRings = geoJsonToRings(mapBoundaryOverride?.geometry);
-    return overrideRings.length ? overrideRings : [PAKNAAN_POLYGON];
+  const [mapBoundaryOverride, setMapBoundaryOverride] = useState({ geometry: null, label: 'Loading barangay boundary' });
+  // Location entry uses only the selected barangay geometry; absent boundaries stay absent.
+  const locationBoundaryPolygons = useMemo(() => {
+    const overrideRings = geoJsonToPolygons(mapBoundaryOverride?.geometry);
+    return overrideRings;
   }, [mapBoundaryOverride]);
-  const locationBoundaryLabel = mapBoundaryOverride?.label ?? 'Paknaan';
-  // Guards the one-time "default to Paknaan" seed below from re-firing on a
-  // second effect invocation (React's dev-only StrictMode double-invokes
-  // effects on mount) — without this, a second run would call
-  // loadBarangaysForProvince(cebu.id, 'Paknaan') again.
-  const mapDefaultAppliedRef = useRef(false);
-  // The bigger race: that seed is 2 sequential API calls deep (province ->
-  // barangay list -> boundary fetch), slow enough on the local dev server
-  // that an admin can pick a real barangay from the dropdown WHILE it's
-  // still in flight. When it finally resolves, it must not overwrite a
-  // selection made in the meantime — this ref is the source of truth for
-  // "has the admin touched this dropdown themselves".
+  const locationBoundaryLabel = mapBoundaryOverride?.label ?? 'Barangay boundary';
+  // Preserve manual choices when the initial account lookup is still in flight.
   const userPickedBarangayRef = useRef(false);
 
   // DEV-only: the same two dropdowns also drive Impersonate below, so a
@@ -2518,7 +2501,7 @@ function Workspace() {
   const barangayOptions = useMemo(() => {
     const byId = new Map(mapBarangays.map((b) => [String(b.id), b]));
     impersonateCandidates.forEach((u) => {
-      if (u.barangay_id && String(u.province_id) === String(mapProvinceId) && !byId.has(String(u.barangay_id))) {
+      if (u.barangay_id && String(u.province_id) === String(mapProvinceId) && String(u.city_id) === String(mapCityId) && !byId.has(String(u.barangay_id))) {
         byId.set(String(u.barangay_id), { id: u.barangay_id, name: u.barangay_name });
       }
     });
@@ -2532,7 +2515,7 @@ function Workspace() {
       byId.set(String(mapBarangayId), { id: mapBarangayId, name: mapBoundaryOverride.label });
     }
     return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [mapBarangays, impersonateCandidates, mapProvinceId, mapBarangayId, mapBoundaryOverride]);
+  }, [mapBarangays, impersonateCandidates, mapProvinceId, mapCityId, mapBarangayId, mapBoundaryOverride]);
   // Keeps the Impersonate staff dropdown valid for whichever barangay is
   // currently selected above — re-runs whenever the barangay changes or the
   // candidate list itself first loads.
@@ -2555,113 +2538,82 @@ function Workspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapBarangayId, impersonateCandidates]);
 
-  // Fetches one barangay's boundary and sets it as the map override.
   const selectBarangayBoundary = useCallback(async (barangayId) => {
-    if (!barangayId) { setMapBoundaryOverride(null); return; }
+    const requestId = ++mapBoundaryRequestRef.current;
+    if (!barangayId) { setMapBoundaryOverride({ geometry: null, label: 'No barangay selected' }); return; }
     try {
-      const res = await api.get(`/barangays/${barangayId}`);
-      // Always carry the picked barangay's own name, even when it has no
-      // boundary polygon on file (only Mandaue City barangays do today) —
-      // otherwise the map silently falls back to Paknaan's shape AND label,
-      // which reads as "the dropdown did nothing" instead of "no data yet".
-      // Qualified with the city name whenever we have one — several
-      // barangay names repeat across neighboring cities (e.g. "Banilad"
-      // exists in both Mandaue City and Cebu City), so a bare name on the
-      // map reads as ambiguous, or worse, as the wrong city's barangay.
-      const label = res.data.city_name ? `${res.data.name}, ${res.data.city_name}` : res.data.name;
-      setMapBoundaryOverride({ geometry: res.data.boundary ?? null, label });
+      const { data } = await api.get('/barangays/' + barangayId);
+      if (requestId !== mapBoundaryRequestRef.current) return;
+      const label = data.city_name ? data.name + ', ' + data.city_name : data.name;
+      setMapBoundaryOverride({ geometry: data.boundary ?? null, label, verified: data.boundary_verified === true });
     } catch {
-      setMapBoundaryOverride(null);
+      if (requestId === mapBoundaryRequestRef.current) setMapBoundaryOverride({ geometry: null, label: 'Boundary unavailable' });
     }
   }, []);
 
-  // Loads the barangays that actually have a registered user (plus Paknaan,
-  // always included — the system's built-in home barangay) for the one
-  // city within a province that has a registered barangay list. Which city
-  // that is comes straight from `/provinces/with-barangays`'
-  // `city_with_barangays_id` (see ProvinceController::withBarangays) rather
-  // than being re-derived here — this used to search the province's city
-  // list for one literally named "Mandaue City", which only worked because
-  // that was the sole seeded example; a second city with real barangay data
-  // in any province would have silently produced an empty dropdown. A
-  // province with no such city (falsy `cityId`) simply ends up with an
-  // empty Barangay dropdown. `defaultBarangayName` pre-selects a barangay
-  // once the list loads — used to land on Paknaan on first load.
-  const loadBarangaysForProvince = useCallback(async (cityId, defaultBarangayName) => {
-    if (!cityId) {
-      setMapBarangays([]);
-      return;
-    }
+  const loadMapBarangays = useCallback(async (cityId) => {
+    const requestId = ++mapBarangaysRequestRef.current;
+    if (!cityId) { setMapBarangays([]); return; }
     try {
-      const barangaysRes = await api.get('/barangays/registered', { params: { city_id: cityId } });
-      setMapBarangays(barangaysRes.data);
-
-      // Skip applying the default if the admin has already picked a real
-      // barangay themselves while this chain was still in flight — this
-      // check happens as late as possible (right before acting on it) so
-      // it catches a pick made at any point during the 3-call chain above.
-      const defaultBarangay = defaultBarangayName && !userPickedBarangayRef.current
-        ? barangaysRes.data.find((b) => b.name === defaultBarangayName)
-        : null;
-      if (defaultBarangay) {
-        setMapBarangayId(String(defaultBarangay.id));
-        selectBarangayBoundary(defaultBarangay.id);
-      }
+      const { data } = await api.get('/barangays/registered', { params: { city_id: cityId } });
+      if (requestId === mapBarangaysRequestRef.current) setMapBarangays(data);
     } catch {
-      setMapBarangays([]);
+      if (requestId === mapBarangaysRequestRef.current) setMapBarangays([]);
     }
-  }, [selectBarangayBoundary]);
+  }, []);
 
   useEffect(() => {
-    // Narrower than the registration form's /provinces — only provinces
-    // that actually have registered barangay/boundary data, so the
-    // dropdown doesn't list 80+ provinces with nothing behind them.
-    api.get('/provinces/with-barangays').then((response) => {
-      setMapProvinces(response.data);
-      const cebu = response.data.find((p) => p.name === 'Cebu');
-      if (cebu) {
-        setMapProvinceId(String(cebu.id));
-        if (!mapDefaultAppliedRef.current) {
-          mapDefaultAppliedRef.current = true;
-          // Land every admin on THEIR OWN barangay by default, not always
-          // Paknaan — that hardcoded default only ever made sense back when
-          // Paknaan was the only barangay in the system. Falls back to
-          // Paknaan only for an account with no barangay of its own (there
-          // isn't one today, but this keeps old behavior as the fallback).
-          if (user.barangay_id && !userPickedBarangayRef.current) {
-            setMapBarangayId(String(user.barangay_id));
-            selectBarangayBoundary(user.barangay_id);
-            loadBarangaysForProvince(cebu.city_with_barangays_id, null);
-          } else {
-            loadBarangaysForProvince(cebu.city_with_barangays_id, 'Paknaan');
-          }
-        } else {
-          // Still populate the barangay list for this province — just
-          // don't re-seed the default selection over a real one.
-          loadBarangaysForProvince(cebu.city_with_barangays_id, null);
-        }
+    let cancelled = false;
+    Promise.all([
+      api.get('/provinces/with-barangays'),
+      user.barangay_id ? api.get('/barangays/' + user.barangay_id) : Promise.resolve(null),
+    ]).then(([provinces, own]) => {
+      if (cancelled) return;
+      setMapProvinces(provinces.data);
+      if (userPickedBarangayRef.current) return;
+      const province = provinces.data.find((p) => String(p.id) === String(own?.data.province_id)) ?? provinces.data[0];
+      const cityId = own?.data.city_id ?? province?.cities?.[0]?.id ?? '';
+      setMapProvinceId(String(province?.id ?? ''));
+      setMapCityId(String(cityId));
+      loadMapBarangays(cityId);
+      if (own) {
+        setMapBarangayId(String(own.data.id));
+        const label = own.data.city_name ? own.data.name + ', ' + own.data.city_name : own.data.name;
+        setMapBoundaryOverride({ geometry: own.data.boundary ?? null, label, verified: own.data.boundary_verified === true });
+      } else {
+        setMapBoundaryOverride({ geometry: null, label: 'No barangay selected' });
       }
-    }).catch(() => {});
-  }, [loadBarangaysForProvince, selectBarangayBoundary, user.barangay_id]);
+    }).catch(() => {
+      if (!cancelled) setMapBoundaryOverride({ geometry: null, label: 'Boundary unavailable' });
+    });
+    return () => { cancelled = true; };
+  }, [loadMapBarangays, user.barangay_id]);
 
-  const handleMapProvinceChange = (e) => {
+  const handleMapProvinceChange = (event) => {
     userPickedBarangayRef.current = true;
-    const provinceId = e.target.value;
+    const provinceId = event.target.value;
+    const cityId = mapProvinces.find((p) => String(p.id) === String(provinceId))?.cities?.[0]?.id ?? '';
     setMapProvinceId(provinceId);
+    setMapCityId(String(cityId));
     setMapBarangayId('');
-    setMapBoundaryOverride(null);
     setMapBarangays([]);
-    if (provinceId) {
-      const province = mapProvinces.find((p) => String(p.id) === String(provinceId));
-      loadBarangaysForProvince(province?.city_with_barangays_id ?? null);
-    }
+    selectBarangayBoundary(null);
+    loadMapBarangays(cityId);
   };
 
-  const handleMapBarangayChange = (e) => {
+  const handleMapCityChange = (event) => {
     userPickedBarangayRef.current = true;
-    const barangayId = e.target.value;
-    setMapBarangayId(barangayId);
-    selectBarangayBoundary(barangayId);
+    setMapCityId(event.target.value);
+    setMapBarangayId('');
+    setMapBarangays([]);
+    selectBarangayBoundary(null);
+    loadMapBarangays(event.target.value);
+  };
+
+  const handleMapBarangayChange = (event) => {
+    userPickedBarangayRef.current = true;
+    setMapBarangayId(event.target.value);
+    selectBarangayBoundary(event.target.value);
   };
 
   // Sidebar badge for a given module key — 'myTasks' has no badge_counts
@@ -2731,22 +2683,10 @@ function Workspace() {
                 <option key={province.id} value={province.id}>{province.name}</option>
               ))}
             </select>
-            {/* Province > City > Barangay > Impersonation. Each province carries
-                the one city that has barangay data today, so City is derived
-                from the chosen province (it can't diverge from it). */}
-            <select
-              aria-label="Map boundary city"
-              disabled={!mapProvinces.find((pr) => String(pr.id) === String(mapProvinceId))?.city_with_barangays_name}
-              value={mapProvinces.find((pr) => String(pr.id) === String(mapProvinceId))?.city_with_barangays_id ?? ''}
-              onChange={() => {}}
-            >
-              {mapProvinces.find((pr) => String(pr.id) === String(mapProvinceId))?.city_with_barangays_name
-                ? (
-                  <option value={mapProvinces.find((pr) => String(pr.id) === String(mapProvinceId)).city_with_barangays_id}>
-                    {mapProvinces.find((pr) => String(pr.id) === String(mapProvinceId)).city_with_barangays_name}
-                  </option>
-                )
-                : <option value="">No city</option>}
+            {/* Province > City > Barangay; each choice scopes the next list. */}
+            <select aria-label="Map boundary city" value={mapCityId} onChange={handleMapCityChange} disabled={!mapProvinceId}>
+              <option value="">Select city</option>
+              {(mapProvinces.find((province) => String(province.id) === String(mapProvinceId))?.cities ?? []).map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}
             </select>
             <select
               aria-label="Map boundary barangay"
@@ -3041,8 +2981,9 @@ function Workspace() {
           ) : isNewLocationPage ? (
             <NewLocationPage
               onBack={() => returnToModule('locations')}
-              boundaryRings={locationBoundaryRings}
+              boundaryPolygons={locationBoundaryPolygons}
               boundaryLabel={locationBoundaryLabel}
+              boundaryVerified={mapBoundaryOverride?.verified === true}
               onSubmit={async (hub) => {
                 await api.post('/hubs', hub);
                 setNotice({ type: 'success', text: 'Location added.' });
@@ -3054,8 +2995,9 @@ function Workspace() {
             <EditLocationPage
               row={locationRows.find((r) => String(r.vehicle_id) === String(editLocationVehicleId)) ?? null}
               allHubs={allHubs}
-              boundaryRings={locationBoundaryRings}
+              boundaryPolygons={locationBoundaryPolygons}
               boundaryLabel={locationBoundaryLabel}
+              boundaryVerified={mapBoundaryOverride?.verified === true}
               onBack={() => returnToModule('locations')}
               onSubmit={async ({ name, lat, lng, label, addressArea, remarks }) => {
                 // Reuse the hub if that name already exists (case-insensitive
@@ -5990,15 +5932,7 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
           </div>
         </div>
       )}
-      {submitting && createPortal(
-        <div className="loading-overlay">
-          <div className="loading-overlay-card">
-            <Icon name="gear" size={34} className="loading-overlay-gear" filled />
-            <span>Loading…</span>
-          </div>
-        </div>,
-        document.body
-      )}
+      {submitting && <LoadingOverlay />}
       <h3>{title}</h3>
       {(() => {
         const renderField = (field) => {
@@ -6352,8 +6286,9 @@ function LocationAddressMapForm({
   initialMarker = null,
   initialAddressArea = '',
   initialRemarks = '',
-  boundaryRings,
+  boundaryPolygons,
   boundaryLabel,
+  boundaryVerified = true,
   onBack,
   onSubmit,
 }) {
@@ -6407,7 +6342,7 @@ function LocationAddressMapForm({
           return;
         }
         setMarker({ lat: match.lat, lng: match.lng });
-        if (!isPointWithinBoundaryRings(match, boundaryRings)) {
+        if (!isLocationPointAllowed(match, boundaryPolygons, boundaryVerified)) {
           setError(`That address is outside the ${boundaryLabel} boundary — only locations within ${boundaryLabel} can be added.`);
         }
       } catch (err) {
@@ -6418,13 +6353,13 @@ function LocationAddressMapForm({
     }, 700);
 
     return () => clearTimeout(timer);
-  }, [address, boundaryRings, boundaryLabel]);
+  }, [address, boundaryPolygons, boundaryLabel, boundaryVerified]);
 
   const handleMapPick = useCallback(async (latLng) => {
     setMarker(latLng);
     setError(null);
 
-    if (!isPointWithinBoundaryRings(latLng, boundaryRings)) {
+    if (!isLocationPointAllowed(latLng, boundaryPolygons, boundaryVerified)) {
       setError(`That spot is outside the ${boundaryLabel} boundary — only locations within ${boundaryLabel} can be added.`);
       return;
     }
@@ -6443,9 +6378,9 @@ function LocationAddressMapForm({
     } finally {
       setLookingUp(false);
     }
-  }, [boundaryRings, boundaryLabel]);
+  }, [boundaryPolygons, boundaryLabel, boundaryVerified]);
 
-  const isPinValid = marker && isPointWithinBoundaryRings(marker, boundaryRings);
+  const isPinValid = marker && isLocationPointAllowed(marker, boundaryPolygons, boundaryVerified);
   const canSubmit = name.trim() && isPinValid && !lookingUp && !submitting;
 
   const handleSubmit = async (event) => {
@@ -6505,7 +6440,7 @@ function LocationAddressMapForm({
               onChange={(e) => setAddress(e.target.value)}
             />
             <small className="field-hint">
-              {lookingUp ? 'Looking up…' : `Must be within the ${boundaryLabel} boundary — you can also click the map to pinpoint it.`}
+              {lookingUp ? 'Looking up…' : boundaryVerified ? `Must be within the ${boundaryLabel} boundary — you can also click the map to pinpoint it.` : 'This outline is unverified. Confirm the address and pin; the reference outline does not restrict location entry.'}
             </small>
           </label>
           {isEdit && (
@@ -6533,19 +6468,20 @@ function LocationAddressMapForm({
           </div>
         </div>
         <div className="add-location-map-shell">
-          <AddLocationMap marker={marker} boundaryRings={boundaryRings} onPick={handleMapPick} />
+          {!boundaryVerified && <p className="notice info">Unverified reference outline. Check this location's address and pin before saving.{marker && !isPointWithinBoundaryPolygons(marker, boundaryPolygons) ? ' The pin is outside the imported outline.' : ''}</p>}
+          <AddLocationMap marker={marker} boundaryPolygons={boundaryPolygons} boundaryLabel={boundaryLabel} boundaryVerified={boundaryVerified} onPick={handleMapPick} />
         </div>
       </form>
     </ModulePanel>
   );
 }
 
-function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
+function NewLocationPage({ onBack, boundaryPolygons, boundaryLabel, boundaryVerified, onSubmit }) {
   return (
     <LocationAddressMapForm
       mode="add"
-      boundaryRings={boundaryRings}
-      boundaryLabel={boundaryLabel}
+      boundaryPolygons={boundaryPolygons}
+      boundaryLabel={boundaryLabel} boundaryVerified={boundaryVerified}
       onBack={onBack}
       onSubmit={({ name, lat, lng, label }) => onSubmit({ name, lat, lng, label })}
     />
@@ -6559,7 +6495,7 @@ function NewLocationPage({ onBack, boundaryRings, boundaryLabel, onSubmit }) {
 // doesn't require a separate trip to Add Location first; the parent's
 // onSubmit decides whether the typed name matches an existing hub (reuse
 // it) or not (create it), same as Add Location's own POST /hubs.
-function EditLocationPage({ row, allHubs, boundaryRings, boundaryLabel, onBack, onSubmit }) {
+function EditLocationPage({ row, allHubs, boundaryPolygons, boundaryLabel, boundaryVerified, onBack, onSubmit }) {
   if (!row) {
     return (
       <ModulePanel description="Update a vehicle's current location.">
@@ -6581,8 +6517,8 @@ function EditLocationPage({ row, allHubs, boundaryRings, boundaryLabel, onBack, 
       initialMarker={currentHub ? { lat: currentHub.lat, lng: currentHub.lng } : null}
       initialAddressArea={row.address_area ?? ''}
       initialRemarks={row.remarks ?? ''}
-      boundaryRings={boundaryRings}
-      boundaryLabel={boundaryLabel}
+      boundaryPolygons={boundaryPolygons}
+      boundaryLabel={boundaryLabel} boundaryVerified={boundaryVerified}
       onBack={onBack}
       onSubmit={onSubmit}
     />
@@ -6705,43 +6641,12 @@ function DataTable({ columns, rows, compact = false, onRowClick, onReorderColumn
 // which stays on a long scrolled form while it saves). Portaled to <body>
 // like FormModal, so it sits above everything regardless of where it's
 // rendered from.
-function SubmitLoadingOverlay({ label = 'Saving…' }) {
-  return createPortal(
-    <div className="modal-overlay submit-loading-overlay" role="status" aria-live="polite">
-      <div className="submit-loading-card">
-        <Icon name="gear" size={48} className="submit-loading-gear" filled />
-        <p className="submit-loading-label">{label}</p>
-      </div>
-    </div>,
-    document.body
-  );
+function SubmitLoadingOverlay({ label = 'Loading...' }) {
+  return <LoadingOverlay label={label} />;
 }
 
-function ModuleLoader({ label = 'Loading module data' }) {
-  return (
-    <div className="module-loader" role="status" aria-live="polite">
-      <div className="module-loader-card">
-        <span className="module-loader-spinner" aria-hidden="true">
-          <svg viewBox="0 0 50 50" width="44" height="44">
-            <circle className="module-loader-track" cx="25" cy="25" r="20" fill="none" strokeWidth="5" />
-            <circle className="module-loader-arc" cx="25" cy="25" r="20" fill="none" strokeWidth="5" strokeLinecap="round" />
-          </svg>
-        </span>
-        <span className="module-loader-label">{label}<span className="module-loader-dots" /></span>
-      </div>
-
-      <div className="skeleton-table" aria-hidden="true">
-        <div className="skeleton-row skeleton-head">
-          {Array.from({ length: 5 }).map((_, i) => <span className="skeleton-cell" key={i} />)}
-        </div>
-        {Array.from({ length: 5 }).map((_, r) => (
-          <div className="skeleton-row" key={r} style={{ animationDelay: `${r * 0.08}s` }}>
-            {Array.from({ length: 5 }).map((_, c) => <span className="skeleton-cell" key={c} />)}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function ModuleLoader({ label = 'Loading...' }) {
+  return <LoadingOverlay label={label} />;
 }
 
 function ReportPreview({ report }) {
@@ -14125,7 +14030,9 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
             <p className="muted ticket-method-hint">
               {entryMode == null
                 ? 'Pick how this repair will be done.'
-                : 'Once an Admin approves and assigns a mechanic, it goes straight to repair.'}
+                : isExternal
+                  ? 'Admin reviews the proposal before shop dispatch. The Custodian verifies the completed work.'
+                  : 'Once an Admin approves and assigns a mechanic, it goes straight to repair.'}
             </p>
           </div>
         </section>
@@ -14198,6 +14105,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           )}
         </section>
 
+        <div className="ticket-work-column">
         <section className="veh-card veh-card-form ticket-issue-section">
           <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
           <div className="ticket-issue-fields">
@@ -14297,6 +14205,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           </div>
         </section>
         )}
+
+        </div>
 
         <div className="form-actions ticket-create-actions">
           <button className="ghost-button" onClick={() => { clearProposeDraft(); onBack(); }} type="button" disabled={submitting}>Cancel</button>

@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             CityBoundarySeeder::class,
             BarangaySeeder::class,
             BarangayBoundarySeeder::class,
+            PhilippineBarangaySeeder::class,
             UserSeeder::class,
             FleetReferenceSeeder::class,
             MockDataSeeder::class,

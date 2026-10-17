@@ -413,6 +413,7 @@ class PhaseB3DataScopingTest extends TestCase
     #[Test]
     public function an_ordinary_staff_registration_notifies_the_barangays_existing_admins(): void
     {
+        Barangay::findOrFail($this->barangayId)->update(['psgc_code' => '0102801001']);
         $setting = RegistrationSetting::for($this->barangayId);
 
         $this->postJson('/api/register', [

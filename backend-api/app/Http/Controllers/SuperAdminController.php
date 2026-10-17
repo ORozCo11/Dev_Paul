@@ -68,7 +68,17 @@ class SuperAdminController extends Controller
         $this->requireAbility($request, 'barangay.view_all', 'Only a Super Admin can perform this action.');
 
         return Barangay::with(['city.province', 'registrationSetting'])
-            ->withCount('users')
+            // Reference-only PSGC rows are registration choices, not platform tenants.
+            // Keep manually added barangays visible before their first staff joins.
+            ->where(function ($query) {
+                $query->whereNull('psgc_code')->orWhereHas('users')->orWhereHas('registrationSetting');
+            })
+            ->select(['id', 'name', 'psgc_code', 'city_id', 'boundary_status', 'pending_boundary', 'pending_boundary_source'])
+            ->selectRaw('CASE WHEN boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
+            ->withCount([
+                'users',
+                'users as active_admin_count' => fn ($query) => $query->havingRole('Admin')->where('is_active', true),
+            ])
             ->orderBy('name')
             ->get()
             ->map(function ($b) {
@@ -76,11 +86,12 @@ class SuperAdminController extends Controller
                 // previously its own separate ->exists() query; counting
                 // instead also gives Phase A4's "only one Admin left" signal
                 // for free.
-                $activeAdminCount = $b->users()->havingRole('Admin')->where('is_active', true)->count();
+                $activeAdminCount = $b->active_admin_count;
 
                 return [
                     'id' => $b->id,
                     'name' => $b->name,
+                    'psgc_code' => $b->psgc_code,
                     'city_name' => $b->city?->name,
                     'province_name' => $b->city?->province?->name,
                     'staff_count' => $b->users_count,
@@ -98,7 +109,7 @@ class SuperAdminController extends Controller
                     // there, and no boundary polygon has been matched/drawn
                     // for it.
                     'has_registration_code' => $b->registrationSetting !== null,
-                    'has_boundary' => $b->boundary !== null,
+                    'has_boundary' => (bool) $b->boundary_present,
                     // Final stabilization — a real status instead of a bare
                     // boolean. 'needs_review' is derived from a pending match
                     // existing, not its own stored value, so there's exactly
@@ -183,7 +194,9 @@ class SuperAdminController extends Controller
         $this->requireAbility($request, 'barangay.refresh_boundary', 'Only a Super Admin can perform this action.');
 
         if ($barangay->boundary !== null) {
-            return response()->json(['has_boundary' => true, 'boundary_status' => 'verified']);
+            $geography = app(\App\Services\BarangayGeography::class);
+            if ($geography->isUnreviewedReference($barangay)) $geography->attachBoundary($barangay);
+            return response()->json(['has_boundary' => true, 'boundary_status' => $barangay->boundary_status, 'pending_boundary' => $barangay->pending_boundary, 'pending_boundary_source' => $barangay->pending_boundary_source]);
         }
 
         $barangay->load('city');
@@ -214,6 +227,36 @@ class SuperAdminController extends Controller
      * auto-confirms. Logged with before/after so a boundary's provenance is
      * always answerable later.
      */
+    public function uploadBoundaryCandidate(Request $request, Barangay $barangay)
+    {
+        $this->requireAbility($request, 'barangay.refresh_boundary', 'Only a Super Admin can perform this action.');
+        $data = $request->validate([
+            'geojson' => ['required', 'array'],
+            'source' => ['required', 'string', 'max:200'],
+            'psgc_code' => ['nullable', 'string'],
+        ]);
+        abort_unless(($data['psgc_code'] ?? null) === $barangay->psgc_code, 422, 'The selected barangay code does not match.');
+        $feature = $data['geojson'];
+        if (($feature['type'] ?? null) === 'FeatureCollection') {
+            abort_unless(is_array($feature['features'] ?? null) && array_is_list($feature['features']) && count($feature['features']) === 1 && is_array($feature['features'][0]), 422, 'Choose a file containing exactly one barangay feature.');
+            $feature = $feature['features'][0];
+        }
+        if (($feature['type'] ?? null) === 'Feature') {
+            $code = $feature['properties']['psgc_code'] ?? $feature['properties']['psgc_10d'] ?? null;
+            abort_if($code !== null && (string) $code !== $barangay->psgc_code, 422, 'The GeoJSON feature belongs to a different barangay.');
+            $geometry = $feature['geometry'] ?? [];
+        } else {
+            $geometry = $feature;
+        }
+        abort_unless(is_array($geometry) && in_array($geometry['type'] ?? null, ['Polygon', 'MultiPolygon'], true) && self::isUsableGeometry($geometry), 422, 'Provide a valid, closed Polygon or MultiPolygon, including valid holes.');
+        $source = 'uploaded_reference: '.trim($data['source']);
+        \Illuminate\Support\Facades\DB::transaction(function () use ($barangay, $geometry, $source, $request) {
+            $barangay->update(['pending_boundary' => $geometry, 'pending_boundary_source' => $source]);
+            $this->log($request, 'Edit', "Uploaded a replacement boundary for {$barangay->name} (PSGC {$barangay->psgc_code}); source: {$source}; awaiting confirmation.");
+        });
+        return response()->json(['pending_boundary' => $geometry, 'pending_boundary_source' => $source, 'boundary_status' => 'needs_review']);
+    }
+
     public function confirmBarangayBoundary(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.refresh_boundary', 'Only a Super Admin can perform this action.');
@@ -254,7 +297,7 @@ class SuperAdminController extends Controller
         $barangay->update([
             'pending_boundary' => null,
             'pending_boundary_source' => null,
-            'boundary_status' => $barangay->boundary !== null ? 'verified' : 'not_found',
+            'boundary_status' => $barangay->boundary !== null ? (app(\App\Services\BarangayGeography::class)->isUnreviewedReference($barangay) ? 'needs_review' : 'verified') : 'not_found',
         ]);
 
         $this->log($request, 'Edit', "Discarded a candidate boundary for barangay {$barangay->name} ({$barangay->city?->name}) — did not match.");
@@ -418,18 +461,22 @@ class SuperAdminController extends Controller
      * (and even passing the class/type/address-match checks above) doesn't
      * guarantee the geometry itself is usable: a degenerate ring (too few
      * points, not closed) or non-numeric coordinates would still draw
-     * garbage on the map. Checks the outer ring of every polygon (ignoring
-     * holes, same as the frontend's geoJsonToRings()) for a closed ring of
-     * at least 4 points with two finite numbers each.
+     * garbage on the map. Checks every shell and hole for closure, nonzero
+     * area and finite geographic coordinates. This is basic validation,
+     * not a cadastral or full topological validation of the uploaded data.
      */
     private static function isUsableGeometry(array $geojson): bool
     {
+        if (!is_array($geojson['coordinates'] ?? null) || !array_is_list($geojson['coordinates'])) return false;
         $polygons = $geojson['type'] === 'MultiPolygon' ? ($geojson['coordinates'] ?? []) : [$geojson['coordinates'] ?? null];
 
+        $points = 0;
         foreach ($polygons as $polygon) {
-            $ring = $polygon[0] ?? null;
-            if (!self::isUsableRing($ring)) {
-                return false;
+            if (!is_array($polygon) || !array_is_list($polygon) || !$polygon) return false;
+            foreach ($polygon as $ring) {
+                if (!self::isUsableRing($ring)) return false;
+                $points += count($ring);
+                if ($points > 50000) return false;
             }
         }
 
@@ -438,20 +485,21 @@ class SuperAdminController extends Controller
 
     private static function isUsableRing($ring): bool
     {
-        if (!is_array($ring) || count($ring) < 4) {
+        if (!is_array($ring) || !array_is_list($ring) || count($ring) < 4) {
             return false;
         }
 
         foreach ($ring as $point) {
-            if (!is_array($point) || count($point) < 2 || !is_numeric($point[0]) || !is_numeric($point[1])) {
+            if (!is_array($point) || !array_is_list($point) || count($point) < 2 || !(is_int($point[0]) || is_float($point[0])) || !(is_int($point[1]) || is_float($point[1])) || !is_finite((float) $point[0]) || !is_finite((float) $point[1]) || abs($point[0]) > 180 || abs($point[1]) > 90) {
                 return false;
             }
         }
 
         $first = $ring[0];
         $last = $ring[count($ring) - 1];
-
-        return (float) $first[0] === (float) $last[0] && (float) $first[1] === (float) $last[1];
+        $area = 0;
+        for ($i = 1; $i < count($ring); $i++) $area += $ring[$i - 1][0] * $ring[$i][1] - $ring[$i][0] * $ring[$i - 1][1];
+        return $area != 0 && (float) $first[0] === (float) $last[0] && (float) $first[1] === (float) $last[1];
     }
 
     /**

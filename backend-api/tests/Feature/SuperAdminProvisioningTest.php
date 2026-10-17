@@ -56,7 +56,7 @@ class SuperAdminProvisioningTest extends TestCase
         // of what's sent, which wouldn't exercise this check at all.
         $province = Province::create(['code' => 'TST', 'name' => 'Test Province']);
         $city = City::create(['province_id' => $province->id, 'code' => 'TSTC', 'name' => 'Test City']);
-        $barangay = Barangay::create(['name' => 'Test Barangay', 'city_id' => $city->id]);
+        $barangay = Barangay::create(['name' => 'Test Barangay', 'city_id' => $city->id, 'psgc_code' => '0102801001']);
         $setting = RegistrationSetting::for($barangay->id);
         User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $barangay->id]);
 

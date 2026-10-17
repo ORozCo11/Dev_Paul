@@ -10,6 +10,19 @@ html:root[data-theme] .superadmin-shell .page-heading-row { display:flex; justif
 html:root[data-theme] .superadmin-shell .page-heading-text p { margin:6px 0 0; font-size:14px; line-height:1.5; color:var(--sa-muted); max-width:none; }
 html:root[data-theme] .superadmin-shell .topbar { min-height:64px; padding:10px 20px; }
 html:root[data-theme] .superadmin-shell .topbar select { min-height:32px; max-width:180px; }
+html:root[data-theme] .superadmin-shell .topbar select:disabled {
+  opacity:1;
+  color:var(--sa-text);
+  -webkit-text-fill-color:var(--sa-text);
+  background-color:var(--sa-surface);
+  cursor:not-allowed;
+}
+html:root[data-theme] .superadmin-shell .topbar .dev-impersonate button:disabled {
+  opacity:1;
+  color:#fff;
+  background:#2563eb;
+  cursor:not-allowed;
+}
 html:root[data-theme] .superadmin-shell .module-nav > button { font-size:13px; }
 .superadmin-shell .superadmin-tab { gap:20px; min-width:0; }
 .superadmin-shell .sa-management-card { min-width:0; border:1px solid var(--sa-border); border-radius:12px; background:var(--sa-surface); overflow:hidden; }

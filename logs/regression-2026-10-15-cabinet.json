@@ -1,0 +1,19 @@
+[
+  {
+    "test": "file cabinet add PNG",
+    "rows": 1,
+    "filename": "proof.png"
+  },
+  {
+    "test": "file cabinet removes pending",
+    "rows": 0
+  },
+  {
+    "test": "toggle external retains completion inputs",
+    "cost": "",
+    "notes": "",
+    "external": "",
+    "fileRows": 0,
+    "externalFields": 1
+  }
+]

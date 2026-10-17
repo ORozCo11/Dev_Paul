@@ -1,0 +1,35 @@
+[
+  {
+    "test": "registration layout 1440",
+    "dimensions": {
+      "viewport": 1440,
+      "scroll": 1440,
+      "offscreen": [
+        {
+          "tag": "DIV",
+          "class": "aurora-blob aurora-blob-1",
+          "right": 1550.4420166015625
+        }
+      ]
+    }
+  },
+  {
+    "test": "registration layout 390",
+    "dimensions": {
+      "viewport": 390,
+      "scroll": 390,
+      "offscreen": []
+    }
+  },
+  {
+    "test": "wrong registration code",
+    "error": [
+      "That staff registration code is not correct. Ask your barangay office for the current code."
+    ]
+  },
+  {
+    "test": "browser staff registration",
+    "status": 201,
+    "text": "Create your account\n\nJoin your barangay's vehicle management team.\n\nRegistration submitted. An administrator must approve your account before you can sign in.\n\nBack to Login\n\nAlready have an account? Sign in\n\nJoin Your Barangay's Fleet Team\n\nCreate an account to help track vehicle readiness, report issues, and coordinate maintenance for your barangay's fleet."
+  }
+]

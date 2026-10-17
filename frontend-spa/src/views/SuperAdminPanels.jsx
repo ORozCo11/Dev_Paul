@@ -102,6 +102,8 @@ export function RegistrationCodesTab({ barangays, initialBarangay, onRequestConf
   const [barangayId, setBarangayId] = useState(initialBarangay ? String(initialBarangay.id) : '');
   const [result, setResult] = useState({ code: null, updated: null, loading: false, error: null });
   const [retry, setRetry] = useState(0);
+  const [barangayLookup, setBarangayLookup] = useState({ cityId: '', rows: [], error: null });
+  const [barangayRetry, setBarangayRetry] = useState(0);
   const selectedRef = useRef(barangayId);
   useEffect(() => { selectedRef.current = barangayId; }, [barangayId]);
   useEffect(() => {
@@ -121,10 +123,26 @@ export function RegistrationCodesTab({ barangays, initialBarangay, onRequestConf
     api.get(`/superadmin/barangays/${barangayId}/registration-code`).then(({ data }) => { if (current) setResult({ code: data.staff_code, updated: data.updated_at, loading: false, error: null }); }).catch((error) => { if (current) setResult({ code: null, updated: null, loading: false, error: error.response?.data?.message ?? 'Could not load the registration code.' }); });
     return () => { current = false; };
   }, [barangayId, retry]);
+  useEffect(() => {
+    if (!cityId) return;
+    let current = true;
+    api.get('/barangays', { params: { city_id: cityId } }).then(({ data }) => {
+      if (current) setBarangayLookup({ cityId, rows: data, error: null });
+    }).catch(() => {
+      if (current) setBarangayLookup({ cityId, rows: [], error: 'Could not load barangays. Please retry.' });
+    });
+    return () => { current = false; };
+  }, [cityId, barangayRetry]);
   const selectedProvince = provinces.find((p) => String(p.id) === provinceId);
   const selectedCity = cities.find((city) => String(city.id) === cityId);
-  const options = useMemo(() => selectedCity ? barangays.filter((b) => b.city_name === selectedCity.name && b.province_name === selectedProvince?.name) : [], [barangays, selectedCity, selectedProvince]);
-  const selected = barangays.find((b) => String(b.id) === barangayId);
+  const barangaysLoading = Boolean(cityId) && barangayLookup.cityId !== cityId;
+  const barangaysError = barangayLookup.cityId === cityId ? barangayLookup.error : null;
+  const options = useMemo(() => {
+    if (!selectedCity || barangayLookup.cityId !== cityId) return [];
+    const managed = barangays.filter((b) => b.city_name === selectedCity.name && b.province_name === selectedProvince?.name);
+    return [...new Map([...managed, ...barangayLookup.rows].map((b) => [String(b.id), b])).values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [barangays, selectedCity, selectedProvince, barangayLookup, cityId]);
+  const selected = options.find((b) => String(b.id) === barangayId) ?? barangays.find((b) => String(b.id) === barangayId);
   const changeBarangay = (id) => { selectedRef.current = id; setBarangayId(id); setResult({ code: null, updated: null, loading: Boolean(id), error: null }); };
   const regenerate = () => {
     const id = barangayId;
@@ -135,8 +153,9 @@ export function RegistrationCodesTab({ barangays, initialBarangay, onRequestConf
     } });
   };
   const copyCode = async () => { try { await navigator.clipboard.writeText(result.code); setNotice({ type: 'success', text: 'Registration code copied.' }); } catch { setNotice({ type: 'error', text: 'Could not copy automatically. Select the code and copy it manually.' }); } };
-  return <div className="superadmin-tab sa-codes"><AdminManagementCard toolbar={<><AdminFilterField label="Province"><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCityId(''); setCities([]); changeBarangay(''); }}><option value="">Select a province</option>{provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></AdminFilterField><AdminFilterField label="City / Municipality"><select disabled={!provinceId} value={cityId} onChange={(event) => { setCityId(event.target.value); changeBarangay(''); }}><option value="">{provinceId ? 'Select a city' : 'Select a province first'}</option>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></AdminFilterField><AdminFilterField label="Barangay"><select disabled={!cityId} value={barangayId} onChange={(event) => changeBarangay(event.target.value)}><option value="">{cityId ? 'Select a barangay' : 'Select a city first'}</option>{options.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></AdminFilterField></>}>
-    {!barangayId ? <AdminEmptyState icon="key" title="Select a barangay" description="Choose a province, city, and registered barangay to view its staff registration code." /> : result.error ? <AdminEmptyState icon="alert" title="Code unavailable" description={result.error}><button className="ghost-button" type="button" onClick={() => { setResult({ code: null, updated: null, loading: true, error: null }); setRetry(retry + 1); }}>Retry lookup</button></AdminEmptyState> : result.loading || !result.code ? <AdminEmptyState icon="key" title="Looking up registration code" description="Checking authorized access for this barangay." /> : <div className="sa-code-details"><div><h3>Registration Code Details</h3><p><strong>{selected?.name}</strong> · {[selected?.city_name, selected?.province_name].filter(Boolean).join(', ')}</p></div><code>{result.code}</code>{result.updated && <p>Last updated {formatDate(result.updated)}</p>}<div className="sa-row-actions"><button className="primary-button" type="button" onClick={copyCode}><Icon name="clipboard" size={16} />Copy Code</button><button className="ghost-button sa-destructive" type="button" onClick={regenerate}>Regenerate Code</button></div></div>}
+  return <div className="superadmin-tab sa-codes"><AdminManagementCard toolbar={<><AdminFilterField label="Province"><select value={provinceId} onChange={(event) => { setProvinceId(event.target.value); setCityId(''); setCities([]); changeBarangay(''); }}><option value="">Select a province</option>{provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></AdminFilterField><AdminFilterField label="City / Municipality"><select disabled={!provinceId} value={cityId} onChange={(event) => { setCityId(event.target.value); changeBarangay(''); }}><option value="">{provinceId ? 'Select a city' : 'Select a province first'}</option>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></AdminFilterField><AdminFilterField label="Barangay"><select disabled={!cityId || barangaysLoading || Boolean(barangaysError) || !options.length} value={barangayId} onChange={(event) => changeBarangay(event.target.value)}><option value="">{barangaysLoading ? 'Loading barangays...' : barangaysError ? 'Barangays unavailable' : cityId ? (options.length ? 'Select a barangay' : 'No barangays available') : 'Select a city first'}</option>{options.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select></AdminFilterField></>}>
+    {barangaysError && <p className="notice error" role="alert">{barangaysError} <button type="button" className="ghost-button" onClick={() => { setBarangayLookup({ cityId: '', rows: [], error: null }); setBarangayRetry((value) => value + 1); }}>Retry barangays</button></p>}
+    {!barangayId ? <AdminEmptyState icon="key" title="Select a barangay" description="Choose a province, city, and barangay to view or provision its staff registration code." /> : result.error ? <AdminEmptyState icon="alert" title="Code unavailable" description={result.error}><button className="ghost-button" type="button" onClick={() => { setResult({ code: null, updated: null, loading: true, error: null }); setRetry(retry + 1); }}>Retry lookup</button></AdminEmptyState> : result.loading || !result.code ? <AdminEmptyState icon="key" title="Looking up registration code" description="Checking authorized access for this barangay." /> : <div className="sa-code-details"><div><h3>Registration Code Details</h3><p><strong>{selected?.name}</strong> · {[selectedCity?.name ?? selected?.city_name, selectedProvince?.name ?? selected?.province_name].filter(Boolean).join(', ')}</p></div><code>{result.code}</code>{result.updated && <p>Last updated {formatDate(result.updated)}</p>}<div className="sa-row-actions"><button className="primary-button" type="button" onClick={copyCode}><Icon name="clipboard" size={16} />Copy Code</button><button className="ghost-button sa-destructive" type="button" onClick={regenerate}>Regenerate Code</button></div></div>}
   </AdminManagementCard></div>;
 }
 
