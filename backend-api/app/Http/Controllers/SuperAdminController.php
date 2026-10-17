@@ -12,9 +12,6 @@ use App\Models\RegistrationSetting;
 use App\Models\User;
 use App\Services\BarangayGeography;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 
 /**
  * Platform-level account administration — the one tier above every
@@ -126,12 +123,9 @@ class SuperAdminController extends Controller
     }
 
     /**
-     * Lets a Super Admin add a barangay for ANY province/city up front —
-     * not just Mandaue's seeded 27 — so a registration code can be
-     * generated and handed to that barangay's office before its first
-     * resident ever registers (registrationCode()/RegistrationSetting::for()
-     * auto-creates the code the first time it's looked up, so nothing
-     * further is needed here to make one available).
+     * Provisions an existing PSA PSGC reference barangay.  This intentionally
+     * accepts no free-text name and never calls a geocoder: a boundary is
+     * selected solely by its official PSGC identity, or remains unavailable.
      */
     public function storeBarangay(Request $request)
     {
@@ -139,32 +133,14 @@ class SuperAdminController extends Controller
 
         $data = $request->validate([
             'city_id' => ['required', 'exists:cities,id'],
-            'name' => [
-                'required', 'string', 'max:150',
-                Rule::unique('barangays')->where('city_id', $request->city_id),
-            ],
+            'barangay_id' => ['required', 'integer', 'exists:barangays,id'],
         ]);
-
-        $barangay = Barangay::create($data);
+        $barangay = Barangay::with('city.province')->findOrFail($data['barangay_id']);
+        abort_unless($barangay->city_id === (int) $data['city_id'] && $barangay->psgc_code,
+            422, 'Select an official PSGC barangay belonging to the selected city or municipality.');
         $barangay->load('city.province');
-
-        // Best-effort — the 27 Mandaue barangays came with a real PSA
-        // boundary file, but nothing does for a barangay added here for
-        // some other city. Rather than always leaving it unset, ask a
-        // public geocoder for one; if it can't find a match (or the
-        // lookup fails/times out) the barangay is still created, just
-        // without a boundary, exactly as before this existed.
-        //
-        // Final stabilization — a found match is no longer saved straight
-        // to `boundary`: it lands in `pending_boundary` for the Super Admin
-        // to actually look at and confirm first (§33.2). Nothing here is
-        // auto-accepted just because the HTTP request succeeded.
-        $boundary = $this->lookupBoundary($barangay->name, $barangay->city?->name);
-        if ($boundary) {
-            $barangay->update(['pending_boundary' => $boundary, 'pending_boundary_source' => 'osm_nominatim']);
-        } else {
-            $barangay->update(['boundary_status' => 'not_found']);
-        }
+        app(BarangayGeography::class)->attachBoundary($barangay);
+        $barangay->refresh();
 
         $this->log($request, 'Add', "Added barangay {$barangay->name} ({$barangay->city?->name}).");
 
@@ -176,51 +152,33 @@ class SuperAdminController extends Controller
             'staff_count' => 0,
             'has_active_admin' => false,
             'has_registration_code' => false,
-            'has_boundary' => false,
-            'boundary_status' => $boundary ? 'needs_review' : 'not_found',
-            'pending_boundary' => $boundary,
-            'pending_boundary_source' => $boundary ? 'osm_nominatim' : null,
+            'psgc_code' => $barangay->psgc_code,
+            'has_boundary' => $barangay->boundary !== null,
+            'boundary_status' => $barangay->boundary !== null ? 'needs_review' : 'not_found',
+            'pending_boundary' => $barangay->pending_boundary,
+            'pending_boundary_source' => $barangay->pending_boundary_source,
         ], 201);
     }
 
     /**
-     * Re-runs the same best-effort boundary lookup storeBarangay() does on
-     * creation, for a barangay that doesn't have one yet — OSM's PH barangay
-     * coverage keeps growing, and a match that failed (or got correctly
-     * rejected as untrustworthy) when the barangay was first added can start
-     * succeeding later without anyone needing to delete and re-add the row.
-     * Only fills in a *missing* boundary; never overwrites one already on
-     * file (use a fresh delete+re-add for that, which is rare enough not to
-     * need its own endpoint).
+     * Re-checks the code-matched PSA/NAMRIA reference bundle. No geocoder,
+     * name matching, generated geometry, or fallback barangay is permitted.
      */
     public function refreshBarangayBoundary(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.refresh_boundary', 'Only a Super Admin can perform this action.');
 
-        if ($barangay->boundary !== null) {
-            $geography = app(BarangayGeography::class);
-            if ($geography->isUnreviewedReference($barangay)) $geography->attachBoundary($barangay);
-            return response()->json(['has_boundary' => true, 'boundary_status' => $barangay->boundary_status, 'pending_boundary' => $barangay->pending_boundary, 'pending_boundary_source' => $barangay->pending_boundary_source]);
-        }
-
         $barangay->load('city');
-        $boundary = $this->lookupBoundary($barangay->name, $barangay->city?->name);
-        if ($boundary) {
-            // Final stabilization — lands as a proposal, not an immediate
-            // save (§33.2); confirmBarangayBoundary() is what actually
-            // writes `boundary`. The Activity Log entry below now records
-            // that a match was FOUND, not that the boundary was finalized.
-            $barangay->update(['pending_boundary' => $boundary, 'pending_boundary_source' => 'osm_nominatim']);
-            $this->log($request, 'Edit', "Found a candidate boundary for barangay {$barangay->name} ({$barangay->city?->name}) on retry — awaiting review.");
-        } else {
-            $barangay->update(['boundary_status' => 'not_found']);
-        }
+        app(BarangayGeography::class)->attachBoundary($barangay);
+        $barangay->refresh();
+        $found = $barangay->boundary !== null;
+        if (!$found) $barangay->update(['boundary_status' => 'not_found']);
 
         return response()->json([
-            'has_boundary' => false,
-            'boundary_status' => $boundary ? 'needs_review' : 'not_found',
-            'pending_boundary' => $boundary,
-            'pending_boundary_source' => $boundary ? 'osm_nominatim' : null,
+            'has_boundary' => $found,
+            'boundary_status' => $found ? 'needs_review' : 'not_found',
+            'pending_boundary' => $barangay->pending_boundary,
+            'pending_boundary_source' => $barangay->pending_boundary_source,
         ]);
     }
 
@@ -653,6 +611,7 @@ class SuperAdminController extends Controller
 
         return User::with('barangay.city.province')
             ->whereNull('approved_at')
+            ->where('is_active', false)
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($u) => [
@@ -696,6 +655,8 @@ class SuperAdminController extends Controller
     public function registrationCode(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.view_registration_code', 'Only a Super Admin can perform this action.');
+        abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
+            'Review the PSGC-matched boundary before issuing a registration code. No code can be issued while the boundary is unavailable or pending review.');
 
         $setting = RegistrationSetting::for($barangay->id);
 
@@ -705,6 +666,8 @@ class SuperAdminController extends Controller
     public function regenerateRegistrationCode(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.regenerate_registration_code', 'Only a Super Admin can perform this action.');
+        abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
+            'Review the PSGC-matched boundary before issuing a registration code. No code can be issued while the boundary is unavailable or pending review.');
 
         $setting = RegistrationSetting::regenerateFor($barangay->id);
         $this->log($request, 'Edit', "Regenerated the staff registration code for {$barangay->name}.");

@@ -126,49 +126,34 @@ class BarangayBoundaryReviewTest extends TestCase
     }
 
     #[Test]
-    public function a_found_match_lands_in_pending_not_boundary(): void
+    public function refresh_does_not_query_or_offer_a_non_authoritative_geocoder_boundary(): void
     {
-        Http::fake(['nominatim.openstreetmap.org/*' => Http::response($this->nominatimResult($this->validRing()))]);
         $barangay = $this->barangay();
 
         Sanctum::actingAs($this->superAdmin, ['*']);
         $response = $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/refresh")->assertOk();
 
-        $this->assertSame('needs_review', $response->json('boundary_status'));
+        $this->assertSame('not_found', $response->json('boundary_status'));
         $this->assertFalse($response->json('has_boundary'));
 
         $barangay->refresh();
         $this->assertNull($barangay->boundary, 'A found match must not be auto-saved to the live boundary.');
-        $this->assertNotNull($barangay->pending_boundary);
-        $this->assertSame('osm_nominatim', $barangay->pending_boundary_source);
+        $this->assertNull($barangay->pending_boundary);
+        $this->assertNull($barangay->pending_boundary_source);
     }
 
     #[Test]
-    public function confirming_a_geocoder_candidate_applies_it_as_an_unverified_reference(): void
+    public function a_reference_refresh_never_promotes_an_unavailable_boundary_to_verified(): void
     {
-        Http::fake(['nominatim.openstreetmap.org/*' => Http::response($this->nominatimResult($this->validRing()))]);
         $barangay = $this->barangay();
 
         Sanctum::actingAs($this->superAdmin, ['*']);
         $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/refresh")->assertOk();
 
-        // OSM geometry is not boundary evidence: it goes live, but unreviewed.
-        $response = $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/confirm")->assertOk();
-        $this->assertSame('needs_review', $response->json('boundary_status'));
-
         $barangay->refresh();
-        $this->assertNotNull($barangay->boundary);
-        $this->assertSame('needs_review', $barangay->boundary_status);
-        $this->assertSame('osm_nominatim', $barangay->boundary_source);
-        $this->getJson('/api/barangays/'.$barangay->id)->assertJsonPath('boundary_verified', false);
-        $this->assertSame($this->superAdmin->id, $barangay->boundary_verified_by);
-        $this->assertNotNull($barangay->boundary_verified_at);
-        $this->assertNull($barangay->pending_boundary, 'The pending slot should be cleared once confirmed.');
-
-        $this->assertDatabaseHas('activity_logs', [
-            'module' => 'Super Admin',
-            'action' => 'Edit',
-        ]);
+        $this->assertNull($barangay->boundary);
+        $this->assertSame('not_found', $barangay->boundary_status);
+        $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/confirm")->assertStatus(422);
     }
 
     #[Test]
@@ -183,12 +168,11 @@ class BarangayBoundaryReviewTest extends TestCase
     #[Test]
     public function discarding_a_pending_boundary_leaves_the_live_boundary_untouched(): void
     {
-        Http::fake(['nominatim.openstreetmap.org/*' => Http::response($this->nominatimResult($this->validRing()))]);
         $barangay = $this->barangay();
 
         Sanctum::actingAs($this->superAdmin, ['*']);
         $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/refresh")->assertOk();
-        $this->deleteJson("/api/superadmin/barangays/{$barangay->id}/boundary/pending")->assertOk();
+        $this->deleteJson("/api/superadmin/barangays/{$barangay->id}/boundary/pending")->assertStatus(422);
 
         $barangay->refresh();
         $this->assertNull($barangay->pending_boundary);

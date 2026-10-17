@@ -42,6 +42,14 @@ class FaultCategory extends Model
      * need the resolved string (e.g. saving it onto a ticket/record). */
     public static function resolve(?string $name): ?string
     {
-        return static::findOrCreateByName($name)?->name;
+        $name = $name !== null ? trim($name) : null;
+        if (!$name) {
+            return null;
+        }
+
+        $existing = static::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        abort_unless($existing, 422, 'Select an existing fault category. Only an Admin can add a new category.');
+
+        return $existing->name;
     }
 }

@@ -16,7 +16,7 @@ import Icon from '../components/Icon';
 import RoleDashboard from '../components/RoleDashboard';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { DonutChart, SolidPieChart, StackedBarChart } from '../components/charts';
+import { DonutChart, StackedBarChart } from '../components/charts';
 import { AuthContext } from '../context/AuthContextObject';
 import { geoJsonToPolygons, isPointWithinBoundaryPolygons, isLocationPointAllowed } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
@@ -467,6 +467,22 @@ const moduleIcons = {
   ),
 };
 
+// A handler with a stable identity that always runs the latest render's
+// version — lets memoized column definitions keep their identity while the
+// handlers they call still see current state.
+function useStableHandler(handler) {
+  const handlerRef = useRef(handler);
+  useLayoutEffect(() => {
+    handlerRef.current = handler;
+  });
+  return useCallback((...args) => handlerRef.current(...args), []);
+}
+
+// YYYY-MM-DD for today + `days` on the Asia/Manila calendar.
+function manilaDateOffset(days = 0) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date(Date.now() + days * 86400000));
+}
+
 function Workspace() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -573,7 +589,7 @@ function Workspace() {
     isNewConditionPage, editConditionId, isNewMaintenancePage, editMaintenanceId,
     isNewUserPage, editUserId, isNewLocationPage, editLocationVehicleId,
   ]);
-  const moduleGroups = useMemo(() => resolveModuleGroups(user), [user.role, user.roles]);
+  const moduleGroups = useMemo(() => resolveModuleGroups(user), [user]);
   const modules = useMemo(() => moduleGroups.flatMap((g) => g.items), [moduleGroups]);
   // A fresh mount (hard refresh, a bookmarked/shared link, opening a new tab)
   // always used to default this to the first sidebar module — losing which
@@ -698,13 +714,14 @@ function Workspace() {
   // Memoized so the object reference stays stable across unrelated re-renders
   // — SmartForm resets its values whenever this reference changes, which
   // would otherwise wipe out whatever the user has already typed.
+  // Default to tomorrow (Manila date) — a schedule is always plotted ahead,
+  // so this saves a click for the common case; still fully editable.
+  const [tomorrowDate] = useState(() => manilaDateOffset(1));
   const scheduleInitialValues = useMemo(() => (
     editScheduleId
       ? (records.schedules ?? []).find((s) => String(s.schedule_id) === String(editScheduleId))
-      // Default to tomorrow — a schedule is always plotted ahead, so this
-      // saves a click for the common case; still fully editable.
-      : { scheduled_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10), ...(prefilledScheduleData ?? {}) }
-  ), [editScheduleId, records.schedules, prefilledScheduleData]);
+      : { scheduled_date: tomorrowDate, ...(prefilledScheduleData ?? {}) }
+  ), [editScheduleId, records.schedules, prefilledScheduleData, tomorrowDate]);
   // Set right before navigating to /conditions/new from the "+" on a
   // specific "Not Checked" vehicle row — same pattern as prefilledScheduleData
   // above, so that vehicle is already selected instead of asking the
@@ -783,10 +800,10 @@ function Workspace() {
   // Mark Done form below — reset wherever the modal is opened (see
   // openCompleteSchedule) rather than in an effect.
   const [completeScheduleExternal, setCompleteScheduleExternal] = useState(false);
-  const openCompleteSchedule = (row) => {
+  const openCompleteSchedule = useStableHandler((row) => {
     setCompleteScheduleExternal(false);
     setCompleteScheduleTarget(row);
-  };
+  });
   const [report, setReport] = useState(null);
   const [notice, setNotice] = useState(null);
   const [vehicleImportOpen, setVehicleImportOpen] = useState(false);
@@ -829,9 +846,11 @@ function Workspace() {
   // is what actually clears the flag after a successful save (submitting
   // navigates away on its own, outside guardedNavigate), and also covers
   // navigating directly from one edit form straight into another.
-  useEffect(() => {
+  const [unsavedCheckPath, setUnsavedCheckPath] = useState(location.pathname);
+  if (unsavedCheckPath !== location.pathname) {
+    setUnsavedCheckPath(location.pathname);
     setHasUnsavedChanges(false);
-  }, [location.pathname]);
+  }
   // First-time approval only — a pending self-registration's role is a
   // request, not yet real, so Admin reviews/confirms it here instead of
   // the plain yes/no ConfirmDialog every other activate/deactivate uses.
@@ -887,13 +906,11 @@ function Workspace() {
   const [prefilledTicketData, setPrefilledTicketData] = useState(null);
   // A form page that finishes by switching module wants its success notice to
   // survive the module-change reset below.
-  const keepNoticeRef = useRef(false);
+  const [keepNotice, setKeepNotice] = useState(false);
   // Pre-filled proposal data (from a flagged issue / condition check) only
   // lives while the ticket form is open — leaving it by ANY route (sidebar,
   // back button, submit) drops it so the next form never re-links stale data.
-  useEffect(() => {
-    if (!isNewTicketPage) setPrefilledTicketData(null);
-  }, [isNewTicketPage]);
+  if (!isNewTicketPage && prefilledTicketData !== null) setPrefilledTicketData(null);
   const [allHubs, setAllHubs] = useState([]);
   const [locationsTab, setLocationsTab] = useState('map');
   const [selectedMapVehicleId, setSelectedMapVehicleId] = useState(null);
@@ -905,14 +922,9 @@ function Workspace() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const hasVehicles = (lookups.vehicles ?? []).length > 0;
 
-  const loadNotifications = useCallback(async () => {
-    try {
-      const response = await api.get('/notifications');
-      setNotifications(response.data);
-    } catch (error) {
-      console.error('Failed to load notifications:', error);
-    }
-  }, []);
+  const loadNotifications = useCallback(() => api.get('/notifications')
+    .then((response) => setNotifications(response.data))
+    .catch((error) => console.error('Failed to load notifications:', error)), []);
 
   const markNotificationAsRead = async (id) => {
     try {
@@ -941,13 +953,10 @@ function Workspace() {
     }
   };
 
-  const loadLookups = useCallback(async () => {
-    const response = await api.get('/lookups');
-    setLookups(response.data);
-  }, []);
+  const loadLookups = useCallback(() => api.get('/lookups')
+    .then((response) => setLookups(response.data)), []);
 
-  const loadHubs = useCallback(async () => {
-    const response = await api.get('/hubs');
+  const loadHubs = useCallback(() => api.get('/hubs').then((response) => {
     setAllHubs(
       response.data
         .filter((hub) => !hub.is_hidden)
@@ -958,28 +967,24 @@ function Workspace() {
             : [hub.name.toLowerCase()],
         }))
     );
-  }, []);
+  }), []);
 
-  const loadTicketLookups = useCallback(async () => {
-    const response = await api.get('/tickets/lookups');
-    setTicketLookups(response.data);
-  }, []);
+  const loadTicketLookups = useCallback(() => api.get('/tickets/lookups')
+    .then((response) => setTicketLookups(response.data)), []);
 
-  const loadModule = useCallback(async (key) => {
+  const loadModule = useCallback((key) => {
     if (key === 'reports') {
-      return;
+      return Promise.resolve();
     }
 
     if (key === 'dashboard') {
-      const response = await api.get('/dashboard');
-      setDashboard(response.data);
-      return;
+      return api.get('/dashboard').then((response) => setDashboard(response.data));
     }
 
     const endpoint = moduleEndpoints[key];
 
     if (!endpoint) {
-      return;
+      return Promise.resolve();
     }
 
     const params = {};
@@ -999,27 +1004,28 @@ function Workspace() {
     // of only the pending queue — once submitted, a ticket moves to the next
     // phase and would otherwise vanish from view entirely.
 
-    const response = await api.get(endpoint, { params });
-    setRecords((current) => ({ ...current, [key]: response.data }));
+    return api.get(endpoint, { params }).then((response) => {
+      setRecords((current) => ({ ...current, [key]: response.data }));
 
-    // The "My Assigned Maintenance Schedules" card section that used to be
-    // piggybacked onto My Work Orders (for when Maintenance Personnel had no
-    // 'schedules' sidebar entry of their own) was removed — that entry is
-    // back, and GET /maintenance-schedules already scopes to assigned_to =
-    // me for a pure Maintenance Personnel account, so it was a plain
-    // duplicate of that page. No second fetch needed here anymore.
+      // The "My Assigned Maintenance Schedules" card section that used to be
+      // piggybacked onto My Work Orders (for when Maintenance Personnel had no
+      // 'schedules' sidebar entry of their own) was removed — that entry is
+      // back, and GET /maintenance-schedules already scopes to assigned_to =
+      // me for a pure Maintenance Personnel account, so it was a plain
+      // duplicate of that page. No second fetch needed here anymore.
 
-    // Admin no longer has a standalone Issue Reports sidebar entry (removed
-    // as redundant — a report with no ticket just sits there for Admin to
-    // dismiss). The "Latest Reports" card that used to live on that page
-    // moves to Maintenance Tickets instead, piggybacked onto this same
-    // fetch the same way ticketWorkOrders above piggybacks mySchedules.
-    if (key === 'tickets' && hasRole(user, 'Admin')) {
-      try {
-        const issuesResponse = await api.get('/issues');
-        setRecords((current) => ({ ...current, issues: issuesResponse.data }));
-      } catch { /* optional secondary fetch — the tickets list still loaded fine */ }
-    }
+      // Admin no longer has a standalone Issue Reports sidebar entry (removed
+      // as redundant — a report with no ticket just sits there for Admin to
+      // dismiss). The "Latest Reports" card that used to live on that page
+      // moves to Maintenance Tickets instead, piggybacked onto this same
+      // fetch the same way ticketWorkOrders above piggybacks mySchedules.
+      if (key === 'tickets' && hasRole(user, 'Admin')) {
+        return api.get('/issues')
+          .then((issuesResponse) => setRecords((current) => ({ ...current, issues: issuesResponse.data })))
+          .catch(() => { /* optional secondary fetch — the tickets list still loaded fine */ });
+      }
+      return undefined;
+    });
   }, [user]);
 
   useEffect(() => {
@@ -1078,14 +1084,22 @@ function Workspace() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    setActiveModule(modules[0]?.[0] ?? 'dashboard');
-  }, [modules]);
+  // Keep a valid module selected whenever the sidebar definition changes,
+  // but do not overwrite a module inferred from a bookmarked/deep URL.
+  const [checkedModules, setCheckedModules] = useState(null);
+  if (checkedModules !== modules) {
+    setCheckedModules(modules);
+    if (!modules.some(([key]) => key === activeModule)) setActiveModule(modules[0]?.[0] ?? 'dashboard');
+  }
 
-  useEffect(() => {
+  // A module switch starts from a clean slate: no edit target, notice
+  // (unless the switch asked to keep it), search or filters.
+  const [resetForModule, setResetForModule] = useState(null);
+  if (resetForModule !== activeModule) {
+     setResetForModule(activeModule);
      setEditTarget(null);
      setReport(null);
-     if (keepNoticeRef.current) keepNoticeRef.current = false; else setNotice(null);
+     if (keepNotice) setKeepNotice(false); else setNotice(null);
      setSearchQuery('');
      setFilterCategory([]);
      setFilterCapacity([]);
@@ -1115,10 +1129,13 @@ function Workspace() {
      setArchiveEnd('');
      setArchiveStatusFilter('');
      setLoading(true);
-     loadModule(activeModule)
-       .catch((error) => showError(error, setNotice))
-       .finally(() => setLoading(false));
-   }, [activeModule, loadModule]);
+  }
+
+  useEffect(() => {
+    loadModule(activeModule)
+      .catch((error) => showError(error, setNotice))
+      .finally(() => setLoading(false));
+  }, [activeModule, loadModule]);
 
   const refreshCurrent = async () => {
     await Promise.all([
@@ -1169,7 +1186,7 @@ function Workspace() {
 
   // ── Ticket workflow action dispatchers ──────────────────────────────
 
-  const ticketAction = async (path, payload, successMsg, method = 'put') => {
+  const ticketAction = useStableHandler(async (path, payload, successMsg, method = 'put') => {
     setNotice(null);
     try {
       const response = await sendPayload(method, path, payload);
@@ -1190,7 +1207,7 @@ function Workspace() {
       showError(error, setNotice);
       return false;
     }
-  };
+  });
 
   const createTicket = async (payload) => {
     setNotice(null);
@@ -1258,7 +1275,7 @@ function Workspace() {
     );
   }
 
-  const handleCreateTicketFromIssue = (issue) => {
+  const handleCreateTicketFromIssue = useStableHandler((issue) => {
     // The custodian who filed this already told us what's wrong — don't make
     // someone re-diagnose it. Pre-diagnosed mode skips straight past
     // inspection to a sub-issue ready for a mechanic; the assigned custodian
@@ -1286,7 +1303,7 @@ function Workspace() {
       ...(reporterIsCustodian ? { assigned_custodian_id: reporterId } : {}),
     });
     navigate(`${roleRoutes[user.role]}/tickets/new`);
-  };
+  });
 
   // #2 (Mode C) — a "Needs Repair"/"Needs Inspection" condition check
   // already IS the inspection, so spawn a pre-diagnosed ticket carrying the
@@ -1294,7 +1311,7 @@ function Workspace() {
   // the same problem all over again via a separate Issue Report. Observations
   // seed the sub-issues. Needs Repair is a confirmed problem (High); Needs
   // Inspection is still just "take a closer look" (Medium) until it is one.
-  const handleCreateTicketFromCondition = (cond) => {
+  const handleCreateTicketFromCondition = useStableHandler((cond) => {
     setPrefilledTicketData({
       vehicle_id: cond.vehicle_id,
       ticket_title: `Condition Check: ${cond.condition_result}`,
@@ -1305,20 +1322,20 @@ function Workspace() {
       condition_check_id: cond.condition_check_id,
     });
     navigate(`${roleRoutes[user.role]}/tickets/new`);
-  };
+  });
 
   // The Custodian has daily eyes on the vehicle and is the one most likely
   // to notice "this is due for a checkup soon" — and, since Custodian can
   // book a schedule directly again, this hands off straight to the real Add
   // Schedule form with the vehicle and a note already filled in; nothing is
   // booked until the form is actually submitted.
-  const handleSuggestScheduleFromCondition = (cond) => {
+  const handleSuggestScheduleFromCondition = useStableHandler((cond) => {
     setPrefilledScheduleData({
       vehicle_id: cond.vehicle_id,
       notes: `Suggested from condition check #${cond.condition_check_id} (${cond.condition_result})${cond.observations ? `: ${cond.observations}` : ''}`,
     });
     navigate(`${roleRoutes[user.role]}/schedules/new`);
-  };
+  });
 
   // Maintenance Personnel can't open a ticket — this points the Custodians at
   // the exact issue so they can propose one with everything already filled in.
@@ -1343,7 +1360,7 @@ function Workspace() {
     }
   };
 
-  const updateRecord = async (path, payload, success) => {
+  const updateRecord = useStableHandler(async (path, payload, success) => {
     try {
       await api.put(path, payload);
       setNotice({ type: 'success', text: success });
@@ -1351,7 +1368,7 @@ function Workspace() {
     } catch (error) {
       showError(error, setNotice);
     }
-  };
+  });
 
   // Readiness check submitted from the post-verification prompt. Separate from
   // the Maintenance Record entirely — two different questions ("was this
@@ -1369,7 +1386,7 @@ function Workspace() {
     }
   };
 
-  const deleteRecord = async (path, success, confirmMessage) => {
+  const deleteRecord = useStableHandler(async (path, success, confirmMessage) => {
     setConfirmDialog({
       title: 'Confirm Action',
       message: confirmMessage ?? 'Continue with this action?',
@@ -1385,9 +1402,9 @@ function Workspace() {
         }
       },
     });
-  };
+  });
 
-  const toggleUserActive = (row, activate) => {
+  const toggleUserActive = useStableHandler((row, activate) => {
     // First-time approval (never approved before) — review the requested
     // role instead of blindly activating. Re-activating an already-once-
     // approved account, or deactivating, stays the plain confirm dialog.
@@ -1412,7 +1429,7 @@ function Workspace() {
         }
       },
     });
-  };
+  });
 
   const regenerateRegistrationCode = () => {
     setConfirmDialog({
@@ -1435,7 +1452,7 @@ function Workspace() {
   // `message` defaults to the vehicle wording this was originally written for,
   // so existing callers are unchanged, but a schedule restore can say what it
   // actually does instead of claiming to restore a vehicle.
-  const restoreRecord = async (path, success, message = 'Restore this vehicle to active service?') => {
+  const restoreRecord = useStableHandler(async (path, success, message = 'Restore this vehicle to active service?') => {
     setConfirmDialog({
       title: 'Confirm Action',
       message,
@@ -1451,7 +1468,7 @@ function Workspace() {
         }
       },
     });
-  };
+  });
 
   const handleConfirmDialog = async () => {
     if (!confirmDialog?.onConfirm || confirmBusy) {
@@ -1590,7 +1607,7 @@ function Workspace() {
   // live (Scheduled); decline collects a reason, same propose/approve/decline
   // shape as a ticket proposal. Both work from Declined too (approve direct,
   // or decline again is a no-op since it's already there).
-  const approveSchedule = async (target) => {
+  const approveSchedule = useStableHandler(async (target) => {
     setNotice(null);
     try {
       await api.put(`/maintenance-schedules/${target.schedule_id}/approve`);
@@ -1599,7 +1616,7 @@ function Workspace() {
     } catch (error) {
       showError(error, setNotice);
     }
-  };
+  });
   const declineSchedule = async (target, payload) => {
     setNotice(null);
     try {
@@ -2052,7 +2069,7 @@ function Workspace() {
     }
 
     return result;
-  }, [rawRows, searchQuery, filterCategory, filterCapacity, filterLocation, filterDomain, filterStatus, filterPriority, filterReadiness, filterIssueType, filterMaintType, filterSource, filterActive, filterAssignedTo, filterVerdict, filterCheckedBy, filterActivityType, filterVehicle, filterMechanic, filterCustodian, filterDateStart, filterDateEnd, activeModule, condFilterStartDate, condFilterEndDate, archiveStart, archiveEnd, archiveStatusFilter]);
+  }, [rawRows, searchQuery, filterCategory, filterCapacity, filterLocation, filterDomain, filterStatus, filterPriority, filterReadiness, filterIssueType, filterMaintType, filterSource, filterActive, filterAssignedTo, filterVerdict, filterCheckedBy, filterActivityType, filterVehicle, filterMechanic, filterCustodian, filterDateStart, filterDateEnd, activeModule, condFilterStartDate, condFilterEndDate, archiveStart, archiveEnd, archiveStatusFilter, user.id]);
 
   // Status breakdown for the Vehicle Management stat cards — counted from the
   // full unfiltered fetch so the cards stay accurate regardless of the active
@@ -2334,7 +2351,7 @@ function Workspace() {
 
   const scheduleColumnDefs = useMemo(
     () => scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, openCompleteSchedule, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord, setReassignScheduleTarget, openTicketProfile, approveSchedule, setDeclineScheduleTarget),
-    [navigate, user, deleteRecord, restoreRecord],
+    [navigate, user, deleteRecord, restoreRecord, openCompleteSchedule, openTicketProfile, approveSchedule],
   );
   const scheduleColumnChooser = useColumnChooser('vms_schedule_columns', scheduleColumnDefs);
 
@@ -2399,7 +2416,7 @@ function Workspace() {
         return <span className="muted">—</span>;
       },
     },
-  ], [setConfirmDialog, openTicketProfile]);
+  ], [setConfirmDialog, openTicketProfile, ticketAction]);
   const archiveColumnChooser = useColumnChooser('vms_ticket_archive_columns', archiveColumnDefs);
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
@@ -2520,23 +2537,18 @@ function Workspace() {
   // currently selected above — re-runs whenever the barangay changes or the
   // candidate list itself first loads.
   const impersonateGroupUsers = impersonateGroups.find((g) => g.key === String(mapBarangayId))?.users ?? [];
-  useEffect(() => {
-    const stillValid = impersonateGroupUsers.some((u) => String(u.id) === String(impersonateId));
-    if (!stillValid) {
-      // The barangay/candidate chain resolves over several async calls, so
-      // this can fire once against a still-loading (wrong) group before
-      // landing on the real one. Falling back to "whoever's first" there
-      // would silently pick a coworker instead of yourself — prefer your
-      // own account if it's in this group at all, only falling further
-      // back to "first" when you genuinely aren't a candidate here.
-      const self = impersonateGroupUsers.find((u) => String(u.id) === String(user.id));
-      setImpersonateId(self?.id ?? impersonateGroupUsers[0]?.id ?? '');
-    }
-    // impersonateGroupUsers is a derived array (new reference every render);
-    // keying off mapBarangayId/impersonateCandidates instead avoids re-running
-    // this on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapBarangayId, impersonateCandidates]);
+  const impersonateStillValid = impersonateGroupUsers.some((u) => String(u.id) === String(impersonateId));
+  if (!impersonateStillValid) {
+    // The barangay/candidate chain resolves over several async calls, so
+    // this can fire once against a still-loading (wrong) group before
+    // landing on the real one. Falling back to "whoever's first" there
+    // would silently pick a coworker instead of yourself — prefer your
+    // own account if it's in this group at all, only falling further
+    // back to "first" when you genuinely aren't a candidate here.
+    const self = impersonateGroupUsers.find((u) => String(u.id) === String(user.id));
+    const fallbackImpersonateId = self?.id ?? impersonateGroupUsers[0]?.id ?? '';
+    if (String(fallbackImpersonateId) !== String(impersonateId)) setImpersonateId(fallbackImpersonateId);
+  }
 
   const selectBarangayBoundary = useCallback(async (barangayId) => {
     const requestId = ++mapBoundaryRequestRef.current;
@@ -2635,24 +2647,22 @@ function Workspace() {
   const [seenBadges, setSeenBadges] = useState(() => {
     try { return JSON.parse(localStorage.getItem(seenStorageKey) ?? '{}') || {}; } catch { return {}; }
   });
-  useEffect(() => {
-    if (!dashboard) return;
+  if (dashboard) {
     const viewing = new Set([breadcrumbModule]);
     if (['ticketVerifications', 'ticketInspections', 'workTracker'].includes(breadcrumbModule)) viewing.add('myTasks');
-    setSeenBadges((prev) => {
-      const next = { ...prev };
-      Object.keys(dashboard.badge_counts ?? {}).concat('myTasks').forEach((k) => {
-        const raw = rawBadgeCountFor(k);
-        if (viewing.has(k)) next[k] = raw;
-        else if ((next[k] ?? 0) > raw) next[k] = raw;
-      });
-      const same = Object.keys(next).length === Object.keys(prev).length && Object.keys(next).every((k) => next[k] === prev[k]);
-      if (same) return prev;
-      try { localStorage.setItem(seenStorageKey, JSON.stringify(next)); } catch { /* storage unavailable */ }
-      return next;
+    const nextSeen = { ...seenBadges };
+    Object.keys(dashboard.badge_counts ?? {}).concat('myTasks').forEach((k) => {
+      const raw = rawBadgeCountFor(k);
+      if (viewing.has(k)) nextSeen[k] = raw;
+      else if ((nextSeen[k] ?? 0) > raw) nextSeen[k] = raw;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashboard, breadcrumbModule, seenStorageKey]);
+    const seenUnchanged = Object.keys(nextSeen).length === Object.keys(seenBadges).length
+      && Object.keys(nextSeen).every((k) => nextSeen[k] === seenBadges[k]);
+    if (!seenUnchanged) setSeenBadges(nextSeen);
+  }
+  useEffect(() => {
+    try { localStorage.setItem(seenStorageKey, JSON.stringify(seenBadges)); } catch { /* storage unavailable */ }
+  }, [seenStorageKey, seenBadges]);
   const badgeCountFor = (key) => Math.max(0, rawBadgeCountFor(key) - (seenBadges[key] ?? 0));
 
   return (
@@ -3037,7 +3047,7 @@ function Workspace() {
                   setPrefilledTicketData(null);
                   // Back to where proposals start (the Issue Reports list, which
                   // now shows this report's ticket), keeping the success notice.
-                  keepNoticeRef.current = true;
+                  setKeepNotice(true);
                   returnToModule(hasReportOrProposeNav ? 'issues' : 'workTracker');
                 }}
                 ticketLookups={ticketLookups}
@@ -3142,7 +3152,6 @@ function Workspace() {
             <>
               <IssueViewPage
                 issueId={viewIssueId}
-                allIssues={records.issues ?? []}
                 allHubs={allHubs}
                 user={user}
                 onCreateTicketFromIssue={handleCreateTicketFromIssue}
@@ -3313,7 +3322,7 @@ function Workspace() {
                   label: 'Receipt / Proof of Completion',
                   name: 'receipt',
                   type: 'file',
-                  accept: 'image/*,.pdf',
+                  accept: '.jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf',
                   // Final senior system review (2026-10-05, §2) — only the
                   // assigned Maintenance Personnel can even open this modal
                   // now, and a receipt/photo is evidence only; it never skips
@@ -3323,7 +3332,7 @@ function Workspace() {
                 { label: 'Notes (what was done)', name: 'notes', type: 'textarea', rows: 2 },
               ]}
               key={`complete-${completeScheduleTarget.schedule_id}`}
-              initialValues={{ date_completed: new Date().toISOString().slice(0, 10) }}
+              initialValues={{ date_completed: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()) }}
               onValuesChange={(vals) => setCompleteScheduleExternal(vals.is_external === 1 || vals.is_external === '1' || vals.is_external === true)}
               onCancel={() => setCompleteScheduleTarget(null)}
               onSubmit={(payload) => completeSchedule(completeScheduleTarget, payload)}
@@ -4941,25 +4950,6 @@ function ChartLegend({ rows }) {
   );
 }
 
-function SolidPieLegend({ segments, total }) {
-  const shown = segments.filter((s) => s.value > 0);
-  if (!shown.length) return null;
-  return (
-    <div className="solid-pie-legend">
-      {shown.map((s) => (
-        <div className="solid-pie-legend-item" key={s.label}>
-          <span className="solid-pie-legend-dot" style={{ background: s.color }} />
-          <div>
-            <p className="solid-pie-legend-label" style={{ color: s.color }}>{s.label}</p>
-            <p className="solid-pie-legend-pct">{total ? Math.round((s.value / total) * 100) : 0}%</p>
-            <p className="solid-pie-legend-count">{s.value} issue{s.value === 1 ? '' : 's'}</p>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // The "what this page does" hint banner (blue info callout) was removed from
 // every module per user request — kept as a no-op rather than touched at
 // every call site, so ModulePanel and the 4 ticket-workflow pages that use it
@@ -4969,6 +4959,7 @@ function DismissibleHint() {
 }
 
 function ModulePanel({ children, description, statCards, filterBar, tabBar }) {
+  const [filtersOpen, setFiltersOpen] = useState(false);
   return (
     <div className="module-grid">
       <DismissibleHint description={description} />
@@ -4978,7 +4969,8 @@ function ModulePanel({ children, description, statCards, filterBar, tabBar }) {
       {statCards}
       {filterBar && (
         <section className="panel module-filter-panel">
-          {filterBar}
+          <button type="button" className={`module-filter-toggle${filtersOpen ? ' is-open' : ''}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}>Filters <Icon name="chevronDown" size={15} /></button>
+          {filtersOpen && filterBar}
         </section>
       )}
       <section className="panel">
@@ -5112,20 +5104,13 @@ function UserViewPage({ userId, users = [], currentUser, onEdit }) {
   );
 }
 
-const ISSUE_STATUS_COLORS = {
-  'Pending': '#f59e0b',
-  'Under Review': '#a855f7',
-  'In Maintenance': '#2563eb',
-  'Resolved': '#22c55e',
-};
-
 // Full-page issue detail — mirrors the vehicle/ticket profile pages so every
 // "View" action opens its own page rather than a modal, consistently for all roles.
 // Fetches by ID rather than looking the issue up in an already-loaded list —
 // a pure Custodian's own list is filtered to "mine", but a "View" link from
 // the duplicate-issue warning is specifically for a report FILED BY SOMEONE
 // ELSE on the same vehicle, which that filtered list would never contain.
-function IssueViewPage({ issueId, allIssues = [], allHubs = [], user, onCreateTicketFromIssue, onDismissIssue, onRecommendTicket }) {
+function IssueViewPage({ issueId, allHubs = [], user, onCreateTicketFromIssue, onDismissIssue, onRecommendTicket }) {
   const actions = useContext(RowActionsContext);
   const [issue, setIssue] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -5155,18 +5140,6 @@ function IssueViewPage({ issueId, allIssues = [], allHubs = [], user, onCreateTi
 
   const hub = allHubs.find((h) => h.name === issue?.vehicle?.current_location);
 
-  // This vehicle's full issue-report history, broken down by status — reuses
-  // the already-loaded issues list, no extra API call.
-  const historySegments = useMemo(() => {
-    if (!issue?.vehicle_id) return [];
-    const forThisVehicle = allIssues.filter((i) => i.vehicle_id === issue.vehicle_id);
-    return Object.entries(ISSUE_STATUS_COLORS).map(([label, color]) => ({
-      label,
-      color,
-      value: forThisVehicle.filter((i) => i.status === label).length,
-    }));
-  }, [allIssues, issue?.vehicle_id]);
-  const historyTotal = historySegments.reduce((sum, s) => sum + s.value, 0);
 
   if (loading) return <ModuleLoader label="Loading issue" />;
 
@@ -5843,9 +5816,9 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
   const [validationLines, setValidationLines] = useState(null);
   const formRef = useRef(null);
 
-  useEffect(() => {
-    setValues(valuesFromFields(fields, initialValues));
-  }, [initialValues]);
+  // Each modal/form instance supplies a React key when it represents a new
+  // record. Do not re-seed on every parent render: that discarded entered
+  // completion details and selected evidence when dependent fields changed.
 
   const handleChange = (event) => {
     const { name, type, files, value } = event.target;
@@ -5860,7 +5833,7 @@ function SmartForm({ fields, initialValues = EMPTY_OBJ, onCancel, cancelLabel = 
     const finalValue = type === 'file' ? files[0] : nextValue;
     const next = { ...values, [name]: finalValue };
     setValues(next);
-    if (fieldErrors[name]) setFieldErrors(({ [name]: _gone, ...rest }) => rest);
+    if (fieldErrors[name]) setFieldErrors((errors) => { const rest = { ...errors }; delete rest[name]; return rest; });
     onValuesChange?.(next);
   };
 
@@ -6791,66 +6764,6 @@ function vehicleCriticality(vehicle, lookups) {
   return vehicle.criticality ? `${vehicle.criticality} (set for this vehicle)` : `${defaultCriticalityFor(vehicle, lookups)} (from vehicle type)`;
 }
 
-const categoryFields = [
-  { label: 'Vehicle Type Name', name: 'category_name', required: true, type: 'text', placeholder: 'e.g. Fire Truck, Rescue Boat' },
-  {
-    label: 'Domain', name: 'domain', options: ['Land', 'Water'], required: true, type: 'select',
-    hint: 'Water changes what a vehicle of this type asks for elsewhere — hull material and engine type instead of the usual land specs.',
-  },
-  {
-    label: 'Default Criticality', name: 'default_criticality', options: CRITICALITY_LEVELS, type: 'select',
-    hint: 'How much a vehicle of this type matters operationally. Critical vehicles surface first on the readiness watch. Admin can override it per vehicle.',
-  },
-  { label: 'Description', name: 'description', type: 'textarea', placeholder: 'Optional notes about when to use this type' },
-];
-
-// `liveValues` lets Confirm Password become required only once a new
-// password has actually been typed — editing an Admin resets someone
-// else's password, so unlike the self-service My Profile flow there's
-// deliberately no Current Password field: the whole point of an admin
-// reset is that they don't (and shouldn't need to) know the old one.
-function userFields(isEditing, liveValues = EMPTY_OBJ) {
-  return [
-    { label: 'Full Name', name: 'name', required: true, type: 'text' },
-    { label: 'Email', name: 'email', required: true, type: 'text', placeholder: 'name@barangay.gov' },
-    { label: 'Phone', name: 'phone', type: 'tel', pattern: '[0-9]{10}', placeholder: '09XXXXXXXXX', title: 'Phone must be exactly 10 digits' },
-    { label: 'Address', name: 'address', type: 'text' },
-    // Deliberately paired side by side, in this order, both NOT full-width:
-    // the grid's dense auto-flow (App.css .form-grid-2col .smart-form)
-    // only backfills gaps when one exists — keeping every field here a
-    // plain single-column item, in strict declared order, means each row
-    // fills left-then-right with no gaps for later fields to jump into
-    // (which is what previously stranded Confirm Password alone).
-    { label: 'Roles (a person can hold more than one — the first is their primary)', name: 'roles', options: ['Admin', 'Custodian', 'Maintenance Personnel'], required: true, type: 'checkboxes' },
-    // Production-readiness audit finding #6 — vehicle registration is a
-    // per-account delegation an Admin grants a specific Custodian, not a
-    // blanket role grant. Only shown once Custodian is actually selected
-    // above; Admin already always registers regardless of this flag.
-    ...(Array.isArray(liveValues.roles) && liveValues.roles.includes('Custodian')
-      ? [{
-          label: 'Vehicle Registration',
-          name: 'can_register_vehicles',
-          options: ['Allow vehicle registration'],
-          type: 'checkboxes',
-        }]
-      : []),
-    { label: 'Profile Photo', name: 'photo', accept: 'image/*', type: 'file' },
-    {
-      label: isEditing ? 'New Password (leave blank to keep current)' : 'Password',
-      name: 'password',
-      required: !isEditing,
-      type: 'password',
-    },
-    {
-      label: isEditing ? 'Confirm New Password' : 'Confirm Password',
-      name: 'password_confirmation',
-      required: isEditing ? Boolean(liveValues.password) : true,
-      type: 'password',
-      confirmOf: 'password',
-    },
-  ];
-}
-
 const verificationFields = [
   { label: 'Verification Result', name: 'verification_result', options: ['Passed', 'Failed'], required: true, type: 'select' },
   { label: 'Verification Notes', name: 'verification_notes', type: 'textarea' },
@@ -7173,337 +7086,6 @@ function OpenItemsWarning({ kind, rows, basePath }) {
 // =========================================================================
 
 // Shared page frame: breadcrumb, heading, one white panel.
-// =========================================================================
-// CANNIBALIZATION — a direct record of parts moved off a vehicle.
-// No request / approval / pending state: fill the form, review, record.
-// A saved record is final (the API has no edit or delete) and is attributed
-// to the signed-in user by the server, never by a form field.
-// =========================================================================
-
-const CANNIBAL_UNITS = ['pc', 'set', 'pair', 'L', 'kg', 'm'];
-const emptyCannibalPart = () => ({ part_name: '', part_number: '', quantity: 1, unit: 'pc', part_condition: '', installation_details: '', notes: '' });
-const nowLocalInput = () => {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-};
-
-function CannibalizationRecordForm({ user, vehicles, onCancel, onSubmit, initialSourceId = '' }) {
-  const [v, setV] = useState({
-    source_vehicle_id: initialSourceId ? String(initialSourceId) : '', source_reason: '', destination_type: 'vehicle', destination_vehicle_id: '', storage_location: '',
-    reason: '', notes: '', removed_at: nowLocalInput(), performed_by_name: '', received_by_name: '', transferred_at: '',
-  });
-  const [parts, setParts] = useState([emptyCannibalPart()]);
-  const [files, setFiles] = useState([]);
-  const [errors, setErrors] = useState([]);
-  const [reviewing, setReviewing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
-  const set = (name, value) => setV((s) => ({ ...s, [name]: value }));
-  const usable = (vehicles ?? []).filter((x) => !['Inactive', 'Decommissioned'].includes(x.status));
-  const source = usable.find((x) => String(x.vehicle_id) === String(v.source_vehicle_id));
-  const dest = usable.find((x) => String(x.vehicle_id) === String(v.destination_vehicle_id));
-  const vehicleLabel = (x) => `${x.vehicle_name} · ${x.plate_number}`;
-
-  const setPart = (i, patch) => setParts((rows) => rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
-  const addPart = () => setParts((rows) => [...rows, emptyCannibalPart()]);
-  const removePart = (i) => setParts((rows) => (rows.length > 1 ? rows.filter((_, k) => k !== i) : rows));
-
-  const validate = () => {
-    const e = [];
-    if (!v.source_vehicle_id) e.push('Choose the source vehicle.');
-    if (!v.source_reason.trim()) e.push('Say why parts are being removed from the source vehicle.');
-    if (v.destination_type === 'vehicle') {
-      if (!v.destination_vehicle_id) e.push('Choose the destination vehicle.');
-      else if (v.destination_vehicle_id === v.source_vehicle_id) e.push('The destination must be a different vehicle from the source.');
-    } else if (!v.storage_location.trim()) e.push('Enter the storage location.');
-    if (!v.reason.trim()) e.push('Enter the reason for the cannibalization.');
-    if (!v.removed_at) e.push('Enter when the parts were removed.');
-    else if (new Date(v.removed_at) > new Date()) e.push('The removal date cannot be in the future.');
-    if (v.transferred_at && v.removed_at && new Date(v.transferred_at) < new Date(v.removed_at)) e.push('The transfer / installation cannot be before the removal.');
-    parts.forEach((p, i) => {
-      if (!p.part_name.trim()) e.push(`Part ${i + 1}: enter the part name.`);
-      if (!(Number(p.quantity) >= 1) || !Number.isInteger(Number(p.quantity))) e.push(`Part ${i + 1}: quantity must be a whole number of 1 or more.`);
-    });
-    return e;
-  };
-
-  const goReview = (ev) => {
-    ev.preventDefault();
-    const e = validate();
-    setErrors(e);
-    if (!e.length) setReviewing(true);
-  };
-
-  const save = async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    try {
-      const fd = new FormData();
-      Object.entries(v).forEach(([k, val]) => {
-        if (val === '' || val == null) return;
-        if (k === 'destination_vehicle_id' && v.destination_type !== 'vehicle') return;
-        if (k === 'storage_location' && v.destination_type !== 'storage') return;
-        // datetime-local is the user's local time; send an absolute (UTC) instant.
-        fd.append(k, k === 'removed_at' || k === 'transferred_at' ? new Date(val).toISOString() : val);
-      });
-      fd.append('parts', JSON.stringify(parts.map((p) => ({ ...p, quantity: Number(p.quantity) }))));
-      files.forEach((f) => fd.append('evidence[]', f));
-      const ok = await onSubmit(fd);
-      if (ok === false) setReviewing(false);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (reviewing) {
-    return (
-      <div className="can-review">
-        <h4>Review before recording</h4>
-        <p className="muted">Once recorded this cannot be edited or deleted. Check it carefully.</p>
-        <dl className="can-kv">
-          <div><dt>Recorded by</dt><dd>{user.name} (automatically)</dd></div>
-          <div><dt>Source vehicle</dt><dd>{source ? vehicleLabel(source) : '—'}</dd></div>
-          <div><dt>Destination</dt><dd>{v.destination_type === 'vehicle' ? (dest ? vehicleLabel(dest) : '—') : `Storage: ${v.storage_location}`}</dd></div>
-          <div><dt>Removed</dt><dd>{v.removed_at.replace('T', ' ')}{v.performed_by_name ? ` · by ${v.performed_by_name}` : ''}</dd></div>
-          {(v.received_by_name || v.transferred_at) && <div><dt>Received / installed</dt><dd>{v.received_by_name || '—'}{v.transferred_at ? ` · ${v.transferred_at.replace('T', ' ')}` : ''}</dd></div>}
-          <div className="can-kv-wide"><dt>Reason</dt><dd>{v.reason}</dd></div>
-        </dl>
-        <table className="can-parts-table">
-          <thead><tr><th>Part</th><th>Qty</th><th>Condition</th></tr></thead>
-          <tbody>{parts.map((p, i) => <tr key={i}><td>{p.part_name}{p.part_number ? ` (${p.part_number})` : ''}</td><td>{p.quantity} {p.unit}</td><td>{p.part_condition || '—'}</td></tr>)}</tbody>
-        </table>
-        {files.length > 0 && <p className="muted">{files.length} evidence file{files.length === 1 ? '' : 's'} attached.</p>}
-        <div className="can-actions">
-          <button type="button" className="ghost-button" onClick={() => setReviewing(false)} disabled={submitting}>Back</button>
-          <button type="button" className="primary-button" onClick={save} disabled={submitting}>{submitting ? 'Recording…' : 'Record Cannibalization'}</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <form className="can-form" onSubmit={goReview} noValidate>
-      {errors.length > 0 && (
-        <div className="notice danger" role="alert">{errors.map((e) => <div key={e}>{e}</div>)}</div>
-      )}
-
-      <section className="can-section">
-        <h4>A. Transaction details</h4>
-        <div className="can-grid">
-          <label><span>Record number</span><input type="text" value="Generated when recorded" disabled /></label>
-          <label><span>Recorded by</span><input type="text" value={user.name} disabled /></label>
-          <label><span>Date and time removed <b className="req">*</b></span>
-            <input type="datetime-local" max={nowLocalInput()} value={v.removed_at} onChange={(e) => set('removed_at', e.target.value)} /></label>
-          <label className="can-wide"><span>Reason for cannibalization <b className="req">*</b></span>
-            <textarea rows={2} value={v.reason} onChange={(e) => set('reason', e.target.value)} /></label>
-          <label className="can-wide"><span>Notes</span><textarea rows={2} value={v.notes} onChange={(e) => set('notes', e.target.value)} /></label>
-        </div>
-      </section>
-
-      <section className="can-section">
-        <h4>B. Source vehicle</h4>
-        <div className="can-grid">
-          <label className="can-wide"><span>Vehicle the parts come from <b className="req">*</b></span>
-            <select value={v.source_vehicle_id} onChange={(e) => set('source_vehicle_id', e.target.value)}>
-              <option value="">Select source vehicle</option>
-              {usable.map((x) => <option key={x.vehicle_id} value={x.vehicle_id}>{vehicleLabel(x)}</option>)}
-            </select></label>
-          {source && <p className="can-hint can-wide">{source.vehicle_name} · {source.plate_number} · condition: <strong>{source.condition}</strong> · status: <strong>{source.status}</strong></p>}
-          <label className="can-wide"><span>Why parts are removed from this vehicle <b className="req">*</b></span>
-            <textarea rows={2} value={v.source_reason} onChange={(e) => set('source_reason', e.target.value)} /></label>
-        </div>
-      </section>
-
-      <section className="can-section">
-        <h4>C. Destination</h4>
-        <div className="can-choice" role="radiogroup" aria-label="Destination type">
-          {[['vehicle', 'Another registered vehicle'], ['storage', 'Spare-parts storage']].map(([val, label]) => (
-            <button key={val} type="button" role="radio" aria-checked={v.destination_type === val} className={v.destination_type === val ? 'is-on' : ''} onClick={() => set('destination_type', val)}>{label}</button>
-          ))}
-        </div>
-        <div className="can-grid">
-          {v.destination_type === 'vehicle' ? (
-            <label className="can-wide"><span>Receiving vehicle <b className="req">*</b></span>
-              <select value={v.destination_vehicle_id} onChange={(e) => set('destination_vehicle_id', e.target.value)}>
-                <option value="">Select destination vehicle</option>
-                {usable.filter((x) => String(x.vehicle_id) !== String(v.source_vehicle_id)).map((x) => <option key={x.vehicle_id} value={x.vehicle_id}>{vehicleLabel(x)}</option>)}
-              </select></label>
-          ) : (
-            <label className="can-wide"><span>Storage location <b className="req">*</b></span>
-              <input type="text" value={v.storage_location} onChange={(e) => set('storage_location', e.target.value)} placeholder="e.g. Parts room, Brgy Hall" /></label>
-          )}
-          {dest && v.destination_type === 'vehicle' && <p className="can-hint can-wide">{dest.vehicle_name} · condition: <strong>{dest.condition}</strong> · status: <strong>{dest.status}</strong></p>}
-          <p className="can-hint can-wide">This does not mark any vehicle operational. Spare-parts stock levels are not tracked by this system, so none are updated.</p>
-        </div>
-      </section>
-
-      <section className="can-section">
-        <h4>D. Parts removed</h4>
-        {parts.map((p, i) => (
-          <div className="can-part" key={i}>
-            <div className="can-part-head">
-              <strong>Part {i + 1}</strong>
-              <button type="button" className="ghost-button" onClick={() => removePart(i)} disabled={parts.length === 1}>Remove</button>
-            </div>
-            <div className="can-grid">
-              <label><span>Part name <b className="req">*</b></span><input type="text" value={p.part_name} onChange={(e) => setPart(i, { part_name: e.target.value })} /></label>
-              <label><span>Part number / description</span><input type="text" value={p.part_number} onChange={(e) => setPart(i, { part_number: e.target.value })} /></label>
-              <label><span>Quantity <b className="req">*</b></span><input type="number" min="1" step="1" value={p.quantity} onChange={(e) => setPart(i, { quantity: e.target.value })} /></label>
-              <label><span>Unit</span>
-                <select value={p.unit} onChange={(e) => setPart(i, { unit: e.target.value })}>{CANNIBAL_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}</select></label>
-              <label><span>Condition</span>
-                <select value={p.part_condition} onChange={(e) => setPart(i, { part_condition: e.target.value })}>
-                  <option value="">Not stated</option>{['Good', 'Fair', 'Worn', 'Damaged'].map((c) => <option key={c} value={c}>{c}</option>)}
-                </select></label>
-              <label><span>Installation details</span><input type="text" value={p.installation_details} onChange={(e) => setPart(i, { installation_details: e.target.value })} /></label>
-              <label className="can-wide"><span>Notes</span><input type="text" value={p.notes} onChange={(e) => setPart(i, { notes: e.target.value })} /></label>
-            </div>
-          </div>
-        ))}
-        <button type="button" className="ghost-button" onClick={addPart}><Icon name="plus" size={14} /> Add another part</button>
-      </section>
-
-      <section className="can-section">
-        <h4>E. Completion details</h4>
-        <div className="can-grid">
-          <label><span>Removed by (if not you)</span><input type="text" value={v.performed_by_name} onChange={(e) => set('performed_by_name', e.target.value)} placeholder={user.name} /></label>
-          <label><span>Received / installed by</span><input type="text" value={v.received_by_name} onChange={(e) => set('received_by_name', e.target.value)} /></label>
-          <label><span>Date transferred / installed</span><input type="datetime-local" max={nowLocalInput()} value={v.transferred_at} onChange={(e) => set('transferred_at', e.target.value)} /></label>
-          <label className="can-wide"><span>Evidence (photos or documents, up to 10)</span>
-            <input type="file" multiple accept="image/*,.pdf,.doc,.docx" onChange={(e) => setFiles(Array.from(e.target.files ?? []).slice(0, 10))} /></label>
-        </div>
-      </section>
-
-      <div className="can-actions">
-        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="primary-button">Review</button>
-      </div>
-    </form>
-  );
-}
-
-function CannibalizationDetail({ record }) {
-  return (
-    <div className="can-review">
-      <dl className="can-kv">
-        <div><dt>Recorded by</dt><dd>{record.recorded_by?.name ?? '—'} · {formatDate(record.created_at)}</dd></div>
-        <div><dt>Source vehicle</dt><dd>{record.source_vehicle ? `${record.source_vehicle.vehicle_name} · ${record.source_vehicle.plate_number}` : '—'}</dd></div>
-        <div><dt>Destination</dt><dd>{record.destination_type === 'vehicle' ? (record.destination_vehicle ? `${record.destination_vehicle.vehicle_name} · ${record.destination_vehicle.plate_number}` : '—') : `Storage: ${record.storage_location}`}</dd></div>
-        <div><dt>Removed</dt><dd>{formatDate(record.removed_at)}{record.performed_by_name ? ` · by ${record.performed_by_name}` : ''}</dd></div>
-        {(record.received_by_name || record.transferred_at) && <div><dt>Received / installed</dt><dd>{record.received_by_name || '—'}{record.transferred_at ? ` · ${formatDate(record.transferred_at)}` : ''}</dd></div>}
-        <div className="can-kv-wide"><dt>Reason</dt><dd>{record.reason}</dd></div>
-        <div className="can-kv-wide"><dt>Why removed from the source</dt><dd>{record.source_reason}</dd></div>
-        {record.notes && <div className="can-kv-wide"><dt>Notes</dt><dd>{record.notes}</dd></div>}
-      </dl>
-      <table className="can-parts-table">
-        <thead><tr><th>Part</th><th>Qty</th><th>Condition</th><th>Installation / notes</th></tr></thead>
-        <tbody>{(record.parts ?? []).map((p) => <tr key={p.part_id}><td>{p.part_name}{p.part_number ? ` (${p.part_number})` : ''}</td><td>{p.quantity} {p.unit}</td><td>{p.part_condition || '—'}</td><td>{[p.installation_details, p.notes].filter(Boolean).join(' · ') || '—'}</td></tr>)}</tbody>
-      </table>
-      {(record.evidence_urls ?? []).length > 0 && (
-        <p>Evidence: {record.evidence_urls.map((u, i) => <a key={u} href={resolvePhotoUrl(u)} target="_blank" rel="noreferrer" style={{ marginRight: 10 }}>File {i + 1}</a>)}</p>
-      )}
-    </div>
-  );
-}
-
-// Vehicle profile: parts moved off / onto THIS vehicle, with a button to
-// record a new transfer (source pre-filled). Lives on the profile, not in
-// the sidebar.
-function VehicleCannibalizationCard({ vehicle, user, vehicles, setNotice, onSaved, compact = false }) {
-  const [records, setRecords] = useState([]);
-  const [formOpen, setFormOpen] = useState(false);
-  const [viewing, setViewing] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const canView = canDo(user, 'cannibalization.view');
-  const canRecord = canDo(user, 'cannibalization.record') && !['Inactive', 'Decommissioned'].includes(vehicle.status);
-
-  useEffect(() => {
-    if (!canView || compact) return undefined;
-    let cancelled = false;
-    api.get('/cannibalizations').then((res) => {
-      if (!cancelled) setRecords((res.data ?? []).filter((r) => r.source_vehicle_id === vehicle.vehicle_id || r.destination_vehicle_id === vehicle.vehicle_id));
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [vehicle.vehicle_id, reloadKey, canView, compact]);
-
-  if (!canView && !canRecord) return null;
-
-  if (compact) {
-    return (
-      <>
-        {canRecord && <button type="button" className="btn-sm ghost-button" onClick={() => setFormOpen(true)}><Icon name="plus" size={13} /> Record Cannibalization</button>}
-        <FormModal open={formOpen} title="Record Cannibalization" onClose={() => setFormOpen(false)} wide>
-          {formOpen && <CannibalizationRecordForm user={user} vehicles={vehicles} initialSourceId={vehicle.vehicle_id} onCancel={() => setFormOpen(false)} onSubmit={async (fd) => {
-            try {
-              await api.post('/cannibalizations', fd);
-              setNotice?.({ type: 'success', text: 'Cannibalization recorded. It now appears in both vehicles\' history.' });
-              setFormOpen(false);
-              setReloadKey((k) => k + 1);
-              onSaved?.();
-              return true;
-            } catch (error) {
-              showError(error, setNotice);
-              return false;
-            }
-          }} />}
-        </FormModal>
-      </>
-    );
-  }
-
-  return (
-    <section className="veh-card">
-      <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>Parts Transfers</h4></div>
-      <div style={{ padding: '0 18px 18px', display: 'grid', gap: 10 }}>
-        {canRecord && (
-          <button type="button" className="btn-sm ghost-button" style={{ justifySelf: 'start' }} onClick={() => setFormOpen(true)}>
-            <Icon name="plus" size={13} /> Record Cannibalization
-          </button>
-        )}
-        {records.length === 0 ? <p className="muted" style={{ margin: 0 }}>No parts have been moved on or off this vehicle.</p> : (
-          <ul className="dispatch-trips">
-            {records.slice(0, 6).map((r) => (
-              <li key={r.cannibalization_id}>
-                <button type="button" className="link-button" style={{ background: 'none', border: 0, padding: 0, color: 'var(--primary)', cursor: 'pointer', textAlign: 'left', fontWeight: 600 }} onClick={() => setViewing(r)}>
-                  {r.record_number}: {(r.parts ?? []).map((p) => `${p.quantity} × ${p.part_name}`).join(', ')}
-                </button>
-                <span>{r.source_vehicle_id === vehicle.vehicle_id ? 'removed' : 'received'} · {formatDate(r.removed_at)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <FormModal open={formOpen} title="Record Cannibalization" onClose={() => setFormOpen(false)} wide>
-        {formOpen && (
-          <CannibalizationRecordForm
-            user={user}
-            vehicles={vehicles}
-            initialSourceId={vehicle.vehicle_id}
-            onCancel={() => setFormOpen(false)}
-            onSubmit={async (fd) => {
-              try {
-                await api.post('/cannibalizations', fd);
-                setNotice?.({ type: 'success', text: 'Cannibalization recorded. It now appears in both vehicles\' history.' });
-                setFormOpen(false);
-                setReloadKey((k) => k + 1);
-                onSaved?.();
-                return true;
-              } catch (error) {
-                showError(error, setNotice);
-                return false;
-              }
-            }}
-          />
-        )}
-      </FormModal>
-      <FormModal open={!!viewing} title={viewing ? `${viewing.record_number} — Cannibalization` : ''} onClose={() => setViewing(null)} wide>
-        {viewing && <CannibalizationDetail record={viewing} />}
-      </FormModal>
-    </section>
-  );
-}
-
 function FxPage({ icon, crumbs, title, description, children }) {
   return (
     <div className="module-grid">
@@ -8567,10 +8149,6 @@ const ISSUE_STAT_CARDS = [
   { key: 'Resolved', label: 'Resolved', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
 
-// Severity filter chips — same colors as the Issue Reports bar chart's own
-// High/Medium/Low segments (see the StackedBarChart segments above).
-const ISSUE_SEVERITY_CHIP_BG = { High: '#fee2e2', Medium: '#fef3c7', Low: '#e0f2fe' };
-const ISSUE_SEVERITY_CHIP_COLOR = { High: '#dc2626', Medium: '#f59e0b', Low: '#0ea5e9' };
 
 // Simplified per product direction: the urgency breakdown (Overdue/1-3
 // Days/4-7 Days) was its own set of cards here — removed in favor of a
@@ -9179,7 +8757,6 @@ function IssueFilterPanel({
   vehicles = [],
   issueTypes = [],
   severityLevels = [],
-  statusOptions = [],
   filterCategory,
   setFilterCategory,
   filterCapacity,
@@ -9201,10 +8778,6 @@ function IssueFilterPanel({
     return Array.from(caps).sort();
   }, [vehicles]);
 
-  const statusKeys = useMemo(
-    () => ISSUE_STAT_CARDS.filter((c) => statusOptions.includes(c.key)).map((c) => c.key),
-    [statusOptions],
-  );
 
   // Same default window every time the applied filter is unset — both on
   // first mount AND after "Clear Filters" resets filterDateStart/End back
@@ -9230,22 +8803,8 @@ function IssueFilterPanel({
       dateStart: filterDateStart || '2026-01-01',
       dateEnd: filterDateEnd || '2026-12-31',
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCategory, filterCapacity, filterIssueType, filterStatus, filterPriority, filterDateStart, filterDateEnd]);
 
-  // An empty draft.status means "no filter" — every chip should read as
-  // checked, the same "everything's included" state the Total/All stat
-  // card represents. Unchecking one FROM that implicit-all state has to
-  // expand it into an explicit "every status except this one" list first —
-  // otherwise toggling off a single chip would (wrongly) read as toggling
-  // it on, since d.status.includes(key) is false for all of them.
-  const toggleDraftStatus = (key) => {
-    setDraft((d) => {
-      const current = d.status.length === 0 ? statusKeys : d.status;
-      const next = current.includes(key) ? current.filter((s) => s !== key) : [...current, key];
-      return { ...d, status: next.length === statusKeys.length ? [] : next };
-    });
-  };
 
   const applyFilters = () => {
     setFilterCategory(draft.category);
@@ -9398,7 +8957,6 @@ function TicketFilterPanel({
       dateStart: filterDateStart || '2026-01-01',
       dateEnd: filterDateEnd || '2026-12-31',
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterCategory, filterCapacity, filterVehicle, filterMechanic, filterCustodian, filterStatus, filterPriority, filterDateStart, filterDateEnd]);
 
   const applyFilters = () => {
@@ -10929,21 +10487,6 @@ function ExpandableText({ text, lines = 2, className = '' }) {
   );
 }
 
-// Stacks two or more long-text fields (e.g. Problem/Reason + Action Taken)
-// into one labeled multi-line block for a table's renderSubRow band,
-// skipping whichever fields aren't populated on a given row.
-function subRowFields(pairs) {
-  const present = pairs.filter(([, value]) => value);
-  if (!present.length) return null;
-  return (
-    <div className="table-subrow-lines">
-      {present.map(([label, value]) => (
-        <div key={label}><strong>{label}:</strong> {value}</div>
-      ))}
-    </div>
-  );
-}
-
 // The backend stores absolute image URLs built from APP_URL, which often points
 // at a different host/port than where the API is actually served (e.g. stored as
 // localhost:8000 but served on 127.0.0.1:8001). Rewrite local-host URLs to the
@@ -11808,168 +11351,6 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
           renderItem={(t) => <TicketCard ticket={t} onClick={() => onViewTicket(t)} />}
         />
       </section>
-    </div>
-  );
-}
-
-// Problem 2 — the functional test ("UAT") checklist. What must be physically
-// operated and confirmed depends on the KIND of vehicle, keyed off the same
-// Land/Water domain that drives the specs form (plus a fire-truck extra).
-function functionalTestChecklist(vehicle) {
-  const domain = vehicle?.category?.domain ?? 'Land';
-  const name = (vehicle?.category?.category_name ?? '').toLowerCase();
-  const base = [
-    'Engine / power system starts normally',
-    'No warning indicators or abnormal noise',
-    'The reported problem no longer occurs',
-  ];
-  if (domain === 'Water') {
-    return [...base, 'Engine runs under load on the water', 'Bilge pump operates', 'No hull leaks or water ingress'];
-  }
-  const land = ['Brakes respond properly', 'Completed a short test drive'];
-  const fireTruck = name.includes('fire') ? ['Water pump reaches full pressure'] : [];
-  return [...base, ...land, ...fireTruck];
-}
-
-// The Custodian's verification IS the functional test: operate the vehicle
-// against the checklist, mark each Pass/Fail, and the verdict follows the
-// result — any Fail => Rejected (bounced back to the mechanic); all Pass =>
-// Approved, but only once the tester attests they actually operated it.
-function VerificationForm({ target, onCancel, onSubmit }) {
-  const checklist = useMemo(() => functionalTestChecklist(target?.vehicle), [target?.vehicle]);
-  const [results, setResults] = useState(() => checklist.map((item) => ({ item, passed: null })));
-  const [attested, setAttested] = useState(false);
-  const [notes, setNotes] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [newTestInput, setNewTestInput] = useState('');
-
-  const allAnswered = results.every((r) => r.passed !== null);
-  const anyFailed = results.some((r) => r.passed === false);
-  const allPassed = results.length > 0 && results.every((r) => r.passed === true);
-  const verdict = anyFailed ? 'Rejected' : 'Approved';
-  const needsAttestation = !anyFailed;
-  const canSubmit = allAnswered && (!needsAttestation || attested) && !submitting;
-
-  const setResult = (i, passed) => setResults((rs) => rs.map((r, idx) => (idx === i ? { ...r, passed } : r)));
-  // Same shortcut as the Readiness Check form — most checks are routine
-  // passes, so bulk-marking everything Pass and flipping the odd real
-  // failure afterward beats clicking Pass on every single row.
-  const toggleAllPassed = (checked) => setResults((rs) => rs.map((r) => ({ ...r, passed: checked ? true : null })));
-  const addTest = () => {
-    if (newTestInput.trim()) {
-      setResults((rs) => [...rs, { item: newTestInput.trim(), passed: null }]);
-      setNewTestInput('');
-    }
-  };
-  const removeTest = (i) => setResults((rs) => rs.filter((_, idx) => idx !== i));
-
-  const submit = async () => {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    try {
-      await onSubmit({
-        verification_verdict: verdict,
-        verification_notes: notes || null,
-        functional_test: results.map((r) => ({ item: r.item, passed: r.passed === true })),
-        test_attested: verdict === 'Approved' ? attested : false,
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div>
-      <p className="muted" style={{ margin: '0 0 12px', fontSize: '0.85rem' }}>
-        Physically operate the vehicle and mark each check. A repair is only accepted once it actually works — any failed check sends it back to the mechanic.
-      </p>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', marginBottom: 8, borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: '0.83rem', fontWeight: 600, color: '#1e40af', cursor: 'pointer' }}>
-        <input type="checkbox" checked={allPassed} onChange={(e) => toggleAllPassed(e.target.checked)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
-        Mark all as Pass
-      </label>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {results.map((r, i) => (
-          <div key={r.item} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--surface-2, #f8fafc)', borderRadius: 8, border: '1px solid var(--border, #e2e8f0)' }}>
-            <span style={{ fontSize: '0.85rem', flex: 1, color: 'var(--text, #1e293b)' }}>{r.item}</span>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button
-                type="button"
-                onClick={() => setResult(i, true)}
-                aria-pressed={r.passed === true}
-                aria-label={`Pass: ${r.item}`}
-                style={{ padding: '4px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', border: `1px solid ${r.passed === true ? '#16a34a' : '#cbd5e1'}`, background: r.passed === true ? '#16a34a' : '#fff', color: r.passed === true ? '#fff' : '#64748b' }}
-              >
-                Pass
-              </button>
-              <button
-                type="button"
-                onClick={() => setResult(i, false)}
-                aria-pressed={r.passed === false}
-                aria-label={`Fail: ${r.item}`}
-                style={{ padding: '4px 12px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', border: `1px solid ${r.passed === false ? '#dc2626' : '#cbd5e1'}`, background: r.passed === false ? '#dc2626' : '#fff', color: r.passed === false ? '#fff' : '#64748b' }}
-              >
-                Fail
-              </button>
-              <button
-                type="button"
-                onClick={() => removeTest(i)}
-                title="Remove this test"
-                aria-label={`Remove check: ${r.item}`}
-                style={{ padding: '4px 8px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', border: '1px solid #fca5a5', background: '#fef2f2', color: '#dc2626' }}
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          <input
-            type="text"
-            value={newTestInput}
-            onChange={(e) => setNewTestInput(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && addTest()}
-            placeholder="Add a custom test item..."
-            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: '0.85rem', fontFamily: 'inherit' }}
-          />
-          <button
-            type="button"
-            onClick={addTest}
-            style={{ padding: '8px 16px', borderRadius: 6, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', border: '1px solid #2563eb', background: '#2563eb', color: '#fff' }}
-          >
-            + Add Test
-          </button>
-        </div>
-      </div>
-
-      {allAnswered && (
-        <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 8,
-          background: anyFailed ? '#fef2f2' : '#ecfdf5', color: anyFailed ? '#991b1b' : '#065f46', border: `1px solid ${anyFailed ? '#fecaca' : '#a7f3d0'}` }}>
-          <Icon name={anyFailed ? 'alert' : 'checkCircle'} size={15} />
-          {anyFailed
-            ? 'A check failed — this will be returned to the mechanic for repair.'
-            : 'All checks passed — approving closes this ticket and returns the vehicle to service.'}
-        </div>
-      )}
-
-      {needsAttestation && (
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12, fontSize: '0.85rem', cursor: 'pointer' }}>
-          <input type="checkbox" checked={attested} onChange={(e) => setAttested(e.target.checked)} style={{ marginTop: 3 }} />
-          <span>I confirm I <strong>personally operated and tested</strong> this vehicle — this is not a paperwork-only sign-off.</span>
-        </label>
-      )}
-
-      <div style={{ marginTop: 12 }}>
-        <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: 4 }}>Notes {anyFailed ? '(what failed / needs redoing)' : '(optional)'}</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} style={{ width: '100%', borderRadius: 8, border: '1px solid #cbd5e1', padding: '8px 10px', fontSize: '0.85rem', fontFamily: 'inherit', resize: 'vertical' }} />
-      </div>
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
-        <button type="button" className={anyFailed ? 'danger-button' : 'primary-button'} onClick={submit} disabled={!canSubmit}>
-          {submitting ? 'Submitting…' : anyFailed ? 'Return for Repair' : 'Approve Repair'}
-        </button>
-      </div>
     </div>
   );
 }
@@ -13825,12 +13206,6 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
     clearDraftState(`${draftKeyBase}:sub-issues`);
     clearDraftState(`${draftKeyBase}:part-rows`);
   };
-  const updatePartRow = (index, patch) => {
-    setPartRows((rows) => rows.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-    onDirty?.();
-  };
-  const addPartRow = () => setPartRows((rows) => [...rows, emptyPartRow]);
-  const removePartRow = (index) => setPartRows((rows) => rows.filter((_, i) => i !== index));
 
   const setField = (name, value) => { setLiveValues((v) => ({ ...v, [name]: value })); onDirty?.(); };
   const setSubIssueRowsDirty = (rows) => { setSubIssueRows(rows); onDirty?.(); };
@@ -13852,10 +13227,6 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
   const isInHouse = entryMode === 'in_house';
   const isCannibalized = entryMode === 'cannibalized';
   const isExternal = entryMode === 'external';
-  const toggleDonorPart = (checked) => {
-    setLiveValues((v) => ({ ...v, entry_mode: checked ? 'cannibalized' : 'in_house', source_vehicle_id: '' }));
-    onDirty?.();
-  };
   const selectEntryMode = (value) => {
     if (value === pickerValue) return;
     setLiveValues((v) => ({
@@ -14254,7 +13625,6 @@ function TicketModule({
   filterDateEnd,
   setFilterDateEnd,
   recentIssues,
-  onViewVehicle,
 }) {
   const [ticketViewMode, setTicketViewMode] = useState(
     () => localStorage.getItem('vms_ticket_view') || 'card'
@@ -14528,65 +13898,6 @@ function IssueFilesCard({ issue }) {
           </>
         )}
       </div>
-    </section>
-  );
-}
-
-// Cross-vehicle "Vehicle Documents" sidebar entry — a vehicle picker beside
-// the exact same per-vehicle Files card (VehicleFiles/VehicleFilesModal)
-// VehicleProfilePage already uses, so there's no second document store or
-// upload path to keep in sync, just another way to reach the existing one.
-// Production-readiness audit finding #8 — FleetController::vehicleReliability()
-// was fully built (failure counts, days out of service, lifetime spend, a
-// chronic flag, a decommission signal) but had no caller anywhere in the
-// frontend. Surfaced here, on the existing Vehicle Profile page, rather than
-// a new sidebar module for one metric set.
-function VehicleReliabilityCard({ vehicleId }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    api.get(`/vehicles/${vehicleId}/reliability`)
-      .then((r) => { if (!cancelled) setData(r.data); })
-      .catch(() => { if (!cancelled) setData(null); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [vehicleId]);
-
-  const peso = (n) => `₱${Number(n ?? 0).toLocaleString()}`;
-
-  return (
-    <section className="veh-card">
-      <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>Reliability</h4></div>
-      {loading ? (
-        <p className="muted" style={{ padding: '10px 14px' }}>Loading…</p>
-      ) : !data ? (
-        <p className="muted" style={{ padding: '10px 14px' }}>Reliability data is unavailable right now.</p>
-      ) : (
-        <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {(data.chronic || data.decommission_signal) && (
-            <div className="ticket-alert-banner formaint" style={{ marginBottom: 2 }}>
-              <Icon name="alert" size={14} />
-              {data.chronic && data.decommission_signal
-                ? 'Chronic repeat failures, and lifetime repair spend is a large share of this vehicle’s value.'
-                : data.chronic
-                  ? 'Chronic repeat failures on this vehicle — consider a deeper fix.'
-                  : 'Lifetime repair spend is a large share of this vehicle’s value — a decommission review may be worth it.'}
-            </div>
-          )}
-          <dl className="veh-kv" style={{ margin: 0 }}>
-            <div><dt>Failures (6 mo)</dt><dd>{data.failures_6mo}</dd></div>
-            <div><dt>Failures (12 mo)</dt><dd>{data.failures_12mo}</dd></div>
-            <div><dt>Avg. Days Out of Service</dt><dd>{data.avg_days_out ?? '-'}</dd></div>
-            <div><dt>Lifetime Repair Spend</dt><dd>{peso(data.total_spend)}</dd></div>
-            {data.acquisition_cost != null && (
-              <div><dt>Spend vs. Acquisition Cost</dt><dd>{data.cost_ratio != null ? `${Math.round(data.cost_ratio * 100)}%` : '-'}</dd></div>
-            )}
-          </dl>
-        </div>
-      )}
     </section>
   );
 }
@@ -14911,7 +14222,7 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
   );
 }
 
-function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canCheckReadiness = false, canRequestInspection = false, canViewReliability = false, canViewUsage = false, canLogUsage = false, currentUser = null, setNotice, onSaved, onRequestConfirmation }) {
+function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canCheckReadiness = false, canRequestInspection = false, setNotice, onSaved, onRequestConfirmation }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(new URLSearchParams(location.search).get('tab') === 'edit');
@@ -15498,7 +14809,6 @@ function CustodianInspectionModule({
   filterPriority,
   setFilterPriority,
   priorityOptions,
-  onViewVehicle,
   stats,
   activeFilter,
   onFilterChange,
@@ -15945,6 +15255,7 @@ function MechanicWorkOrderModule({
   // just the active ones — see loadModule), so a plain local boolean over
   // data already on hand is enough.
   const [showArchive, setShowArchive] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Resolve the real ticket object for a ticket_id — both grouping helpers
   // below return a synthesized summary row, not what TicketCard needs.
@@ -16032,7 +15343,8 @@ function MechanicWorkOrderModule({
             onFilterChange={onFilterChange}
           />
           <section className="panel module-filter-panel">
-            <FilterBar
+            <button type="button" className={`module-filter-toggle${filtersOpen ? ' is-open' : ''}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}>Filters <Icon name="chevronDown" size={15} /></button>
+            {filtersOpen && <FilterBar
               categories={categories}
               vehicles={vehicles}
               filterCategory={filterCategory}
@@ -16043,7 +15355,7 @@ function MechanicWorkOrderModule({
               setFilterPriority={setFilterPriority}
               priorityOptions={maintTypeOptions}
               priorityLabel="Maintenance Type"
-            />
+            />}
           </section>
           <section className="panel operations-board work-order-board work-order-queue-board">
             <div className="operations-board-head">
@@ -17038,6 +16350,7 @@ function CreatableSelect({
   // 403 on click.
   const { user: currentUser } = useContext(AuthContext);
   const canDeleteCatalogItems = hasRole(currentUser, 'Admin');
+  const canCreateCatalogItems = !catalogEndpoint || canDo(currentUser, 'catalog.create');
   // Accepts either a plain name string (the simple catalogs) or a raw API
   // row keyed by idField/nameField (e.g. vehicle categories) — either way,
   // normalized to one {id, name} shape everything below works with.
@@ -17118,7 +16431,7 @@ function CreatableSelect({
   const query = justOpened ? '' : text.trim().toLowerCase();
   const filtered = query ? catalogItems.filter((o) => o.name.toLowerCase().includes(query)) : catalogItems;
   const hasExactMatch = catalogItems.some((o) => o.name.toLowerCase() === query);
-  const canAddNew = query.length > 0 && !hasExactMatch;
+  const canAddNew = canCreateCatalogItems && query.length > 0 && !hasExactMatch;
 
   const openPanel = () => {
     setDraftText(displayText);
@@ -17264,7 +16577,7 @@ function CreatableSelect({
       />
       {open && (
         <div className="creatable-select-panel">
-          {!canAddNew && (
+          {canCreateCatalogItems && !canAddNew && (
             <button type="button" className="creatable-select-option creatable-select-add creatable-select-add-pinned" onClick={() => openAddModal('')}>
               <Icon name="plus" size={13} /> Add New {newItemTitle}
             </button>
@@ -18117,68 +17430,6 @@ function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
   );
 }
 
-function VehicleUsageCard({ vehicleId, canLog, vehicleStatus }) {
-  const [trips, setTrips] = useState([]);
-  const [form, setForm] = useState({ purpose: '', destination: '', driver_name: '', odometer_start: '' });
-  const [endForm, setEndForm] = useState({ odometer_end: '' });
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.get(`/vehicles/${vehicleId}/usage`).then((res) => { if (!cancelled) setTrips(res.data); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [vehicleId, reloadKey]);
-
-  const open = trips.find((t) => !t.ended_at);
-
-  const run = async (fn) => {
-    setBusy(true); setError('');
-    try { await fn(); setReloadKey((k) => k + 1); } catch (err) {
-      setError(err.response?.data?.message || err.response?.data?.errors && Object.values(err.response.data.errors)[0]?.[0] || 'Could not save.');
-    } finally { setBusy(false); }
-  };
-
-  const clean = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => String(v).trim() !== ''));
-
-  return (
-    <section className="veh-card">
-      <div className="veh-card-head"><Icon name="vehicle" size={16} /><h4>Usage Log</h4></div>
-      <div style={{ padding: '0 18px 18px', display: 'grid', gap: 10 }}>
-        {error && <div className="notice error">{error}</div>}
-        {canLog && !open && vehicleStatus === 'Available' && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input type="text" placeholder="Purpose *" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} style={{ flex: '2 1 180px' }} />
-            <input type="text" placeholder="Destination" value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} style={{ flex: '1 1 140px' }} />
-            <input type="text" placeholder="Driver" value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} style={{ flex: '1 1 120px' }} />
-            <input type="number" min="0" placeholder="Odometer" value={form.odometer_start} onChange={(e) => setForm({ ...form, odometer_start: e.target.value })} style={{ width: 110 }} />
-            <button type="button" className="primary-button" disabled={busy || !form.purpose.trim()} onClick={() => run(async () => { await api.post(`/vehicles/${vehicleId}/usage`, clean(form)); setForm({ purpose: '', destination: '', driver_name: '', odometer_start: '' }); })}>Take Out</button>
-          </div>
-        )}
-        {canLog && open && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.85rem' }}>Out since {formatDate(open.started_at)}: <strong>{open.purpose}</strong></span>
-            <input type="number" min={open.odometer_start ?? 0} placeholder="Odometer on return" value={endForm.odometer_end} onChange={(e) => setEndForm({ odometer_end: e.target.value })} style={{ width: 150 }} />
-            <button type="button" className="primary-button" disabled={busy} onClick={() => run(async () => { await api.put(`/usage-logs/${open.usage_id}/end`, clean(endForm)); setEndForm({ odometer_end: '' }); })}>Mark Returned</button>
-          </div>
-        )}
-        {trips.length === 0 ? (
-          <p className="muted" style={{ margin: 0 }}>No trips recorded yet.</p>
-        ) : (
-          <div style={{ display: 'grid', gap: 6 }}>
-            {trips.slice(0, 8).map((t) => (
-              <div key={t.usage_id} style={{ fontSize: '0.84rem', display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                <span><strong>{t.purpose}</strong>{t.destination ? ` → ${t.destination}` : ''}{t.driver_name ? ` · ${t.driver_name}` : ''}</span>
-                <span className="muted">{formatDate(t.started_at)}{t.ended_at ? ` – ${formatDate(t.ended_at)}` : ' · out now'}{t.odometer_start != null && t.odometer_end != null ? ` · ${t.odometer_end - t.odometer_start} km` : ''}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
 function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport, onAdd, addLabel = "Add", onImport, columnChooser }) {
   return (
     <div className="local-search-bar">

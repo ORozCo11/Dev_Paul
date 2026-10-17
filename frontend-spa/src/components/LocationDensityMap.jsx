@@ -300,6 +300,9 @@ function ResizeMapOnContainerResize() {
   return null;
 }
 
+
+const loadHubRecords = () => api.get('/hubs').then((response) => response.data.map(normalizeHub));
+
 function LocationDensityMap({
   vehicles = [],
   selectedVehicleId = null,
@@ -344,22 +347,28 @@ function LocationDensityMap({
     };
   }, [isMaximized]);
 
-  const fetchHubs = useCallback(async () => {
-    try {
-      const response = await api.get('/hubs');
-      const normalized = response.data.map(normalizeHub);
-      setHubRecords(normalized);
-      if (onHubsChange) {
-        onHubsChange(normalized.filter((hub) => !hub.isHidden));
-      }
-    } catch (error) {
-      console.error('Failed to load hubs:', error);
+  const applyHubs = useCallback((normalized) => {
+    setHubRecords(normalized);
+    if (onHubsChange) {
+      onHubsChange(normalized.filter((hub) => !hub.isHidden));
     }
   }, [onHubsChange]);
 
+  const fetchHubs = useCallback(async () => {
+    try {
+      applyHubs(await loadHubRecords());
+    } catch (error) {
+      console.error('Failed to load hubs:', error);
+    }
+  }, [applyHubs]);
+
   useEffect(() => {
-    fetchHubs().catch(() => {});
-  }, [fetchHubs]);
+    let cancelled = false;
+    loadHubRecords()
+      .then((normalized) => { if (!cancelled) applyHubs(normalized); })
+      .catch((error) => console.error('Failed to load hubs:', error));
+    return () => { cancelled = true; };
+  }, [applyHubs]);
 
   // When the naming modal opens, focus the input.
   useEffect(() => {

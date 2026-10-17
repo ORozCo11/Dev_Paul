@@ -52,6 +52,7 @@ function FaqItem({ q, a }) {
 }
 
 export default function Support() {
+  const [supportChoice, setSupportChoice] = useState(null);
   const [form, setForm] = useState({
     concern_type: '',
     barangay_name: '',
@@ -65,6 +66,7 @@ export default function Support() {
 
   useEffect(() => {
     if (location.hash !== '#contact') return;
+    setSupportChoice('report');
     // Wait a tick for layout to settle before scrolling — the target sits
     // well below the fold, past the hero.
     const id = setTimeout(() => {
@@ -114,17 +116,27 @@ export default function Support() {
 
       <section className="support-body">
         <div className="support-body-inner">
-          <h2 className="support-section-title">Frequently Asked Questions</h2>
-          <div className="faq-list">
-            {FAQ.map((item) => <FaqItem key={item.q} {...item} />)}
-          </div>
+          {!supportChoice && <div className="support-choice">
+            <h2 className="support-section-title">How can we help?</h2>
+            <p className="support-section-subtitle">Choose one to continue.</p>
+            <div className="support-choice-actions">
+              <button type="button" className="support-choice-button" onClick={() => setSupportChoice('faq')}><Icon name="search" size={24} /><span><strong>Frequently Asked Questions</strong><small>Find quick answers and system guidance.</small></span></button>
+              <button type="button" className="support-choice-button is-concern" onClick={() => setSupportChoice('report')}><Icon name="alert" size={24} /><span><strong>Report a Concern</strong><small>Send an issue for platform administrator review.</small></span></button>
+            </div>
+          </div>}
 
-          <h2 className="support-section-title" id="contact">Report a Concern</h2>
+          {supportChoice === 'faq' && <div className="support-selected-view">
+            <div className="support-view-heading"><div><h2 className="support-section-title">Frequently Asked Questions</h2><p className="support-section-subtitle">Quick answers about using Barangay VMS.</p></div><button type="button" className="support-back-button" onClick={() => setSupportChoice(null)}>Back</button></div>
+            <div className="faq-list">{FAQ.map((item) => <FaqItem key={item.q} {...item} />)}</div>
+          </div>}
+
+          {supportChoice === 'report' && <div className="support-selected-view" id="contact">
+          <div className="support-view-heading"><div><h2 className="support-section-title">Report a Concern</h2>
           <p className="support-section-subtitle">
             Use this if a barangay's account seems dead, or you suspect someone
             isn't really barangay staff. A platform administrator reviews every
             submission.
-          </p>
+          </p></div><button type="button" className="support-back-button" onClick={() => setSupportChoice(null)}>Back</button></div>
 
           <form className="auth-form auth-form-grid support-form" onSubmit={handleSubmit} noValidate>
             <label className="auth-field auth-field-full">
@@ -185,6 +197,7 @@ export default function Support() {
               {submitting ? 'Submitting…' : 'Submit Concern'}
             </button>
           </form>
+          </div>}
         </div>
       </section>
 

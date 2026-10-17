@@ -214,4 +214,25 @@ class VehicleDocumentUploadTest extends TestCase
         $this->assertStringEndsWith('.pdf', $document->file_url);
         $this->assertStringNotContainsString('.html', $document->file_url);
     }
+
+    #[Test]
+    public function deleting_a_document_removes_its_storage_object(): void
+    {
+        Storage::fake('supabase');
+        $this->actingAsAdmin();
+        $vehicle = $this->vehicle();
+
+        $this->postJson("/api/vehicles/{$vehicle->vehicle_id}/documents", [
+            'title' => 'Delete me',
+            'file' => UploadedFile::fake()->create('delete-me.pdf', 50, 'application/pdf'),
+        ])->assertCreated();
+
+        $document = VehicleDocument::firstOrFail();
+        Storage::disk('supabase')->assertExists($document->file_url);
+
+        $this->deleteJson("/api/documents/{$document->document_id}")->assertOk();
+
+        Storage::disk('supabase')->assertMissing($document->file_url);
+        $this->assertDatabaseMissing('vehicle_documents', ['document_id' => $document->document_id]);
+    }
 }

@@ -3,12 +3,14 @@ import '../components/RoleDashboard.css';
 import './SuperAdminWorkspace.css';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
+import { MapContainer, Polygon, TileLayer } from 'react-leaflet';
 import BoundaryReviewModal from '../components/BoundaryReviewModal';
 import api from '../api/axios';
 import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import { AdminActionDrawer, AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge } from '../components/SuperAdminUI';
 import { formatDate } from '../utils/adminDate';
+import { geoJsonToPolygons } from '../utils/boundary';
 import { ActivityLogTab, ConcernReportsTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
 
@@ -166,9 +168,12 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
 function AddBarangayForm({ onAdded, onCancel }) {
   const [provinces, setProvinces] = useState([]);
   const [cities, setCities] = useState([]);
+  const [barangays, setBarangays] = useState([]);
   const [provinceId, setProvinceId] = useState('');
   const [cityId, setCityId] = useState('');
-  const [name, setName] = useState('');
+  const [barangayId, setBarangayId] = useState('');
+  const [boundaryPreview, setBoundaryPreview] = useState(null);
+  const [previewStatus, setPreviewStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -183,13 +188,34 @@ function AddBarangayForm({ onAdded, onCancel }) {
     return () => { current = false; };
   }, [provinceId]);
 
+  useEffect(() => {
+    if (!cityId) { setBarangays([]); return; }
+    let current = true;
+    api.get('/barangays', { params: { city_id: cityId } }).then((res) => { if (current) setBarangays(res.data); }).catch(() => { if (current) setBarangays([]); });
+    return () => { current = false; };
+  }, [cityId]);
+
+  useEffect(() => {
+    if (!barangayId) { setBoundaryPreview(null); setPreviewStatus(''); return; }
+    let current = true;
+    setBoundaryPreview(null); setPreviewStatus('Loading the PSGC-matched boundary…');
+    api.get(`/barangays/${barangayId}`).then(({ data }) => {
+      if (!current) return;
+      setBoundaryPreview(data);
+      setPreviewStatus(data.boundary ? '' : 'Unavailable: this PSGC record has no approved reference geometry. No boundary will be generated.');
+    }).catch(() => { if (current) setPreviewStatus('The reference boundary could not be loaded.'); });
+    return () => { current = false; };
+  }, [barangayId]);
+
+  const previewPolygons = useMemo(() => geoJsonToPolygons(boundaryPreview?.boundary), [boundaryPreview]);
+
   const submit = async (e) => {
     e.preventDefault();
-    if (!cityId || !name.trim()) return;
+    if (!cityId || !barangayId) return;
     setSaving(true);
     setError(null);
     try {
-      const res = await api.post('/superadmin/barangays', { city_id: cityId, name: name.trim() });
+      const res = await api.post('/superadmin/barangays', { city_id: cityId, barangay_id: barangayId });
       onAdded(res.data);
     } catch (err) {
       setError(err.response?.data?.message ?? 'Something went wrong — please try again.');
@@ -206,28 +232,31 @@ function AddBarangayForm({ onAdded, onCancel }) {
       </p>
       {error && <p className="muted" style={{ color: '#dc2626' }}>{error}</p>}
       <div className="superadmin-inline-row">
-        <select aria-label="New barangay province" value={provinceId} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setCities([]); }} required>
+        <select aria-label="New barangay province" value={provinceId} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayId(''); setCities([]); setBarangays([]); }} required>
           <option value="">Province</option>
           {provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select aria-label="New barangay city" value={cityId} onChange={(e) => setCityId(e.target.value)} disabled={!provinceId} required>
+        <select aria-label="New barangay city" value={cityId} onChange={(e) => { setCityId(e.target.value); setBarangayId(''); }} disabled={!provinceId} required>
           <option value="">City / Municipality</option>
           {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Barangay name"
-          aria-label="Barangay name"
-          disabled={!cityId}
-          required
-        />
+        <select aria-label="Official PSGC barangay" value={barangayId} onChange={(e) => setBarangayId(e.target.value)} disabled={!cityId} required>
+          <option value="">Barangay (PSGC)</option>
+          {barangays.map((barangay) => <option key={barangay.id} value={barangay.id}>{barangay.name} · {barangay.psgc_code}</option>)}
+        </select>
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="primary-button" disabled={saving || !cityId || !name.trim()}>
+        <button type="submit" className="primary-button" disabled={saving || !cityId || !barangayId}>
           {saving ? 'Adding…' : 'Add'}
         </button>
       </div>
+      {barangayId && <section className="boundary-registration-preview" aria-live="polite">
+        <div className="boundary-registration-preview-head"><div><strong>Step 2 — Boundary Preview</strong><span>{boundaryPreview?.name ?? 'Selected barangay'} · PSGC {boundaryPreview?.psgc_code ?? 'Loading…'}</span></div><small>{boundaryPreview?.boundary_source ?? 'Authoritative reference lookup'}</small></div>
+        {previewPolygons.length ? <div className="boundary-registration-map"><MapContainer key={JSON.stringify(boundaryPreview?.boundary)} bounds={previewPolygons.flat(2)} style={{ height: '100%', width: '100%' }} scrollWheelZoom>
+          <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {previewPolygons.map((polygon, index) => <Polygon key={index} positions={polygon} pathOptions={{ color: '#fca5a5', weight: 2, fillColor: '#ef4444', fillOpacity: .12 }} />)}
+        </MapContainer></div> : <p className="muted boundary-registration-empty">{previewStatus || 'Choose an official PSGC barangay to retrieve its boundary.'}</p>}
+        {previewPolygons.length > 0 && <p className="muted boundary-registration-note">Reference preview only. Confirm the source and geometry before the system issues a registration code; this is not a legal or cadastral certification.</p>}
+      </section>}
     </form>
   );
 }
@@ -376,7 +405,9 @@ export default function SuperAdminWorkspace() {
   const [barangayFilter, setBarangayFilter] = useState('all');
   const [codeBarangay, setCodeBarangay] = useState(null);
   const [showAddBarangay, setShowAddBarangay] = useState(false);
-  const navigateTab = (tab, filter) => { setActiveTab(tab); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
+  // Data otherwise loads only on mount, so registrations submitted while this
+  // page is open would stay hidden until a full reload.
+  const navigateTab = (tab, filter) => { loadAll(true); setActiveTab(tab); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
   // Always starts expanded — a collapsed sidebar should only ever be a
   // deliberate, in-session choice (the toggle button), never the default a
   // returning user lands on.
@@ -842,6 +873,7 @@ export default function SuperAdminWorkspace() {
 
         <section className="content-area">
           <div className={`page-heading-row${activeTab === 'dashboard' ? ' focus-branded-heading' : ''}`}>
+            {activeTab === 'dashboard' && <span className="focus-heading-art" aria-hidden="true"><Icon name="grid" size={174} /></span>}
             <div className="page-heading-text">
               <h1>{TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h1>
               <p>{TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>

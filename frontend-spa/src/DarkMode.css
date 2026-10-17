@@ -32,6 +32,10 @@ html[data-theme="dark"] .sidebar .module-nav button:hover { background: #1b2a3e;
 html[data-theme="dark"] .sidebar .module-nav button.active { background: #1d3655; border-color: #45688d; color: #fff; box-shadow: none; filter: none; font-weight: 600; }
 html[data-theme="dark"] .sidebar .module-nav button .nav-icon { color: inherit; stroke: currentColor; }
 html[data-theme="dark"] :is(.workspace, .superadmin-shell) :is(h1, h2, h3, h4, h5, h6, .metric-card strong) { text-shadow: none; }
+/* Module KPI cards use a dark surface in this theme; never retain the
+   light-theme ink colours from the shared metric-card base rules. */
+html[data-theme="dark"] .metric-card-iconic .metric-card-body strong { color: #f8fafc; }
+html[data-theme="dark"] .metric-card-iconic .metric-card-body span { color: #93c5fd; }
 html[data-theme="dark"] :is(.workspace, .topbar, .superadmin-shell, .modal-overlay, .confirm-overlay) { color-scheme: dark; }
 html[data-theme="dark"] :is(.content-area, .topbar) { background: var(--bg); }
 html[data-theme="dark"] .topbar { border-color: var(--border); }
