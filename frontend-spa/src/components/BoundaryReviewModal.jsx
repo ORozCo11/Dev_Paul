@@ -5,10 +5,25 @@ import Icon from './Icon';
 import FileCabinet from './FileCabinet';
 import { geoJsonToPolygons } from '../utils/boundary';
 
+// Matches the API: every ring repeats its first point as its last.
+function hasClosedRings(geometry) {
+  const polygons = geometry?.type === 'Polygon' ? [geometry.coordinates] : geometry?.type === 'MultiPolygon' ? geometry.coordinates : [];
+  return polygons.every((polygon) => polygon.every((ring) => {
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    return first?.[0] === last?.[0] && first?.[1] === last?.[1];
+  }));
+}
+
+function savedSourceIsUpload(source) {
+  return source.startsWith('uploaded_reference: ');
+}
+
 export default function BoundaryReviewModal({ barangay, onClose, onConfirm, onDiscard, onSaved }) {
   const [geometry, setGeometry] = useState(barangay.pending_boundary ?? null);
   const [savedGeometry, setSavedGeometry] = useState(barangay.pending_boundary ?? null);
   const [hasCandidate, setHasCandidate] = useState(Boolean(barangay.pending_boundary));
+  const [pendingSource, setPendingSource] = useState(barangay.pending_boundary_source ?? '');
   const [files, setFiles] = useState([]);
   const [document, setDocument] = useState(null);
   const [source, setSource] = useState('');
@@ -36,6 +51,7 @@ export default function BoundaryReviewModal({ barangay, onClose, onConfirm, onDi
       const feature = json.type === 'FeatureCollection' ? json.features[0] : json;
       const candidate = feature.type === 'Feature' ? feature.geometry : feature;
       if (!geoJsonToPolygons(candidate).length) throw new Error('The file must contain a Polygon or MultiPolygon.');
+      if (!hasClosedRings(candidate)) throw new Error('Every ring must be closed: its last point must repeat its first point.');
       setDocument(json); setGeometry(candidate);
     } catch (failure) { if (version === readVersion.current) { setError(failure.message); setGeometry(savedGeometry); } }
   };
@@ -43,11 +59,13 @@ export default function BoundaryReviewModal({ barangay, onClose, onConfirm, onDi
     setBusy(true); setError('');
     try {
       const { data } = await api.post(`/superadmin/barangays/${barangay.id}/boundary/candidate`, { geojson: document, source: source.trim(), psgc_code: barangay.psgc_code ?? null });
-      setGeometry(data.pending_boundary); setSavedGeometry(data.pending_boundary); setHasCandidate(true); setFiles([]); setDocument(null);
+      setGeometry(data.pending_boundary); setSavedGeometry(data.pending_boundary); setPendingSource(data.pending_boundary_source ?? ''); setHasCandidate(true); setFiles([]); setDocument(null);
       await onSaved?.();
     } catch (failure) { setError(failure.response?.data?.message ?? 'Could not save the replacement boundary.'); }
     finally { setBusy(false); }
   };
+  // Only an uploaded file naming its source document becomes a reviewed boundary.
+  const candidateIsReference = hasCandidate && !savedSourceIsUpload(pendingSource) && !document;
   const run = async (action) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
   return <div className="modal-overlay" onClick={busy ? undefined : onClose}>
     <div className="modal-box boundary-review-dialog" role="dialog" aria-modal="true" aria-label="Review barangay boundary" onClick={(event) => event.stopPropagation()}>
@@ -60,7 +78,8 @@ export default function BoundaryReviewModal({ barangay, onClose, onConfirm, onDi
         </MapContainer></div>}
         <FileCabinet name="boundary_geojson" title="Replacement boundary" accept=".json,.geojson" files={files} onChange={changeFile} />
         <label>Source document or URL<input value={source} maxLength={200} onChange={(event) => setSource(event.target.value)} placeholder="LGU-approved boundary map or survey reference" /></label>
-        <p className="muted">Upload one WGS84 GeoJSON Polygon, MultiPolygon, or single-feature file. Saving stages a replacement; confirmation applies it to existing accounts and future registrations.</p>
+        <p className="muted">Upload one WGS84 GeoJSON Polygon, MultiPolygon, or single-feature file. Saving stages a replacement; confirmation applies it to existing accounts and future registrations and marks it as reviewed against the named source.</p>
+        {candidateIsReference && <p className="notice info">This candidate came from {pendingSource === 'osm_nominatim' ? 'an OpenStreetMap lookup' : 'imported reference data'}. Confirming it applies the outline as an unverified reference; it will not restrict location pins. Upload an LGU-approved boundary file to mark it reviewed.</p>}
         {error && <p className="notice error" role="alert">{error}</p>}
         <div className="form-actions" style={{ marginTop: 12 }}>
           <button type="button" className="ghost-button" disabled={busy || !hasCandidate || files.length > 0} onClick={() => run(onDiscard)}>Discard candidate</button>

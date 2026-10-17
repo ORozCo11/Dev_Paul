@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesAbilities;
+use App\Models\Barangay;
 use App\Models\Vehicle;
 use App\Models\VehicleHub;
+use App\Services\BarangayGeography;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -39,6 +41,8 @@ class HubController extends Controller
             'label' => ['nullable', 'string', 'max:8'],
         ]);
 
+        $this->requireInsideReviewedBoundary($request, (float) $data['lat'], (float) $data['lng']);
+
         $hub = VehicleHub::create([
             'hub_key' => Str::slug($data['name']).'-'.Str::random(6),
             'name' => $data['name'],
@@ -70,9 +74,30 @@ class HubController extends Controller
             'is_hidden' => ['sometimes', 'boolean'],
         ]);
 
+        if (array_key_exists('lat', $data) || array_key_exists('lng', $data)) {
+            $this->requireInsideReviewedBoundary($request, (float) ($data['lat'] ?? $hub->lat), (float) ($data['lng'] ?? $hub->lng));
+        }
+
         $hub->update($data);
 
         return $hub->fresh();
+    }
+
+    /**
+     * Mirrors the Add/Edit Location form: a reviewed boundary (confirmed from
+     * an uploaded source document) must contain the pin. Unreviewed reference
+     * outlines never block a pin on outline position alone.
+     */
+    private function requireInsideReviewedBoundary(Request $request, float $lat, float $lng): void
+    {
+        $barangayId = $request->user()->barangay_id;
+        $barangay = $barangayId ? Barangay::find($barangayId) : null;
+        $geography = app(BarangayGeography::class);
+        if (!$barangay || !$geography->isReviewed($barangay)) {
+            return;
+        }
+        abort_unless(BarangayGeography::containsPoint($barangay->boundary, $lat, $lng), 422,
+            "That location is outside the reviewed {$barangay->name} boundary.");
     }
 
     /**

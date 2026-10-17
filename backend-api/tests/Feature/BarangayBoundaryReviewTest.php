@@ -107,6 +107,11 @@ class BarangayBoundaryReviewTest extends TestCase
         $this->postJson($url, $bad)->assertUnprocessable();
         $bad['geojson'] = ['type' => 'Feature', 'properties' => ['psgc_10d' => '0702222034'], 'geometry' => $payload['geojson']];
         $this->postJson($url, $bad)->assertUnprocessable();
+        $bad['geojson'] = ['type' => 'Feature', 'properties' => ['ADM4_PCODE' => 'PH0702222034'], 'geometry' => $payload['geojson']];
+        $this->postJson($url, $bad)->assertUnprocessable();
+        // A hole that lies outside its outer ring.
+        $bad['geojson'] = ['type' => 'Polygon', 'coordinates' => [$this->validRing(), [[124.0, 10.0], [124.01, 10.0], [124.01, 10.01], [124.0, 10.0]]]];
+        $this->postJson($url, $bad)->assertUnprocessable();
         $this->assertNull($barangay->fresh()->pending_boundary);
     }
 
@@ -139,7 +144,7 @@ class BarangayBoundaryReviewTest extends TestCase
     }
 
     #[Test]
-    public function confirming_a_pending_boundary_moves_it_to_live_and_stamps_the_verifier(): void
+    public function confirming_a_geocoder_candidate_applies_it_as_an_unverified_reference(): void
     {
         Http::fake(['nominatim.openstreetmap.org/*' => Http::response($this->nominatimResult($this->validRing()))]);
         $barangay = $this->barangay();
@@ -147,13 +152,15 @@ class BarangayBoundaryReviewTest extends TestCase
         Sanctum::actingAs($this->superAdmin, ['*']);
         $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/refresh")->assertOk();
 
+        // OSM geometry is not boundary evidence: it goes live, but unreviewed.
         $response = $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/confirm")->assertOk();
-        $this->assertSame('verified', $response->json('boundary_status'));
+        $this->assertSame('needs_review', $response->json('boundary_status'));
 
         $barangay->refresh();
         $this->assertNotNull($barangay->boundary);
-        $this->assertSame('verified', $barangay->boundary_status);
+        $this->assertSame('needs_review', $barangay->boundary_status);
         $this->assertSame('osm_nominatim', $barangay->boundary_source);
+        $this->getJson('/api/barangays/'.$barangay->id)->assertJsonPath('boundary_verified', false);
         $this->assertSame($this->superAdmin->id, $barangay->boundary_verified_by);
         $this->assertNotNull($barangay->boundary_verified_at);
         $this->assertNull($barangay->pending_boundary, 'The pending slot should be cleared once confirmed.');
@@ -190,7 +197,7 @@ class BarangayBoundaryReviewTest extends TestCase
     }
 
     #[Test]
-    public function an_already_verified_boundary_is_never_touched_by_another_refresh(): void
+    public function a_legacy_backfilled_boundary_is_an_unverified_reference_and_keeps_its_geometry(): void
     {
         $barangay = $this->barangay();
         $barangay->update([
@@ -209,12 +216,36 @@ class BarangayBoundaryReviewTest extends TestCase
         Sanctum::actingAs($this->superAdmin, ['*']);
         $response = $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/refresh")->assertOk();
         $this->assertTrue($response->json('has_boundary'));
-        $this->assertSame('verified', $response->json('boundary_status'));
+        // The 2026_10_11 'legacy' backfill was never reviewed by anyone.
+        $this->assertSame('needs_review', $response->json('boundary_status'));
+        $this->getJson('/api/barangays/'.$barangay->id)->assertJsonPath('boundary_verified', false);
 
         $originalCoordinates = $barangay->boundary['coordinates'];
         $barangay->refresh();
-        $this->assertSame($originalCoordinates, $barangay->boundary['coordinates'], 'An existing verified boundary must never change from a later lookup.');
-        $this->assertNull($barangay->pending_boundary);
+        $this->assertSame($originalCoordinates, $barangay->boundary['coordinates'], 'An existing boundary must never change from a later lookup.');
+        $this->assertNotSame([[124.0, 10.5], [124.01, 10.5], [124.01, 10.51], [124.0, 10.51], [124.0, 10.5]], $barangay->pending_boundary['coordinates'][0] ?? null);
+    }
+
+    #[Test]
+    public function only_a_reviewed_boundary_rejects_hub_pins_outside_it_on_the_server(): void
+    {
+        $barangay = $this->barangay();
+        $barangay->update(['psgc_code' => '0702222024', 'boundary' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]], 'boundary_source' => 'legacy', 'boundary_status' => 'verified']);
+        $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $barangay->id]);
+        $outside = ['name' => 'Outside hub', 'lat' => 10.5, 'lng' => 124.5];
+
+        // Unreviewed reference: the outline does not block the pin.
+        Sanctum::actingAs($admin, ['*']);
+        $this->postJson('/api/hubs', $outside)->assertCreated();
+
+        Sanctum::actingAs($this->superAdmin, ['*']);
+        $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/candidate", ['geojson' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]], 'source' => 'Dalaguete MPDO certified map', 'psgc_code' => $barangay->psgc_code])->assertOk();
+        $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/confirm")->assertOk()->assertJsonPath('boundary_status', 'verified');
+
+        Sanctum::actingAs($admin, ['*']);
+        $this->postJson('/api/hubs', ['name' => 'Outside again', 'lat' => 10.5, 'lng' => 124.5])->assertUnprocessable();
+        $inside = $this->postJson('/api/hubs', ['name' => 'Inside hub', 'lat' => 10.305, 'lng' => 123.905])->assertCreated();
+        $this->putJson('/api/hubs/'.$inside->json('hub_id'), ['lat' => 10.5])->assertUnprocessable();
     }
 
     #[Test]
