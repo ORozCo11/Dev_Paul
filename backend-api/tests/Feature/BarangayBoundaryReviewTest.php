@@ -274,4 +274,23 @@ class BarangayBoundaryReviewTest extends TestCase
         $this->assertNotNull($second->json('updated_at'));
         $this->assertNotSame($first->json('staff_code'), $second->json('staff_code'));
     }
+
+    #[Test]
+    public function registration_codes_are_available_while_a_boundary_is_awaiting_review(): void
+    {
+        $barangay = $this->barangay();
+        $barangay->update([
+            'boundary' => null,
+            'pending_boundary' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]],
+        ]);
+
+        Sanctum::actingAs($this->superAdmin, ['*']);
+
+        $this->getJson("/api/superadmin/barangays/{$barangay->id}/registration-code")
+            ->assertOk()
+            ->assertJsonStructure(['staff_code', 'updated_at']);
+        $this->postJson("/api/superadmin/barangays/{$barangay->id}/registration-code/regenerate")
+            ->assertOk()
+            ->assertJsonStructure(['staff_code', 'updated_at']);
+    }
 }

@@ -159,33 +159,6 @@
   overflow: hidden;
 }
 .auth-page .auth-card { position: relative; z-index: 1; }
-.login-ripple-grid {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-  background-color: #07142d;
-  background-image:
-    linear-gradient(rgba(96, 165, 250, .18) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96, 165, 250, .18) 1px, transparent 1px),
-    radial-gradient(circle at 25% 32%, rgba(59, 130, 246, .24), transparent 23%),
-    radial-gradient(circle at 74% 70%, rgba(37, 99, 235, .19), transparent 26%);
-  background-size: 38px 38px, 38px 38px, 100% 100%, 100% 100%;
-  background-position: center;
-}
-.login-ripple-grid::before,
-.login-ripple-grid::after {
-  content: '';
-  position: absolute;
-  width: 460px;
-  height: 460px;
-  border: 1px solid rgba(147, 197, 253, .22);
-  border-radius: 50%;
-  box-shadow: 0 0 0 42px rgba(96, 165, 250, .045), 0 0 0 84px rgba(96, 165, 250, .03), 0 0 0 126px rgba(96, 165, 250, .02);
-}
-.login-ripple-grid::before { top: -300px; left: -170px; }
-.login-ripple-grid::after { right: -220px; bottom: -330px; }
 /* The card itself always stays a clean white, regardless of the in-app
    light/dark theme cascade further down this file — !important because
    several later theme-scoped rules of equal-or-higher specificity would
@@ -645,14 +618,7 @@
   min-height: calc(100vh - 140px);
   display: flex;
   justify-content: center;
-  background-color: #0b1f4d;
-  background-image:
-    linear-gradient(rgba(147, 197, 253, .14) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(147, 197, 253, .14) 1px, transparent 1px),
-    radial-gradient(circle at 18% 24%, rgba(59, 130, 246, .28), transparent 25%),
-    radial-gradient(circle at 78% 76%, rgba(37, 99, 235, .26), transparent 28%),
-    linear-gradient(135deg, #0b1f4d 0%, #1d4ed8 55%, #2563eb 100%);
-  background-size: 38px 38px, 38px 38px, 100% 100%, 100% 100%, 100% 100%;
+  background: linear-gradient(135deg, #0b1f4d 0%, #1d4ed8 55%, #2563eb 100%);
   padding: 64px 20px 72px;
   overflow: hidden;
 }
@@ -15858,7 +15824,7 @@ html:root .toast-notice:is(.error, .danger, .success, .warning, .info) { box-sha
 .about-showcase { box-sizing: border-box; min-height: calc(100vh - 112px); display: flex; align-items: center; padding: 28px clamp(16px, 3vw, 48px) 40px; background: #eef4fb; }
 .about-showcase-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 1400px; margin: 0 auto; }
 .about-showcase-panel { min-width: 0; min-height: 560px; }
-.about-showcase .about-system-panel { display: block; min-height: 0; padding: clamp(30px, 4vw, 64px); border-radius: 20px; background-color: #102c63; background-image: linear-gradient(rgba(147, 197, 253, .13) 1px, transparent 1px), linear-gradient(90deg, rgba(147, 197, 253, .13) 1px, transparent 1px), radial-gradient(circle at 18% 25%, rgba(59, 130, 246, .26), transparent 30%), linear-gradient(135deg, #102c63, #1d4ed8); background-size: 38px 38px, 38px 38px, 100% 100%, 100% 100%; box-shadow: 0 16px 38px rgba(15, 23, 42, .12); transition: order .3s ease; }
+.about-showcase .about-system-panel { display: block; min-height: 0; padding: clamp(30px, 4vw, 64px); border-radius: 20px; background: linear-gradient(135deg, #102c63, #1d4ed8); box-shadow: 0 16px 38px rgba(15, 23, 42, .12); transition: order .3s ease; }
 .about-showcase .about-system-panel .auth-hero-inner { width: 100%; max-width: 590px; margin: 0; text-align: left; }
 .about-showcase .about-system-panel .auth-hero-subtitle { max-width: none; }
 .about-showcase .about-system-panel .about-hero-body { width: 100%; max-width: none; }

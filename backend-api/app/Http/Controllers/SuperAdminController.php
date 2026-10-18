@@ -655,8 +655,9 @@ class SuperAdminController extends Controller
     public function registrationCode(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.view_registration_code', 'Only a Super Admin can perform this action.');
-        abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
-            'Review the PSGC-matched boundary before issuing a registration code. No code can be issued while the boundary is unavailable or pending review.');
+        // A registration code onboards staff; it does not authorize map-based
+        // operations. Keep boundary review independent so a PSGC barangay can
+        // be staffed while its reference outline is awaiting verification.
 
         $setting = RegistrationSetting::for($barangay->id);
 
@@ -666,8 +667,6 @@ class SuperAdminController extends Controller
     public function regenerateRegistrationCode(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.regenerate_registration_code', 'Only a Super Admin can perform this action.');
-        abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
-            'Review the PSGC-matched boundary before issuing a registration code. No code can be issued while the boundary is unavailable or pending review.');
 
         $setting = RegistrationSetting::regenerateFor($barangay->id);
         $this->log($request, 'Edit', "Regenerated the staff registration code for {$barangay->name}.");
