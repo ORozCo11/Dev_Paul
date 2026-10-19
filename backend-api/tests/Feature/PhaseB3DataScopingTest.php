@@ -161,6 +161,7 @@ class PhaseB3DataScopingTest extends TestCase
     #[Test]
     public function custodian_and_maintenance_personnel_can_both_file_an_issue_report(): void
     {
+        \App\Models\FaultCategory::create(['name' => 'Flat tire']);
         $vehicle = $this->vehicle();
 
         foreach ([$this->custodian, $this->mechanic] as $reporter) {

@@ -1896,7 +1896,9 @@ class FleetController extends Controller
         ]);
 
         if ($request->hasFile('file')) {
+            $oldFileUrl = $document->file_url;
             $data['file_url'] = $this->storeUploadedImage($request->file('file'), 'vehicle-documents');
+            $this->deleteStoredUpload($oldFileUrl);
         }
         unset($data['file']);
 
@@ -1911,6 +1913,7 @@ class FleetController extends Controller
         $this->requireAbility($request, 'document.delete');
 
         $this->log($request, 'Delete', 'Vehicle Documents', $document->document_id, "Deleted document \"{$document->title}\"");
+        $this->deleteStoredUpload($document->file_url);
         $document->delete();
 
         return response()->json(['message' => 'Document deleted.']);

@@ -97,6 +97,12 @@ const PATHS = {
       <path d="m9 11 3 3L22 4" />
     </>
   ),
+  user: (
+    <>
+      <circle cx="12" cy="7" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </>
+  ),
   flag: (
     <>
       <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
@@ -196,12 +202,6 @@ const PATHS = {
       <circle cx="15" cy="5" r="1.4" fill="currentColor" stroke="none" />
       <circle cx="15" cy="12" r="1.4" fill="currentColor" stroke="none" />
       <circle cx="15" cy="19" r="1.4" fill="currentColor" stroke="none" />
-    </>
-  ),
-  search: (
-    <>
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </>
   ),
   edit: (
@@ -304,14 +304,4 @@ export default function Icon({ name, size = 16, strokeWidth = 2, className, styl
       {content}
     </svg>
   );
-}
-
-// Maps Open-Meteo weather → an icon name in this set.
-export function weatherIconName(code) {
-  if (code === 0) return 'sun';
-  if ([1, 2, 3].includes(code)) return 'cloudSun';
-  if ([45, 48].includes(code)) return 'cloudFog';
-  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return 'cloudRain';
-  if ([95, 96, 99].includes(code)) return 'cloudLightning';
-  return 'cloudSun';
 }

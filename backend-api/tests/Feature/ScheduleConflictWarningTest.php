@@ -54,7 +54,7 @@ class ScheduleConflictWarningTest extends TestCase
 
         return Vehicle::create([
             'vehicle_name' => 'Test Ambulance',
-            'plate_number' => 'TST ' . random_int(1000, 9999),
+            'plate_number' => 'TST ' . uniqid(),
             'category_id' => $category->category_id,
             'brand' => 'Toyota', 'model' => 'HiAce', 'year_model' => 2022,
             'capacity' => '1000 kg', 'vehicle_color' => 'White', 'current_location' => 'Main Depot',

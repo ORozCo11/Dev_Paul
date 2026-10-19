@@ -133,8 +133,10 @@ class SuperAdminControllerTest extends TestCase
     public function pending_approvals_lists_only_accounts_never_approved(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
-        $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'approved_at' => null]);
+        $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'approved_at' => null, 'is_active' => false]);
         $approved = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian'], 'approved_at' => now()]);
+        // Seeded/legacy staff: active but never stamped — not an applicant.
+        $activeUnstamped = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian'], 'approved_at' => null, 'is_active' => true]);
 
         Sanctum::actingAs($superAdmin, ['*']);
         $response = $this->getJson('/api/superadmin/pending-approvals')->assertOk();
@@ -142,6 +144,7 @@ class SuperAdminControllerTest extends TestCase
         $ids = collect($response->json())->pluck('id');
         $this->assertTrue($ids->contains($pending->id));
         $this->assertFalse($ids->contains($approved->id));
+        $this->assertFalse($ids->contains($activeUnstamped->id));
     }
 
     #[Test]

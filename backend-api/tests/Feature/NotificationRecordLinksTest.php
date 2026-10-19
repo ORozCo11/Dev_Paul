@@ -40,6 +40,7 @@ class NotificationRecordLinksTest extends TestCase
     #[Test]
     public function filing_an_issue_report_notifies_admins_with_a_link_to_it(): void
     {
+        \App\Models\FaultCategory::create(['name' => 'Flat tire']);
         $vehicle = $this->vehicle();
         $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $vehicle->barangay_id]);
         $custodian = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian'], 'barangay_id' => $vehicle->barangay_id]);

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import AuthHeader from '../components/AuthHeader';
 import AuthFooter from '../components/AuthFooter';
 import Icon from '../components/Icon';
@@ -34,11 +35,20 @@ const FEATURES = [
 ];
 
 export default function About() {
+  const [featurePage, setFeaturePage] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setFeaturePage((page) => (page + 1) % 2), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <div className="auth-page-shell">
       <AuthHeader />
 
-      <main className="auth-hero">
+      <main className="about-showcase" aria-label="About Barangay VMS">
+        <div className="about-showcase-panels">
+        <section className="auth-hero about-showcase-panel about-system-panel">
         <div className="auth-hero-inner">
           <p className="auth-hero-eyebrow">Barangay VMS</p>
           <h1 className="auth-hero-title">About the System</h1>
@@ -69,13 +79,13 @@ export default function About() {
             </p>
           </div>
         </div>
-      </main>
+        </section>
 
-      <section className="about-features">
+      <section className="about-features about-showcase-panel about-features-panel">
         <div className="about-features-inner">
           <h2 className="about-features-title">A Smarter Way to Manage Your Barangay's Fleet</h2>
           <div className="about-features-grid">
-            {FEATURES.map((f) => (
+            {FEATURES.slice(featurePage * 4, (featurePage + 1) * 4).map((f) => (
               <div className="about-feature-card" key={f.title}>
                 <span className="about-feature-icon">{f.icon}</span>
                 <p className="about-feature-name">{f.title}</p>
@@ -83,8 +93,13 @@ export default function About() {
               </div>
             ))}
           </div>
+          <div className="about-feature-pagination" aria-label={`Feature slide ${featurePage + 1} of 2`}>
+            {[0, 1].map((page) => <span key={page} className={page === featurePage ? 'is-active' : ''} />)}
+          </div>
         </div>
       </section>
+        </div>
+      </main>
 
       <AuthFooter />
     </div>

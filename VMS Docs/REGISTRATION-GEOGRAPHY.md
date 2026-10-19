@@ -14,7 +14,7 @@ On successful registration, a missing boundary is attached from the detailed bun
 
 **40,771 references have a matched detailed Polygon/MultiPolygon; 1,275 do not.** Unmapped codes are excluded; geographic correspondence codes are translated through the explicit catalog mapping, including highly urbanized cities. Missing geometry stays missing: it is not substituted with Paknaan or a same-named barangay. The map shows an unavailable-boundary notice and a country-level frame; location entry waits for a boundary to be supplied/reviewed.
 
-These are **full-detail source reference polygons**, with every source vertex retained and coordinates rounded to six decimal places (about 0.1m). They are not cadastral survey boundaries or a guarantee of current legal boundaries. Polygon holes and separate islands are retained in map rendering and location containment checks. Areas without a match still require the existing Super Admin boundary-review flow or an updated vetted dataset.
+These are **full-detail source reference polygons**, with every source vertex retained and coordinates stored to six decimal places. That is storage precision (about 0.1m), not positional accuracy: the outlines are only as accurate as the indicative source mapping. They are not cadastral survey boundaries or a guarantee of current legal boundaries. Polygon holes and separate islands are retained in map rendering and location containment checks. Areas without a match still require the existing Super Admin boundary-review flow or an updated vetted dataset.
 
 ## Sources and provenance
 

@@ -70,8 +70,10 @@ class BarangayController extends Controller
             'city_name' => $barangay->city?->name,
             'province_id' => $barangay->city?->province_id,
             'boundary' => $geometry,
-            'boundary_status' => $geometry && ($geography->isUnreviewedReference($barangay) || $barangay->boundary === null) ? 'needs_review' : $barangay->boundary_status,
-            'boundary_verified' => $geometry !== null && $barangay->boundary_status === 'verified' && !$geography->isUnreviewedReference($barangay),
+            // 'verified' means a Super Admin confirmed an uploaded outline that
+            // names its source document; every other outline is a reference.
+            'boundary_status' => $geometry ? ($geography->isReviewed($barangay) ? 'verified' : 'needs_review') : $barangay->boundary_status,
+            'boundary_verified' => $geometry !== null && $geography->isReviewed($barangay),
             'boundary_source' => $geometry ? ($barangay->boundary !== null && !$geography->hasAutomaticLegacyBoundary($barangay) ? $barangay->boundary_source : \App\Services\BarangayGeography::SOURCE) : null,
         ];
     }

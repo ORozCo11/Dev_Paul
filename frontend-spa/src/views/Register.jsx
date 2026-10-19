@@ -1,6 +1,7 @@
 import LoadingOverlay from '../components/LoadingOverlay';
 import './Register.css';
-import { useContext, useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { MapContainer, Polygon, TileLayer } from 'react-leaflet';
 import { Link, Navigate } from 'react-router-dom';
 import api from '../api/axios';
 import Icon from '../components/Icon';
@@ -8,6 +9,7 @@ import Aurora from '../components/Aurora';
 import AuthHeader from '../components/AuthHeader';
 import AuthFooter from '../components/AuthFooter';
 import { AuthContext } from '../context/AuthContextObject';
+import { geoJsonToPolygons } from '../utils/boundary';
 
 const roleRoutes = {
   Admin: '/admin',
@@ -111,6 +113,7 @@ function Register() {
   // independently re-derives this at submit time regardless of what this
   // says — this is purely a UX preview, never the source of truth.
   const [isFirstForBarangay, setIsFirstForBarangay] = useState(null);
+  const [boundaryPreview, setBoundaryPreview] = useState(null);
 
   useEffect(() => {
     api.get('/provinces')
@@ -147,6 +150,16 @@ function Register() {
       .catch(() => { if (!cancelled) setIsFirstForBarangay(null); });
     return () => { cancelled = true; };
   }, [form.city_id, form.barangay_id]);
+
+  useEffect(() => {
+    if (!form.barangay_id) { setBoundaryPreview(null); return; }
+    let cancelled = false;
+    setBoundaryPreview(null);
+    api.get(`/barangays/${form.barangay_id}`).then(({ data }) => { if (!cancelled) setBoundaryPreview(data); }).catch(() => { if (!cancelled) setBoundaryPreview({ error: true }); });
+    return () => { cancelled = true; };
+  }, [form.barangay_id]);
+
+  const boundaryPolygons = useMemo(() => geoJsonToPolygons(boundaryPreview?.boundary), [boundaryPreview]);
 
   if (token && user) {
     return <Navigate to={roleRoutes[user.role] ?? '/unauthorized'} replace />;
@@ -469,6 +482,14 @@ function Register() {
             {locationError && <div className="notice error auth-field-full" role="alert">{locationError} <button type="button" className="link-button" onClick={() => { setLocationError(''); setCitiesLoading(Boolean(form.province_id)); setBarangaysLoading(Boolean(form.city_id)); setLocationRetry((value) => value + 1); }}>Try again</button></div>}
             {form.city_id && !barangaysLoading && !barangays.length && !locationError && <p className="notice auth-field-full">No barangay reference is available for this city. Contact the system administrator.</p>}
             {form.barangay_id && <p className="field-hint auth-field-full">Your selected barangay sets your account&apos;s service area. Its map outline may require administrator review.</p>}
+            {form.barangay_id && <section className="register-boundary-preview auth-field-full" aria-live="polite">
+              <header><strong>Boundary preview</strong><span>PSGC {boundaryPreview?.psgc_code ?? 'Loading…'}</span></header>
+              {boundaryPolygons.length ? <div className="register-boundary-map"><MapContainer key={JSON.stringify(boundaryPreview.boundary)} bounds={boundaryPolygons.flat(2)} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
+                <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                {boundaryPolygons.map((polygon, index) => <Polygon key={index} positions={polygon} pathOptions={{ color: '#ef4444', weight: 2, fillOpacity: .12 }} />)}
+              </MapContainer></div> : <p>{boundaryPreview?.error ? 'Boundary preview could not be loaded.' : boundaryPreview ? 'No authoritative reference boundary is available for this PSGC record.' : 'Retrieving the PSGC-matched boundary…'}</p>}
+              <small>Reference preview only; it is not a legal boundary certification.</small>
+            </section>}
 
             {isFirstForBarangay === true && (
               <p className="notice success auth-field-full">
