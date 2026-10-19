@@ -612,7 +612,6 @@ class SuperAdminController extends Controller
 
         return User::with('barangay.city.province')
             ->whereNull('approved_at')
-            ->where('is_active', false)
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($u) => [

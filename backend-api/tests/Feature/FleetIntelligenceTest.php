@@ -37,7 +37,6 @@ class FleetIntelligenceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        \App\Models\MaintenanceType::create(['name' => 'Cooling System']);
         $this->admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
         $this->custodian = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
     }

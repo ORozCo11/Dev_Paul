@@ -9,7 +9,6 @@ const roleCopy = {
   Custodian: ['Custodian Dashboard', 'Prioritize inspections, readiness checks, and independent repair verification.'],
   'Maintenance Personnel': ['Maintenance Dashboard', 'Your assigned repairs, upcoming maintenance, and completed work.'],
 };
-const roleBannerIcon = { Admin: 'user', Custodian: 'checkCircle', 'Maintenance Personnel': 'wrench' };
 const conditionColors = { Good: '#16a34a', 'Needs Inspection': '#d97706', 'Needs Repair': '#dc2626' };
 const sameId = (a, b) => a != null && b != null && String(a) === String(b);
 const date = (value) => value ? new Date(value).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }) : 'No date recorded';
@@ -127,7 +126,7 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const attentionChart = <DashboardBarCard title="Readiness Attention by Vehicle Type" description="Vehicles without verified-ready status. Red indicates a type with no verified-ready coverage; amber indicates partial coverage." rows={attentionRows} unit="Vehicles" emptyMessage="No readiness counts available yet.">{readiness.length > 0 && readinessDetails}</DashboardBarCard>;
   const scheduleChart = <DashboardBarCard title="My Maintenance Schedule" description="Your scheduled assignments by due date, using Philippine time. Upcoming excludes today." rows={scheduleRows} unit="Schedules" loading={loading} error={error} emptyMessage={mySchedules.length ? 'No dated assignments to chart yet.' : 'No assigned maintenance schedules.'} />;
   return <div className="focus-dashboard role-dashboard">
-    <header className="focus-heading focus-branded-heading"><span className="focus-heading-art" aria-hidden="true"><Icon name={roleBannerIcon[role]} size={174} /></span><div><h2>{roleCopy[role][0]}</h2><p>{roleCopy[role][1]}</p></div>{roles.length > 1 && <label>Responsibility<select aria-label="Dashboard responsibility" value={role} onChange={(e) => setSelectedRole(e.target.value)}>{roles.map((r) => <option key={r}>{r}</option>)}</select></label>}</header>
+    <header className="focus-heading focus-branded-heading"><div><h2>{roleCopy[role][0]}</h2><p>{roleCopy[role][1]}</p></div>{roles.length > 1 && <label>Responsibility<select aria-label="Dashboard responsibility" value={role} onChange={(e) => setSelectedRole(e.target.value)}>{roles.map((r) => <option key={r}>{r}</option>)}</select></label>}</header>
     {error && <div role="alert" className="focus-error">{error}<button type="button" onClick={() => setRetry((n) => n + 1)}>Retry</button></div>}
     <div className="focus-kpis" style={{ '--kpi-count': kpis.length }}>{kpis.map((k) => <button type="button" key={k.label} onClick={k.open}><span className="focus-kpi-icon"><Icon name={k.icon} size={19} /></span><span>{k.label}<strong>{k.value}</strong>{k.detail && <small>{k.detail}</small>}</span><Icon name="chevronRight" size={14} /></button>)}</div>
     <div className={admin ? 'focus-columns focus-columns-even' : 'focus-columns'}>

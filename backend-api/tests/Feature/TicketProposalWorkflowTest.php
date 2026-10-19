@@ -282,7 +282,6 @@ class TicketProposalWorkflowTest extends TestCase
     #[Test]
     public function a_proposal_gets_a_server_built_mt_number_title_that_a_typed_title_cannot_override(): void
     {
-        \App\Models\MaintenanceType::create(['name' => 'Belt Replacement']);
         $vehicle = $this->vehicle();
         // A client-supplied title is ignored; the server builds
         // "MT-0001 — Vehicle — Issue" from the number, vehicle and issue.

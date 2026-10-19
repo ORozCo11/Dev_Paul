@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../api/axios';
 import { AuthContext } from './AuthContextObject';
 
@@ -10,19 +10,15 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token') || sessionStorage.getItem('token') || null);
   const [loading, setLoading] = useState(true);
 
-  const logout = useCallback(() => {
-    // Capture the credential before clearing storage. The Axios interceptor
-    // reads storage at request time, so clearing first used to send logout
-    // anonymously and left the server token reusable.
-    const tokenToRevoke = token || localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (tokenToRevoke) {
-      api.post('/logout', null, { headers: { Authorization: `Bearer ${tokenToRevoke}` } }).catch(() => {});
-    }
+  const logout = () => {
+    // Clear local state immediately so the UI reacts right away,
+    // then invalidate the server-side token in the background.
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     setToken(null);
     setUser(null);
-  }, [token]);
+    api.post('/logout').catch(() => {});
+  };
 
   useEffect(() => {
     const checkUserSession = async () => {
@@ -37,7 +33,7 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     };
     checkUserSession();
-  }, [token, logout]);
+  }, [token]);
 
   const login = (userData, userToken, remember = true) => {
     // Only one storage ever holds the token at a time — clear the other so a

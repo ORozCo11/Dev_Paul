@@ -300,9 +300,6 @@ function ResizeMapOnContainerResize() {
   return null;
 }
 
-
-const loadHubRecords = () => api.get('/hubs').then((response) => response.data.map(normalizeHub));
-
 function LocationDensityMap({
   vehicles = [],
   selectedVehicleId = null,
@@ -347,28 +344,22 @@ function LocationDensityMap({
     };
   }, [isMaximized]);
 
-  const applyHubs = useCallback((normalized) => {
-    setHubRecords(normalized);
-    if (onHubsChange) {
-      onHubsChange(normalized.filter((hub) => !hub.isHidden));
-    }
-  }, [onHubsChange]);
-
   const fetchHubs = useCallback(async () => {
     try {
-      applyHubs(await loadHubRecords());
+      const response = await api.get('/hubs');
+      const normalized = response.data.map(normalizeHub);
+      setHubRecords(normalized);
+      if (onHubsChange) {
+        onHubsChange(normalized.filter((hub) => !hub.isHidden));
+      }
     } catch (error) {
       console.error('Failed to load hubs:', error);
     }
-  }, [applyHubs]);
+  }, [onHubsChange]);
 
   useEffect(() => {
-    let cancelled = false;
-    loadHubRecords()
-      .then((normalized) => { if (!cancelled) applyHubs(normalized); })
-      .catch((error) => console.error('Failed to load hubs:', error));
-    return () => { cancelled = true; };
-  }, [applyHubs]);
+    fetchHubs().catch(() => {});
+  }, [fetchHubs]);
 
   // When the naming modal opens, focus the input.
   useEffect(() => {

@@ -343,23 +343,6 @@ class PhaseB4RoleModelTest extends TestCase
     }
 
     #[Test]
-    public function a_custodian_cannot_create_a_new_maintenance_type_indirectly_through_a_schedule(): void
-    {
-        $vehicle = $this->vehicle();
-        $unknown = 'Unapproved Type ' . uniqid();
-
-        Sanctum::actingAs($this->custodian, ['*']);
-        $this->postJson('/api/maintenance-schedules', [
-            'vehicle_id' => $vehicle->vehicle_id,
-            'maintenance_type' => $unknown,
-            'scheduled_date' => now()->addWeek()->toDateString(),
-        ])->assertStatus(422);
-
-        $this->assertDatabaseMissing('maintenance_types', ['name' => $unknown]);
-        $this->assertDatabaseCount('vehicle_maintenance_schedules', 0);
-    }
-
-    #[Test]
     public function schedule_suggest_is_now_a_dead_endpoint_for_everyone(): void
     {
         // schedule.suggest's ability grant is now [] — creation itself is a

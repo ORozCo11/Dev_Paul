@@ -42,14 +42,6 @@ class MaintenanceType extends Model
      * need the resolved string (e.g. saving it onto a ticket/record). */
     public static function resolve(?string $name): ?string
     {
-        $name = $name !== null ? trim($name) : null;
-        if (!$name) {
-            return null;
-        }
-
-        $existing = static::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
-        abort_unless($existing, 422, 'Select an existing maintenance type. Only an Admin can add a new type.');
-
-        return $existing->name;
+        return static::findOrCreateByName($name)?->name;
     }
 }

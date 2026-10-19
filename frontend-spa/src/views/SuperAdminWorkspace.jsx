@@ -405,9 +405,7 @@ export default function SuperAdminWorkspace() {
   const [barangayFilter, setBarangayFilter] = useState('all');
   const [codeBarangay, setCodeBarangay] = useState(null);
   const [showAddBarangay, setShowAddBarangay] = useState(false);
-  // Data otherwise loads only on mount, so registrations submitted while this
-  // page is open would stay hidden until a full reload.
-  const navigateTab = (tab, filter) => { loadAll(true); setActiveTab(tab); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
+  const navigateTab = (tab, filter) => { setActiveTab(tab); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
   // Always starts expanded — a collapsed sidebar should only ever be a
   // deliberate, in-session choice (the toggle button), never the default a
   // returning user lands on.
@@ -873,7 +871,6 @@ export default function SuperAdminWorkspace() {
 
         <section className="content-area">
           <div className={`page-heading-row${activeTab === 'dashboard' ? ' focus-branded-heading' : ''}`}>
-            {activeTab === 'dashboard' && <span className="focus-heading-art" aria-hidden="true"><Icon name="grid" size={174} /></span>}
             <div className="page-heading-text">
               <h1>{TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h1>
               <p>{TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
