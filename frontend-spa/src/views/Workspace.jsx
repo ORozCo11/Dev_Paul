@@ -7,6 +7,7 @@ import FileCabinet from '../components/FileCabinet';
 import VMSLogo from '../components/VMSLogo';
 import { Children, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
 import { createPortal } from 'react-dom';
+import RepairFileCabinet from '../components/RepairFileCabinet';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
 import LocationDensityMap from '../components/LocationDensityMap';
@@ -878,6 +879,7 @@ function Workspace() {
   const [archiveStart, setArchiveStart] = useState('');
   const [archiveEnd, setArchiveEnd] = useState('');
   const [archiveStatusFilter, setArchiveStatusFilter] = useState('');
+  const [showDeletedArchives, setShowDeletedArchives] = useState(false);
 
   // Condition Monitoring Filters
   const [condFilterStartDate, setCondFilterStartDate] = useState('');
@@ -1968,6 +1970,7 @@ function Workspace() {
     }
 
     if (activeModule === 'ticketArchives') {
+      result = result.filter((row) => showDeletedArchives ? !!row.deleted_at || row.final_status === 'Deleted' : !row.deleted_at && row.final_status !== 'Deleted');
       if (archiveStart) {
         result = result.filter((row) => row.archived_at && row.archived_at.substring(0, 10) >= archiveStart);
       }
@@ -2052,7 +2055,7 @@ function Workspace() {
     }
 
     return result;
-  }, [rawRows, searchQuery, filterCategory, filterCapacity, filterLocation, filterDomain, filterStatus, filterPriority, filterReadiness, filterIssueType, filterMaintType, filterSource, filterActive, filterAssignedTo, filterVerdict, filterCheckedBy, filterActivityType, filterVehicle, filterMechanic, filterCustodian, filterDateStart, filterDateEnd, activeModule, condFilterStartDate, condFilterEndDate, archiveStart, archiveEnd, archiveStatusFilter]);
+  }, [rawRows, searchQuery, filterCategory, filterCapacity, filterLocation, filterDomain, filterStatus, filterPriority, filterReadiness, filterIssueType, filterMaintType, filterSource, filterActive, filterAssignedTo, filterVerdict, filterCheckedBy, filterActivityType, filterVehicle, filterMechanic, filterCustodian, filterDateStart, filterDateEnd, activeModule, condFilterStartDate, condFilterEndDate, archiveStart, archiveEnd, archiveStatusFilter, showDeletedArchives]);
 
   // Status breakdown for the Vehicle Management stat cards — counted from the
   // full unfiltered fetch so the cards stay accurate regardless of the active
@@ -2271,7 +2274,7 @@ function Workspace() {
     () => vehicleColumns(user, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile, (row) => setReadinessPromptTarget(row), (row) => setDispatchTarget(row)),
     [user, openVehicleProfile, deleteRecord, restoreRecord, filterStatus, openTicketProfile],
   );
-  const vehicleColumnChooser = useColumnChooser('vms_vehicle_columns', vehicleColumnDefs);
+  const vehicleColumnChooser = useColumnChooser('vms_vehicle_columns_v2', vehicleColumnDefs);
 
   // Every other module's table gets the same Choose Columns / drag-to-reorder
   // treatment as Vehicle Management above — one useColumnChooser call per
@@ -2347,59 +2350,29 @@ function Workspace() {
   );
   const logColumnChooser = useColumnChooser('vms_activity_log_columns', logColumnDefs);
 
-  const archiveColumnDefs = useMemo(() => [
+  const archiveColumnDefs = [
     ...ticketArchiveColumns,
     {
       key: 'actions',
       label: 'Actions',
       locked: true,
       className: 'cell-center',
-      render: (row) => {
-        if (row.final_status === 'Deleted') {
-          return (
-            <div className="row-actions">
-              <button
-                className="btn-reopen-action icon-btn"
-                type="button"
-                title="Reopen Ticket"
-                aria-label="Reopen Ticket"
-                onClick={() => {
-                  setConfirmDialog({
-                    title: 'Reopen Deleted Ticket',
-                    message: `Are you sure you want to reopen Ticket #${row.ticket_id} for ${row.vehicle_name}? It will be restored with all its sub-issues to how they were before it was deleted.`,
-                    confirmLabel: 'Reopen Ticket',
-                    variant: 'primary',
-                    onConfirm: () => ticketAction(`/ticket-archives/${row.archive_id}/reopen`, {}, 'Ticket successfully reopened.'),
-                  });
-                }}
-              >
-                <Icon name="undo" size={14} />
-              </button>
-            </div>
-          );
-        }
-        // A Closed ticket is permanently locked (no Reopen), but its
-        // record still exists — the Admin can still open it read-only
-        // to see the full history of what was done.
-        if (row.final_status === 'Closed') {
-          return (
-            <div className="row-actions">
-              <button
-                className="btn-view-action icon-btn"
-                type="button"
-                title="View Ticket"
-                aria-label="View Ticket"
-                onClick={() => openTicketProfile({ ticket_id: row.ticket_id })}
-              >
-                <Icon name="eye" size={14} />
-              </button>
-            </div>
-          );
-        }
-        return <span className="muted">—</span>;
-      },
+      render: (row) => (
+        <div className="row-actions">
+          {row.final_status === 'Closed' && <button className="btn-view-action icon-btn" type="button" title="View Ticket" aria-label="View Ticket" onClick={() => openTicketProfile({ ticket_id: row.ticket_id })}><Icon name="eye" size={14} /></button>}
+          {row.deleted_at || row.final_status === 'Deleted' ? (
+            <button className="btn-reopen-action icon-btn" type="button" title="Restore Ticket" aria-label="Restore Ticket" onClick={() => setConfirmDialog({
+              title: 'Restore Ticket', message: row.deleted_at ? 'Restore this record to Archived Tickets?' : 'Restore this deleted ticket and its recorded repair progress?', confirmLabel: 'Restore', variant: 'primary',
+              onConfirm: () => ticketAction('/ticket-archives/' + row.archive_id + (row.deleted_at ? '/restore' : '/reopen'), {}, 'Ticket restored.'),
+            })}><Icon name="undo" size={14} /></button>
+          ) : <button className="btn-delete-action icon-btn" type="button" title="Delete Archived Ticket" aria-label="Delete Archived Ticket" onClick={() => setConfirmDialog({
+            title: 'Delete Archived Ticket', message: 'Move this archived record to Deleted Tickets? You can restore it later.', confirmLabel: 'Delete', variant: 'danger',
+            onConfirm: async () => { try { await api.delete('/ticket-archives/' + row.archive_id); await refreshCurrent(); } catch (err) { setNotice({ type: 'error', text: err.response?.data?.message || 'Could not delete archived ticket.' }); } },
+          })}><Icon name="trash" size={14} /></button>}
+        </div>
+      ),
     },
-  ], [setConfirmDialog, openTicketProfile]);
+  ];
   const archiveColumnChooser = useColumnChooser('vms_ticket_archive_columns', archiveColumnDefs);
 
   const unreadCount = notifications.filter((n) => !n.read_at).length;
@@ -2545,7 +2518,7 @@ function Workspace() {
       const { data } = await api.get('/barangays/' + barangayId);
       if (requestId !== mapBoundaryRequestRef.current) return;
       const label = data.city_name ? data.name + ', ' + data.city_name : data.name;
-      setMapBoundaryOverride({ geometry: data.boundary ?? null, label, verified: data.boundary_verified === true });
+      setMapBoundaryOverride({ geometry: data.boundary ?? null, label, barangayName: data.name, cityName: data.city_name, source: data.boundary_source, psgcCode: data.psgc_code, verified: data.boundary_verified === true });
     } catch {
       if (requestId === mapBoundaryRequestRef.current) setMapBoundaryOverride({ geometry: null, label: 'Boundary unavailable' });
     }
@@ -2579,7 +2552,7 @@ function Workspace() {
       if (own) {
         setMapBarangayId(String(own.data.id));
         const label = own.data.city_name ? own.data.name + ', ' + own.data.city_name : own.data.name;
-        setMapBoundaryOverride({ geometry: own.data.boundary ?? null, label, verified: own.data.boundary_verified === true });
+        setMapBoundaryOverride({ geometry: own.data.boundary ?? null, label, barangayName: own.data.name, cityName: own.data.city_name, source: own.data.boundary_source, psgcCode: own.data.psgc_code, verified: own.data.boundary_verified === true });
       } else {
         setMapBoundaryOverride({ geometry: null, label: 'No barangay selected' });
       }
@@ -4586,7 +4559,7 @@ function Workspace() {
 
       return (
         <ModulePanel
-          description="Immutable audit trail of all completed and closed maintenance tickets."
+          description="Completed maintenance tickets and recoverable deleted records."
           filterBar={
             <div className="filter-bar-container" style={{ flexWrap: 'wrap', gap: '8px 12px', alignItems: 'center' }}>
               <div className="filter-label"><span>Vehicle:</span></div>
@@ -4713,11 +4686,12 @@ function Workspace() {
               <button type="button" className="ghost-button" style={{ marginRight: 10 }} onClick={() => setActiveModule('tickets')}>
                 <Icon name="arrowLeft" size={14} /> Tickets
               </button>
-              Archived Tickets <span className="count-badge">{visibleRows.length}</span>
+              {showDeletedArchives ? 'Deleted Tickets' : 'Archived Tickets'} <span className="count-badge">{visibleRows.length}</span>
               {visibleRows.length !== allArchiveRows.length && (
                 <span style={{ fontWeight: 400, fontSize: '0.8rem', marginLeft: 6 }}>of {allArchiveRows.length} total</span>
               )}
             </h3>
+            <label className="archive-deleted-toggle"><input type="checkbox" checked={showDeletedArchives} onChange={(e) => setShowDeletedArchives(e.target.checked)} />Deleted Tickets</label>
             <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search archives..." columnChooser={archiveColumnChooser} />
           </div>
 
@@ -4731,7 +4705,7 @@ function Workspace() {
           <PaginatedTable
             columns={archiveColumnChooser.visibleColumns}
             onReorderColumn={archiveColumnChooser.reorderColumn}
-            emptyMessage="No archived tickets yet — completed tickets are stored here automatically."
+            emptyMessage={showDeletedArchives ? "No deleted tickets." : "No archived tickets yet — completed tickets are stored here automatically."}
             rows={visibleRows}
           />
         </ModulePanel>
@@ -8732,6 +8706,8 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFil
 function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus, onViewTicket, onReadinessCheck, onDispatch) {
   const columns = [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.vehicle_id },
+    { key: 'type', label: 'Type', render: (row) => row.category?.category_name ?? 'Unassigned' },
+    { key: 'brand_model', label: 'Brand / Model', render: (row) => `${row.brand} ${row.model}` },
     {
       key: 'vehicle',
       label: 'Vehicle',
@@ -8744,8 +8720,6 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
       ),
     },
     { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.plate_number },
-    { key: 'type', label: 'Type', render: (row) => row.category?.category_name ?? 'Unassigned' },
-    { key: 'brand_model', label: 'Brand / Model', render: (row) => `${row.brand} ${row.model}` },
     { key: 'capacity', label: 'Capacity', className: 'cell-center', render: (row) => row.capacity },
     { key: 'location', label: 'Location', render: (row) => row.current_location },
     {
@@ -9682,11 +9656,6 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
             <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id })} type="button" title={`View Ticket #${row.maintenance_ticket.ticket_id}`} aria-label={`View Ticket #${row.maintenance_ticket.ticket_id}`}><Icon name="eye" size={14} /></button>
           ) : (
             <button className="btn-view-action icon-btn" onClick={() => onView(row)} type="button" title="View" aria-label="View"><Icon name="eye" size={14} /></button>
-          )}
-          {/* A Custodian turns a flagged concern into a ticket proposal right
-              from the row — only while the issue can still take one. */}
-          {canDo(user, 'ticket.propose') && onCreateTicketFromIssue && ['Pending', 'Under Review'].includes(row.status) && !row.maintenance_ticket && (
-            <button className="btn-confirm-action icon-btn" onClick={() => onCreateTicketFromIssue(row)} type="button" title="Propose Ticket" aria-label="Propose Ticket"><Icon name="ticket" size={14} /></button>
           )}
           {row.status === 'Pending' && (
             <>
@@ -12410,7 +12379,7 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
         </label>
         {mechanicOptions && (
           <label style={{ marginTop: 10 }}>
-            <span>Maintenance Personnel <span className="muted" style={{ fontWeight: 400 }}>(optional — Admin can change this)</span></span>
+            <span>Maintenance Personnel</span>
             <select
               value={draft.suggested_mechanic_id}
               onChange={(e) => setDraft((d) => ({ ...d, suggested_mechanic_id: e.target.value }))}
@@ -12458,8 +12427,7 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
 // TICKET DETAIL PANEL — shown when admin clicks a ticket row
 // =========================================================================
 
-function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEditSubIssue, onDeleteSubIssue, onAssignTicketMechanic, onReassignCustodian, onReopenDone, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onApproveCannibalization, onRejectCannibalization, onApproveProposal, onDeclineProposal, onUndeclineProposal, onClose, asPage = false }) {
-  const [subDraft, setSubDraft] = useState(null); // { id|null, title, maintenance_type }
+function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechanic, onReassignCustodian, onReopenDone, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onApproveCannibalization, onRejectCannibalization, onApproveProposal, onDeclineProposal, onUndeclineProposal, onClose, asPage = false }) {
   // Cannibalization approval — tracks which sub-issue's reject form is
   // open; Approve has no form of its own (it needs no input beyond the
   // click itself), so it doesn't need a tracked id.
@@ -12493,13 +12461,9 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
     const ids = prev ?? defaultExpandedSubs;
     return ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
   });
-  const isAdminUser = hasRole(user, 'Admin');
   const isAssignedMechanic = ticket.assigned_mechanic_id != null && String(ticket.assigned_mechanic_id) === String(userId);
   const isAssignedCustodian = ticket.assigned_custodian_id != null && String(ticket.assigned_custodian_id) === String(userId);
   const resolvedCount = progress.done + progress.deferred;
-  const inRepairCount = subIssues.filter((s) => s.status === 'Under Repair').length;
-  const loggedCount = subIssues.filter((s) => s.status === 'For Inspection').length;
-  const pendingApprovalCount = subIssues.filter((s) => s.status === 'Pending Approval').length;
   // Every sub-issue has to have its repair logged (For Inspection) before
   // the mechanic can hand the whole ticket to the Custodian — a cannibalized
   // line item still sitting at Pending Approval naturally blocks this,
@@ -12520,33 +12484,9 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
     return { label: 'Returned — record service report', hint: 'Vehicle returned; service report next', detail: 'The vehicle is back. Record the service report so the Custodian can verify it.' };
   })();
   const canHandleExternal = isExternalTicket && ticket.status === 'Active' && canDo(user, 'external.handle');
-  const ticketCost = subIssues.reduce((sum, s) => sum + (Number(s.maintenance_cost) || 0), 0);
   const resolvedPercent = ticket.status === 'Closed'
     ? 100
     : subIssues.length > 0 ? Math.round((resolvedCount / subIssues.length) * 100) : 0;
-  const nextSignal = (() => {
-    if (ticket.status === 'Cancelled') return { tone: 'alert', label: 'Ticket cancelled', detail: 'Restore it only if work needs to resume.' };
-    if (ticket.status === 'Closed') return { tone: 'ok', label: 'Closed', detail: 'All recorded work is complete.' };
-    if (ticket.status === 'Declined') return { tone: 'alert', label: 'Declined', detail: 'Undecline it first — then you can approve and assign it.' };
-    if (ticket.status === 'Pending Approval') return { tone: 'warn', label: 'Review proposal', detail: 'A Custodian proposed this ticket — review and approve or decline it below.' };
-    if (ticket.status === 'For Verification') return isAssignedCustodian
-      ? { tone: 'warn', label: 'Verify repair', detail: 'The mechanic says this is done — confirm it before the ticket closes.' }
-      : { tone: 'active', label: 'Awaiting verification', detail: `${ticket.assigned_custodian?.name ?? 'The assigned Custodian'} needs to verify this repair.` };
-    if (isExternalTicket && ticket.status === 'Active') return { tone: 'active', label: extStage.label, detail: extStage.detail };
-    if (canSubmitForVerification) return { tone: 'warn', label: 'Submit for verification', detail: 'Every sub-issue is logged — submit the ticket for the Custodian to verify.' };
-    if (isAdminUser && pendingApprovalCount > 0) return { tone: 'warn', label: 'Approve cannibalized repair', detail: `${pendingApprovalCount} repair${pendingApprovalCount === 1 ? '' : 's'} using a part from another vehicle ${pendingApprovalCount === 1 ? 'needs' : 'need'} your approval.` };
-    if (pendingApprovalCount > 0) return { tone: 'active', label: 'Awaiting Admin approval', detail: 'A cannibalized repair is waiting for Admin approval before it can be logged as done.' };
-    if (!isAdminUser && isAssignedMechanic && inRepairCount > 0) return { tone: 'warn', label: 'Log your repairs', detail: `${inRepairCount} sub-issue${inRepairCount === 1 ? '' : 's'} still ${inRepairCount === 1 ? 'needs' : 'need'} a repair log.` };
-    if (inRepairCount > 0) return { tone: 'active', label: 'Repair in progress', detail: `${ticket.assigned_mechanic?.name ?? 'The assigned mechanic'} is still working on ${inRepairCount} sub-issue${inRepairCount === 1 ? '' : 's'}.` };
-    return { tone: 'active', label: 'Work in motion', detail: 'Follow the active handoff shown in the repair board.' };
-  })();
-  const processStats = [
-    { icon: 'list', label: 'Sub-issues', value: subIssues.length },
-    { icon: 'wrench', label: 'In repair', value: inRepairCount },
-    { icon: 'search', label: 'Logged', value: loggedCount },
-    { icon: 'clipboard', label: 'Cost', value: ticketCost ? `PHP ${ticketCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : 'PHP 0.00' },
-  ];
-
   // "How long has this been sitting?" — the aging signal. Flagged past 30 days.
   const daysOpen = ticket.days_open;
   const isAging = ticket.status !== 'Closed' && ticket.status !== 'Cancelled' && typeof daysOpen === 'number' && daysOpen >= 30;
@@ -12573,7 +12513,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
 
   const panel = (
       <div className={`ticket-detail-panel${asPage ? ' is-page' : ''}`} onClick={asPage ? undefined : (e) => e.stopPropagation()}>
-        <section className={`ticket-process-hero is-${nextSignal.tone}`}>
+        <section className="ticket-process-hero ticket-process-hero--simple">
           <div className="ticket-process-meter" style={{ '--ticket-progress': `${resolvedPercent}%` }}>
             <div className="ticket-process-meter-core">
               <span>Resolved</span>
@@ -12614,23 +12554,8 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
             )}
           </div>
 
-          <div className="ticket-process-next-card">
-            {asPage ? null : (
-              <button className="icon-btn ticket-process-close" onClick={onClose} type="button" title="Close" aria-label="Close"><Icon name="close" size={18} /></button>
-            )}
-            <span className="ticket-process-next-label">Next best action</span>
-            <strong>{nextSignal.label}</strong>
-            <p>{nextSignal.detail}</p>
-            <div className="ticket-process-stat-grid">
-              {processStats.map((stat) => (
-                <div key={stat.label} className="ticket-process-stat">
-                  <span className="ticket-process-stat-icon"><Icon name={stat.icon} size={14} /></span>
-                  <strong className="ticket-process-stat-value">{stat.value}</strong>
-                  <span className="ticket-process-stat-label">{stat.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          {!asPage && <button className="icon-btn ticket-process-close" onClick={onClose} type="button" title="Close" aria-label="Close"><Icon name="close" size={18} /></button>}
+
         </section>
 
         {ticket.status === 'Cancelled' ? (
@@ -12681,11 +12606,11 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
                   <strong>{ticket.vehicle?.vehicle_name}</strong>
                   <span>{ticket.vehicle?.plate_number} &middot; {ticket.vehicle?.category?.category_name ?? 'Unclassified'}</span>
                   <span className="muted">{[ticket.vehicle?.brand, ticket.vehicle?.model].filter(Boolean).join(' ') || '—'} &middot; {ticket.vehicle?.current_location ?? 'No location on file'}</span>
-                  <div className="ticket-preview-badges">
+                  <div className="ticket-preview-badges ticket-overview-status-text">
                     <StatusBadge value={ticket.vehicle?.status} />
                     <StatusBadge value={ticket.vehicle?.condition} />
                   </div>
-                  <div className="ticket-overview-progress" aria-label="Current repair progress">
+                  <div className="ticket-overview-progress ticket-overview-status-text" aria-label="Current repair progress">
                     <span>Repair progress</span>
                     <TicketStatusBadge value={ticket.status} />
                     <TicketStageBadge ticket={ticket} variant="pill" />
@@ -12706,12 +12631,6 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
                     <span>Assigned To</span>
                     <UserAvatarName user={ticket.assigned_custodian} />
                   </div>
-                  {ticket.inspection_result && (
-                    <div>
-                      <span>Result</span>
-                      <TicketStatusBadge value={ticket.inspection_result} />
-                    </div>
-                  )}
                 </div>
                 {ticket.inspection_notes && <p className="muted" style={{ margin: 0, fontSize: '0.82rem' }}>{ticket.inspection_notes}</p>}
 
@@ -12866,51 +12785,6 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
                 <p className="muted">No sub-issues — inspection found nothing to repair.</p>
               )}
 
-              {/* Adding a brand-new sub-issue to an already-Active ticket is
-                  deliberately not offered — every sub-issue is supposed to be
-                  settled at Admin approval, before repair starts. This inline
-                  form still renders for editing an existing sub-issue (the
-                  pencil icon below sets subDraft with its id), since that's
-                  unchanged — only the "Add Sub-issue" entry point is gone. */}
-              {subDraft && (
-                <div className="ticket-inline-form" style={{ marginBottom: 10, padding: '10px 12px' }}>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      autoFocus
-                      placeholder="What else is wrong?"
-                      value={subDraft.title}
-                      onChange={(e) => setSubDraft({ ...subDraft, title: e.target.value })}
-                      style={{ flex: '2 1 240px' }}
-                    />
-                    <input
-                      type="text"
-                      list="subissue-maintenance-types"
-                      placeholder="Maintenance type (optional)"
-                      value={subDraft.maintenance_type}
-                      onChange={(e) => setSubDraft({ ...subDraft, maintenance_type: e.target.value })}
-                      style={{ flex: '1 1 180px' }}
-                    />
-                    <datalist id="subissue-maintenance-types">
-                      {(lookups.maintenance_types ?? []).map((t) => <option key={t.name ?? t} value={t.name ?? t} />)}
-                    </datalist>
-                    <button
-                      type="button"
-                      className="primary-button"
-                      disabled={!subDraft.title.trim()}
-                      onClick={async () => {
-                        const payload = { title: subDraft.title.trim(), maintenance_type: subDraft.maintenance_type.trim() || null };
-                        const ok = subDraft.id ? await onEditSubIssue(ticket, subDraft.id, payload) : await onAddSubIssue(ticket, payload);
-                        if (ok !== false) setSubDraft(null);
-                      }}
-                    >
-                      {subDraft.id ? 'Save' : 'Add'}
-                    </button>
-                    <button type="button" className="ghost-button" onClick={() => setSubDraft(null)}>Cancel</button>
-                  </div>
-                </div>
-              )}
-
               <div className="ticket-subissue-scroll">
               {subIssues.map((si, index) => {
                 const stageBanner = {
@@ -12936,14 +12810,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
                     <span className="subissue-index">{index + 1}</span>
                     <strong className="subissue-title">{si.title}</strong>
                     <TicketStatusBadge value={si.status} />
-                    {onEditSubIssue && ticket.status === 'Active' && ['Open', 'Under Repair'].includes(si.status) && canDo(user, 'subissue.manage') && (hasRole(user, 'Admin') || String(ticket.assigned_custodian_id) === String(userId)) && (
-                      <span className="subissue-card-head-actions">
-                        <button type="button" className="btn-edit-action icon-btn" title="Edit sub-issue" aria-label="Edit sub-issue" onClick={() => setSubDraft({ id: si.sub_issue_id, title: si.title, maintenance_type: si.maintenance_type ?? '' })}><Icon name="edit" size={13} /></button>
-                        {subIssues.length > 1 && (
-                          <button type="button" className="btn-delete-action icon-btn" title="Remove sub-issue" aria-label="Remove sub-issue" onClick={() => onDeleteSubIssue(ticket, si)}><Icon name="trash" size={13} /></button>
-                        )}
-                      </span>
-                    )}                  </div>
+                  </div>
 
                   <div className="subissue-body-grid">
                   <div className="subissue-body-main">
@@ -13017,6 +12884,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAddSubIssue, onEdi
                       <PartsTags value={si.parts_used} />
                     </div>
                   )}
+                  {(si.attachment_files ?? []).map((file, i) => <a key={file.url ?? i} className="subissue-attachment-link" href={resolvePhotoUrl(file.url)} target="_blank" rel="noreferrer"><Icon name="clipboard" size={13} />{file.name || 'Repair attachment'}</a>)}
                   {si.attachment_url && (
                     <a className="subissue-attachment-link" href={resolvePhotoUrl(si.attachment_url)} target="_blank" rel="noreferrer">
                       <Icon name="clipboard" size={13} /> View attached photo/document
@@ -16226,7 +16094,6 @@ function CannibalizationManagement({ ticket, vehicleOptions, onChanged, notify }
     <section className="lr-group cm-section" aria-label="Cannibalization management">
       <div className="cm-head">
         <h4 className="lr-section-label" style={{ margin: 0 }}>Cannibalization Management</h4>
-        <span className="cm-badge">Cannibalized Repair</span>
       </div>
       <p className="cm-desc">This repair uses parts recovered from a donor vehicle. Parts and materials you buy are listed separately, and donor parts never add to the repair cost.</p>
 
@@ -16235,7 +16102,6 @@ function CannibalizationManagement({ ticket, vehicleOptions, onChanged, notify }
         <div><dt>Plate</dt><dd>{donor?.plate_number ?? donorFallback?.plate_number ?? '—'}</dd></div>
         <div><dt>Type</dt><dd>{donor?.category?.category_name ?? '—'}</dd></div>
         <div><dt>Status</dt><dd>{donor ? <StatusBadge value={donor.status} /> : '—'}</dd></div>
-        <div><dt>Condition</dt><dd>{donor ? <StatusBadge value={donor.condition} /> : '—'}</dd></div>
       </div>
       <p className="cm-note"><Icon name="info" size={13} /> Adding or editing parts changes nothing on the donor. When you submit this repair, one issue report listing these parts is filed on the donor vehicle and it is flagged for inspection.</p>
 
@@ -16247,7 +16113,6 @@ function CannibalizationManagement({ ticket, vehicleOptions, onChanged, notify }
       {parts.length === 0 ? (
         <div className="cm-empty">
           <p>No donor parts recorded yet.</p>
-          {editable && <button type="button" className="btn-sm primary-button" onClick={() => setModal({ mode: 'add' })}><Icon name="plus" size={13} /> Add Part</button>}
         </div>
       ) : (
         <div className="cm-table-wrap">
@@ -16332,8 +16197,8 @@ function DonorVehiclePicker({ ticket, vehicleOptions, onChanged, notify }) {
 
 function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty, onExternalSend, onExternalReturn, onDonorChanged, notify }) {
   const [repairLogs, setRepairLogs] = useState('');
-  const [parts, setParts] = useState([{ name: '', cost: '' }]);
-  const [attachment, setAttachment] = useState(null);
+  const [parts, setParts] = useState([]);
+  const [attachments, setAttachments] = useState([]);
   const [repairStartedAt, setRepairStartedAt] = useState('');
   const [repairCompletedAt, setRepairCompletedAt] = useState('');
   // Pre-filled from whatever was chosen at ticket creation (if this was a
@@ -16360,8 +16225,8 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   }
 
   const updatePart = (index, field, value) => { setParts((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row))); onDirty?.(); };
-  const addPart = () => setParts((rows) => [...rows, { name: '', cost: '' }]);
-  const removePart = (index) => setParts((rows) => rows.filter((_, i) => i !== index));
+  const addPart = () => { setParts((rows) => [...rows, { name: '', cost: '' }]); onDirty?.(); };
+  const removePart = (index) => { setParts((rows) => rows.filter((_, i) => i !== index)); onDirty?.(); };
 
   // Live-running total instead of a manual "Generate" click — a click-based
   // total would go stale the moment another row is added or edited after
@@ -16383,8 +16248,8 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
     onSubmit(ticket, {
       repair_logs: repairLogs,
       parts_used: namedParts.map((p) => p.name.trim()).join(', ') || undefined,
-      photo: attachment || undefined,
-      maintenance_cost: totalCost > 0 ? totalCost : undefined,
+      photos: attachments.length ? attachments : undefined,
+      maintenance_cost: parts.some((part) => part.cost !== '') ? totalCost : undefined,
       repair_started_at: repairStartedAt || undefined,
       repair_completed_at: repairCompletedAt || undefined,
       repair_type: repairType || undefined,
@@ -16400,7 +16265,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   const idBase = `lr-${ticket.sub_issue_id ?? ticket.ticket_id}`;
   const workDescription = ticket.work_order_notes ?? ticket.ticket_description;
   const namedPartCount = parts.filter((p) => p.name.trim()).length;
-  const formatFileSize = (bytes) => (bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
   const dimWhileAtShop = { opacity: awaitingShopReturn ? 0.5 : 1 };
 
   // One workspace instead of a stack of cards: a compact header (vehicle /
@@ -16594,43 +16458,19 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             <p className="lr-note">Evidence, parts and dates apply once the vehicle is back from the shop — mark it Returned above when it comes in.</p>
           )}
 
-          {/* Compact uploader — a button, not a giant drop rectangle. Same
-              single-file `attachment` state and accept list as before. */}
-          <section className="lr-group" style={dimWhileAtShop} aria-labelledby={`${idBase}-ev`}>
-            <h4 className="lr-section-label" id={`${idBase}-ev`}>Repair Evidence</h4>
-            {attachment ? (
-              <div className="lr-file-row">
-                {attachment.type.startsWith('image/') ? (
-                  <img src={URL.createObjectURL(attachment)} alt="" className="lr-file-thumb" />
-                ) : (
-                  <span className="lr-file-thumb lr-file-thumb-icon"><Icon name="archive" size={15} /></span>
-                )}
-                <span className="lr-file-name">{attachment.name}</span>
-                <span className="lr-hint">{formatFileSize(attachment.size)}</span>
-                <button type="button" className="lr-icon-btn" onClick={() => setAttachment(null)} title="Remove attachment" aria-label={`Remove ${attachment.name}`}>
-                  <Icon name="close" size={13} />
-                </button>
-              </div>
-            ) : (
-              <div className="lr-upload-line">
-                <label className="lr-upload-btn">
-                  <Icon name="plus" size={14} /> Add Photo / Document
-                  <input type="file" className="lr-file-input" accept="image/*,.pdf,.doc,.docx" onChange={(e) => { setAttachment(e.target.files[0] ?? null); onDirty?.(); }} />
-                </label>
-                <span className="lr-hint">JPG, PNG, PDF, or DOC · up to 8 MB</span>
-              </div>
-            )}
-          </section>
+
         </div>
 
-        <aside className="lr-side" aria-label="Repair record and submission">
+        <aside className="lr-side-column" aria-label="Repair record and submission">
+          <div className="lr-side">
           {/* Part name takes the row, cost is a fixed narrow column — no
               more fields pinned to opposite edges of the page. Same
               Part Name + Cost model the backend stores (a joined string +
               one total), so no quantity/unit-cost fields are invented. */}
           <section className="lr-side-group" style={dimWhileAtShop} aria-labelledby={`${idBase}-parts`}>
-            <h4 className="lr-section-label" id={`${idBase}-parts`}>Parts &amp; Materials</h4>
-            <div className="lr-parts" role="table" aria-labelledby={`${idBase}-parts`}>
+            <h4 className="lr-section-label" id={`${idBase}-parts`}>Parts &amp; Materials <span className="lr-hint">(optional)</span></h4>
+            {!parts.length && <p className="lr-hint">No parts or costs to record? Leave this section empty.</p>}
+            {!!parts.length && <div className="lr-parts" role="table" aria-labelledby={`${idBase}-parts`}>
               <div className="lr-parts-head" role="row">
                 <span role="columnheader">Part / Material</span>
                 <span role="columnheader">Cost (₱)</span>
@@ -16644,7 +16484,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                     type="button"
                     className="lr-icon-btn"
                     onClick={() => removePart(index)}
-                    disabled={parts.length === 1}
                     title="Remove part"
                     aria-label={`Remove part ${index + 1}`}
                   >
@@ -16652,7 +16491,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                   </button>
                 </div>
               ))}
-            </div>
+            </div>}
             <button type="button" className="lr-link-btn" onClick={addPart}><Icon name="plus" size={13} /> Add Part</button>
             <div className="lr-total">
               <span>Total Repair Cost</span>
@@ -16676,11 +16515,13 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 
           <div className="lr-side-actions">
             <p className="lr-hint">
-              Recorded under Ticket #{ticket.ticket_id} · {namedPartCount} part{namedPartCount === 1 ? '' : 's'} · {attachment ? '1 file attached' : 'no evidence attached'}
+              Recorded under Ticket #{ticket.ticket_id} · {namedPartCount} part{namedPartCount === 1 ? '' : 's'} · {attachments.length ? `${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : 'no evidence attached'}
             </p>
             <button className="primary-button lr-submit" type="submit">Submit Repair Log</button>
             <button className="ghost-button lr-cancel" onClick={onBack} type="button">Cancel</button>
           </div>
+          </div>
+          <RepairFileCabinet files={attachments} savedFiles={[...(ticket.attachment_files ?? []).map((file) => ({ ...file, url: resolvePhotoUrl(file.url) })), ...(ticket.attachment_url ? [{ url: resolvePhotoUrl(ticket.attachment_url), name: 'Previous repair attachment' }] : [])]} onChange={(files) => { setAttachments(files); onDirty?.(); }} onError={(text) => notify?.({ type: 'error', text })} />
         </aside>
       </form>
     </ModulePanel>

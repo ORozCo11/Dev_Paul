@@ -212,7 +212,7 @@ class TicketController extends Controller
     {
         $this->requireAbility($request, 'ticket.view_archives');
 
-        $query = TicketArchiveLog::with(['vehicle', 'archivedBy'])
+        $query = TicketArchiveLog::withTrashed()->with(['vehicle', 'archivedBy'])
             ->when($request->filled('vehicle_id'), fn ($q) => $q->where('vehicle_id', $request->vehicle_id));
 
         if ($request->filled('q')) {
@@ -225,6 +225,25 @@ class TicketController extends Controller
         }
 
         return $query->orderByDesc('archived_at')->get();
+    }
+
+    public function deleteArchive(Request $request, TicketArchiveLog $archive)
+    {
+        $this->requireAbility($request, 'ticket.delete');
+        $archive->delete();
+        $this->log($request, 'Delete Archived Ticket', "Archive #{$archive->archive_id} moved to Deleted Tickets.", $archive->ticket_id);
+
+        return response()->json(['message' => 'Archived ticket moved to Deleted Tickets.']);
+    }
+
+    public function restoreArchive(Request $request, TicketArchiveLog $archive)
+    {
+        $this->requireAbility($request, 'ticket.reopen_archived');
+        abort_unless($archive->trashed(), 422, 'This archive has not been deleted.');
+        $archive->restore();
+        $this->log($request, 'Restore Archived Ticket', "Archive #{$archive->archive_id} restored.", $archive->ticket_id);
+
+        return response()->json(['message' => 'Archived ticket restored.']);
     }
 
     // ===================================================================
@@ -1977,6 +1996,8 @@ class TicketController extends Controller
             'repair_logs'           => ['required_unless:repair_type,cannibalized', 'nullable', 'string'],
             'parts_used'            => ['nullable', 'string'],
             'photo'                 => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:8192'],
+            'photos'                => ['nullable', 'array', 'max:10'],
+            'photos.*'              => ['file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:8192'],
             'repair_started_at'     => ['nullable', 'date'],
             'repair_completed_at'   => ['nullable', 'date'],
             'maintenance_cost'      => ['nullable', 'numeric', 'min:0'],
@@ -2044,11 +2065,23 @@ class TicketController extends Controller
                 $logText = 'Part taken from ' . $donorName . ' and installed.';
             }
 
+            $attachmentFiles = $subIssue->attachment_files ?? [];
+            foreach ($request->file('photos', []) as $file) {
+                $attachmentFiles[] = [
+                    'url' => $this->storeUploadedImage($file, 'repair-attachments'),
+                    'name' => $file->getClientOriginalName(),
+                    'size' => $file->getSize(),
+                    'added_by' => $request->user()->name,
+                    'added_at' => now()->toIso8601String(),
+                ];
+            }
+
             $subIssue->update([
                 'status'                    => 'For Inspection',
                 'verification_assigned_to'  => $ticket->assigned_custodian_id,
                 'repair_logs'               => $existingLogs . '[' . now()->format('Y-m-d H:i') . '] ' . $logText,
                 'parts_used'                => $data['parts_used'] ?? $subIssue->parts_used,
+                'attachment_files'          => $attachmentFiles,
                 'attachment_url'            => $request->hasFile('photo')
                     ? $this->storeUploadedImage($request->file('photo'), 'repair-attachments')
                     : $subIssue->attachment_url,
@@ -2923,6 +2956,7 @@ class TicketController extends Controller
                 'issue_report_id', 'created_by', 'title', 'status', 'assigned_mechanic_id',
                 'maintenance_type', 'work_order_notes', 'mechanic_assigned_at', 'mechanic_assigned_by',
                 'repair_logs', 'parts_used', 'repair_started_at', 'repair_completed_at', 'maintenance_cost',
+                'attachment_url', 'attachment_files',
                 'verification_verdict', 'verification_notes', 'verified_by', 'verified_at',
                 'confirmation_verdict', 'confirmation_notes', 'confirmed_by', 'confirmed_at',
                 'deferred_reason', 'deferred_by', 'deferred_at', 'deferred_issue_report_id',
@@ -2945,7 +2979,7 @@ class TicketController extends Controller
 
             $this->recomputeVehicleStatus($ticket->vehicle_id, $request);
 
-            $archive->delete();
+            $archive->forceDelete();
 
             $this->log($request, 'Ticket Reopened', "Deleted Ticket #{$snapshot['ticket_id']} was reopened by Admin as new Ticket #{$ticket->ticket_id}.", $ticket->ticket_id);
 

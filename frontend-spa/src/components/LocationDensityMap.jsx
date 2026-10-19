@@ -10,6 +10,7 @@ import {
 } from '../data/paknaanLocationDensity';
 import { BOUNDARY_REFERENCE_ATTRIBUTION, geoJsonToPolygons } from '../utils/boundary';
 import BoundaryReferenceLabel from './BoundaryReferenceLabel';
+import BoundaryMapDetails from './BoundaryMapDetails';
 
 // Normalizes a hub record from the Laravel `/hubs` API into the shape the map/UI expects.
 function normalizeHub(record) {
@@ -483,6 +484,7 @@ function LocationDensityMap({
   const hasBoundarySelection = boundaryOverride !== null;
   const hasBoundaryGeometry = Boolean(boundaryOverride?.geometry);
   const boundaryLabel = boundaryOverride?.label ?? 'Paknaan';
+  const barangayName = boundaryOverride?.barangayName ?? boundaryLabel;
   // Only the actual outline to draw — deliberately empty when a barangay
   // was picked but has no boundary polygon on file (only Mandaue City
   // barangays do today), rather than silently substituting Paknaan's shape.
@@ -687,7 +689,6 @@ function LocationDensityMap({
           <span>No detailed boundary reference is available for {boundaryLabel}. Ask the system administrator to review its boundary.</span>
         </div>
       )}
-      {hasBoundaryGeometry && boundaryOverride?.verified !== true && <div className="location-density-notice info" role="status">This outline is an unverified reference. A Super Admin can review or replace it in Barangay Management.</div>}
       {mapNotice && (
         <div className={`location-density-notice ${mapNotice.type}`} role="status">
           <span>{mapNotice.text}</span>
@@ -734,6 +735,13 @@ function LocationDensityMap({
           <button type="button" className={basemap === 'satellite' ? 'is-active' : ''} onClick={() => setBasemap('satellite')}>Satellite</button>
           {basemap === 'satellite' && <button type="button" aria-pressed={showPlaceLabels} className={showPlaceLabels ? 'is-active' : ''} title="Show place names supplied by the map provider. These do not define barangay boundaries." onClick={() => setShowPlaceLabels((value) => !value)}>Map labels</button>}
         </div>
+        {boundaryPolygons.length > 0 && <BoundaryMapDetails
+          name={barangayName}
+          locality={boundaryOverride?.cityName}
+          verified={boundaryOverride?.verified === true}
+          source={boundaryOverride?.source}
+          psgcCode={boundaryOverride?.psgcCode}
+        />}
         {/* Dark casing (halo) drawn UNDER the boundary so the yellow line pops
             on both the light street map and the dark satellite imagery. Each Polygon retains its shell and holes; islands render separately. */}
         {boundaryPolygons.map((ring, index) => (
@@ -758,7 +766,7 @@ function LocationDensityMap({
             positions={ring}
           />
         ))}
-        <BoundaryReferenceLabel polygons={boundaryPolygons} label={boundaryLabel} verified={boundaryOverride?.verified === true} />
+        <BoundaryReferenceLabel polygons={boundaryPolygons} label={barangayName} locality={boundaryOverride?.cityName} />
         {hubs.map((hub) => (
           <Marker
             icon={hubIcons[hub.id]}

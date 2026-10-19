@@ -166,6 +166,78 @@ class TicketWorkflowTest extends TestCase
     }
 
     #[Test]
+    public function archived_tickets_can_be_deleted_and_restored_without_reopening_closed_work(): void
+    {
+        $ticket = $this->driveTicketToClosed($this->activeTicket($this->vehicle(), ['Worn belt']));
+        $archive = TicketArchiveLog::where('ticket_id', $ticket->ticket_id)->firstOrFail();
+        $snapshot = $archive->full_ticket_snapshot;
+        Sanctum::actingAs($this->admin, ['*']);
+
+        $this->deleteJson("/api/ticket-archives/{$archive->archive_id}")->assertOk();
+        $this->assertSoftDeleted('ticket_archive_logs', ['archive_id' => $archive->archive_id]);
+        $this->getJson('/api/ticket-archives')->assertOk()->assertJsonFragment(['archive_id' => $archive->archive_id]);
+        $this->putJson("/api/ticket-archives/{$archive->archive_id}/restore")->assertOk();
+        $this->assertSame($snapshot, $archive->fresh()->full_ticket_snapshot);
+        $this->assertNull($archive->fresh()->deleted_at);
+        $this->assertSame('Closed', $ticket->fresh()->status);
+        $this->putJson("/api/ticket-archives/{$archive->archive_id}/reopen")->assertUnprocessable();
+    }
+
+    #[Test]
+    public function staff_cannot_delete_or_restore_archives(): void
+    {
+        $ticket = $this->driveTicketToClosed($this->activeTicket($this->vehicle(), ['Worn belt']));
+        $archive = TicketArchiveLog::where('ticket_id', $ticket->ticket_id)->firstOrFail();
+        foreach ([$this->custodian, $this->mechanic] as $user) {
+            Sanctum::actingAs($user, ['*']);
+            $this->deleteJson("/api/ticket-archives/{$archive->archive_id}")->assertForbidden();
+        }
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->deleteJson("/api/ticket-archives/{$archive->archive_id}")->assertOk();
+        foreach ([$this->custodian, $this->mechanic] as $user) {
+            Sanctum::actingAs($user, ['*']);
+            $this->putJson("/api/ticket-archives/{$archive->archive_id}/restore")->assertForbidden();
+        }
+    }
+
+    #[Test]
+    public function repair_logs_accept_multiple_evidence_files_without_parts_or_cost(): void
+    {
+        Storage::fake('supabase');
+        $ticket = $this->activeTicket($this->vehicle(), ['Worn belt']);
+        $sub = $ticket->subIssues->first();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->post("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", [
+            '_method' => 'PUT',
+            'repair_logs' => 'Adjusted belt tension. No replacement parts needed.',
+            'photos' => [UploadedFile::fake()->image('belt.jpg'), UploadedFile::fake()->create('report.pdf', 20, 'application/pdf')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $files = $sub->fresh()->attachment_files;
+        $this->assertCount(2, $files);
+        $this->assertSame('belt.jpg', $files[0]['name']);
+        $this->assertSame('report.pdf', $files[1]['name']);
+        $this->assertSame($this->mechanic->name, $files[0]['added_by']);
+        $this->assertNull($sub->fresh()->maintenance_cost);
+        $this->assertNull($sub->fresh()->parts_used);
+        $this->getJson("/api/tickets/{$ticket->ticket_id}")->assertOk()->assertJsonFragment(['name' => 'report.pdf']);
+    }
+
+    #[Test]
+    public function repair_evidence_rejects_oversized_or_unsupported_files(): void
+    {
+        Storage::fake('supabase');
+        $ticket = $this->activeTicket($this->vehicle(), ['Worn belt']);
+        $sub = $ticket->subIssues->first();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->post("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", [
+            '_method' => 'PUT', 'repair_logs' => 'Adjusted belt tension.',
+            'photos' => [UploadedFile::fake()->create('large.pdf', 8193, 'application/pdf'), UploadedFile::fake()->create('script.exe', 1)],
+        ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors(['photos.0', 'photos.1']);
+        $this->assertSame('Under Repair', $sub->fresh()->status);
+        $this->assertNull($sub->fresh()->attachment_files);
+    }
+
+    #[Test]
     public function nobody_can_create_a_ticket_directly_any_more(): void
     {
         // ticket.create has no role (config/permissions.php) — every ticket

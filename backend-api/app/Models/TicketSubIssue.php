@@ -73,6 +73,7 @@ class TicketSubIssue extends Model
         'repair_logs',
         'parts_used',
         'attachment_url',
+        'attachment_files',
         'repair_started_at',
         'repair_completed_at',
         'maintenance_cost',
@@ -106,6 +107,7 @@ class TicketSubIssue extends Model
     ];
 
     protected $casts = [
+        'attachment_files' => 'array',
         'mechanic_assigned_at' => 'datetime',
         'verified_at'          => 'datetime',
         'confirmed_at'         => 'datetime',

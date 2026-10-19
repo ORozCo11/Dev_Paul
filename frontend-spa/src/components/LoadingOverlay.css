@@ -31,7 +31,7 @@
 }
 
 .vms-loading-logo {
-  animation: vms-loading-rotate 1.5s linear infinite;
+  animation: vms-loading-rotate 6s linear infinite;
 }
 
 @keyframes vms-loading-rotate {
