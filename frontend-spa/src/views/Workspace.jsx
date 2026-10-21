@@ -468,6 +468,25 @@ const moduleIcons = {
   ),
 };
 
+// Sidebar and page-heading icons share the Solar Linear catalogue used by the
+// rest of the application, keeping this navigation flat and outline-only.
+const moduleIconNames = {
+  dashboard: 'grid', vehicles: 'vehicle', categories: 'list', locations: 'pin',
+  conditions: 'checkCircle', issues: 'alert', maintenance: 'wrench',
+  maintenanceStatus: 'checkCircle', maintenanceLedger: 'wrench', schedules: 'calendar',
+  tickets: 'ticket', ticketArchives: 'archive', reportOrPropose: 'alert',
+  myTasks: 'clipboard', ticketPropose: 'document', ticketInspections: 'search',
+  ticketVerifications: 'checkCircle', ticketWorkOrders: 'wrench', workTracker: 'columns',
+  histories: 'undo', reports: 'document', logs: 'document', users: 'users',
+};
+
+function renderModuleIcon(key) {
+  const iconName = moduleIconNames[key];
+  return iconName
+    ? <Icon name={iconName} size={20} className="nav-icon" />
+    : (moduleIcons[key] ?? null);
+}
+
 function Workspace() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -2877,7 +2896,7 @@ function Workspace() {
                     title={isSidebarCollapsed ? label : undefined}
                     type="button"
                   >
-                    {moduleIcons[key]}
+                    {renderModuleIcon(key)}
                     <span>{label}</span>
                     {badgeCount > 0 && <span className="module-nav-badge">{badgeCount}</span>}
                   </button>
@@ -2896,7 +2915,7 @@ function Workspace() {
               redundantly above it, so it's skipped for that one page only. */}
           {(activeModule !== 'dashboard' || isOnSpecialPage) && (
             <div className="page-heading-row">
-              <span className="page-heading-icon">{moduleIcons[breadcrumbModule]}</span>
+              <span className="page-heading-icon">{renderModuleIcon(breadcrumbModule)}</span>
               <div className="page-heading-text">
                 {subPageTitle && !isProfilePage && (
                   <p className="breadcrumb-path">{moduleLabel(modules, breadcrumbModule)} »</p>
