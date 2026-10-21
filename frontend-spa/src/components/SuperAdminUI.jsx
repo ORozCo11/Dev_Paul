@@ -69,11 +69,11 @@ export function AdminFilterField({ label, children }) {
   return <div className="sa-filter-field"><label htmlFor={id}>{label}</label>{cloneElement(children, { id })}</div>;
 }
 
-export function AdminManagementCard({ summary, toolbar, children }) {
+export function AdminManagementCard({ summary, toolbar, children, filtersCollapsible = true }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   return <section className="sa-management-card">
     {summary && <div className="sa-card-summary">{summary}</div>}
-    {toolbar && <><button type="button" className={`sa-filter-toggle${filtersOpen ? ' is-open' : ''}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}><Icon name="search" size={15} />Filters<Icon name="chevronDown" size={15} /></button>{filtersOpen && <div className="sa-toolbar">{toolbar}</div>}</>}
+    {toolbar && (filtersCollapsible ? <><button type="button" className={`sa-filter-toggle${filtersOpen ? ' is-open' : ''}`} aria-expanded={filtersOpen} onClick={() => setFiltersOpen((open) => !open)}><Icon name="search" size={15} />Filters<Icon name="chevronDown" size={15} /></button>{filtersOpen && <div className="sa-toolbar">{toolbar}</div>}</> : <div className="sa-toolbar">{toolbar}</div>)}
     {children}
   </section>;
 }
