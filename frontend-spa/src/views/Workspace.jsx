@@ -471,6 +471,8 @@ const moduleIcons = {
 function Workspace() {
   const navigate = useNavigate();
   const location = useLocation();
+  const topbarRef = useRef(null);
+  const workspaceRef = useRef(null);
   const vehicleUrlMatch = location.pathname.match(/\/vehicles\/(new|\d+)$/);
   const vehicleProfileId = vehicleUrlMatch && vehicleUrlMatch[1] !== 'new' ? vehicleUrlMatch[1] : null;
   const isNewVehiclePage = vehicleUrlMatch?.[1] === 'new';
@@ -541,6 +543,22 @@ function Workspace() {
     || (editLocationVehicleId && 'Update Location')
     || null;
   const { user, logout, refreshUser } = useContext(AuthContext);
+  // The top bar can become taller when its location selectors wrap. Keep the
+  // fixed sidebar aligned to that measured edge instead of the 64px fallback.
+  useLayoutEffect(() => {
+    const topbar = topbarRef.current;
+    const workspace = workspaceRef.current;
+    if (!topbar || !workspace) return undefined;
+
+    const syncTopbarHeight = () => {
+      workspace.style.setProperty('--topbar-height', `${Math.ceil(topbar.getBoundingClientRect().height)}px`);
+    };
+
+    const observer = new ResizeObserver(syncTopbarHeight);
+    observer.observe(topbar);
+    syncTopbarHeight();
+    return () => observer.disconnect();
+  }, []);
   // Phase B2 — UX-only redirect for every full-page create/edit route: the
   // backend independently (and exhaustively) enforces each of these
   // abilities on the actual endpoint, so this just keeps someone without the
@@ -2631,7 +2649,7 @@ function Workspace() {
   return (
     <FormNoticeContext.Provider value={notice}>
     <RowActionsContext.Provider value={rowActions}>
-      <header className="topbar">
+      <header className="topbar" ref={topbarRef}>
         <div className="topbar-left">
           <div className="topbar-brand-cluster">
             <button
@@ -2796,7 +2814,7 @@ function Workspace() {
       </div>
       </header>
 
-      <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
+      <main ref={workspaceRef} className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`}>
           <nav className="module-nav" aria-label="Workspace modules">
             {moduleGroups.map(({ section, items }) => {
