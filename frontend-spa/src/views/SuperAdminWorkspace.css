@@ -196,7 +196,7 @@ html:root[data-theme] .superadmin-shell .topbar select { height: 34px; min-heigh
 @media (max-width: 900px) {
  html:root[data-theme] .superadmin-shell .topbar { display: block; padding: 12px 16px; }
  html:root[data-theme] .superadmin-shell .topbar-left { display: block; width: 100%; }
- html:root[data-theme] .superadmin-shell .topbar-brand-cluster { display: grid; grid-template-columns: 24px 24px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; }
+ html:root[data-theme] .superadmin-shell .topbar-brand-cluster { display: grid; grid-template-columns: 24px auto minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; }
  html:root[data-theme] .superadmin-shell .topbar-right { position: absolute; right: 16px; top: 10px; gap: 8px; }
  html:root[data-theme] .superadmin-shell .map-boundary-selector { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
  html:root[data-theme] .superadmin-shell .dev-impersonate { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; width: 100%; }
