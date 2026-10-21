@@ -70,7 +70,7 @@ class SuperAdminController extends Controller
             // Reference-only PSGC rows are registration choices, not platform tenants.
             // Keep manually added barangays visible before their first staff joins.
             ->where(function ($query) {
-                $query->whereNull('psgc_code')->orWhereHas('users')->orWhereHas('registrationSetting');
+                $query->whereNull('psgc_code')->orWhereNotNull('provisioned_at')->orWhereHas('users')->orWhereHas('registrationSetting');
             })
             ->select(['id', 'name', 'psgc_code', 'city_id', 'boundary_status', 'boundary_source', 'boundary_verified_by', 'pending_boundary', 'pending_boundary_source'])
             ->selectRaw('CASE WHEN boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
@@ -141,7 +141,9 @@ class SuperAdminController extends Controller
             422, 'Select an official PSGC barangay belonging to the selected city or municipality.');
         $barangay->load('city.province');
         app(BarangayGeography::class)->attachBoundary($barangay);
+        $barangay->update(['provisioned_at' => $barangay->provisioned_at ?? now()]);
         $barangay->refresh();
+        $barangay->loadCount(['users', 'users as active_admin_count' => fn ($query) => $query->havingRole('Admin')->where('is_active', true)]);
 
         $this->log($request, 'Add', "Added barangay {$barangay->name} ({$barangay->city?->name}).");
 
@@ -150,12 +152,13 @@ class SuperAdminController extends Controller
             'name' => $barangay->name,
             'city_name' => $barangay->city?->name,
             'province_name' => $barangay->city?->province?->name,
-            'staff_count' => 0,
-            'has_active_admin' => false,
-            'has_registration_code' => false,
+            'staff_count' => $barangay->users_count,
+            'has_active_admin' => $barangay->active_admin_count > 0,
+            'sole_active_admin' => $barangay->active_admin_count === 1,
+            'has_registration_code' => $barangay->registrationSetting()->exists(),
             'psgc_code' => $barangay->psgc_code,
             'has_boundary' => $barangay->boundary !== null,
-            'boundary_status' => $barangay->boundary !== null ? 'needs_review' : 'not_found',
+            'boundary_status' => $this->boundaryStatus($barangay),
             'pending_boundary' => $barangay->pending_boundary,
             'pending_boundary_source' => $barangay->pending_boundary_source,
         ], 201);
@@ -177,7 +180,7 @@ class SuperAdminController extends Controller
 
         return response()->json([
             'has_boundary' => $found,
-            'boundary_status' => $found ? 'needs_review' : 'not_found',
+            'boundary_status' => $this->boundaryStatus($barangay),
             'pending_boundary' => $barangay->pending_boundary,
             'pending_boundary_source' => $barangay->pending_boundary_source,
         ]);
@@ -640,14 +643,19 @@ class SuperAdminController extends Controller
 
         $data = $request->validate([
             'role' => ['required', Rule::in(self::ROLES)],
+            'preserve_roles' => ['sometimes', 'boolean'],
         ]);
+        abort_if($request->boolean('preserve_roles') && $data['role'] !== 'Admin', 422, 'Existing roles can only be preserved when promoting an Administrator.');
+        $roles = $request->boolean('preserve_roles') ? array_values(array_unique([...$user->allRoles(), 'Admin'])) : [$data['role']];
 
         if ($data['role'] !== 'Admin') {
             $this->abortIfLastActiveAdmin($user, 'changing their role');
         }
 
-        $user->update(['role' => $data['role'], 'roles' => [$data['role']]]);
-        $this->log($request, 'Edit', "Changed {$user->name}'s role to {$data['role']}.");
+        $this->abortIfHasOpenWork($user, 'changing their roles', $roles);
+
+        $user->update(['role' => $data['role'], 'roles' => $roles]);
+        $this->log($request, 'Edit', "Changed {$user->name}'s roles to ".implode(', ', $roles)." (primary: {$data['role']}).");
 
         return $user->fresh();
     }
@@ -656,7 +664,7 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'barangay.view_registration_code', 'Only a Super Admin can perform this action.');
         abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
-            'Review the PSGC-matched boundary before issuing a registration code. No code can be issued while the boundary is unavailable or pending review.');
+            'A live boundary outline is required before issuing a registration code. Confirm or discard any pending replacement first. An imported reference outline does not have to be marked reviewed.');
 
         $setting = RegistrationSetting::for($barangay->id);
 
@@ -667,7 +675,7 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'barangay.regenerate_registration_code', 'Only a Super Admin can perform this action.');
         abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
-            'Review the PSGC-matched boundary before issuing a registration code. No code can be issued while the boundary is unavailable or pending review.');
+            'A live boundary outline is required before issuing a registration code. Confirm or discard any pending replacement first. An imported reference outline does not have to be marked reviewed.');
 
         $setting = RegistrationSetting::regenerateFor($barangay->id);
         $this->log($request, 'Edit', "Regenerated the staff registration code for {$barangay->name}.");
@@ -689,11 +697,33 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'activity_log.view_platform', 'Only a Super Admin can perform this action.');
 
-        return ActivityLog::with('user')
-            ->whereIn('module', self::ACCOUNT_MODULES)
-            ->latest('log_id')
-            ->limit(200)
-            ->get();
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:200'],
+            'scope' => ['nullable', Rule::in(['all', 'superadmin'])],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', Rule::in([25, 50, 100])],
+        ]);
+        $query = ActivityLog::with('user')->whereIn('module', self::ACCOUNT_MODULES);
+        if (($data['scope'] ?? 'all') === 'superadmin') $query->where('module', 'Super Admin');
+        if (($search = trim($data['q'] ?? '')) !== '') {
+            $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search)).'%';
+            $query->where(function ($query) use ($pattern) {
+                foreach (['role', 'action', 'module', 'details'] as $column) $query->orWhereRaw("LOWER({$column}) LIKE ? ESCAPE '!'", [$pattern]);
+                $query->orWhereHas('user', fn ($user) => $user->whereRaw("LOWER(name) LIKE ? ESCAPE '!'", [$pattern]));
+            });
+        }
+        $query->latest('log_id');
+        // Keep the legacy array response for existing integrations. The portal
+        // requests pagination so search covers the complete authorized history.
+        if ($request->boolean('paginate')) return $query->paginate($data['per_page'] ?? 25)->withQueryString();
+        return $query->limit(200)->get();
+    }
+
+    private function boundaryStatus(Barangay $barangay): string
+    {
+        if ($barangay->pending_boundary !== null) return 'needs_review';
+        if ($barangay->boundary === null) return 'not_found';
+        return app(BarangayGeography::class)->isReviewed($barangay) ? 'verified' : 'needs_review';
     }
 
     /**

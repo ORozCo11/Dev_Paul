@@ -359,7 +359,14 @@ function LocationDensityMap({
   }, [onHubsChange]);
 
   useEffect(() => {
-    fetchHubs().catch(() => {});
+    let cancelled = false;
+    // Start external I/O after commit; a torn-down mount never starts it.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      fetchHubs().catch(() => {});
+
+    });
+    return () => { cancelled = true; };
   }, [fetchHubs]);
 
   // When the naming modal opens, focus the input.

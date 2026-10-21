@@ -6,6 +6,7 @@ import { AdminActionDrawer, AdminEmptyState, AdminFilterField, AdminIdentity, Ad
 import { formatDate } from '../utils/adminDate';
 
 const ROLES = ['Admin', 'Custodian', 'Maintenance Personnel'];
+const effectiveRoles = (account) => [...new Set([...(account.roles ?? []), account.role].filter(Boolean))];
 const concernLabel = (report) => ({ 'Barangay Inactive': 'Barangay seems inactive', 'Suspected Fake Staff': 'Suspected fake staff', Other: 'Other' })[report.concern_type] ?? report.concern_type ?? 'Platform concern';
 const location = (record) => [record.barangay_name, record.city_name, record.province_name].filter(Boolean).join(', ') || 'Unassigned';
 const firstAdmin = (account, barangays) => account.role === 'Admin' && !barangays.find((b) => b.id === account.barangay_id)?.has_active_admin;
@@ -79,19 +80,19 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onApprove, onRej
   };
   const requestRoleChange = (event) => {
     event.preventDefault();
-    onRequestConfirmation({ title: 'Change Account Role', message: `Change ${editing.name}'s role from ${(editing.roles ?? [editing.role]).join(', ')} to ${nextRole}? This replaces their current roles and changes account permissions.`, confirmLabel: 'Confirm Role Change', variant: 'primary', onConfirm: async () => { const success = await onChangeRole(editing, nextRole); if (success) setEditing(null); } });
+    onRequestConfirmation({ title: 'Change Account Role', message: `Change ${editing.name}'s role from ${effectiveRoles(editing).join(', ')} to ${nextRole}? This replaces their current roles and changes account permissions.`, confirmLabel: 'Confirm Role Change', variant: 'primary', onConfirm: async () => { const success = await onChangeRole(editing, nextRole); if (success) setEditing(null); } });
   };
-  const visible = users.filter((account) => (!barangay || String(account.barangay_id) === barangay) && (!role || (account.roles ?? [account.role]).includes(role)) && (!status || accountStatus(account) === status) && [account.name, account.email, location(account)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const visible = users.filter((account) => (!barangay || String(account.barangay_id) === barangay) && (!role || effectiveRoles(account).includes(role)) && (!status || accountStatus(account) === status) && [account.name, account.email, location(account)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const columns = [
     { label: 'User', render: (account) => <AdminIdentity name={account.name} email={account.email} /> },
     { label: 'Barangay', render: (account) => <div className="sa-stacked"><strong>{account.barangay_name || 'Unassigned'}</strong><span>{[account.city_name, account.province_name].filter(Boolean).join(', ')}</span></div> },
-    { label: 'Role', render: (account) => (account.roles?.length ? account.roles : [account.role]).join(', ') },
+    { label: 'Role', render: (account) => effectiveRoles(account).join(', ') },
     { label: 'Account Status', render: (account) => <StatusBadge value={accountStatus(account)} /> },
     { label: 'Actions', render: (account) => <div className="sa-row-actions"><button className="ghost-button" type="button" onClick={() => { setEditing(account); setNextRole(account.role); }}>Edit Role</button><button type="button" className={`ghost-button${account.approved_at && account.is_active ? ' sa-destructive' : ''}`} onClick={() => requestStateChange(account)}>{!account.approved_at ? 'Approve' : account.is_active ? 'Deactivate' : 'Activate'}</button>{!account.approved_at && <button className="ghost-button sa-destructive" type="button" onClick={() => onRequestConfirmation({ title: 'Reject Registration', message: `Permanently delete ${account.name}'s pending registration? This cannot be undone.`, confirmLabel: 'Reject & Delete', variant: 'danger', onConfirm: () => onReject(account) })}>Reject</button>}</div> },
   ];
   return <div className="superadmin-tab"><AdminManagementCard toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search user or email..." /><AdminFilterField label="Barangay"><select value={barangay} onChange={(event) => setBarangay(event.target.value)}><option value="">All Barangays</option>{[...new Map(users.map((account) => [String(account.barangay_id), location(account)])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></AdminFilterField><AdminFilterField label="Role"><select value={role} onChange={(event) => setRole(event.target.value)}><option value="">All Roles</option>{ROLES.map((name) => <option key={name}>{name}</option>)}</select></AdminFilterField><AdminFilterField label="Account status"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option>{['Active', 'Deactivated', 'Pending Approval'].map((name) => <option key={name}>{name}</option>)}</select></AdminFilterField></>}>
     <PaginatedTable rows={visible} columns={columns} emptyMessage="No matching users" emptyDescription="Try another user name or adjust the account filters." />
-  </AdminManagementCard>{editing && <AdminActionDrawer title="Edit account role" description="Review this account's access before saving." onClose={() => setEditing(null)}><AdminIdentity name={editing.name} email={editing.email} /><form className="sa-role-form" onSubmit={requestRoleChange}><p>Current roles: <strong>{(editing.roles ?? [editing.role]).join(', ')}</strong></p><AdminFilterField label="New role"><select value={nextRole} onChange={(event) => setNextRole(event.target.value)}>{ROLES.map((name) => <option key={name}>{name}</option>)}</select></AdminFilterField><p className="muted">Saving replaces the account's current roles. Last-Administrator and account restrictions still apply.</p><div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => setEditing(null)}>Cancel</button><button type="submit" className="primary-button" disabled={nextRole === editing.role}>Save Role</button></div></form></AdminActionDrawer>}</div>;
+  </AdminManagementCard>{editing && <AdminActionDrawer title="Edit account role" description="Review this account's access before saving." onClose={() => setEditing(null)}><AdminIdentity name={editing.name} email={editing.email} /><form className="sa-role-form" onSubmit={requestRoleChange}><p>Current roles: <strong>{effectiveRoles(editing).join(', ')}</strong></p><AdminFilterField label="New role"><select value={nextRole} onChange={(event) => setNextRole(event.target.value)}>{ROLES.map((name) => <option key={name}>{name}</option>)}</select></AdminFilterField><p className="muted">Saving replaces the account's current roles. Last-Administrator and account restrictions still apply.</p><div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => setEditing(null)}>Cancel</button><button type="submit" className="primary-button" disabled={nextRole === editing.role && effectiveRoles(editing).length === 1}>Save Role</button></div></form></AdminActionDrawer>}</div>;
 }
 
 export function RegistrationCodesTab({ barangays, initialBarangay, onRequestConfirmation, setNotice }) {
@@ -163,7 +164,7 @@ export function ConcernReportsTab({ reports, onResolve, onReopen, onDelete, onRe
   const [search, setSearch] = useState('');
   const [scope, setScope] = useState('open');
   const [reviewing, setReviewing] = useState(null);
-  const visible = reports.filter((report) => (scope !== 'open' || report.status !== 'Resolved') && [report.id, report.description, report.barangay_name, report.reporter_name, concernLabel(report)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const visible = reports.filter((report) => (scope !== 'open' || report.status !== 'Resolved') && [report.id, `CR-${report.id}`, report.description, report.barangay_name, report.reporter_name, concernLabel(report)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const actions = (report) => <div className="sa-row-actions"><button className="primary-button" type="button" onClick={async () => { const success = await (report.status === 'Resolved' ? onReopen(report) : onResolve(report)); if (success) setReviewing(null); }}>{report.status === 'Resolved' ? 'Reopen' : 'Mark Resolved'}</button><button className="ghost-button sa-destructive" type="button" onClick={() => onRequestConfirmation({ title: 'Delete Concern Report', message: 'Delete this concern report permanently? This cannot be undone.', confirmLabel: 'Delete', variant: 'danger', onConfirm: async () => { const success = await onDelete(report); if (success) setReviewing(null); } })}>Delete</button></div>;
   const columns = [
     { label: 'Concern', render: (report) => <div className="sa-stacked"><strong>CR-{report.id}</strong><span>{concernLabel(report)}</span></div> },
@@ -178,11 +179,29 @@ export function ConcernReportsTab({ reports, onResolve, onReopen, onDelete, onRe
   </AdminManagementCard>{reviewing && <AdminActionDrawer title={`Concern CR-${reviewing.id}`} description={concernLabel(reviewing)} onClose={() => setReviewing(null)} footer={actions(reviewing)}><dl className="sa-detail-list"><dt>Barangay</dt><dd>{reviewing.barangay_name || 'Not specified'}</dd><dt>Reported by</dt><dd>{reviewing.reporter_name || 'Anonymous'}</dd><dt>Contact</dt><dd>{reviewing.reporter_contact || 'Not provided'}</dd><dt>Submitted</dt><dd>{formatDate(reviewing.created_at)}</dd><dt>Status</dt><dd><StatusBadge value={reviewing.status} /></dd>{reviewing.resolved_at && <><dt>Resolved</dt><dd>{formatDate(reviewing.resolved_at)}{reviewing.resolved_by?.name ? ` by ${reviewing.resolved_by.name}` : ''}</dd></>}</dl><h3>Full description</h3><p className="sa-full-text">{reviewing.description}</p></AdminActionDrawer>}</div>;
 }
 
-export function ActivityLogTab({ entries }) {
-  const [search, setSearch] = useState('');
-  const [scope, setScope] = useState('all');
+export function ActivityLogTab() {
+  const [filters, setFilters] = useState({ search: '', scope: 'all', page: 1, size: 25, attempt: 0 });
+  const [result, setResult] = useState({ key: '', data: null, error: null });
   const [reviewing, setReviewing] = useState(null);
-  const visible = entries.filter((entry) => (scope !== 'mine' || entry.module === 'Super Admin') && [entry.user?.name, entry.role, entry.action, entry.module, entry.details].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const { search, scope, page, size, attempt } = filters;
+  const path = `/superadmin/activity-log?${new URLSearchParams({ paginate: '1', q: search.trim(), scope, page: String(page), per_page: String(size) })}`;
+  const key = `${path}:${attempt}`;
+  const loading = result.key !== key;
+  const updateFilters = (changes) => setFilters((current) => ({ ...current, page: 1, ...changes }));
+  useEffect(() => {
+    let current = true;
+    const timer = setTimeout(() => {
+      api.get(path).then(({ data }) => {
+        if (!current) return;
+        if (data.current_page > data.last_page) {
+          setFilters((previous) => ({ ...previous, page: data.last_page }));
+          return;
+        }
+        setResult({ key, data, error: null });
+      }).catch(() => { if (current) setResult({ key, data: null, error: 'Could not load activity records. Please retry.' }); });
+    }, 200);
+    return () => { current = false; clearTimeout(timer); };
+  }, [path, key]);
   const columns = [
     { label: 'Date & Time', className: 'sa-date-cell', render: (entry) => formatDate(entry.created_at) },
     { label: 'Actor', render: (entry) => entry.user?.name ?? 'Deleted account' },
@@ -191,7 +210,7 @@ export function ActivityLogTab({ entries }) {
     { label: 'Module', key: 'module' },
     { label: 'Details', className: 'sa-log-details', render: (entry) => <><p className="sa-truncate">{entry.details}</p><button className="sa-text-button" type="button" onClick={() => setReviewing(entry)}>View full details</button></> },
   ];
-  return <div className="superadmin-tab"><AdminManagementCard summary={<><strong>{visible.length} activity records</strong><span>Account and platform administration · Times shown in Philippine time</span></>} toolbar={<><div className="sa-segments"><button type="button" aria-pressed={scope === 'all'} onClick={() => setScope('all')}>Full Platform Log</button><button type="button" aria-pressed={scope === 'mine'} onClick={() => setScope('mine')}>Super Admin Actions Only</button></div><LocalSearchInput value={search} onChange={setSearch} placeholder="Search platform activity..." /></>}>
-    <PaginatedTable rows={visible} columns={columns} initialPageSize={25} pageSizeOptions={[25, 50, 100]} emptyMessage="No matching activity records" emptyDescription="Try another search or choose the full authorized platform log." />
+  return <div className="superadmin-tab"><AdminManagementCard summary={<><strong>{loading ? 'Loading activity records…' : result.error ? 'Activity records unavailable' : `${result.data.total} activity records`}</strong><span>Account and platform administration · Times shown in Philippine time</span></>} toolbar={<><div className="sa-segments"><button type="button" aria-pressed={scope === 'all'} onClick={() => updateFilters({ scope: 'all' })}>Full Platform Log</button><button type="button" aria-pressed={scope === 'superadmin'} onClick={() => updateFilters({ scope: 'superadmin' })}>Super Admin Actions Only</button></div><LocalSearchInput value={search} onChange={(value) => updateFilters({ search: value.slice(0, 200) })} placeholder="Search platform activity..." /></>}>
+    {loading ? <p role="status">Loading activity records…</p> : result.error ? <p role="alert">{result.error} <button type="button" className="ghost-button" onClick={() => updateFilters({ attempt: attempt + 1, page })}>Retry activity records</button></p> : <PaginatedTable rows={result.data.data} columns={columns} pagination={{ page, size, total: result.data.total }} onPageChange={(value) => updateFilters({ page: value })} onPageSizeChange={(value) => updateFilters({ size: value })} initialPageSize={25} pageSizeOptions={[25, 50, 100]} emptyMessage="No matching activity records" emptyDescription="Try another search or choose the full authorized platform log." />}
   </AdminManagementCard>{reviewing && <AdminActionDrawer title="Activity details" description={`Record ${reviewing.log_id ?? reviewing.id ?? ''}`} onClose={() => setReviewing(null)}><dl className="sa-detail-list"><dt>Date & time</dt><dd>{formatDate(reviewing.created_at)}</dd><dt>Actor</dt><dd>{reviewing.user?.name ?? 'Deleted account'}</dd><dt>Role at time of action</dt><dd>{reviewing.role ?? reviewing.user?.role ?? 'Not recorded'}</dd><dt>Action</dt><dd>{reviewing.action}</dd><dt>Module</dt><dd>{reviewing.module}</dd></dl><h3>Complete details</h3><p className="sa-full-text">{reviewing.details}</p></AdminActionDrawer>}</div>;
 }

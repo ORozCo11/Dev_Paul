@@ -89,7 +89,7 @@ function ProfileMenu({ user, open, setOpen, onOpenSettings, onLogout }) {
   const initials = user.name ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : 'U';
   return (
     <>
-      <button className="profile-menu-trigger" type="button" onClick={() => setOpen((v) => !v)} aria-label="Account menu">
+      <button className="profile-menu-trigger" type="button" onClick={() => setOpen((v) => !v)} aria-label="Account menu" aria-expanded={open}>
         <span className="profile-menu-avatar">{initials}</span>
       </button>
       {open && (
@@ -165,18 +165,32 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
       <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd><dt>Boundary status</dt><dd><StatusBadge value={boundaryStatus(managing)} /></dd><dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
       <section className="sa-detail-section"><h3>Registration code</h3><p>View or regenerate this barangay's staff registration code.</p><button type="button" className="ghost-button" onClick={() => onRegistrationCode(managing)}><Icon name="key" size={15} />Manage Registration Code</button></section>
       <section className="sa-detail-section"><h3>Boundary configuration</h3><button type="button" className="ghost-button" onClick={() => { setReviewingBoundary(managing); }}>Review / Replace Boundary</button>{managing.boundary_status === 'needs_review' ? <><p>{managing.pending_boundary ? 'A candidate outline is waiting for review.' : 'The current outline is an unverified reference.'} Review it against an LGU-approved boundary map or survey.</p><button type="button" className="primary-button" onClick={() => { setReviewingBoundary(managing); }}>Review Boundary</button></> : managing.boundary_status === 'verified' ? <p>A boundary reviewed against an uploaded source document is on file. This is an administrator review, not a legal certification.</p> : <><p>No matching boundary is on file. Retry the supported lookup.</p><button type="button" className="ghost-button" disabled={retryingId === managing.id} onClick={() => retryBoundary(managing)}>{retryingId === managing.id ? 'Checking…' : 'Retry Boundary Lookup'}</button></>}</section>
-      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin. An inactive account will also be activated.</p><AdminFilterField label="Staff member"><select value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</select></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
+      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities. An inactive account will also be approved and activated.</p><AdminFilterField label="Staff member"><select value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</select></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
       </div>
     </section>}
     {reviewingBoundary && <BoundaryReviewModal onSaved={onBoundarySaved} barangay={reviewingBoundary} onClose={() => setReviewingBoundary(null)} onConfirm={async () => { if (await onConfirmBoundary(reviewingBoundary)) setReviewingBoundary(null); }} onDiscard={async () => { if (await onDiscardBoundary(reviewingBoundary)) setReviewingBoundary(null); }} />}
   </div>;
 }
 
+function useAdminLookup(url, enabled, label) {
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState({ key: '', rows: [], error: null });
+  const key = `${url}:${attempt}`;
+  useEffect(() => {
+    if (!enabled) return;
+    let current = true;
+    api.get(url).then(({ data }) => {
+      if (current) setResult({ key, rows: data, error: null });
+    }).catch(() => {
+      if (current) setResult({ key, rows: [], error: `Could not load ${label}. Please retry.` });
+    });
+    return () => { current = false; };
+  }, [url, enabled, label, key]);
+  return { rows: enabled && result.key === key ? result.rows : [], loading: enabled && result.key !== key, error: enabled && result.key === key ? result.error : null, retry: () => setAttempt((value) => value + 1) };
+}
+
 // Nationwide location cascade for adding a registered barangay.
 function AddBarangayForm({ onAdded, onCancel }) {
-  const [provinces, setProvinces] = useState([]);
-  const [cities, setCities] = useState([]);
-  const [barangays, setBarangays] = useState([]);
   const [provinceId, setProvinceId] = useState('');
   const [cityId, setCityId] = useState('');
   const [barangayId, setBarangayId] = useState('');
@@ -185,28 +199,16 @@ function AddBarangayForm({ onAdded, onCancel }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    api.get('/provinces').then((res) => setProvinces(res.data)).catch(() => {});
-  }, []);
+  const provinceLookup = useAdminLookup('/provinces', true, 'provinces');
+  const cityLookup = useAdminLookup(`/cities?province_id=${provinceId}`, Boolean(provinceId), 'cities');
+  const barangayLookup = useAdminLookup(`/barangays?city_id=${cityId}`, Boolean(cityId), 'barangays');
+  const provinces = provinceLookup.rows;
+  const cities = cityLookup.rows;
+  const barangays = barangayLookup.rows;
 
   useEffect(() => {
-    if (!provinceId) return;
+    if (!barangayId) return;
     let current = true;
-    api.get('/cities', { params: { province_id: provinceId } }).then((res) => { if (current) setCities(res.data); }).catch(() => { if (current) setCities([]); });
-    return () => { current = false; };
-  }, [provinceId]);
-
-  useEffect(() => {
-    if (!cityId) { setBarangays([]); return; }
-    let current = true;
-    api.get('/barangays', { params: { city_id: cityId } }).then((res) => { if (current) setBarangays(res.data); }).catch(() => { if (current) setBarangays([]); });
-    return () => { current = false; };
-  }, [cityId]);
-
-  useEffect(() => {
-    if (!barangayId) { setBoundaryPreview(null); setPreviewStatus(''); return; }
-    let current = true;
-    setBoundaryPreview(null); setPreviewStatus('Loading the PSGC-matched boundary…');
     api.get(`/barangays/${barangayId}`).then(({ data }) => {
       if (!current) return;
       setBoundaryPreview(data);
@@ -236,20 +238,21 @@ function AddBarangayForm({ onAdded, onCancel }) {
     <form className="location-form-panel superadmin-panel-spaced" onSubmit={submit}>
       <h3>Add Barangay</h3>
       <p className="muted superadmin-muted-block">
-        Creates the barangay immediately — a registration code can be generated for it right after, from Registration Codes.
+        Adds the barangay to platform management. A registration code requires a live boundary outline and no pending replacement. Imported reference outlines can be used without marking them reviewed.
       </p>
       {error && <p className="muted" style={{ color: '#dc2626' }}>{error}</p>}
+      {[provinceLookup, cityLookup, barangayLookup].filter((lookup) => lookup.error).map((lookup) => <p key={lookup.error} className="notice error" role="alert">{lookup.error} <button type="button" className="ghost-button" onClick={lookup.retry}>Retry lookup</button></p>)}
       <div className="superadmin-inline-row">
-        <select aria-label="New barangay province" value={provinceId} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayId(''); setCities([]); setBarangays([]); }} required>
-          <option value="">Province</option>
+        <select aria-label="New barangay province" value={provinceId} disabled={provinceLookup.loading || Boolean(provinceLookup.error)} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} required>
+          <option value="">{provinceLookup.loading ? 'Loading provinces…' : 'Province'}</option>
           {provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <select aria-label="New barangay city" value={cityId} onChange={(e) => { setCityId(e.target.value); setBarangayId(''); }} disabled={!provinceId} required>
-          <option value="">City / Municipality</option>
+        <select aria-label="New barangay city" value={cityId} onChange={(e) => { setCityId(e.target.value); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} disabled={!provinceId || cityLookup.loading || Boolean(cityLookup.error)} required>
+          <option value="">{cityLookup.loading ? 'Loading cities…' : 'City / Municipality'}</option>
           {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select aria-label="Official PSGC barangay" value={barangayId} onChange={(e) => setBarangayId(e.target.value)} disabled={!cityId} required>
-          <option value="">Barangay (PSGC)</option>
+        <select aria-label="Official PSGC barangay" value={barangayId} onChange={(e) => { setBarangayId(e.target.value); setBoundaryPreview(null); setPreviewStatus('Loading the PSGC-matched boundary…'); }} disabled={!cityId || barangayLookup.loading || Boolean(barangayLookup.error)} required>
+          <option value="">{barangayLookup.loading ? 'Loading barangays…' : 'Barangay (PSGC)'}</option>
           {barangays.map((barangay) => <option key={barangay.id} value={barangay.id}>{barangay.name} · {barangay.psgc_code}</option>)}
         </select>
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
@@ -263,7 +266,7 @@ function AddBarangayForm({ onAdded, onCancel }) {
           <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           {previewPolygons.map((polygon, index) => <Polygon key={index} positions={polygon} pathOptions={{ color: '#fca5a5', weight: 2, fillColor: '#ef4444', fillOpacity: .12 }} />)}
         </MapContainer></div> : <p className="muted boundary-registration-empty">{previewStatus || 'Choose an official PSGC barangay to retrieve its boundary.'}</p>}
-        {previewPolygons.length > 0 && <p className="muted boundary-registration-note">Reference preview only. Confirm the source and geometry before the system issues a registration code; this is not a legal or cadastral certification.</p>}
+        {previewPolygons.length > 0 && <p className="muted boundary-registration-note">Reference preview only. A live imported outline can support registration without being marked reviewed. Confirming an uploaded source marks a boundary reviewed; this is not a legal or cadastral certification.</p>}
       </section>}
     </form>
   );
@@ -412,6 +415,9 @@ export default function SuperAdminWorkspace() {
   const navigate = useNavigate();
   const location = useLocation();
   const activeTab = location.pathname.split('/')[2] || 'dashboard';
+  const validRoute = (TABS.some(([tab]) => tab === activeTab) || activeTab === 'settings')
+    && (!location.pathname.split('/')[3] || activeTab === 'barangays' && /^\d+$/.test(location.pathname.split('/')[3]))
+    && !location.pathname.split('/').slice(4).some(Boolean);
   const [barangayFilter, setBarangayFilter] = useState('all');
   const [codeBarangay, setCodeBarangay] = useState(null);
   const [showAddBarangay, setShowAddBarangay] = useState(false);
@@ -445,9 +451,12 @@ export default function SuperAdminWorkspace() {
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [concernReports, setConcernReports] = useState([]);
-  const [activityLog, setActivityLog] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [resourceLoading, setResourceLoading] = useState({ barangays: true, users: true, pending: true, candidates: true, concerns: true });
+  const [resourceErrors, setResourceErrors] = useState({});
+  const loadVersion = useRef(0);
+  const requiredResources = { dashboard: ['barangays', 'pending', 'concerns'], barangays: ['barangays', 'users'], pending: ['pending', 'barangays'], users: ['users'], codes: ['barangays'], concerns: ['concerns'] };
+  const loading = (requiredResources[activeTab] ?? []).some((key) => resourceLoading[key]);
+  const loadError = (requiredResources[activeTab] ?? []).some((key) => resourceErrors[key]);
 
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -465,40 +474,33 @@ export default function SuperAdminWorkspace() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  // `silent` skips the `loading` flip — every tab's content-body unmounts
-  // while loading is true (see the ternary below), which wipes any local
-  // form state a tab was mid-filling-out (province/city/barangay picks,
-  // search text, ...). Fine for the very first mount, where there's nothing
-  // to lose yet; wrong for a post-mutation refresh, which should update the
-  // data in place without blanking whatever the Super Admin was doing.
-  const loadAll = useCallback(async (silent = false) => {
-    try {
-      const [b, u, p, c, r, a] = await Promise.all([
-        api.get('/superadmin/barangays'),
-        api.get('/superadmin/users'),
-        api.get('/superadmin/pending-approvals'),
-        api.get('/impersonate/candidates'),
-        api.get('/superadmin/concern-reports'),
-        api.get('/superadmin/activity-log'),
-      ]);
-      setBarangays(b.data);
-      setUsers(u.data);
-      setPendingApprovals(p.data);
-      setCandidates(c.data);
-      setConcernReports(r.data);
-      setActivityLog(a.data);
-      setLoadError(false);
-    } catch {
-      if (!silent) setLoadError(true);
-      setNotice({ type: 'error', text: 'Could not load Super Admin data.' });
-    } finally {
-      if (!silent) setLoading(false);
-    }
+  // Each page waits only for its own datasets. Refreshes preserve form state,
+  // and an unrelated slow or failed endpoint cannot hide healthy controls.
+  const loadAll = useCallback(async () => {
+    const version = ++loadVersion.current;
+    const resources = [
+      ['barangays', '/superadmin/barangays', setBarangays],
+      ['users', '/superadmin/users', setUsers],
+      ['pending', '/superadmin/pending-approvals', setPendingApprovals],
+      ['candidates', '/impersonate/candidates', setCandidates],
+      ['concerns', '/superadmin/concern-reports', setConcernReports],
+    ];
+    await Promise.allSettled(resources.map(async ([key, path, update]) => {
+      try {
+        const { data } = await api.get(path, { timeout: 15000 });
+        if (version !== loadVersion.current) return;
+        update(data);
+        setResourceErrors((previous) => ({ ...previous, [key]: false }));
+      } catch {
+        if (version === loadVersion.current) setResourceErrors((previous) => ({ ...previous, [key]: true }));
+      } finally {
+        if (version === loadVersion.current) setResourceLoading((previous) => ({ ...previous, [key]: false }));
+      }
+    }));
   }, []);
 
   useEffect(() => {
     // loadAll awaits the API batch before updating React state.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadAll();
   }, [loadAll]);
 
@@ -562,12 +564,12 @@ export default function SuperAdminWorkspace() {
   const promoteToAdmin = async (target) => {
     if (!target) return;
     try {
-      await api.put(`/superadmin/users/${target.id}/role`, { role: 'Admin' });
-      if (!target.is_active) {
+      await api.put(`/superadmin/users/${target.id}/role`, { role: 'Admin', preserve_roles: true });
+      if (!target.is_active || !target.approved_at) {
         await api.put(`/superadmin/users/${target.id}/activate`);
       }
       setNotice({ type: 'success', text: `${target.name} is now this barangay's Admin.` });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not promote this user.' });
@@ -580,7 +582,7 @@ export default function SuperAdminWorkspace() {
   // every other mutation here uses) and surfaces the success notice.
   const addBarangay = async (created) => {
     setNotice({ type: 'success', text: `${created.name} (${created.city_name}) added.` });
-    await loadAll(true);
+    await loadAll();
   };
 
   // Only meaningful for a barangay without a verified boundary yet — re-runs
@@ -593,11 +595,11 @@ export default function SuperAdminWorkspace() {
     try {
       const res = await api.post(`/superadmin/barangays/${barangay.id}/boundary/refresh`);
       setNotice(res.data.boundary_status === 'needs_review'
-        ? { type: 'success', text: `Found a candidate boundary for ${barangay.name} — review it before confirming.` }
+        ? { type: 'success', text: `A reference outline is on file for ${barangay.name}. Review or replace it against an LGU-approved source.` }
         : res.data.boundary_status === 'verified'
           ? { type: 'success', text: `${barangay.name} already has a reviewed boundary.` }
           : { type: 'error', text: `Still no boundary match for ${barangay.name} — try again later, or add it manually.` });
-      await loadAll(true);
+      await loadAll();
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not retry that boundary lookup.' });
     }
@@ -609,7 +611,7 @@ export default function SuperAdminWorkspace() {
       setNotice({ type: 'success', text: data.boundary_status === 'verified'
         ? `Boundary reviewed and applied for ${barangay.name}.`
         : `Outline applied for ${barangay.name} as an unverified reference. Upload an LGU-approved file to mark it reviewed.` });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not confirm that boundary.' });
@@ -621,7 +623,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.delete(`/superadmin/barangays/${barangay.id}/boundary/pending`);
       setNotice({ type: 'success', text: `Candidate boundary discarded for ${barangay.name}.` });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not discard that candidate boundary.' });
@@ -630,11 +632,11 @@ export default function SuperAdminWorkspace() {
   };
 
   const changeRole = async (targetUser, role) => {
-    if (role === targetUser.role) return;
+    if (role === targetUser.role && !(targetUser.roles ?? []).some((current) => current !== role)) return;
     try {
       await api.put(`/superadmin/users/${targetUser.id}/role`, { role });
       setNotice({ type: 'success', text: `${targetUser.name}'s role is now ${role}.` });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not change that role.' });
@@ -646,7 +648,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/users/${targetUser.id}/${targetUser.is_active ? 'deactivate' : 'activate'}`);
       setNotice({ type: 'success', text: `${targetUser.name} is now ${targetUser.is_active ? 'inactive' : 'active'}.` });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that account.' });
@@ -658,7 +660,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/users/${approval.id}/activate`);
       setNotice({ type: 'success', text: `${approval.name} is approved and can now sign in.` });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not approve this account.' });
@@ -670,7 +672,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.delete(`/superadmin/users/${approval.id}/reject`);
       setNotice({ type: 'success', text: `${approval.name}'s registration was rejected.` });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not reject this account.' });
@@ -682,7 +684,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/concern-reports/${report.id}/resolve`);
       setNotice({ type: 'success', text: 'Concern report marked resolved.' });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that report.' });
@@ -694,7 +696,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.put(`/superadmin/concern-reports/${report.id}/reopen`);
       setNotice({ type: 'success', text: 'Concern report reopened.' });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that report.' });
@@ -729,7 +731,7 @@ export default function SuperAdminWorkspace() {
     try {
       await api.delete(`/superadmin/concern-reports/${report.id}`);
       setNotice({ type: 'success', text: 'Concern report deleted.' });
-      await loadAll(true);
+      await loadAll();
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not delete that report.' });
@@ -765,7 +767,7 @@ export default function SuperAdminWorkspace() {
             </button>
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
-            <ImpersonateInline candidates={candidates} onImpersonate={doImpersonate} />
+            {resourceErrors.candidates ? <span role="alert">Support accounts unavailable. <button type="button" className="ghost-button" onClick={() => loadAll()}>Retry support accounts</button></span> : <ImpersonateInline candidates={candidates} onImpersonate={doImpersonate} />}
           </div>
         </div>
 
@@ -774,6 +776,8 @@ export default function SuperAdminWorkspace() {
             <button
               className="icon-btn notification-btn"
               title="Notifications"
+              aria-label="Notifications"
+              aria-expanded={showNotifications}
               type="button"
               onClick={() => setShowNotifications((v) => !v)}
             >
@@ -882,8 +886,8 @@ export default function SuperAdminWorkspace() {
         <section className="content-area">
           <div className={`page-heading-row${activeTab === 'dashboard' ? ' focus-branded-heading' : ''}`}>
             <div className="page-heading-text">
-              <h1>{TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h1>
-              <p>{TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
+              <h1>{!validRoute ? 'Page not found' : TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h1>
+              <p>{!validRoute ? 'This Super Admin page does not exist.' : TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
             </div>
             {activeTab === 'barangays' && !location.pathname.split('/')[3] && <button type="button" className="primary-button" onClick={() => setShowAddBarangay(!showAddBarangay)}><Icon name={showAddBarangay ? 'close' : 'plus'} size={16} />{showAddBarangay ? 'Cancel' : 'Add Barangay'}</button>}
           </div>
@@ -901,15 +905,17 @@ export default function SuperAdminWorkspace() {
           )}
 
           <div className="content-body">
-            {loading ? (
+            {!validRoute ? (
+              <div className="sa-management-card"><p role="alert">Page not found. <button type="button" className="ghost-button" onClick={() => navigateTab('dashboard')}>Back to Platform Overview</button></p></div>
+            ) : loading && !['activity', 'settings'].includes(activeTab) ? (
               <p className="muted" role="status">Loading platform data…</p>
             ) : loadError ? (
-              <div className="sa-management-card"><p className="sa-load-error" role="alert">Platform data could not be loaded. <button type="button" className="ghost-button" onClick={() => { setLoading(true); loadAll(); }}>Retry</button></p></div>
+              <div className="sa-management-card"><p className="sa-load-error" role="alert">Data for this page could not be loaded. <button type="button" className="ghost-button" onClick={() => loadAll()}>Retry</button></p></div>
             ) : activeTab === 'dashboard' ? (
               <PlatformOverview barangays={barangays} approvals={pendingApprovals} concerns={concernReports} onNavigate={navigateTab} />
             ) : activeTab === 'barangays' ? (
               <BarangayManagementTab
-                onBoundarySaved={() => loadAll(true)}
+                onBoundarySaved={() => loadAll()}
                 key={barangayFilter}
                 initialFilter={barangayFilter}
                 showAddForm={showAddBarangay}
@@ -939,7 +945,7 @@ export default function SuperAdminWorkspace() {
             ) : activeTab === 'concerns' ? (
               <ConcernReportsTab reports={concernReports} onResolve={resolveConcern} onReopen={reopenConcern} onDelete={deleteConcern} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'activity' ? (
-              <ActivityLogTab entries={activityLog} />
+              <ActivityLogTab />
             ) : (
               <SettingsTab setNotice={setNotice} />
             )}

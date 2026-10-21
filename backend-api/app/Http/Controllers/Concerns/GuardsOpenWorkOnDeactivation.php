@@ -29,11 +29,12 @@ trait GuardsOpenWorkOnDeactivation
      * Plain-English list of everything still open and assigned to $user.
      * Empty means safe to deactivate.
      */
-    private function openWorkFor(User $user): array
+    private function openWorkFor(User $user, ?array $remainingRoles = null): array
     {
         $items = [];
 
         MaintenanceTicket::where('assigned_custodian_id', $user->id)
+            ->when($remainingRoles !== null && in_array('Custodian', $remainingRoles, true), fn ($query) => $query->whereRaw('1 = 0'))
             ->whereNotIn('status', ['Closed', 'Cancelled'])
             ->get(['ticket_id', 'ticket_title'])
             ->each(function (MaintenanceTicket $ticket) use (&$items) {
@@ -41,6 +42,7 @@ trait GuardsOpenWorkOnDeactivation
             });
 
         TicketSubIssue::where('assigned_mechanic_id', $user->id)
+            ->when($remainingRoles !== null && in_array('Maintenance Personnel', $remainingRoles, true), fn ($query) => $query->whereRaw('1 = 0'))
             ->whereNotIn('status', ['Done', 'Deferred'])
             ->with('ticket:ticket_id,ticket_title')
             ->get()
@@ -50,7 +52,8 @@ trait GuardsOpenWorkOnDeactivation
             });
 
         VehicleMaintenanceSchedule::where('assigned_to', $user->id)
-            ->where('status', 'Scheduled')
+            ->when($remainingRoles !== null && in_array('Maintenance Personnel', $remainingRoles, true), fn ($query) => $query->whereRaw('1 = 0'))
+            ->whereIn('status', ['Scheduled', 'Pending Approval'])
             ->get(['schedule_id', 'maintenance_type'])
             ->each(function (VehicleMaintenanceSchedule $schedule) use (&$items) {
                 $items[] = "Schedule #{$schedule->schedule_id} ({$schedule->maintenance_type}) — assigned";
@@ -59,9 +62,9 @@ trait GuardsOpenWorkOnDeactivation
         return $items;
     }
 
-    private function abortIfHasOpenWork(User $user, string $action): void
+    private function abortIfHasOpenWork(User $user, string $action, ?array $remainingRoles = null): void
     {
-        $openWork = $this->openWorkFor($user);
+        $openWork = $this->openWorkFor($user, $remainingRoles);
 
         if (empty($openWork)) {
             return;

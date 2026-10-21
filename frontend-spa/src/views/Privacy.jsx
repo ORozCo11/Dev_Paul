@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import Aurora from '../components/Aurora';
-import Icon from '../components/Icon';
+
 import AuthHeader from '../components/AuthHeader';
 import AuthFooter from '../components/AuthFooter';
+import VMSLogo from '../components/VMSLogo';
 
 export default function Privacy() {
   return (
@@ -13,7 +14,7 @@ export default function Privacy() {
       <section className="auth-card policy-card" style={{ maxWidth: 680, width: '100%', textAlign: 'left', gap: '1rem' }}>
 
         <div className="policy-card-logo">
-          <Icon name="gear" size={28} className="topbar-gear-icon" filled />
+          <VMSLogo variant="blue" size={28} className="topbar-gear-icon" />
           <span className="vms-wordmark vms-wordmark-sm policy-card-logo-wordmark">vms</span>
         </div>
 
@@ -45,12 +46,14 @@ export default function Privacy() {
             <li>Generating administrative reports for fleet management and audit purposes</li>
             <li>Maintaining an activity log for accountability and transparency</li>
           </ul>
-          No data is shared with third parties, sold, or used for advertising purposes.
+          Data is not sold or used for advertising. Configured hosting and storage providers process data to operate the system.
         </PolicySection>
 
         <PolicySection title="4. Data Storage and Security">
-          All data is stored within a secured local database managed by the barangay's IT
-          infrastructure. Access is restricted by role-based permissions — Admin, Custodian, and
+          Account and fleet records are stored in the system's configured database. Depending on
+          the deployment, this may be hosted locally or by a cloud database provider. Uploaded
+          files are stored privately in configured Supabase storage or private local storage;
+          authorized screens issue short-lived download links. Access is restricted by role-based permissions — Admin, Custodian, and
           Maintenance Personnel accounts each have distinct levels of access to a barangay's own
           fleet data. Super Admin accounts instead have general oversight and cross-barangay
           administrative access (registration codes, concern reports, and user account
@@ -102,7 +105,7 @@ function PolicySection({ title, children }) {
   return (
     <div style={{ marginBottom: '1rem' }}>
       <h3 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.4rem' }}>{title}</h3>
-      <p style={{ fontSize: '0.875rem', lineHeight: 1.7, opacity: 0.8 }}>{children}</p>
+      <div style={{ fontSize: '0.875rem', lineHeight: 1.7, opacity: 0.8 }}>{children}</div>
     </div>
   );
 }

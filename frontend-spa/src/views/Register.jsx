@@ -87,6 +87,7 @@ function Register() {
   useEffect(() => { stepHeading.current?.focus(); }, [step]);
   const [form, setForm] = useState(emptyForm);
   const [provinces, setProvinces] = useState([]);
+  const [provinceError, setProvinceError] = useState('');
   const [cities, setCities] = useState([]);
   const [barangays, setBarangays] = useState([]);
   const [citiesLoading, setCitiesLoading] = useState(false);
@@ -116,10 +117,12 @@ function Register() {
   const [boundaryPreview, setBoundaryPreview] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
     api.get('/provinces')
-      .then((response) => setProvinces(response.data))
-      .catch(() => setProvinces([]));
-  }, []);
+      .then((response) => { if (!cancelled) { setProvinces(response.data); setProvinceError(''); } })
+      .catch(() => { if (!cancelled) setProvinceError('Could not load provinces. Please try again.'); });
+    return () => { cancelled = true; };
+  }, [locationRetry]);
 
   // Ignore late responses after a parent selection changes.
   useEffect(() => {
@@ -152,9 +155,8 @@ function Register() {
   }, [form.city_id, form.barangay_id]);
 
   useEffect(() => {
-    if (!form.barangay_id) { setBoundaryPreview(null); return; }
+    if (!form.barangay_id) return;
     let cancelled = false;
-    setBoundaryPreview(null);
     api.get(`/barangays/${form.barangay_id}`).then(({ data }) => { if (!cancelled) setBoundaryPreview(data); }).catch(() => { if (!cancelled) setBoundaryPreview({ error: true }); });
     return () => { cancelled = true; };
   }, [form.barangay_id]);
@@ -168,7 +170,7 @@ function Register() {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
-    if (name === 'barangay_id') setIsFirstForBarangay(null);
+    if (name === 'barangay_id') { setIsFirstForBarangay(null); setBoundaryPreview(null); }
     clearFieldErrors(name, ...(name === 'password' ? ['password_confirmation'] : []));
   };
 
@@ -201,6 +203,7 @@ function Register() {
       barangay_id: '',
     }));
     setCities([]);
+    setBoundaryPreview(null);
     setBarangays([]);
     setCitiesLoading(Boolean(value));
     setBarangaysLoading(false);
@@ -218,6 +221,7 @@ function Register() {
     }));
     setBarangays([]);
     setBarangaysLoading(Boolean(value));
+    setBoundaryPreview(null);
     setLocationError('');
     setIsFirstForBarangay(null);
     clearFieldErrors('city_id', 'barangay_id');
@@ -479,7 +483,7 @@ function Register() {
               </div>
               <RegistrationFieldError name="barangay_id" errors={fieldErrors} />
             </label>
-            {locationError && <div className="notice error auth-field-full" role="alert">{locationError} <button type="button" className="link-button" onClick={() => { setLocationError(''); setCitiesLoading(Boolean(form.province_id)); setBarangaysLoading(Boolean(form.city_id)); setLocationRetry((value) => value + 1); }}>Try again</button></div>}
+            {(provinceError || locationError) && <div className="notice error auth-field-full" role="alert">{provinceError || locationError} <button type="button" className="link-button" onClick={() => { setLocationError(''); setCitiesLoading(Boolean(form.province_id)); setBarangaysLoading(Boolean(form.city_id)); setLocationRetry((value) => value + 1); }}>Try again</button></div>}
             {form.city_id && !barangaysLoading && !barangays.length && !locationError && <p className="notice auth-field-full">No barangay reference is available for this city. Contact the system administrator.</p>}
             {form.barangay_id && <p className="field-hint auth-field-full">Your selected barangay sets your account&apos;s service area. Its map outline may require administrator review.</p>}
             {form.barangay_id && <section className="register-boundary-preview auth-field-full" aria-live="polite">

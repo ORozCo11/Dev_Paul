@@ -11,13 +11,16 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   const logout = () => {
+    const logoutToken = localStorage.getItem('token') || sessionStorage.getItem('token');
     // Clear local state immediately so the UI reacts right away,
     // then invalidate the server-side token in the background.
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     setToken(null);
     setUser(null);
-    api.post('/logout').catch(() => {});
+    if (logoutToken) {
+      return api.post('/logout', null, { headers: { Authorization: `Bearer ${logoutToken}` } }).catch(() => {});
+    }
   };
 
   useEffect(() => {

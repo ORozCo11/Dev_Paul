@@ -69,32 +69,13 @@ return [
             'key'                     => env('SUPABASE_KEY'),
             'secret'                  => env('SUPABASE_SECRET'),
             'region'                  => env('SUPABASE_REGION', 'ap-southeast-1'),
-            'bucket'                  => env('SUPABASE_BUCKET'),
+            'bucket'                  => env('SUPABASE_PRIVATE_BUCKET'),
             'endpoint'                => env('SUPABASE_ENDPOINT'),
             'url'                     => env('SUPABASE_URL'),
             'use_path_style_endpoint' => true,
 
-            /*
-             | Intentionally 'public', not a mistake to "fix".
-             |
-             | The whole app already assumes these URLs are directly,
-             | unauthenticated-ly fetchable: UploadsImages::storeUploadedImage()
-             | (app/Http/Controllers/Concerns/UploadsImages.php) builds a plain
-             | base-URL + path string for every upload — vehicle photos,
-             | maintenance receipts, vehicle documents (registration/insurance),
-             | repair attachments, profile photos — and the frontend renders
-             | every one of them as a bare `<img src=...>` or `<a href=...>`
-             | (see resolvePhotoUrl() in frontend-spa/src/views/Workspace.jsx,
-             | used throughout Workspace.jsx). There is no signed-URL or
-             | Authorization-header path anywhere in that flow. Flipping this
-             | to 'private' would break image/file loading app-wide without
-             | first building a signed-URL pipeline — a much bigger change,
-             | out of scope here. (One category worth a second look: vehicle
-             | registration/insurance documents may be more sensitive than
-             | vehicle photos and arguably shouldn't be guessable-URL-public;
-             | see the audit follow-up notes rather than changing this here.)
-             */
-            'visibility'              => 'public',
+            // Requires a private bucket; public-bucket ACLs cannot protect files.
+            'visibility'              => 'private',
             'throw'                   => true,
             'report'                  => false,
 

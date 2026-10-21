@@ -1140,7 +1140,7 @@
 .profile-info-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .profile-info-item dt { font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
 .profile-info-item dd { color: #e2e8f0; font-size: 0.85rem; font-weight: 500; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
- 
+
 .profile-actions { display: flex; flex-direction: column; gap: 10px; }
 .profile-actions .smart-form h3 { font-size: 0.9rem; color: #e2e8f0 !important; padding-bottom: 8px; border-bottom: 1px solid #334155; margin-bottom: 6px; }
 .profile-actions .smart-form label span { color: #94a3b8 !important; font-size: 0.78rem !important; }
@@ -1154,7 +1154,7 @@
 .profile-actions .smart-form input:focus { border-color: #3b82f6 !important; }
 .profile-actions .form-actions { justify-content: stretch; }
 .profile-actions .primary-button { width: 100%; height: 36px; font-size: 0.88rem; }
- 
+
 .logout-button {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 10px;
@@ -2520,7 +2520,7 @@ table a:hover {
   letter-spacing: 0.04em;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
- 
+
 /* STATUS BADGES */
 .status-badge {
   display: inline-flex;
@@ -2562,7 +2562,7 @@ table a:hover {
   border-color: #bfdbfe;
   color: #1d4ed8;
 }
- 
+
 /* FORMS */
 .smart-form {
   display: flex;
@@ -3354,7 +3354,7 @@ td:has(> .date-badge) { text-align: center; }
   justify-content: flex-end;
   margin-top: 10px;
 }
- 
+
 /* BUTTONS */
 .primary-button, .primary-link {
   display: inline-flex;
@@ -3387,7 +3387,7 @@ td:has(> .date-badge) { text-align: center; }
   cursor: not-allowed;
   box-shadow: none;
 }
- 
+
 /* SUB-BUTTONS */
 .ghost-button, .row-actions button, .report-heading button, table button, .table-shell button {
   display: inline-flex;
@@ -3510,11 +3510,11 @@ table button.icon-btn svg,
   box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
 }
 
- 
+
 .report-heading button { background: linear-gradient(180deg, #eff6ff, #dbeafe); color: #1e3a8a; }
- 
+
 .auth-subtitle, .report-heading p, .module-description { color: #334155; }
- 
+
 /* REPORT */
 .report-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 16px; }
 .report-heading h3 { font-size: 1.2rem; font-weight: 800; }
@@ -15822,3 +15822,29 @@ html:root :is(.notice, .toast-notice, .location-density-notice):is(.error, .dang
   background: var(--notice-bg); border: 1px solid var(--notice-border); color: var(--notice-text);
 }
 html:root .toast-notice:is(.error, .danger, .success, .warning, .info) { box-shadow: 0 3px 9px #0f172a18; }
+@media (max-width: 620px) {
+  .module-grid, .module-grid > *, .module-grid .panel,
+  .panel-header-bar, .schedule-panel-tools, .location-density-toolbar { min-width: 0; max-width: 100%; }
+  .panel-header-bar { flex-wrap: wrap; gap: 10px; }
+  .panel-header-bar > div, .schedule-panel-tools { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+  .panel-header-bar .local-search-bar { flex: 1 1 140px; min-width: 0; max-width: 100%; }
+  .panel-header-bar .local-search-input { min-width: 0; width: 100%; }
+  .locations-tab-bar { flex-wrap: wrap; }
+  .locations-tab-bar .locations-tab-button { flex: 1 1 120px; min-width: 0; white-space: normal; }
+  .location-density-toolbar, .location-density-toolbar > div { flex-wrap: wrap; max-width: 100%; min-width: 0; }
+  .location-density-toolbar .location-density-btn { min-width: 0; white-space: normal; }
+  .registration-code-panel { flex-direction: column; align-items: stretch !important; }
+  .registration-code-panel > div:last-child { flex-wrap: wrap; min-width: 0; }
+  .registration-code-panel code { overflow-wrap: anywhere; }
+}
+/* The location cascade also wraps; measuring the header keeps content below it. */
+.topbar { min-height: 64px; }
+@media (max-width: 620px) {
+  .topbar-left { flex-wrap: wrap; width: 100%; min-width: 0; gap: 8px; }
+  .map-boundary-selector { flex: 1 1 100%; min-width: 0; max-width: 100%; }
+  .map-boundary-selector select { flex: 1 1 80px; width: 0; min-width: 0; max-width: 100%; }
+  .dev-impersonate { flex-wrap: wrap; max-width: 100%; }
+}
+/* Keep screen-reader descriptions inside their table cell's scroll container. */
+.tpa-group { position: relative; }
+.tpa-sr { top: 0; left: 0; clip-path: inset(50%); }

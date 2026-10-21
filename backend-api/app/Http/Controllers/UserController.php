@@ -164,6 +164,10 @@ class UserController extends Controller
             $this->abortIfLastActiveAdmin($user, 'removing their Admin role');
         }
 
+        if (array_key_exists('roles', $data)) {
+            $this->abortIfHasOpenWork($user, 'changing their roles', $data['roles']);
+        }
+
         if (!empty($data['password'])) {
             $data['password'] = Hash::make($data['password']);
         } else {

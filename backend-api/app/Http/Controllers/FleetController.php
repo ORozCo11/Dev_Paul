@@ -1000,11 +1000,8 @@ class FleetController extends Controller
     public function storeVehicle(Request $request)
     {
         $this->requireAbility($request, 'vehicle.create');
-        // Production-readiness audit finding #6 — the ability above only
-        // says Admin/Custodian are the eligible roles; this is the real
-        // per-account delegation check (Admin always; Custodian only if
-        // granted) an Admin sets per Custodian from the Edit User form.
-        abort_unless($request->user()->canRegisterVehicles(), 403, 'Vehicle registration has not been delegated to your account. Ask your Admin to enable it.');
+        // Keep single registration and import aligned with role eligibility.
+        abort_unless($request->user()->canRegisterVehicles(), 403, 'Your account cannot register vehicles.');
 
         $data = $this->validateVehicle($request);
 
@@ -1897,6 +1894,7 @@ class FleetController extends Controller
 
         if ($request->hasFile('file')) {
             $data['file_url'] = $this->storeUploadedImage($request->file('file'), 'vehicle-documents');
+            \App\Models\ManagedFile::removeReference($document->file_url);
         }
         unset($data['file']);
 
@@ -1911,6 +1909,7 @@ class FleetController extends Controller
         $this->requireAbility($request, 'document.delete');
 
         $this->log($request, 'Delete', 'Vehicle Documents', $document->document_id, "Deleted document \"{$document->title}\"");
+        \App\Models\ManagedFile::removeReference($document->file_url);
         $document->delete();
 
         return response()->json(['message' => 'Document deleted.']);

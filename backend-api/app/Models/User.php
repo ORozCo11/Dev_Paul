@@ -153,14 +153,7 @@ class User extends Authenticatable
             ->all();
     }
 
-    /**
-     * Production-readiness audit finding #6 — vehicle.create's role grant
-     * (Admin, Custodian) says WHO is ever eligible; this is the per-account
-     * delegation check layered on top, same pattern as every other
-     * ownership/live-state guard in this codebase (not folded into
-     * config/permissions.php, which only ever expresses role membership).
-     * Admin is always allowed; a Custodian needs can_register_vehicles.
-     */
+    /** Registration is a standard duty of Admin and Custodian accounts. */
     public function canRegisterVehicles(): bool
     {
         if ($this->hasRole('Admin')) {

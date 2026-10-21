@@ -42,6 +42,11 @@ class MaintenanceType extends Model
      * need the resolved string (e.g. saving it onto a ticket/record). */
     public static function resolve(?string $name): ?string
     {
-        return static::findOrCreateByName($name)?->name;
+        $name = trim($name ?? '');
+        if ($name === '') return null;
+
+        // Recording work may retain a free-text description, but must not
+        // silently grant catalog.create. Only the catalog endpoint inserts.
+        return static::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->value('name') ?? $name;
     }
 }

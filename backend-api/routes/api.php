@@ -22,6 +22,9 @@ use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\RestrictImpersonatedToReadOnly;
 use App\Http\Middleware\RestrictSuperAdminScope;
 
+Route::get('/files/{file}', [\App\Http\Controllers\ManagedFileController::class, 'show'])
+    ->where('file', '[A-Za-z0-9-]+\.[a-z0-9]+')->middleware('signed')->name('files.show');
+
 /*
 |--------------------------------------------------------------------------
 | Public Routes (No Bearer Token Required)
@@ -60,8 +63,9 @@ Route::post('/concern-reports', [ConcernReportController::class, 'store'])->midd
 | Protected Routes (Requires a Valid Sanctum Token in Header)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class])->group(function () {
-    
+Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class, \App\Http\Middleware\SignManagedFiles::class])->group(function () {
+    Route::get('/files/refresh', [\App\Http\Controllers\ManagedFileController::class, 'refresh']);
+
     // Session termination route
     Route::post('/logout', [AuthController::class, 'logout']);
 
