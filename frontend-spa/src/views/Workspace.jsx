@@ -4225,7 +4225,9 @@ function Workspace() {
             <ModuleStatCards
               totalLabel="Total Schedules"
               total={scheduleStats.total}
-              cards={(hasRole(user, 'Maintenance Personnel') && !hasRole(user, 'Admin')) ? [...SCHEDULE_STAT_CARDS, MY_ASSIGNED_SCHEDULE_CARD] : SCHEDULE_STAT_CARDS}
+              cards={(hasRole(user, 'Maintenance Personnel') && !hasRole(user, 'Admin'))
+                ? [MY_ASSIGNED_SCHEDULE_CARD, ...SCHEDULE_STAT_CARDS.filter((card) => card.key !== 'Scheduled')]
+                : SCHEDULE_STAT_CARDS}
               counts={scheduleStats}
               activeFilter={filterStatus}
               onFilterChange={setFilterStatus}
@@ -8544,9 +8546,8 @@ function ReportsModule({ lookups, onGenerate }) {
 // NOTE: no "In Use" card — the status exists in the DB enum but this system
 // tracks availability only (no dispatch flow ever sets a vehicle to In Use).
 const VEHICLE_STAT_CARDS = [
-  { key: 'Available', label: 'Available', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
+  { key: 'Available', label: 'Available Vehicles', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
   { key: 'Under Maintenance', label: 'Under Maintenance', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
-  { key: 'Inactive', label: 'Inactive', icon: 'archive', bg: '#fee2e2', color: '#dc2626' },
   // Distinct from "Available" — a vehicle can be Available yet never (or no
   // longer) proven ready by an actual readiness check. See responseReadinessState().
   { key: 'ReadyToRespond', label: 'Ready to Respond', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
@@ -8573,13 +8574,11 @@ const ISSUE_SEVERITY_CHIP_COLOR = { High: '#dc2626', Medium: '#f59e0b', Low: '#0
 const SCHEDULE_STAT_CARDS = [
   { key: 'Scheduled', label: 'Scheduled', icon: 'calendar', bg: '#dbeafe', color: '#1d4ed8' },
   { key: 'Pending Approval', label: 'Pending Approval', icon: 'alert', bg: '#fef3c7', color: '#d97706' },
-  { key: 'Declined', label: 'Declined', icon: 'close', bg: '#fee2e2', color: '#dc2626' },
   { key: 'Completed', label: 'Completed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
   // A schedule marked "Completed" only means the calendar task is done —
   // its record might still be sitting unverified. Its own filter so those
   // rows are findable instead of scrolling through fully-verified ones.
   { key: 'AwaitingVerification', label: 'Awaiting Verification', icon: 'search', bg: '#fef9c3', color: '#854d0e' },
-  { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#f1f5f9', color: '#64748b' },
 ];
 
 // Only shown to a Maintenance-Personnel-only viewer — "how many vehicles do
@@ -8611,7 +8610,6 @@ const TICKET_STAT_CARDS = [
   { key: 'Declined', label: 'Declined', icon: 'close', bg: '#fee2e2', color: '#dc2626' },
   { key: 'Active', label: 'Active', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
   { key: 'Closed', label: 'Closed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
-  { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#f1f5f9', color: '#64748b' },
 ];
 
 const TICKET_INSPECTION_STAT_CARDS = [
