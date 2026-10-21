@@ -1,0 +1,14 @@
+{
+  "checks": [
+    "Barangay detail route, reload and back navigation",
+    "Removed action summary, sub-issue edit and overview capsules",
+    "Archive delete buttons and Deleted Tickets checkbox",
+    "Optional parts; multi-file selection, rename and removal",
+    "Repair layout at 390px and 1440px",
+    "cannibalized repair layout",
+    "external repair layout",
+    "Vehicle columns begin with ID, Type, Brand / Model",
+    "Custodian issue table has no Propose Ticket row action"
+  ],
+  "errors": []
+}

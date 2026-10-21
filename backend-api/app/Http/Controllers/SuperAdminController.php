@@ -12,6 +12,7 @@ use App\Models\RegistrationSetting;
 use App\Models\User;
 use App\Services\BarangayGeography;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Platform-level account administration — the one tier above every
@@ -611,7 +612,6 @@ class SuperAdminController extends Controller
 
         return User::with('barangay.city.province')
             ->whereNull('approved_at')
-            ->where('is_active', false)
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($u) => [

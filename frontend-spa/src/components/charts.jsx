@@ -43,11 +43,8 @@ function barTooltip({ active, payload }) {
 }
 
 export function DonutChart({ segments, centerLabel, centerSubLabel }) {
-  const [activeSegment, setActiveSegment] = useState(null);
   const data = segments.filter((s) => s.value > 0);
   const pieData = data.length ? data : [{ label: 'None', value: 1, color: EMPTY_SLICE_COLOR }];
-  const centerValue = activeSegment?.value ?? centerLabel;
-  const centerText = activeSegment?.label ?? centerSubLabel;
 
   return (
     <div className="donut-chart">
@@ -62,16 +59,15 @@ export function DonutChart({ segments, centerLabel, centerSubLabel }) {
             paddingAngle={data.length > 1 ? 2 : 0}
             stroke="none"
             isAnimationActive={false}
-            onMouseEnter={(_, index) => setActiveSegment(data[index] ?? null)}
-            onMouseLeave={() => setActiveSegment(null)}
           >
             {pieData.map((seg) => <Cell key={seg.label} fill={seg.color} />)}
           </Pie>
+          {data.length > 0 && <Tooltip content={pieTooltip} />}
         </PieChart>
       </ResponsiveContainer>
       <div className="donut-center">
-        <strong>{centerValue}</strong>
-        <span>{centerText}</span>
+        <strong>{centerLabel}</strong>
+        <span>{centerSubLabel}</span>
       </div>
     </div>
   );

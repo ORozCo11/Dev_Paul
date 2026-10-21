@@ -1,0 +1,9 @@
+{
+  "checks": [
+    "Barangay and city labels, removed banner, collapsed status/source/PSGC details",
+    "Map details fit desktop/mobile and do not overlap layer controls",
+    "Barangay label changes with the selected barangay"
+  ],
+  "errors": [],
+  "source": "Original reference; source not recorded"
+}

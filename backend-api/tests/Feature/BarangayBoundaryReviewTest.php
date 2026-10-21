@@ -265,6 +265,7 @@ class BarangayBoundaryReviewTest extends TestCase
     public function the_registration_code_response_includes_when_it_was_last_changed(): void
     {
         $barangay = $this->barangay();
+        $barangay->update(['boundary' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]]]);
 
         Sanctum::actingAs($this->superAdmin, ['*']);
         $first = $this->getJson("/api/superadmin/barangays/{$barangay->id}/registration-code")->assertOk();

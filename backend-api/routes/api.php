@@ -300,8 +300,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
 
     // Archived ticket audit log — a "Closed" entry is permanently locked, but
     // a "Deleted" entry (an accidental delete that had real progress on it)
-    // can be reopened.
+    // can be reopened. Archive deletion retains the snapshot for recovery.
     Route::get('/ticket-archives', [TicketController::class, 'archives']);
+    Route::delete('/ticket-archives/{archive}', [TicketController::class, 'deleteArchive']);
+    Route::put('/ticket-archives/{archive}/restore', [TicketController::class, 'restoreArchive'])->withTrashed();
     // Cannibalization: direct, final records of parts moved between vehicles
     // (no approval step, and deliberately no update/delete routes).
     Route::get('/cannibalizations', [CannibalizationController::class, 'index']);

@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { BOUNDARY_REFERENCE_ATTRIBUTION } from '../utils/boundary';
 import BoundaryReferenceLabel from './BoundaryReferenceLabel';
+import BoundaryMapDetails from './BoundaryMapDetails';
 
 const ESRI_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const ESRI_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
@@ -89,6 +90,7 @@ export default function AddLocationMap({ marker, boundaryPolygons, boundaryLabel
       <div className="location-density-basemap-toggle" ref={(node) => { if (node) L.DomEvent.disableClickPropagation(node); }}>
         <button type="button" aria-pressed={showPlaceLabels} className={showPlaceLabels ? 'is-active' : ''} title="Show place names supplied by the map provider. These do not define barangay boundaries." onClick={() => setShowPlaceLabels((value) => !value)}>Map labels</button>
       </div>
+      <BoundaryMapDetails name={boundaryLabel} verified={boundaryVerified} />
       <ClickToPick onPick={onPick} />
       {boundaryPolygons.map((ring, index) => (
         <Polygon
@@ -97,7 +99,7 @@ export default function AddLocationMap({ marker, boundaryPolygons, boundaryLabel
           pathOptions={{ color: '#facc15', fillColor: '#facc15', fillOpacity: 0.05, opacity: 1, weight: 3 }}
         />
       ))}
-      <BoundaryReferenceLabel polygons={boundaryPolygons} label={boundaryLabel} verified={boundaryVerified} />
+      <BoundaryReferenceLabel polygons={boundaryPolygons} label={boundaryLabel} />
       {marker && <Marker position={[marker.lat, marker.lng]} icon={pickPin} />}
       <FlyToMarker marker={marker} />
     </MapContainer>
