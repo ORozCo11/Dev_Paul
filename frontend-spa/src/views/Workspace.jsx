@@ -3956,7 +3956,7 @@ function Workspace() {
                 />
               </div>
               <LatestIssueCard issues={records.issues ?? []} onRowClick={(row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`)} />
-              <section className="panel module-filter-panel issue-summary-filters">
+              <CollapsibleFilterPanel className="issue-summary-filters">
                 <IssueFilterPanel
                   categories={lookups.categories}
                   vehicles={lookups.vehicles}
@@ -3978,7 +3978,7 @@ function Workspace() {
                   filterDateEnd={filterDateEnd}
                   setFilterDateEnd={setFilterDateEnd}
                 />
-              </section>
+              </CollapsibleFilterPanel>
             </div>
           }
         >
@@ -4942,6 +4942,25 @@ function DismissibleHint() {
   return null;
 }
 
+function CollapsibleFilterPanel({ children, className = '' }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <section className={`panel module-filter-panel ${className}`.trim()}>
+      <button
+        type="button"
+        className={`module-filter-toggle${isOpen ? ' is-open' : ''}`}
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((open) => !open)}
+      >
+        <span>Filters</span>
+        <Icon name="chevronDown" size={16} aria-hidden="true" />
+      </button>
+      {isOpen && children}
+    </section>
+  );
+}
+
 function ModulePanel({ children, description, statCards, filterBar, tabBar }) {
   return (
     <div className="module-grid">
@@ -4951,9 +4970,9 @@ function ModulePanel({ children, description, statCards, filterBar, tabBar }) {
       {tabBar}
       {statCards}
       {filterBar && (
-        <section className="panel module-filter-panel">
+        <CollapsibleFilterPanel>
           {filterBar}
-        </section>
+        </CollapsibleFilterPanel>
       )}
       <section className="panel">
         {children}
@@ -11722,7 +11741,7 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
         onFilterChange={setActiveFilter}
       />
       {tabBar}
-      <section className="panel module-filter-panel">
+      <CollapsibleFilterPanel>
         <FilterBar
           categories={categories}
           vehicles={vehicles}
@@ -11745,7 +11764,7 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
             setSelected: setFilterOutcome,
           }]}
         />
-      </section>
+      </CollapsibleFilterPanel>
       <section className="panel operations-board work-tracker-board">
         <div className="operations-board-head">
           <div>
@@ -14200,7 +14219,7 @@ function TicketModule({
             ]}
           />
         </div>
-        <section className="panel module-filter-panel ticket-summary-filters">
+        <CollapsibleFilterPanel className="ticket-summary-filters">
           <TicketFilterPanel
             categories={categories}
             vehicles={vehicles}
@@ -14227,7 +14246,7 @@ function TicketModule({
             filterDateEnd={filterDateEnd}
             setFilterDateEnd={setFilterDateEnd}
           />
-        </section>
+        </CollapsibleFilterPanel>
         {/* Admin no longer has a standalone Issue Reports page — this is
             the one thing worth keeping from it, moved here instead of
             dropped. */}
@@ -15414,7 +15433,7 @@ function CustodianInspectionModule({
         onFilterChange={onFilterChange}
       />
       {tabBar}
-      <section className="panel module-filter-panel">
+      <CollapsibleFilterPanel>
         <FilterBar
           categories={categories}
           vehicles={vehicles}
@@ -15427,7 +15446,7 @@ function CustodianInspectionModule({
           priorityOptions={priorityOptions}
           priorityLabel="Priority"
         />
-      </section>
+      </CollapsibleFilterPanel>
       <section className="panel">
         <div className="panel-header-bar">
           {/* Not every ticket in this second bucket was actually inspected —
@@ -15715,7 +15734,7 @@ function CustodianVerificationModule({
       />
       {tabBar}
       <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
-      <section className="panel module-filter-panel">
+      <CollapsibleFilterPanel>
         <FilterBar
           categories={categories}
           vehicles={vehicles}
@@ -15735,7 +15754,7 @@ function CustodianVerificationModule({
             setSelected: setFilterVerdict,
           }]}
         />
-      </section>
+      </CollapsibleFilterPanel>
       <section className="panel">
         <div className="panel-header-bar">
           <h3>{panelTitle} <span className="count-badge">{tickets.length}</span></h3>
@@ -15899,7 +15918,7 @@ function MechanicWorkOrderModule({
             activeFilter={activeFilter}
             onFilterChange={onFilterChange}
           />
-          <section className="panel module-filter-panel">
+          <CollapsibleFilterPanel>
             <FilterBar
               categories={categories}
               vehicles={vehicles}
@@ -15912,7 +15931,7 @@ function MechanicWorkOrderModule({
               priorityOptions={maintTypeOptions}
               priorityLabel="Maintenance Type"
             />
-          </section>
+          </CollapsibleFilterPanel>
           <section className="panel operations-board work-order-board work-order-queue-board">
             <div className="operations-board-head">
               <div>
