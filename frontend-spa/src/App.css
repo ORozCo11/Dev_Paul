@@ -280,7 +280,7 @@
 }
 
 /* Dedicated login form shell — distinct from the CRUD .smart-form (which
-   carries admin-panel Orbitron/Space Grotesk styling) so the sign-in card
+   carries admin-panel styling) so the sign-in card
    reads as a clean, focused auth screen. Icon-prefixed inputs for a more
    organized, professional first impression. */
 .auth-form {
@@ -2416,7 +2416,7 @@ td.cell-text {
 
 .issue-id-badge {
   flex-shrink: 0;
-  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-family: inherit;
   font-size: 0.68rem;
   font-weight: 700;
   color: #93c5fd;
@@ -2461,7 +2461,7 @@ td.cell-text {
 thead th {
   background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
   color: #1e293b;
-  font-family: 'Orbitron', sans-serif;
+  font-family: inherit;
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -2530,7 +2530,7 @@ table a:hover {
   min-height: 22px;
   padding: 3px 10px;
   border-radius: 16px;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: inherit;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -2570,7 +2570,7 @@ table a:hover {
   gap: 12px;
 }
 .smart-form h3 {
-  font-family: 'Orbitron', sans-serif;
+  font-family: inherit;
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--text-strong, #0f172a);
@@ -2591,7 +2591,7 @@ table a:hover {
   line-height: 1.4;
 }
 .smart-form label span {
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: inherit;
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -2610,7 +2610,7 @@ table a:hover {
   color: #0f172a;
   padding: 6px 9px;
   font-size: 0.8rem;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: inherit;
   outline: none;
   transition: all 0.15s ease;
 }
@@ -3365,7 +3365,7 @@ td:has(> .date-badge) { text-align: center; }
   border-radius: 10px;
   background: linear-gradient(90deg, #2563eb, #1d4ed8);
   color: #ffffff;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: inherit;
   font-size: 0.95rem;
   font-weight: 600;
   border: none;
@@ -3398,7 +3398,7 @@ td:has(> .date-badge) { text-align: center; }
   border-radius: 10px;
   background: #ffffff;
   color: #475569;
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: inherit;
   font-size: 0.9rem;
   font-weight: 600;
   border: 1.5px solid #cbd5e1;
@@ -7408,7 +7408,7 @@ thead th,
 table button,
 .table-shell button,
 .status-badge {
-  font-family: 'Inter', "Trebuchet MS", Helvetica, sans-serif !important;
+  font-family: inherit !important;
 }
 
 .workspace {
@@ -11056,7 +11056,7 @@ button.btn-view-action svg {
 }
 
 .vms-wordmark {
-  font-family: 'Poppins', 'Inter', "Trebuchet MS", Helvetica, sans-serif;
+  font-family: 'Changa One', 'Plus Jakarta Sans', Arial, sans-serif;
   font-weight: 800;
   color: #2563eb;
   letter-spacing: -0.5px;
@@ -11402,7 +11402,7 @@ thead th,
 table button,
 .table-shell button,
 .status-badge {
-  font-family: 'Poppins', 'Inter', "Trebuchet MS", Helvetica, sans-serif !important;
+  font-family: inherit !important;
 }
 
 html[data-theme="light"] .workspace {

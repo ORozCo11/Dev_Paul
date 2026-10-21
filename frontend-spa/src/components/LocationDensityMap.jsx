@@ -69,7 +69,7 @@ function createHubIcon(label, isCustom = false) {
         <circle cx="21" cy="21" r="15" fill="${innerColor}" stroke="#86EFAC" stroke-width="1"/>
         <path d="M12 24.5 21 17l9 7.5" fill="none" stroke="#DCFCE7" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M15.5 23.5v8h11v-8" fill="none" stroke="#DCFCE7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        <text x="21" y="15" text-anchor="middle" fill="#BBF7D0" font-size="8" font-family="Arial, sans-serif" font-weight="800">${safeLabel}</text>
+        <text x="21" y="15" text-anchor="middle" fill="#BBF7D0" font-size="8" font-family="Plus Jakarta Sans, Arial, sans-serif" font-weight="800">${safeLabel}</text>
       </svg>
     `,
     iconSize: [42, 42],

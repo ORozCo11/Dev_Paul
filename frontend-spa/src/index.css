@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Changa+One&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 /* ============================================
    BARANGAY VMS - Base Styles & Reset
@@ -20,7 +20,7 @@ html, body, #root {
 }
 
 body {
-  font-family: 'Poppins', 'Inter', "Trebuchet MS", Helvetica, sans-serif;
+  font-family: 'Plus Jakarta Sans', Arial, sans-serif;
   font-size: 1rem;
   line-height: 1.6;
   color: #ede7dc;
@@ -40,7 +40,7 @@ a {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Poppins', 'Inter', "Trebuchet MS", Helvetica, sans-serif;
+  font-family: inherit;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: 0;
