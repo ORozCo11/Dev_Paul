@@ -9,7 +9,9 @@ import {
   PAKNAAN_CENTER,
   PAKNAAN_POLYGON,
 } from '../data/paknaanLocationDensity';
-import { geoJsonToRings } from '../utils/boundary';
+import { BOUNDARY_REFERENCE_ATTRIBUTION, geoJsonToPolygons } from '../utils/boundary';
+import BoundaryReferenceLabel from './BoundaryReferenceLabel';
+import BoundaryMapDetails from './BoundaryMapDetails';
 
 // Normalizes a hub record from the Laravel `/hubs` API into the shape the map/UI expects.
 function normalizeHub(record) {
@@ -325,6 +327,7 @@ function LocationDensityMap({
   const [resetViewRequest, setResetViewRequest] = useState(0);
   const [isMaximized, setIsMaximized] = useState(false);
   const [basemap, setBasemap] = useState('satellite'); // 'map' | 'satellite'
+  const [showPlaceLabels, setShowPlaceLabels] = useState(false);
   const mapShellRef = useRef(null);
   const nameInputRef = useRef(null);
 
@@ -357,7 +360,14 @@ function LocationDensityMap({
   }, [onHubsChange]);
 
   useEffect(() => {
-    fetchHubs().catch(() => {});
+    let cancelled = false;
+    // Start external I/O after commit; a torn-down mount never starts it.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      fetchHubs().catch(() => {});
+
+    });
+    return () => { cancelled = true; };
   }, [fetchHubs]);
 
   // When the naming modal opens, focus the input.
@@ -482,21 +492,23 @@ function LocationDensityMap({
   const hasBoundarySelection = boundaryOverride !== null;
   const hasBoundaryGeometry = Boolean(boundaryOverride?.geometry);
   const boundaryLabel = boundaryOverride?.label ?? 'Paknaan';
+  const barangayName = boundaryOverride?.barangayName ?? boundaryLabel;
   // Only the actual outline to draw — deliberately empty when a barangay
   // was picked but has no boundary polygon on file (only Mandaue City
   // barangays do today), rather than silently substituting Paknaan's shape.
-  const boundaryRings = useMemo(() => {
+  const boundaryPolygons = useMemo(() => {
     if (hasBoundarySelection && !hasBoundaryGeometry) return [];
-    const overrideRings = geoJsonToRings(boundaryOverride?.geometry);
-    return overrideRings.length ? overrideRings : [PAKNAAN_POLYGON];
+    const overrideRings = geoJsonToPolygons(boundaryOverride?.geometry);
+    return overrideRings.length ? overrideRings : [[PAKNAAN_POLYGON]];
   }, [boundaryOverride, hasBoundarySelection, hasBoundaryGeometry]);
   // The map still needs *some* valid area to frame even when there's
   // nothing to draw — keep the last known region (Paknaan) rather than an
   // empty/invalid Leaflet bounds object.
   const boundaryBounds = useMemo(() => {
-    const framingRings = boundaryRings.length ? boundaryRings : [PAKNAAN_POLYGON];
-    return L.latLngBounds(framingRings.flat());
-  }, [boundaryRings]);
+    return boundaryPolygons.length
+      ? L.latLngBounds(boundaryPolygons.flat(2))
+      : L.latLngBounds([[4.5, 116], [21.2, 127]]);
+  }, [boundaryPolygons]);
   // Generous padding so panning/zooming still feels free within whichever
   // area is selected, not just the original hand-tuned Paknaan box.
   const boundaryMaxBounds = useMemo(() => boundaryBounds.pad(0.5), [boundaryBounds]);
@@ -673,7 +685,7 @@ function LocationDensityMap({
           </span>
           FOCUS
         </span>
-        {boundaryRings.length > 0 && (
+        {boundaryPolygons.length > 0 && (
           <span className="location-density-legend-item">
             <span className="legend-symbol legend-symbol-boundary" aria-hidden="true" />
             {boundaryLabel} boundary
@@ -682,7 +694,7 @@ function LocationDensityMap({
       </div>
       {hasBoundarySelection && !hasBoundaryGeometry && (
         <div className="location-density-notice info" role="status">
-          <span>No boundary outline on file for {boundaryLabel} yet — only Mandaue City barangays have one today. Hubs and vehicles below aren't affected.</span>
+          <span>No detailed boundary reference is available for {boundaryLabel}. Ask the system administrator to review its boundary.</span>
         </div>
       )}
       {mapNotice && (
@@ -713,11 +725,11 @@ function LocationDensityMap({
       >
         {basemap === 'satellite' ? (
           <>
-            <TileLayer attribution={ESRI_ATTRIBUTION} crossOrigin="anonymous" maxZoom={19} url={ESRI_IMAGERY_URL} />
-            <TileLayer attribution="" crossOrigin="anonymous" maxZoom={19} url={ESRI_LABELS_URL} />
+            <TileLayer attribution={`${ESRI_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} crossOrigin="anonymous" maxZoom={19} url={ESRI_IMAGERY_URL} />
+            {showPlaceLabels && <TileLayer attribution="" crossOrigin="anonymous" maxZoom={19} url={ESRI_LABELS_URL} />}
           </>
         ) : (
-          <TileLayer attribution={STREET_ATTRIBUTION} crossOrigin="anonymous" maxZoom={19} url={STREET_TILE_URL} />
+          <TileLayer attribution={`${STREET_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} crossOrigin="anonymous" maxZoom={19} url={STREET_TILE_URL} />
         )}
 
         {/* Map / Satellite base-layer toggle — floats over the map like Google.
@@ -729,12 +741,18 @@ function LocationDensityMap({
         >
           <button type="button" className={basemap === 'map' ? 'is-active' : ''} onClick={() => setBasemap('map')}>Map</button>
           <button type="button" className={basemap === 'satellite' ? 'is-active' : ''} onClick={() => setBasemap('satellite')}>Satellite</button>
+          {basemap === 'satellite' && <button type="button" aria-pressed={showPlaceLabels} className={showPlaceLabels ? 'is-active' : ''} title="Show place names supplied by the map provider. These do not define barangay boundaries." onClick={() => setShowPlaceLabels((value) => !value)}>Map labels</button>}
         </div>
+        {boundaryPolygons.length > 0 && <BoundaryMapDetails
+          name={barangayName}
+          locality={boundaryOverride?.cityName}
+          verified={boundaryOverride?.verified === true}
+          source={boundaryOverride?.source}
+          psgcCode={boundaryOverride?.psgcCode}
+        />}
         {/* Dark casing (halo) drawn UNDER the boundary so the yellow line pops
-            on both the light street map and the dark satellite imagery. One
-            <Polygon> per ring so a MultiPolygon (e.g. a city with islands)
-            renders as separate disjoint shapes rather than shell+holes. */}
-        {boundaryRings.map((ring, index) => (
+            on both the light street map and the dark satellite imagery. Each Polygon retains its shell and holes; islands render separately. */}
+        {boundaryPolygons.map((ring, index) => (
           <Polygon
             key={`halo-${index}`}
             pathOptions={{ color: '#1e293b', weight: 6, opacity: 0.45, fill: false }}
@@ -743,7 +761,7 @@ function LocationDensityMap({
         ))}
         {/* Solid yellow boundary on top — high visibility against greens,
             water, and light streets alike. */}
-        {boundaryRings.map((ring, index) => (
+        {boundaryPolygons.map((ring, index) => (
           <Polygon
             key={`line-${index}`}
             pathOptions={{
@@ -756,6 +774,7 @@ function LocationDensityMap({
             positions={ring}
           />
         ))}
+        <BoundaryReferenceLabel polygons={boundaryPolygons} label={barangayName} locality={boundaryOverride?.cityName} />
         {hubs.map((hub) => (
           <Marker
             icon={hubIcons[hub.id]}

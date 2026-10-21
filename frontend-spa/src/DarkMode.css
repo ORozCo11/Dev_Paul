@@ -1,0 +1,193 @@
+/* Shared dark-mode colors. Light-mode and public-page layouts stay independent. */
+html[data-theme="dark"] {
+  --bg: #0b1018;
+  --bg-elevated: #101824;
+  --surface: #151e2b;
+  --surface-2: #1c2838;
+  --surface-3: #263449;
+  --surface-hover: #24344b;
+  --sidebar: #0c131e;
+  --border: #3a495f;
+  --border-subtle: #2c394c;
+  --text: #e2e8f0;
+  --text-strong: #f8fafc;
+  --text-muted: #b6c2d3;
+  --text-faint: #9cacc2;
+  --primary-strong: #93c5fd;
+  --primary-soft: #182f50;
+  --primary-border: #486b9b;
+  --text-success: #86efac;
+  --success: #86efac;
+  --warning: #fcd34d;
+  --danger: #fda4af;
+  --info: #93c5fd;
+  --dark-link: #93c5fd;
+  --control-border: #63758f;
+}
+
+/* Flat, legible navigation; keyboard focus remains distinct from selection. */
+html[data-theme="dark"] .sidebar { background: var(--sidebar); box-shadow: none; }
+html[data-theme="dark"] .sidebar .module-nav button { color: #cbd5e1; font-weight: 500; }
+html[data-theme="dark"] .sidebar .module-nav button:hover { background: #1b2a3e; color: #fff; box-shadow: none; }
+html[data-theme="dark"] .sidebar .module-nav button.active { background: #1d3655; border-color: #45688d; color: #fff; box-shadow: none; filter: none; font-weight: 600; }
+html[data-theme="dark"] .sidebar .module-nav button .nav-icon { color: inherit; stroke: currentColor; }
+html[data-theme="dark"] :is(.workspace, .superadmin-shell) :is(h1, h2, h3, h4, h5, h6, .metric-card strong) { text-shadow: none; }
+html[data-theme="dark"] :is(.workspace, .topbar, .superadmin-shell, .modal-overlay, .confirm-overlay) { color-scheme: dark; }
+html[data-theme="dark"] :is(.content-area, .topbar) { background: var(--bg); }
+html[data-theme="dark"] .topbar { border-color: var(--border); }
+html[data-theme="dark"] :is(.sidebar-toggle-btn, .topbar .vms-wordmark) { color: #93c5fd; }
+html[data-theme="dark"] .topbar .topbar-gear-icon > path { fill: #93c5fd; }
+
+/* Dashboard actions and chart labels must read clearly on a dark surface. */
+html[data-theme="dark"] :is(.focus-card button, .focus-more, .focus-readiness-details > summary, .focus-error button) { color: var(--dark-link); }
+html[data-theme="dark"] :is(.focus-kpi-icon, .focus-task-mark, .ticket-method-icon, .subissue-empty-icon) { background: #193456; color: #bfdbfe; }
+html[data-theme="dark"] .focus-task-mark.is-urgent { background: #421f2d; color: #fda4af; }
+html[data-theme="dark"] .focus-warning { color: #fcd34d; }
+html[data-theme="dark"] .focus-error { background: #351c28; border-color: #8b4557; color: #fecdd3; }
+html[data-theme="dark"] .chart-tooltip-card { background: var(--surface-2); border-color: var(--border); color: var(--text-strong); }
+html[data-theme="dark"] .chart-tooltip-label { color: var(--text); }
+
+/* Shared controls override legacy fixed white/black field colors. */
+html[data-theme="dark"] :is(.workspace, .topbar, .superadmin-shell, .modal-overlay, .confirm-overlay) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea) {
+  color: var(--text-strong) !important;
+  background-color: var(--surface-2) !important;
+  border-color: var(--control-border);
+  caret-color: #fff;
+}
+html[data-theme="dark"] :is(.workspace, .superadmin-shell, .modal-overlay) :is(input, textarea)::placeholder { color: #acbad0; opacity: 1; }
+html[data-theme="dark"] :is(.workspace, .superadmin-shell, .modal-overlay) :is(select option, select optgroup) { color: var(--text-strong); background: var(--surface-2); }
+html[data-theme="dark"] :is(.workspace, .topbar, .superadmin-shell, .modal-overlay) :is(input, select, textarea):disabled { opacity: 1; color: #98a8bf !important; background-color: #18202e !important; }
+html[data-theme="dark"] :is(.workspace, .superadmin-shell, .modal-overlay) :is(label > span:first-child, .filter-date-group > span, .form-field-label) { color: var(--text-muted); }
+html[data-theme="dark"] .smart-form label > span:first-child { background-color: var(--surface); }
+html[data-theme="dark"] .smart-form.ticket-create-form label > span:first-child,
+html[data-theme="dark"] .profile-page .smart-form label > span:first-child { background: transparent; color: var(--text-muted); }
+html[data-theme="dark"] :is(.workspace, .superadmin-shell, .modal-overlay) :is(.fx-error, .field-error, .has-error > .fx-error) { color: #fda4af; }
+html[data-theme="dark"] :is(.workspace, .superadmin-shell, .modal-overlay) :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
+
+html[data-theme="dark"] :is(.icon-btn, .ghost-button, .filter-select, .local-search-container, .date-filter-input, .view-dropdown-btn, .export-btn, .row-actions-trigger) { background: var(--surface-2); color: var(--text); border-color: var(--control-border); }
+html[data-theme="dark"] :is(.primary-button, .primary-link, .icon-add-btn, .filter-apply-btn) { color: #fff; background: #2563eb; border-color: #3b82f6; }
+html[data-theme="dark"] :is(.danger-button, .btn-delete-action) { color: #fff; background: #b91c1c; border-color: #f87171; }
+html[data-theme="dark"] :is(.success-button, .btn-confirm-action) { color: #fff; background: #15803d; border-color: #4ade80; }
+html[data-theme="dark"] :is(.table-shell .cell-link, .vehicle-profile-ticket-link, .sch-card-notes button, .veh-seeall, .issue-reporter-link, .vehicle-cell a, .vehicle-cell button) { color: var(--dark-link); }
+
+/* Lists, tables and overlays share readable surfaces and dividers. */
+html[data-theme="dark"] :is(.panel, .table-shell, .ticket-card, .veh-card, .ticket-section, .subissue-card, .issue-report-card, .graph-panel, .location-form-panel, .profile-section, .modal-box, .confirm-dialog, .latest-issue-card, .ticket-summary-chart, .ticket-summary-filters) { background-color: var(--surface); color: var(--text); border-color: var(--border); }
+html[data-theme="dark"] .table-shell thead th { background: var(--surface-2); color: var(--text-muted); border-color: var(--border); }
+html[data-theme="dark"] .table-shell tbody tr { background: var(--surface); }
+html[data-theme="dark"] .table-shell tbody tr:nth-child(even) { background: #182333; }
+html[data-theme="dark"] .table-shell tbody tr:hover { background: var(--surface-hover); }
+html[data-theme="dark"] .table-shell tbody td { background: transparent; color: var(--text); border-color: var(--border-subtle); }
+html[data-theme="dark"] :is(.issue-note-cell, .sch-card-notes p, .ticket-detail-description-box, .ticket-preview-body, .vehicle-detail-specs dd) { color: var(--text); }
+html[data-theme="dark"] :is(.muted, .empty-state, .panel-description, .module-description, .superadmin-muted-block) { color: var(--text-muted) !important; }
+html[data-theme="dark"] :is(.profile-menu-dropdown, .notifications-dropdown, .notifications-header, .modal-header, .ticket-detail-header, .ticket-detail-actions, .row-actions-popover, .view-dropdown-menu, .column-chooser-menu, .creatable-select-panel, .multi-select-panel, .filter-popover) { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+html[data-theme="dark"] :is(.profile-menu-name, .notifications-header h4, .modal-header h3, .confirm-dialog h3) { color: var(--text-strong); }
+html[data-theme="dark"] :is(.profile-menu-item, .creatable-select-option, .popover-checkbox-label, .view-dropdown-item, .column-chooser-item) { color: var(--text); }
+html[data-theme="dark"] :is(.profile-menu-item, .creatable-select-option, .view-dropdown-item, .column-chooser-item):hover { background: var(--surface-hover); color: #fff; }
+html[data-theme="dark"] :is(.profile-menu-item-danger, .creatable-select-option-delete, .profile-menu-impersonation-error) { color: #fda4af; }
+
+/* Profile and ticket forms introduced by the UI redesign. */
+html[data-theme="dark"] :is(.profile-hero, .profile-section, .user-form-grid, .subissue-editor-panel) { background: var(--surface); border-color: var(--border); }
+html[data-theme="dark"] :is(.profile-hero-info h2, .profile-section-title, .ticket-method-copy strong, .ticket-preview-empty-copy strong, .subissue-editor-title) { color: var(--text-strong); }
+html[data-theme="dark"] :is(.profile-hero-info p, .profile-section-hint, .ticket-method-copy small, .ticket-preview-body span, .ticket-preview-empty-copy span) { color: var(--text-muted); }
+html[data-theme="dark"] :is(.photo-box, .subissue-empty-state, .ticket-preview-card, .ticket-detail-description-box, .subissue-meta-strip, .ticket-process-next-card, .file-card-empty) { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+html[data-theme="dark"] .ticket-create-form .ticket-method-card { background: var(--surface); color: var(--text); border-color: var(--control-border); }
+html[data-theme="dark"] .ticket-create-form .ticket-method-card:hover,
+html[data-theme="dark"] .ticket-create-form .ticket-method-card.is-selected { background: #193456; border-color: #93c5fd; box-shadow: none; }
+html[data-theme="dark"] :is(.ticket-method-radio, .subissue-count) { background: var(--surface-2); color: #bfdbfe; }
+html[data-theme="dark"] .ticket-method-card.is-selected .ticket-method-radio { border-color: #93c5fd; }
+html[data-theme="dark"] :is(.ticket-preview-plate, .ticket-preview-empty-copy svg, .ticket-role-tag) { color: var(--dark-link); }
+
+/* Schedule cards and their selected/hover states had fixed light colors. */
+html[data-theme="dark"] .ticket-card-grid .sch-card { --schedule-wash: #182f50; background: var(--surface); border-color: var(--schedule-color, #94a3b8); box-shadow: none; }
+html[data-theme="dark"] .ticket-card-grid .sch-card:hover { background: #1b293c; border-color: var(--schedule-color, #94a3b8); box-shadow: none; }
+html[data-theme="dark"] .sch-card.sch-scheduled { --schedule-color: #60a5fa; }
+html[data-theme="dark"] .sch-card.sch-pending-approval { --schedule-color: #fbbf24; }
+html[data-theme="dark"] .sch-card.sch-completed { --schedule-color: #4ade80; }
+html[data-theme="dark"] .sch-card.sch-cancelled { --schedule-color: #94a3b8; }
+html[data-theme="dark"] .sch-card.sch-declined,
+html[data-theme="dark"] .sch-card.is-overdue { --schedule-color: #fb7185; }
+html[data-theme="dark"] .sch-card.sch-awaiting-verification { --schedule-color: #a78bfa; }
+html[data-theme="dark"] :is(.schedule-panel-header, .sch-card-date, .sch-card-photo, .sch-detail-icon, .ticket-card-stage, .ticket-card-progress-track) { background: var(--surface-2); border-color: var(--border); color: var(--text); }
+html[data-theme="dark"] :is(.schedule-panel-header h3, .sch-card .sch-card-title, .sch-card-vehicle-name, .ticket-card-title, .ticket-card-vehicle-name) { color: var(--text-strong); }
+html[data-theme="dark"] :is(.schedule-panel-heading p, .sch-card .sch-card-id, .sch-card-plate, .sch-card-notes strong, .sch-card-meta dt, .sch-card-meta dt svg, .ticket-card-subline, .ticket-card-date-label) { color: var(--text-muted); }
+html[data-theme="dark"] .ticket-card-grid .sch-card-meta dd { color: var(--text); }
+html[data-theme="dark"] :is(.sch-card-main, .sch-card-actions, .sch-card-meta > div, .schedule-panel-header) { border-color: var(--border); }
+html[data-theme="dark"] .ticket-card-grid .sch-card .sch-card-date dd { color: var(--dark-link); }
+html[data-theme="dark"] .ticket-card-grid .sch-card .sch-card-date.is-overdue dd { color: #fda4af; }
+html[data-theme="dark"] .schedule-count-badge { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+html[data-theme="dark"] .ticket-card-grid .sch-card .sch-action { background: var(--surface-2); color: var(--text); border-color: var(--control-border); }
+html[data-theme="dark"] .ticket-card-grid .sch-card .sch-action.is-primary { background: #193456; color: #bfdbfe; border-color: #547aab; }
+html[data-theme="dark"] .ticket-card-grid .sch-card .sch-action.is-danger { background: #421f2d; color: #fecdd3; border-color: #945366; }
+
+/* Semantic status colors retain their meaning with dark backgrounds. */
+html[data-theme="dark"] :is(.status-badge, .sch-status-badge, .ticket-preview-badge) { background: #263449; color: #e2e8f0; border-color: #586b86; }
+html[data-theme="dark"] :is(.status-badge.good, .status-badge.active, .status-badge.closed, .status-badge.available, .status-badge.verified, .status-badge.resolved, .status-badge.active-admin, .sch-status-badge.is-completed) { background: #14352b; color: #a7f3d0; border-color: #3f806a; }
+html[data-theme="dark"] :is(.status-badge.pending, .status-badge.pending-approval, .status-badge.needs-inspection, .status-badge.under-maintenance, .status-badge.open, .sch-status-badge.is-pending-approval) { background: #3d3018; color: #fde68a; border-color: #9a7834; }
+html[data-theme="dark"] :is(.status-badge.needs-repair, .status-badge.declined, .status-badge.deactivated, .sch-status-badge.is-declined, .sch-overdue-pill, .sch-decline-reason) { background: #421f2d; color: #fecdd3; border-color: #945366; }
+html[data-theme="dark"] :is(.status-badge.for-verification, .status-badge.scheduled, .sch-status-badge.is-scheduled) { background: #193456; color: #bfdbfe; border-color: #547aab; }
+
+/* Vehicle and repair-record details. Preserve their blue section headers. */
+html[data-theme="dark"] :is(.vehicle-profile-keydates dd, .vehicle-profile-specs dd, .veh-specs dd, .lr-value, .lr-total, .lr-file-name) { color: var(--text-strong); }
+html[data-theme="dark"] :is(.vehicle-profile-status-item > span:first-child, .vehicle-profile-keydates dt, .vehicle-profile-specs dt, .veh-specs dt, .lr-label) { color: var(--text-muted); }
+html[data-theme="dark"] :is(.vehicle-profile-status-item, .vehicle-profile-keydates > div, .vehicle-profile-specs > div) { border-color: var(--border); }
+html[data-theme="dark"] .vehicle-profile-page .file-card-empty { background: var(--surface-2); color: var(--text-muted); border-color: var(--border); }
+
+/* Super Admin uses its local surface aliases; keep its controls consistent. */
+html[data-theme="dark"] .superadmin-shell { --sa-bg: #0b1018; --sa-surface: #151e2b; --sa-subtle: #1c2838; --sa-text: #f8fafc; --sa-muted: #b6c2d3; --sa-border: #3a495f; }
+html[data-theme="dark"] .superadmin-shell :is(.sa-text-button, .sa-group-row th, .sa-empty-icon) { color: var(--dark-link); }
+html[data-theme="dark"] .superadmin-shell .sa-segments button[aria-pressed="true"] { background: #193456; color: #bfdbfe; border-color: #547aab; }
+html[data-theme="dark"] .superadmin-shell .sa-avatar { background: #193456; color: #bfdbfe; }
+html:root[data-theme="dark"] .superadmin-shell .sa-destructive { color: #fda4af; }
+html:root[data-theme="dark"] .superadmin-shell .sa-text-button { color: var(--dark-link); }
+html:root[data-theme="dark"] .superadmin-shell .sa-table .sa-group-row th { color: var(--dark-link); }
+html[data-theme="dark"] .superadmin-shell .sa-warning { color: #fcd34d !important; }
+html:root[data-theme="dark"] .superadmin-shell .status-badge { background: #263449; color: #e2e8f0; border-color: #586b86; }
+html:root[data-theme="dark"] .superadmin-shell .status-badge:is(.active, .active-admin, .verified, .resolved, .activate, .approve) { background: #14352b; color: #a7f3d0; border-color: #3f806a; }
+html:root[data-theme="dark"] .superadmin-shell .status-badge:is(.pending-approval, .initial-administrator, .needs-review, .no-active-admin, .open) { background: #3d3018; color: #fde68a; border-color: #9a7834; }
+html:root[data-theme="dark"] .superadmin-shell .status-badge:is(.deactivated, .not-found, .delete, .deactivate) { background: #421f2d; color: #fecdd3; border-color: #945366; }
+html[data-theme="dark"] .sidebar .module-nav button span.module-nav-badge { color: #fff; background: #b91c1c; }
+
+/* Legacy detail views and floating labels use more specific fixed colors. */
+html[data-theme="dark"] .smart-form label > span:first-child { color: var(--text-muted) !important; }
+html[data-theme="dark"] .smart-form label > span:first-child > span:not(.required-asterisk) { color: inherit; }
+html[data-theme="dark"] .photo-box-empty span { color: var(--text-muted); }
+html[data-theme="dark"] :is(.profile-menu-role, .photo-placeholder span, .photo-box > span, .ticket-detail-label, .ticket-process-stat-label, .ticket-timeline-meta, .subissue-meta-chip) { color: var(--text-muted); }
+html[data-theme="dark"] .ticket-detail-panel.is-page .ticket-process-stat-value,
+html[data-theme="dark"] .ticket-preview-body > strong,
+html[data-theme="dark"] .ticket-timeline-content p { color: var(--text-strong); }
+html[data-theme="dark"] :is(.ticket-process-stat-icon, .ticket-count-pill, .ticket-timeline-dot) { background: #193456; color: #bfdbfe; }
+html[data-theme="dark"] :is(.ticket-subissue-toggle-all, .ticket-process-next-label, .ticket-process-next-card > strong, .user-avatar-name.cell-link) { color: var(--dark-link); }
+html[data-theme="dark"] .ticket-process-next-card > p { color: var(--text); }
+html[data-theme="dark"] .ticket-process-flow-label { color: var(--text-muted) !important; }
+html[data-theme="dark"] .ticket-process-flow-step.is-active .ticket-process-flow-label { background: #3d3018; color: #fde68a !important; }
+html[data-theme="dark"] .ticket-process-flow-step.is-done .ticket-process-flow-label { color: #a7f3d0 !important; }
+html[data-theme="dark"] .ticket-timeline-line { background: var(--border); }
+html[data-theme="dark"] .required-asterisk { color: #fda4af !important; }
+html[data-theme="dark"] .count-badge { background: #b91c1c; color: #fff; }
+html[data-theme="dark"] .module-grid:has(.schedule-panel-header) > .module-filter-panel { background: var(--surface); border-color: var(--border); }
+html[data-theme="dark"] .schedule-panel-header .schedule-panel-heading p { color: #fff; }
+html[data-theme="dark"] .ticket-detail-panel.is-page .ticket-process-next-card { background: var(--surface-2); border-color: var(--border); }
+html[data-theme="dark"] .ticket-detail-panel.is-page .ticket-process-stat-icon { background: #193456; color: #bfdbfe; }
+html[data-theme="dark"] .ticket-preview-photo-empty { background: var(--surface-3); color: #bfdbfe; }
+html[data-theme="dark"] :is(.status-badge, .sch-status-badge):is(.ticket-done, .priority-low) { background: #14352b; color: #a7f3d0; border-color: #3f806a; }
+html[data-theme="dark"] :is(.status-badge, .sch-status-badge):is(.ticket-repair, .ticket-formaint, .priority-medium, .ticket-deferred) { background: #3d3018; color: #fde68a; border-color: #9a7834; }
+html[data-theme="dark"] :is(.status-badge, .sch-status-badge):is(.priority-high, .priority-critical, .ticket-declined) { background: #421f2d; color: #fecdd3; border-color: #945366; }
+html[data-theme="dark"] :is(.status-badge, .sch-status-badge):is(.ticket-open, .ticket-forinspect, .ticket-forconfirm) { background: #193456; color: #bfdbfe; border-color: #547aab; }
+html[data-theme="dark"] .ticket-card-grid .sch-card .sch-action:is(.is-info, .is-success, .is-warning) { background: #193456; color: #bfdbfe; border-color: #547aab; }
+html[data-theme="dark"] .ticket-card-grid .sch-card .sch-action.is-success { background: #14352b; color: #a7f3d0; border-color: #3f806a; }
+html[data-theme="dark"] .ticket-card-grid .sch-card .sch-action.is-warning { background: #3d3018; color: #fde68a; border-color: #9a7834; }
+html[data-theme="dark"] .issue-filter-status-chip { background: #263449 !important; color: #e2e8f0 !important; }
+html[data-theme="dark"] .issue-filter-status-chip[data-status="Closed"] { background: #14352b !important; color: #a7f3d0 !important; }
+html[data-theme="dark"] .issue-filter-status-chip:is([data-status="Pending Approval"], [data-status="Active"]) { background: #3d3018 !important; color: #fde68a !important; }
+html[data-theme="dark"] .issue-filter-status-chip[data-status="Declined"] { background: #421f2d !important; color: #fecdd3 !important; }
+html[data-theme="dark"] .issue-filter-status-chip[data-status="For Verification"] { background: #302450 !important; color: #ddd6fe !important; }
+html[data-theme="dark"] #root > .auth-page > .auth-card { background: var(--surface); color: var(--text); }
+html[data-theme="dark"] :is(.ready-to-close-panel, .report-category-card) { background: var(--surface); border-color: var(--border); }
+html[data-theme="dark"] .ready-to-close-header h3 { color: #a7f3d0; }
+html[data-theme="dark"] .ready-to-close-body .table-shell { background: var(--surface); }
+html[data-theme="dark"] .report-category-card .report-category-card-head h4 { color: var(--text-strong); }
+html[data-theme="dark"] .report-category-card .report-category-count { background: #193456; color: #bfdbfe; }
+html[data-theme="dark"] .report-category-card.tone-green .report-category-count { background: #14352b; color: #a7f3d0; }
+html[data-theme="dark"] .report-category-card.tone-purple .report-category-count { background: #302450; color: #ddd6fe; }
+html[data-theme="dark"] .report-category-card.tone-amber .report-category-count { background: #3d3018; color: #fde68a; }
+html[data-theme="dark"] .operations-board-head :is(.operations-kicker, p) { color: #fff; }

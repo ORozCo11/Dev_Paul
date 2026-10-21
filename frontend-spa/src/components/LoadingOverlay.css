@@ -1,0 +1,43 @@
+.vms-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  cursor: progress;
+}
+
+.vms-loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 168px;
+  max-width: calc(100vw - 32px);
+  min-height: 68px;
+  box-sizing: border-box;
+  padding: 12px 24px;
+  border: 1px solid #dedede;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: center;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+}
+
+.vms-loading-logo {
+  animation: vms-loading-rotate 6s linear infinite;
+}
+
+@keyframes vms-loading-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vms-loading-logo { animation: none; }
+}

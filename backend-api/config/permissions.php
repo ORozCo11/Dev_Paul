@@ -24,13 +24,9 @@ return [
     'vehicle_type.delete' => ['Admin'],
 
     // Vehicles
-    // Registration is data entry, not a transfer of accountability — a
-    // Custodian may register a vehicle when the barangay delegates that to
-    // them, but vehicle.edit stays Admin-only below, so the protected
-    // master record can't be freely changed afterward by whoever typed it in.
+    // Registration is a standard Admin/Custodian duty; editing remains Admin-only.
     'vehicle.create' => ['Admin', 'Custodian'],
-    // Bulk import registers vehicles, so FleetController::storeVehicle's
-    // per-account delegation check (canRegisterVehicles) still applies on top.
+    // Bulk import follows the same role eligibility as single registration.
     'vehicle.import' => ['Admin', 'Custodian'],
     // Vehicle Usage Log: who took which vehicle where, and when it came back.
     'usage.view' => ['Admin', 'Custodian'],
@@ -178,6 +174,13 @@ return [
     'subissue.assign_mechanic' => [],
     'subissue.reassign_mechanic' => [],
     'subissue.log_repair' => ['Maintenance Personnel'],
+    // Dispatching / receiving / writing up an EXTERNAL-shop repair that has no
+    // in-house mechanic. Admin records it (never the verifying Custodian).
+    'external.handle' => ['Admin'],
+    // Cannibalization records: anyone on the barangay's repair side can record
+    // and read them. There is no approval ability by design.
+    'cannibalization.record' => ['Admin', 'Custodian', 'Maintenance Personnel'],
+    'cannibalization.view' => ['Admin', 'Custodian', 'Maintenance Personnel'],
     // Production-readiness audit finding #2 — Admin was a general Tier-1
     // verification fallback; removed. Verification is a Custodian-only
     // action now. An unavailable Custodian is handled by reassigning the

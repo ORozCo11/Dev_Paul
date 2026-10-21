@@ -166,6 +166,78 @@ class TicketWorkflowTest extends TestCase
     }
 
     #[Test]
+    public function archived_tickets_can_be_deleted_and_restored_without_reopening_closed_work(): void
+    {
+        $ticket = $this->driveTicketToClosed($this->activeTicket($this->vehicle(), ['Worn belt']));
+        $archive = TicketArchiveLog::where('ticket_id', $ticket->ticket_id)->firstOrFail();
+        $snapshot = $archive->full_ticket_snapshot;
+        Sanctum::actingAs($this->admin, ['*']);
+
+        $this->deleteJson("/api/ticket-archives/{$archive->archive_id}")->assertOk();
+        $this->assertSoftDeleted('ticket_archive_logs', ['archive_id' => $archive->archive_id]);
+        $this->getJson('/api/ticket-archives')->assertOk()->assertJsonFragment(['archive_id' => $archive->archive_id]);
+        $this->putJson("/api/ticket-archives/{$archive->archive_id}/restore")->assertOk();
+        $this->assertSame($snapshot, $archive->fresh()->full_ticket_snapshot);
+        $this->assertNull($archive->fresh()->deleted_at);
+        $this->assertSame('Closed', $ticket->fresh()->status);
+        $this->putJson("/api/ticket-archives/{$archive->archive_id}/reopen")->assertUnprocessable();
+    }
+
+    #[Test]
+    public function staff_cannot_delete_or_restore_archives(): void
+    {
+        $ticket = $this->driveTicketToClosed($this->activeTicket($this->vehicle(), ['Worn belt']));
+        $archive = TicketArchiveLog::where('ticket_id', $ticket->ticket_id)->firstOrFail();
+        foreach ([$this->custodian, $this->mechanic] as $user) {
+            Sanctum::actingAs($user, ['*']);
+            $this->deleteJson("/api/ticket-archives/{$archive->archive_id}")->assertForbidden();
+        }
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->deleteJson("/api/ticket-archives/{$archive->archive_id}")->assertOk();
+        foreach ([$this->custodian, $this->mechanic] as $user) {
+            Sanctum::actingAs($user, ['*']);
+            $this->putJson("/api/ticket-archives/{$archive->archive_id}/restore")->assertForbidden();
+        }
+    }
+
+    #[Test]
+    public function repair_logs_accept_multiple_evidence_files_without_parts_or_cost(): void
+    {
+        Storage::fake('supabase');
+        $ticket = $this->activeTicket($this->vehicle(), ['Worn belt']);
+        $sub = $ticket->subIssues->first();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->post("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", [
+            '_method' => 'PUT',
+            'repair_logs' => 'Adjusted belt tension. No replacement parts needed.',
+            'photos' => [UploadedFile::fake()->image('belt.jpg'), UploadedFile::fake()->create('report.pdf', 20, 'application/pdf')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $files = $sub->fresh()->attachment_files;
+        $this->assertCount(2, $files);
+        $this->assertSame('belt.jpg', $files[0]['name']);
+        $this->assertSame('report.pdf', $files[1]['name']);
+        $this->assertSame($this->mechanic->name, $files[0]['added_by']);
+        $this->assertNull($sub->fresh()->maintenance_cost);
+        $this->assertNull($sub->fresh()->parts_used);
+        $this->getJson("/api/tickets/{$ticket->ticket_id}")->assertOk()->assertJsonFragment(['name' => 'report.pdf']);
+    }
+
+    #[Test]
+    public function repair_evidence_rejects_oversized_or_unsupported_files(): void
+    {
+        Storage::fake('supabase');
+        $ticket = $this->activeTicket($this->vehicle(), ['Worn belt']);
+        $sub = $ticket->subIssues->first();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->post("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", [
+            '_method' => 'PUT', 'repair_logs' => 'Adjusted belt tension.',
+            'photos' => [UploadedFile::fake()->create('large.pdf', 8193, 'application/pdf'), UploadedFile::fake()->create('script.exe', 1)],
+        ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors(['photos.0', 'photos.1']);
+        $this->assertSame('Under Repair', $sub->fresh()->status);
+        $this->assertNull($sub->fresh()->attachment_files);
+    }
+
+    #[Test]
     public function nobody_can_create_a_ticket_directly_any_more(): void
     {
         // ticket.create has no role (config/permissions.php) — every ticket
@@ -265,7 +337,7 @@ class TicketWorkflowTest extends TestCase
     }
 
     #[Test]
-    public function verifying_requires_attestation_and_every_sub_issue_ready(): void
+    public function verifying_needs_the_ticket_at_for_verification_and_closes_it_on_approve(): void
     {
         $vehicle = $this->vehicle();
         $ticket = $this->activeTicket($vehicle, ['Low coolant level']);
@@ -276,16 +348,8 @@ class TicketWorkflowTest extends TestCase
 
         Sanctum::actingAs($this->custodian, ['*']);
 
-        // No attestation at all -> rejected.
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertUnprocessable();
-
-        // An explicit false attestation -> rejected (accepted rule).
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => false])->assertUnprocessable();
-
-        $this->assertSame('For Verification', $ticket->fresh()->status);
-
-        // A truthy attestation succeeds and closes the ticket.
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertOk();
+        // Approve is a single click — no checklist or attestation gate any more.
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertOk();
         $this->assertSame('Closed', $ticket->fresh()->status);
     }
 
@@ -1043,158 +1107,9 @@ class TicketWorkflowTest extends TestCase
 
         return $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
             'repair_logs' => 'Swapped in a part from another vehicle.',
-            'repair_type' => 'cannibalized',
+            'repair_type' => 'cannibalized', 'part_needed' => 'Alternator', 'part_quantity' => 1,
             'source_vehicle_id' => $donorVehicle->vehicle_id,
         ]);
-    }
-
-    #[Test]
-    public function logging_a_cannibalized_repair_parks_at_pending_approval_instead_of_going_straight_to_inspection(): void
-    {
-        $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
-        $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
-        $subIssue = $ticket->subIssues->first();
-
-        $this->logCannibalizedRepair($ticket, $subIssue, $donor)->assertOk();
-
-        $subIssue->refresh();
-        $this->assertSame('Pending Approval', $subIssue->status);
-        $this->assertSame('Pending', $subIssue->cannibalization_status);
-        $this->assertSame($donor->vehicle_id, $subIssue->source_vehicle_id);
-    }
-
-    #[Test]
-    public function a_ticket_cannot_be_submitted_for_verification_while_a_repair_is_pending_cannibalization_approval(): void
-    {
-        $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
-        $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
-        $subIssue = $ticket->subIssues->first();
-        $this->logCannibalizedRepair($ticket, $subIssue, $donor)->assertOk();
-
-        Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertUnprocessable();
-    }
-
-    #[Test]
-    public function approving_a_cannibalized_repair_releases_it_to_inspection_and_opens_an_issue_report_on_the_donor(): void
-    {
-        $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
-        $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
-        $subIssue = $ticket->subIssues->first();
-        $this->logCannibalizedRepair($ticket, $subIssue, $donor)->assertOk();
-
-        Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/approve-cannibalization", [])
-            ->assertOk();
-
-        $subIssue->refresh();
-        $this->assertSame('For Inspection', $subIssue->status);
-        $this->assertSame('Approved', $subIssue->cannibalization_status);
-        $this->assertSame($this->admin->id, $subIssue->cannibalization_reviewed_by);
-        $this->assertNotNull($subIssue->cannibalization_reviewed_at);
-        $this->assertNotNull($subIssue->cannibalization_issue_report_id);
-
-        $donor->refresh();
-        $this->assertSame('Needs Inspection', $donor->condition);
-        $this->assertDatabaseHas('vehicle_issue_reports', [
-            'issue_report_id' => $subIssue->cannibalization_issue_report_id,
-            'vehicle_id' => $donor->vehicle_id,
-            'status' => 'Pending',
-        ]);
-        $this->assertDatabaseHas('vehicle_histories', [
-            'vehicle_id' => $donor->vehicle_id,
-            'activity_type' => 'Issue Reported',
-            'related_record_id' => (string) $subIssue->cannibalization_issue_report_id,
-        ]);
-
-        // Now released to the normal pipeline — the ticket can be submitted
-        // and the Custodian can verify it, closing the ticket.
-        Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
-
-        Sanctum::actingAs($this->custodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertOk();
-        $this->assertSame('Closed', $ticket->fresh()->status);
-    }
-
-    #[Test]
-    public function rejecting_a_cannibalized_repair_sends_it_back_to_under_repair_with_no_donor_side_effects(): void
-    {
-        $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
-        $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
-        $subIssue = $ticket->subIssues->first();
-        $this->logCannibalizedRepair($ticket, $subIssue, $donor)->assertOk();
-
-        Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/reject-cannibalization", [
-            'cannibalization_rejection_reason' => 'We need that part on the donor vehicle itself.',
-        ])->assertOk();
-
-        $subIssue->refresh();
-        $this->assertSame('Under Repair', $subIssue->status);
-        $this->assertSame('Rejected', $subIssue->cannibalization_status);
-        $this->assertSame('We need that part on the donor vehicle itself.', $subIssue->cannibalization_rejection_reason);
-        $this->assertNull($subIssue->cannibalization_issue_report_id);
-
-        $donor->refresh();
-        $this->assertNotSame('Needs Inspection', $donor->condition);
-        $this->assertDatabaseMissing('vehicle_issue_reports', ['vehicle_id' => $donor->vehicle_id]);
-    }
-
-    #[Test]
-    public function rejecting_a_cannibalized_repair_requires_a_reason(): void
-    {
-        $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
-        $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
-        $subIssue = $ticket->subIssues->first();
-        $this->logCannibalizedRepair($ticket, $subIssue, $donor)->assertOk();
-
-        Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/reject-cannibalization", [])
-            ->assertUnprocessable();
-    }
-
-    #[Test]
-    public function only_an_admin_can_approve_or_reject_a_cannibalized_repair(): void
-    {
-        $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
-        $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
-        $subIssue = $ticket->subIssues->first();
-        $this->logCannibalizedRepair($ticket, $subIssue, $donor)->assertOk();
-
-        Sanctum::actingAs($this->custodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/approve-cannibalization", [])->assertForbidden();
-
-        Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/reject-cannibalization", [
-            'cannibalization_rejection_reason' => 'nope',
-        ])->assertForbidden();
-    }
-
-    #[Test]
-    public function cannibalization_approval_cannot_be_actioned_twice(): void
-    {
-        $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
-        $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
-        $subIssue = $ticket->subIssues->first();
-        $this->logCannibalizedRepair($ticket, $subIssue, $donor)->assertOk();
-
-        Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/approve-cannibalization", [])->assertOk();
-
-        // Already Approved — a second approval (or a reject) must not be
-        // allowed to silently re-open/re-run this gate.
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/approve-cannibalization", [])->assertUnprocessable();
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/reject-cannibalization", [
-            'cannibalization_rejection_reason' => 'too late',
-        ])->assertUnprocessable();
     }
 
     #[Test]
@@ -1327,21 +1242,6 @@ class TicketWorkflowTest extends TestCase
     }
 
     #[Test]
-    public function approving_a_cannibalization_on_a_cancelled_ticket_is_refused(): void
-    {
-        $vehicle = $this->vehicle();
-        $donor = $this->vehicle();
-        $ticket = $this->activeTicket($vehicle, ['Alternator']);
-        $subIssue = $ticket->subIssues->first();
-        $this->logCannibalizedRepair($ticket, $subIssue, $donor);
-
-        Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", [])->assertOk();
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/approve-cannibalization", [])->assertStatus(422);
-        $this->assertSame(0, VehicleIssueReport::where('vehicle_id', $donor->vehicle_id)->count());
-    }
-
-    #[Test]
     public function reassigning_the_custodian_also_moves_a_repair_awaiting_cannibalization_approval(): void
     {
         $vehicle = $this->vehicle();
@@ -1356,5 +1256,77 @@ class TicketWorkflowTest extends TestCase
         ])->assertOk();
 
         $this->assertSame($newCustodian->id, $subIssue->fresh()->verification_assigned_to);
+    }
+
+    #[Test]
+    public function a_donor_part_goes_straight_to_verification_with_no_admin_approval(): void
+    {
+        $vehicle = $this->vehicle();
+        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
+        $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
+        $subIssue = $ticket->subIssues->first();
+
+        $this->logCannibalizedRepair($ticket, $subIssue, $donor)->assertOk();
+
+        $subIssue->refresh();
+        $this->assertSame('For Inspection', $subIssue->status);
+        $this->assertSame($donor->vehicle_id, $subIssue->source_vehicle_id);
+        $this->assertSame('For Verification', $ticket->fresh()->status);
+
+        // The donor's side is still recorded, so the missing part is never invisible.
+        $this->assertNotNull($subIssue->cannibalization_issue_report_id);
+        $this->assertSame('Needs Inspection', $donor->fresh()->condition);
+        $this->assertDatabaseHas('vehicle_issue_reports', [
+            'issue_report_id' => $subIssue->cannibalization_issue_report_id,
+            'vehicle_id' => $donor->vehicle_id,
+            'status' => 'Pending',
+        ]);
+
+        // …and the Custodian can verify and close it.
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertOk();
+        $this->assertSame('Closed', $ticket->fresh()->status);
+    }
+
+    #[Test]
+    public function a_donor_part_only_job_needs_no_repair_narrative_but_a_repair_still_does(): void
+    {
+        $vehicle = $this->vehicle();
+        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
+        $ticket = $this->activeTicket($vehicle, ['Broken alternator', 'Loose bolt']);
+        [$partOnly, $repairOnly] = $ticket->subIssues->all();
+
+        // Donor part only — no repair_logs sent at all.
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$partOnly->sub_issue_id}/log-repairs", [
+            'repair_type' => 'cannibalized', 'part_needed' => 'Gearbox',  'source_vehicle_id' => $donor->vehicle_id,
+        ])->assertOk();
+        $this->assertStringContainsString('Donor Vehicle', $partOnly->fresh()->repair_logs);
+
+        // A plain repair with no narrative is still refused.
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$repairOnly->sub_issue_id}/log-repairs", [])->assertUnprocessable();
+
+        // Repair + donor part together is fine too.
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$repairOnly->sub_issue_id}/log-repairs", [
+            'repair_logs' => 'Fitted the part and re-torqued.', 'repair_type' => 'cannibalized', 'part_needed' => 'Hose',  'source_vehicle_id' => $donor->vehicle_id,
+        ])->assertOk();
+        $this->assertSame('For Verification', $ticket->fresh()->status);
+    }
+
+    #[Test]
+    public function closing_a_ticket_notifies_admins_and_counts_in_their_tickets_badge(): void
+    {
+        $vehicle = $this->vehicle();
+        $ticket = $this->activeTicket($vehicle, ['Loose bolt']);
+
+        Sanctum::actingAs($this->admin, ['*']);
+        $before = $this->getJson('/api/dashboard')->json('badge_counts.tickets');
+
+        $this->driveTicketToClosed($ticket);
+
+        $this->assertTrue(\App\Models\Notification::where('user_id', $this->admin->id)
+            ->where('type', 'ticket_closed')->where('ticket_id', $ticket->ticket_id)->exists());
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->assertSame($before + 1, $this->getJson('/api/dashboard')->json('badge_counts.tickets'));
     }
 }

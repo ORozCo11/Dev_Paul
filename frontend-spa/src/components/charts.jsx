@@ -7,6 +7,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, LabelList,
 } from 'recharts';
+import { useState } from 'react';
 
 const BAR_CHART_PALETTE = ['#2563eb', '#f97316', '#22c55e', '#a855f7', '#ec4899', '#06b6d4', '#eab308', '#ef4444'];
 
@@ -20,7 +21,7 @@ function ChartTooltipCard({ rows }) {
     <div className="chart-tooltip-card">
       {rows.map((row) => (
         <div className="chart-tooltip-row" key={row.label}>
-          {row.color && <span style={{ background: row.color }} />}
+          {row.color && <span className="chart-tooltip-dot" style={{ background: row.color }} />}
           <span className="chart-tooltip-label">{row.label}</span>
           <strong>{row.value}</strong>
         </div>
@@ -98,7 +99,24 @@ export function SolidPieChart({ segments, size = 170 }) {
   );
 }
 
-export function HorizontalBarChart({ rows = [] }) {
+function WrappedBarLabel({ x, y, payload }) {
+  const words = String(payload.value).split(/\s+/);
+  const lines = [''];
+  words.forEach((word) => {
+    const last = lines.length - 1;
+    if (lines[last] && `${lines[last]} ${word}`.length > 15) lines.push(word);
+    else lines[last] += `${lines[last] ? ' ' : ''}${word}`;
+  });
+  return <text x={x} y={y} textAnchor="end" style={AXIS_TICK_STYLE}>{lines.map((line, index) => <tspan key={index} x={x} dy={index === 0 ? -((lines.length - 1) * 7) + 4 : 14}>{line}</tspan>)}</text>;
+}
+
+function CompactBarLabel({ y, payload, rows }) {
+  const zero = rows.find((row) => row.label === payload.value)?.value === 0;
+  return <text x={4} y={y - 18} style={AXIS_TICK_STYLE}>{payload.value}{zero ? ' (0)' : ''}</text>;
+}
+
+export function HorizontalBarChart({ rows = [], wrapLabels = false }) {
+  const [chartWidth, setChartWidth] = useState(0);
   if (!rows.length) {
     return <p className="empty-state">No graph data yet.</p>;
   }
@@ -108,15 +126,16 @@ export function HorizontalBarChart({ rows = [] }) {
     value: Number(row.value) || 0,
     color: row.color || BAR_CHART_PALETTE[i % BAR_CHART_PALETTE.length],
   }));
-  const height = Math.max(140, data.length * 38 + 24);
+  const height = Math.max(wrapLabels ? 160 : 140, data.length * (wrapLabels ? 56 : 38) + 24);
+  const compact = wrapLabels && chartWidth > 0 && chartWidth < 340;
 
   return (
     <div className="horizontal-bars" style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 34, bottom: 4, left: 0 }}>
+      <ResponsiveContainer width="100%" height="100%" onResize={wrapLabels ? (width) => setChartWidth(width) : undefined}>
+        <BarChart data={data} layout="vertical" margin={{ top: compact ? 20 : 4, right: 34, bottom: 4, left: compact ? 4 : 0 }}>
           <CartesianGrid horizontal={false} stroke={GRID_STROKE} />
           <XAxis type="number" tick={AXIS_TICK_STYLE} axisLine={AXIS_LINE_STYLE} tickLine={false} allowDecimals={false} />
-          <YAxis type="category" dataKey="label" width={112} tick={AXIS_TICK_STYLE} axisLine={false} tickLine={false} />
+          <YAxis type="category" dataKey="label" width={compact ? 0 : 112} tick={compact ? <CompactBarLabel rows={data} /> : wrapLabels ? <WrappedBarLabel /> : AXIS_TICK_STYLE} axisLine={false} tickLine={false} />
           <Tooltip cursor={{ fill: 'var(--surface-hover, #202126)' }} content={barTooltip} />
           <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={22} isAnimationActive={false}>
             {data.map((d) => <Cell key={d.label} fill={d.color} />)}
@@ -160,7 +179,9 @@ export function ColumnChart({ rows = [] }) {
   );
 }
 
-export function StackedBarChart({ title, segments }) {
+export function StackedBarChart({ title, segments, showPercentages = false }) {
+  const total = segments.reduce((sum, segment) => sum + (Number(segment.value) || 0), 0);
+  const percentage = (value) => `${total ? Math.round(Number(value) / total * 1000) / 10 : 0}%`;
   const visible = segments.filter((s) => Number(s.value) > 0);
   const row = { name: 'total', ...Object.fromEntries(visible.map((s) => [s.label, Number(s.value)])) };
 
@@ -174,11 +195,13 @@ export function StackedBarChart({ title, segments }) {
             <YAxis type="category" dataKey="name" hide />
             <Tooltip
               cursor={false}
+              portal={document.body}
+              wrapperStyle={{ zIndex: 1000, pointerEvents: 'none' }}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const tRows = payload.map((p) => ({
                   label: p.dataKey,
-                  value: p.value,
+                  value: showPercentages ? `${p.value} (${percentage(p.value)})` : p.value,
                   color: visible.find((s) => s.label === p.dataKey)?.color,
                 }));
                 return <ChartTooltipCard rows={tRows} />;
@@ -191,7 +214,7 @@ export function StackedBarChart({ title, segments }) {
                 <LabelList
                   dataKey={s.label}
                   position="center"
-                  formatter={(v) => (v > 0 ? v : '')}
+                  formatter={(v) => (v > 0 ? (showPercentages ? percentage(v) : v) : '')}
                   style={{ fill: '#ffffff', fontWeight: 700, fontSize: 13 }}
                 />
               </Bar>
@@ -203,7 +226,7 @@ export function StackedBarChart({ title, segments }) {
         {segments.map((s) => (
           <span key={s.label} className="stacked-bar-legend-item">
             <span style={{ background: s.color }} />
-            {s.label}
+            {s.label}{showPercentages ? ` ${percentage(s.value)} (${s.value})` : ''}
           </span>
         ))}
       </div>

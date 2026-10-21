@@ -185,7 +185,14 @@ class FleetController extends Controller
                         ->whereHas('vehicle', fn ($q) => $q->whereNotIn('status', ['Inactive', 'Decommissioned']))
                         ->count()
                     : $activeIssues,
-                'tickets' => MaintenanceTicket::whereNotIn('status', ['Closed', 'Cancelled'])->count(),
+                // Admin: what needs a look — proposals awaiting a decision plus
+                // tickets a Custodian closed in the last 14 days (so a closure
+                // shows up here without anyone telling them). Everyone else
+                // keeps the open-ticket count.
+                'tickets' => $user->hasRole('Admin')
+                    ? MaintenanceTicket::where('status', 'Pending Approval')->count()
+                        + MaintenanceTicket::where('status', 'Closed')->where('closed_at', '>=', now()->subDays(14))->count()
+                    : MaintenanceTicket::whereNotIn('status', ['Closed', 'Cancelled'])->count(),
                 'conditions' => VehicleConditionCheck::whereIn('condition_result', ['Needs Inspection', 'Needs Repair'])
                     ->whereHas('vehicle', fn ($q) => $q->whereNotIn('status', ['Inactive', 'Decommissioned']))
                     ->count(),
@@ -195,7 +202,6 @@ class FleetController extends Controller
                 'schedules' => ($user->hasRole('Maintenance Personnel') && !$user->hasRole('Admin'))
                     ? VehicleMaintenanceSchedule::where('status', 'Scheduled')
                         ->where('assigned_to', $user->id)
-                        ->whereDate('scheduled_date', '>=', now()->toDateString())
                         ->count()
                     : $upcomingMaintenance + $overdueMaintenance,
                 // Maintenance Records waiting on someone's check — the same
@@ -218,8 +224,11 @@ class FleetController extends Controller
                 'ticketVerifications' => MaintenanceTicket::where('status', 'For Verification')
                     ->where('assigned_custodian_id', $request->user()->id)
                     ->count(),
-                'ticketWorkOrders' => TicketSubIssue::where('assigned_mechanic_id', $request->user()->id)
-                    ->where('status', 'Under Repair')
+                // Work orders are counted per ticket, the same way the page's
+                // Pending card is: tickets still Active in this mechanic's
+                // hands (a two-sub-issue ticket is one work order, not two).
+                'ticketWorkOrders' => MaintenanceTicket::where('assigned_mechanic_id', $request->user()->id)
+                    ->where('status', 'Active')
                     ->count(),
                 // Admin's queue of Custodian-proposed tickets awaiting
                 // approve/decline (TicketController::proposeTicket).
@@ -966,7 +975,15 @@ class FleetController extends Controller
             ->get()
             ->groupBy('vehicle_id');
 
-        $vehicles->each(function (Vehicle $vehicle) use ($latestChecks, $openTicketsByVehicle) {
+        // Which vehicles are out on a trip right now (dispatched) — one query.
+        $openTrips = \App\Models\VehicleUsageLog::whereNull('ended_at')->get()->keyBy('vehicle_id');
+
+        $vehicles->each(function (Vehicle $vehicle) use ($latestChecks, $openTicketsByVehicle, $openTrips) {
+            $trip = $openTrips->get($vehicle->vehicle_id);
+            $vehicle->open_trip = $trip ? [
+                'usage_id' => $trip->usage_id, 'purpose' => $trip->purpose, 'destination' => $trip->destination,
+                'driver_name' => $trip->driver_name, 'started_at' => $trip->started_at, 'odometer_start' => $trip->odometer_start,
+            ] : null;
             $latest = $latestChecks->get($vehicle->vehicle_id);
             $vehicle->readiness_state = $this->responseReadinessState($vehicle, $latest);
             $vehicle->readiness_last_checked = $latest?->checked_at;
@@ -983,11 +1000,8 @@ class FleetController extends Controller
     public function storeVehicle(Request $request)
     {
         $this->requireAbility($request, 'vehicle.create');
-        // Production-readiness audit finding #6 — the ability above only
-        // says Admin/Custodian are the eligible roles; this is the real
-        // per-account delegation check (Admin always; Custodian only if
-        // granted) an Admin sets per Custodian from the Edit User form.
-        abort_unless($request->user()->canRegisterVehicles(), 403, 'Vehicle registration has not been delegated to your account. Ask your Admin to enable it.');
+        // Keep single registration and import aligned with role eligibility.
+        abort_unless($request->user()->canRegisterVehicles(), 403, 'Your account cannot register vehicles.');
 
         $data = $this->validateVehicle($request);
 
@@ -1880,6 +1894,7 @@ class FleetController extends Controller
 
         if ($request->hasFile('file')) {
             $data['file_url'] = $this->storeUploadedImage($request->file('file'), 'vehicle-documents');
+            \App\Models\ManagedFile::removeReference($document->file_url);
         }
         unset($data['file']);
 
@@ -1894,6 +1909,7 @@ class FleetController extends Controller
         $this->requireAbility($request, 'document.delete');
 
         $this->log($request, 'Delete', 'Vehicle Documents', $document->document_id, "Deleted document \"{$document->title}\"");
+        \App\Models\ManagedFile::removeReference($document->file_url);
         $document->delete();
 
         return response()->json(['message' => 'Document deleted.']);

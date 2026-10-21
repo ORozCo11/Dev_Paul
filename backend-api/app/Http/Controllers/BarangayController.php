@@ -9,9 +9,7 @@ class BarangayController extends Controller
 {
     /**
      * Public list for the registration form's barangay dropdown. Scoped to
-     * a city — today only Mandaue City has a real barangay list, so the
-     * frontend falls back to a free-text field whenever this comes back
-     * empty for the selected city.
+     * a city. Only preloaded PSGC references are offered for registration.
      */
     public function index(Request $request)
     {
@@ -20,8 +18,9 @@ class BarangayController extends Controller
         ]);
 
         return Barangay::where('city_id', $request->city_id)
+            ->whereNotNull('psgc_code')
             ->orderBy('name')
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'psgc_code']);
     }
 
     /**
@@ -60,8 +59,22 @@ class BarangayController extends Controller
      */
     public function show(Barangay $barangay)
     {
-        $barangay->load('city:id,name');
-
-        return $barangay->setVisible(['id', 'name', 'boundary'])->append('city_name');
+        $barangay->load('city:id,name,code,province_id');
+        $geography = app(\App\Services\BarangayGeography::class);
+        $geometry = $geography->resolvedBoundary($barangay);
+        return [
+            'id' => $barangay->id,
+            'name' => $barangay->name,
+            'psgc_code' => $barangay->psgc_code,
+            'city_id' => $barangay->city_id,
+            'city_name' => $barangay->city?->name,
+            'province_id' => $barangay->city?->province_id,
+            'boundary' => $geometry,
+            // 'verified' means a Super Admin confirmed an uploaded outline that
+            // names its source document; every other outline is a reference.
+            'boundary_status' => $geometry ? ($geography->isReviewed($barangay) ? 'verified' : 'needs_review') : $barangay->boundary_status,
+            'boundary_verified' => $geometry !== null && $geography->isReviewed($barangay),
+            'boundary_source' => $geometry ? ($barangay->boundary !== null && !$geography->hasAutomaticLegacyBoundary($barangay) ? $barangay->boundary_source : \App\Services\BarangayGeography::SOURCE) : null,
+        ];
     }
 }

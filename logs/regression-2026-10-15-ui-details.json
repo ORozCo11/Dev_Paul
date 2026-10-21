@@ -1,0 +1,34 @@
+[
+  {
+    "test": "completion default in Philippine timezone after UTC midnight offset",
+    "localDate": "2026-10-16",
+    "default": "2026-10-15"
+  },
+  {
+    "test": "file cabinet accepts GIF",
+    "rows": 1
+  },
+  {
+    "test": "backend rejects GIF receipt",
+    "status": 422,
+    "body": {
+      "message": "The receipt field must be a file of type: jpg, jpeg, png, pdf.",
+      "errors": {
+        "receipt": [
+          "The receipt field must be a file of type: jpg, jpeg, png, pdf."
+        ]
+      }
+    }
+  },
+  {
+    "test": "external section CSS columns",
+    "computed": {
+      "column": "1 / -1",
+      "formColumns": "340px 810px"
+    }
+  },
+  {
+    "test": "Custodian sees forbidden add maintenance type",
+    "buttonVisible": true
+  }
+]

@@ -12,7 +12,7 @@ const TEAM = [
   { name: 'Precious Dignos', role: 'Project Manager / QA Specialist', photo: '/team/precious-dignos.jpg' },
   { name: 'John Paul Orozco', role: 'Project Lead / Full-Stack Developer', photo: '/team/paul-orozco.jpg' },
   { name: 'Justine Mae Belia', role: 'Documentation / QA Specialist', photo: '/team/justine-mae-belia.jpg' },
-  { name: 'Jake Engana', role: 'Backend Developer / UI-UX Designer', photo: null },
+  { name: 'Jake Engana', role: 'Backend Developer', photo: '/team/jake-engana.png' },
 ];
 
 const PER_PAGE = 4;
@@ -51,7 +51,7 @@ export default function Developers() {
         <DecoArrow className="dev-team-deco-arrow dev-team-deco-arrow-right" gradientId="devArrowRight" />
         <div className="auth-hero-inner">
           <p className="auth-hero-eyebrow">Barangay VMS</p>
-          <h1 className="auth-hero-title">Meet the Developers</h1>
+          <h1 className="auth-hero-title">Meet the Team</h1>
           <p className="auth-hero-subtitle">
             This system was built as a capstone project by a small, dedicated team
             committed to giving barangays a better way to manage their vehicle fleet.

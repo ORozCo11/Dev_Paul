@@ -8,6 +8,7 @@ use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\ConcernReportController;
 use App\Http\Controllers\FleetController;
+use App\Http\Controllers\CannibalizationController;
 use App\Http\Controllers\HubController;
 use App\Http\Controllers\TicketController;
 use App\Http\Controllers\NotificationController;
@@ -20,6 +21,9 @@ use App\Http\Controllers\VehicleUsageController;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\RestrictImpersonatedToReadOnly;
 use App\Http\Middleware\RestrictSuperAdminScope;
+
+Route::get('/files/{file}', [\App\Http\Controllers\ManagedFileController::class, 'show'])
+    ->where('file', '[A-Za-z0-9-]+\.[a-z0-9]+')->middleware('signed')->name('files.show');
 
 /*
 |--------------------------------------------------------------------------
@@ -59,8 +63,9 @@ Route::post('/concern-reports', [ConcernReportController::class, 'store'])->midd
 | Protected Routes (Requires a Valid Sanctum Token in Header)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class])->group(function () {
-    
+Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class, \App\Http\Middleware\SignManagedFiles::class])->group(function () {
+    Route::get('/files/refresh', [\App\Http\Controllers\ManagedFileController::class, 'refresh']);
+
     // Session termination route
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -167,6 +172,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
     Route::post('/superadmin/barangays/{barangay}/registration-code/regenerate', [SuperAdminController::class, 'regenerateRegistrationCode']);
     Route::post('/superadmin/barangays/{barangay}/boundary/refresh', [SuperAdminController::class, 'refreshBarangayBoundary']);
     Route::post('/superadmin/barangays/{barangay}/boundary/confirm', [SuperAdminController::class, 'confirmBarangayBoundary']);
+    Route::post('/superadmin/barangays/{barangay}/boundary/candidate', [SuperAdminController::class, 'uploadBoundaryCandidate']);
     Route::delete('/superadmin/barangays/{barangay}/boundary/pending', [SuperAdminController::class, 'discardPendingBoundary']);
     Route::get('/superadmin/activity-log', [SuperAdminController::class, 'activityLog']);
     Route::get('/superadmin/concern-reports', [SuperAdminController::class, 'concernReports']);
@@ -258,6 +264,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
 
     // Phase 3 — Mechanic: Log physical repairs on a sub-issue
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/log-repairs', [TicketController::class, 'logRepairs']);
+    // Cannibalized repair: pick the donor vehicle, then manage its parts (CRUD).
+    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/donor', [TicketController::class, 'setDonorVehicle']);
+    Route::post('/tickets/{ticket}/sub-issues/{subIssue}/donor-parts', [TicketController::class, 'storeDonorPart']);
+    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/donor-parts/{part}', [TicketController::class, 'updateDonorPart']);
+    Route::delete('/tickets/{ticket}/sub-issues/{subIssue}/donor-parts/{part}', [TicketController::class, 'deleteDonorPart']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/external-sent', [TicketController::class, 'markExternalSent']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/external-returned', [TicketController::class, 'markExternalReturned']);
     Route::post('/tickets/{ticket}/sub-issues', [TicketController::class, 'addSubIssue']);
@@ -293,8 +304,15 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
 
     // Archived ticket audit log — a "Closed" entry is permanently locked, but
     // a "Deleted" entry (an accidental delete that had real progress on it)
-    // can be reopened.
+    // can be reopened. Archive deletion retains the snapshot for recovery.
     Route::get('/ticket-archives', [TicketController::class, 'archives']);
+    Route::delete('/ticket-archives/{archive}', [TicketController::class, 'deleteArchive']);
+    Route::put('/ticket-archives/{archive}/restore', [TicketController::class, 'restoreArchive'])->withTrashed();
+    // Cannibalization: direct, final records of parts moved between vehicles
+    // (no approval step, and deliberately no update/delete routes).
+    Route::get('/cannibalizations', [CannibalizationController::class, 'index']);
+    Route::get('/cannibalizations/{id}', [CannibalizationController::class, 'show']);
+    Route::post('/cannibalizations', [CannibalizationController::class, 'store']);
     Route::put('/ticket-archives/{archive}/reopen', [TicketController::class, 'reopenArchive']);
 
     // Notifications API

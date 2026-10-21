@@ -144,6 +144,25 @@ class TicketController extends Controller
         return $ticket;
     }
 
+    private function mechanicsWithWorkload(?int $barangayId)
+    {
+        $tickets = MaintenanceTicket::whereIn('status', ['Active', 'For Verification'])
+            ->whereNotNull('assigned_mechanic_id')
+            ->selectRaw('assigned_mechanic_id, COUNT(*) as n')
+            ->groupBy('assigned_mechanic_id')->pluck('n', 'assigned_mechanic_id');
+        $schedules = VehicleMaintenanceSchedule::where('status', 'Scheduled')
+            ->whereNotNull('assigned_to')
+            ->selectRaw('assigned_to, COUNT(*) as n')
+            ->groupBy('assigned_to')->pluck('n', 'assigned_to');
+
+        return User::where('barangay_id', $barangayId)->havingRole('Maintenance Personnel')->orderBy('name')
+            ->get(['id', 'name', 'email'])
+            ->each(function ($m) use ($tickets, $schedules) {
+                $m->setAttribute('active_tickets', (int) ($tickets[$m->id] ?? 0));
+                $m->setAttribute('scheduled_jobs', (int) ($schedules[$m->id] ?? 0));
+            });
+    }
+
     public function lookups(Request $request)
     {
         return response()->json([
@@ -154,7 +173,10 @@ class TicketController extends Controller
             // User carries no global scope — filter by barangay by hand,
             // or a ticket could get assigned to staff from another barangay.
             'custodians'            => User::where('barangay_id', $request->user()->barangay_id)->havingRole('Custodian')->orderBy('name')->get(['id', 'name', 'email', 'photo_url']),
-            'maintenance_personnel' => User::where('barangay_id', $request->user()->barangay_id)->havingRole('Maintenance Personnel')->orderBy('name')->get(['id', 'name', 'email']),
+            // Each mechanic's current load rides along so Admin/Custodian can
+            // balance work before picking one: tickets still in their hands
+            // (Active or awaiting verification) and approved schedules waiting.
+            'maintenance_personnel' => $this->mechanicsWithWorkload($request->user()->barangay_id),
             'priorities'            => $this->priorities,
             'maintenance_types'     => MaintenanceType::orderBy('name')->pluck('name'),
             // 'Pending Approval' included so a Custodian's proposal has a
@@ -190,7 +212,7 @@ class TicketController extends Controller
     {
         $this->requireAbility($request, 'ticket.view_archives');
 
-        $query = TicketArchiveLog::with(['vehicle', 'archivedBy'])
+        $query = TicketArchiveLog::withTrashed()->with(['vehicle', 'archivedBy'])
             ->when($request->filled('vehicle_id'), fn ($q) => $q->where('vehicle_id', $request->vehicle_id));
 
         if ($request->filled('q')) {
@@ -203,6 +225,25 @@ class TicketController extends Controller
         }
 
         return $query->orderByDesc('archived_at')->get();
+    }
+
+    public function deleteArchive(Request $request, TicketArchiveLog $archive)
+    {
+        $this->requireAbility($request, 'ticket.delete');
+        $archive->delete();
+        $this->log($request, 'Delete Archived Ticket', "Archive #{$archive->archive_id} moved to Deleted Tickets.", $archive->ticket_id);
+
+        return response()->json(['message' => 'Archived ticket moved to Deleted Tickets.']);
+    }
+
+    public function restoreArchive(Request $request, TicketArchiveLog $archive)
+    {
+        $this->requireAbility($request, 'ticket.reopen_archived');
+        abort_unless($archive->trashed(), 422, 'This archive has not been deleted.');
+        $archive->restore();
+        $this->log($request, 'Restore Archived Ticket', "Archive #{$archive->archive_id} restored.", $archive->ticket_id);
+
+        return response()->json(['message' => 'Archived ticket restored.']);
     }
 
     // ===================================================================
@@ -709,19 +750,23 @@ class TicketController extends Controller
     {
         $this->requireAbility($request, 'ticket.approve');
 
-        // A previously Declined proposal can be approved directly — Admin
-        // doesn't have to undecline it first.
+        // A Declined proposal has to be undeclined first (back to Pending
+        // Approval) — only then can it be approved and assigned.
         abort_unless(
-            in_array($ticket->status, ['Pending Approval', 'Declined'], true),
+            $ticket->status === 'Pending Approval',
             422,
-            "Only a Pending Approval or Declined ticket can be approved. Current: {$ticket->status}."
+            $ticket->status === 'Declined'
+                ? 'This proposal was declined — undecline it first, then approve and assign it.'
+                : "Only a Pending Approval ticket can be approved. Current: {$ticket->status}."
         );
 
         $data = $request->validate([
             'ticket_description'    => ['sometimes', 'string'],
             'priority'              => ['sometimes', Rule::in($this->priorities)],
             'assigned_custodian_id' => ['sometimes', 'exists:users,id'],
-            'assigned_mechanic_id'  => ['required', 'exists:users,id'],
+            // Required for an in-house ticket. An EXTERNAL-shop ticket has no
+            // in-house mechanic: the vehicle goes to an outside shop.
+            'assigned_mechanic_id'  => ['nullable', 'exists:users,id'],
             'sub_issues'                        => ['nullable', 'array'],
             'sub_issues.*.sub_issue_id'          => ['required_with:sub_issues', 'exists:ticket_sub_issues,sub_issue_id'],
             'sub_issues.*.title'                 => ['nullable', 'string', 'max:255'],
@@ -735,9 +780,16 @@ class TicketController extends Controller
             abort_unless($newCustodian->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected Custodian does not belong to this barangay.');
         }
 
-        $assignedMechanic = User::findOrFail($data['assigned_mechanic_id']);
-        abort_unless($assignedMechanic->hasRole('Maintenance Personnel'), 422, 'The selected user is not Maintenance Personnel.');
-        abort_unless($assignedMechanic->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected mechanic does not belong to this barangay.');
+        $isExternalTicket = $ticket->subIssues()->count() > 0
+            && $ticket->subIssues()->where('repair_type', '!=', 'external')->count() === 0;
+        abort_if(!$isExternalTicket && empty($data['assigned_mechanic_id']), 422, 'Choose the mechanic who will do this repair.');
+
+        $assignedMechanic = null;
+        if (!empty($data['assigned_mechanic_id'])) {
+            $assignedMechanic = User::findOrFail($data['assigned_mechanic_id']);
+            abort_unless($assignedMechanic->hasRole('Maintenance Personnel'), 422, 'The selected user is not Maintenance Personnel.');
+            abort_unless($assignedMechanic->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected mechanic does not belong to this barangay.');
+        }
 
         abort_if(
             in_array($ticket->vehicle->status, ['Inactive', 'Decommissioned'], true),
@@ -749,11 +801,11 @@ class TicketController extends Controller
         $ticket = DB::transaction(function () use ($ticket, $data, $request, $assignedMechanic) {
             // Serialize against a concurrent approve/decline of the same proposal.
             $locked = MaintenanceTicket::where('ticket_id', $ticket->ticket_id)->lockForUpdate()->first();
-            abort_unless($locked && in_array($locked->status, ['Pending Approval', 'Declined'], true), 422, 'This proposal was already approved.');
+            abort_unless($locked && $locked->status === 'Pending Approval', 422, 'This proposal is no longer awaiting approval.');
 
             $ticket->update(array_intersect_key($data, array_flip([
-                'ticket_description', 'priority', 'assigned_custodian_id', 'assigned_mechanic_id',
-            ])));
+                'ticket_description', 'priority', 'assigned_custodian_id',
+            ])) + ['assigned_mechanic_id' => $assignedMechanic?->id]);
 
             foreach ($data['sub_issues'] ?? [] as $subData) {
                 $subIssue = TicketSubIssue::where('ticket_id', $ticket->ticket_id)
@@ -794,13 +846,15 @@ class TicketController extends Controller
             $this->history($vehicle, 'Ticket Approved', "Ticket #{$ticket->ticket_id} (\"{$ticket->ticket_title}\") was approved — {$vehicle->vehicle_name} moved to Under Maintenance.", 'maintenance_tickets', $ticket->ticket_id, $request);
 
             $dispatchedMechanics = [];
-            $ticket->subIssues()->update([
+            $ticket->subIssues()->update($assignedMechanic ? [
                 'status'               => 'Under Repair',
                 'assigned_mechanic_id' => $assignedMechanic->id,
                 'mechanic_assigned_at' => now(),
                 'mechanic_assigned_by' => $request->user()->id,
-            ]);
-            $dispatchedMechanics[] = $assignedMechanic;
+            ] : ['status' => 'Under Repair']);
+            if ($assignedMechanic) {
+                $dispatchedMechanics[] = $assignedMechanic;
+            }
             /* Legacy suggested-mechanic dispatch is deliberately skipped:
              * approval now assigns the ticket, and all of its line items,
              * to the one mechanic selected above.
@@ -829,7 +883,7 @@ class TicketController extends Controller
             }
 
             */
-            $this->log($request, 'Approve Ticket', "Ticket #{$ticket->ticket_id} ({$ticket->ticket_title}) proposal approved and assigned to {$assignedMechanic->name}.", $ticket->ticket_id);
+            $this->log($request, 'Approve Ticket', "Ticket #{$ticket->ticket_id} ({$ticket->ticket_title}) proposal approved" . ($assignedMechanic ? " and assigned to {$assignedMechanic->name}." : ' for an external shop (no in-house mechanic).'), $ticket->ticket_id);
 
             $this->notifyUser(
                 $ticket->assigned_custodian_id,
@@ -1066,6 +1120,7 @@ class TicketController extends Controller
         $priorMechanicIds = $ticket->subIssues
             ->flatMap(fn ($s) => $s->prior_mechanic_ids ?? [])
             ->push($ticket->assigned_mechanic_id)
+            ->merge($ticket->subIssues->flatMap(fn ($s) => [$s->external_handled_by, $s->external_received_by]))
             ->filter()
             ->unique()
             ->values()
@@ -1097,13 +1152,10 @@ class TicketController extends Controller
         $failedChecks = collect($functionalTest ?? [])->reject(fn ($i) => $i['passed'])->pluck('item');
 
         if ($approved) {
-            abort_unless(
-                $request->boolean('test_attested'),
-                422,
-                'Before approving, you must attest that you personally operated and tested the vehicle.'
-            );
-            // The server re-checks the checklist itself rather than trusting
-            // the verdict: a failed check can never be approved.
+            // The Approve / Disapprove modal no longer carries a checklist or
+            // an attestation box — approving IS the Custodian's sign-off. If a
+            // checklist is sent anyway, a failed check can still never be
+            // approved (the server re-checks it rather than trusting the verdict).
             abort_if(
                 $failedChecks->isNotEmpty(),
                 422,
@@ -1181,6 +1233,15 @@ class TicketController extends Controller
                 "Your repair work on Ticket #{$ticket->ticket_id} ({$vehicleName}) was verified and the ticket is now closed.",
                 'ticket_verified',
                 $ticket->ticket_id
+            );
+            // Admin isn't in the verification loop, so tell them it closed
+            // (the Maintenance Tickets sidebar badge also counts it).
+            $this->notifyAdmins(
+                'Ticket Closed',
+                "Ticket #{$ticket->ticket_id} ({$vehicleName}) was verified by {$request->user()->name} and is now closed.",
+                'ticket_closed',
+                $ticket->ticket_id,
+                $ticket->vehicle->barangay_id
             );
         });
 
@@ -1752,12 +1813,130 @@ class TicketController extends Controller
         return response()->json(['message' => 'Sub-issue removed.']);
     }
 
-    /** The mechanic hands the vehicle (or part) to an outside shop. */
-    public function markExternalSent(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    // ===================================================================
+    // Cannibalized repair — donor vehicle + its parts (CRUD)
+    // ===================================================================
+
+    /**
+     * Who may change a cannibalized repair's donor details: the assigned
+     * mechanic, while the work order is still being repaired. Once the repair
+     * is logged (For Inspection and beyond) the parts are history and locked.
+     */
+    private function authorizeDonorEdit(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue): void
     {
         $this->requireAbility($request, 'subissue.log_repair');
         $this->assertBelongsToTicket($ticket, $subIssue);
-        abort_unless($subIssue->assigned_mechanic_id === $request->user()->id, 403, 'This work order is not assigned to you.');
+        abort_unless((int) $subIssue->assigned_mechanic_id === (int) $request->user()->id, 403, 'This work order is not assigned to you.');
+        abort_unless($ticket->status === 'Active', 422, "Donor parts can only be changed while the ticket is Active. Current status: {$ticket->status}.");
+        abort_unless($subIssue->status === 'Under Repair', 422, 'This repair has already been logged, so its donor parts are locked.');
+        abort_if($subIssue->repair_type === 'external', 422, 'An external-shop repair cannot use donor parts.');
+    }
+
+    private function assertDonorEligible(MaintenanceTicket $ticket, ?int $donorId): Vehicle
+    {
+        abort_if(!$donorId, 422, 'Choose the donor vehicle first.');
+        $donor = Vehicle::find($donorId);
+        abort_if(!$donor, 422, 'The donor vehicle no longer exists.');
+        abort_if((int) $donor->vehicle_id === (int) $ticket->vehicle_id, 422, 'The donor vehicle must be a different vehicle from the one being repaired.');
+        abort_unless($donor->barangay_id === $ticket->vehicle->barangay_id, 422, 'The donor vehicle must be in the same barangay.');
+        abort_if(in_array($donor->status, ['Inactive', 'Decommissioned'], true), 422, 'The donor vehicle is archived or decommissioned.');
+
+        return $donor;
+    }
+
+    /** Choose (or clear) the donor vehicle. Clearing is refused while parts exist. */
+    public function setDonorVehicle(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        $data = $request->validate(['source_vehicle_id' => ['nullable', 'exists:vehicles,vehicle_id']]);
+
+        if (empty($data['source_vehicle_id'])) {
+            abort_if($subIssue->donorParts()->exists(), 422, 'Delete the donor parts before switching this repair back to in-house.');
+            $subIssue->update(['repair_type' => 'in_house', 'source_vehicle_id' => null]);
+        } else {
+            $this->assertDonorEligible($ticket, (int) $data['source_vehicle_id']);
+            $subIssue->update(['repair_type' => 'cannibalized', 'source_vehicle_id' => $data['source_vehicle_id']]);
+        }
+        $this->log($request, 'Donor Vehicle Set', "Ticket #{$ticket->ticket_id} - sub-issue \"{$subIssue->title}\" repair method is now {$subIssue->repair_type}.", $ticket->ticket_id);
+
+        return $subIssue->fresh(['donorParts', 'sourceVehicle:vehicle_id,vehicle_name,plate_number']);
+    }
+
+    private function donorPartRules(): array
+    {
+        return [
+            'part_name'      => ['required', 'string', 'max:255'],
+            'quantity'       => ['required', 'integer', 'min:1', 'max:100000'],
+            'part_condition' => ['nullable', 'string', 'max:100'],
+            'installed_at'   => ['nullable', 'date', 'before_or_equal:today'],
+            'reason'         => ['nullable', 'string', 'max:2000'],
+            'notes'          => ['nullable', 'string', 'max:2000'],
+        ];
+    }
+
+    private function requireDonorSet(MaintenanceTicket $ticket, TicketSubIssue $subIssue): void
+    {
+        abort_unless($subIssue->repair_type === 'cannibalized' && $subIssue->source_vehicle_id, 422, 'Choose the donor vehicle before adding parts.');
+        $this->assertDonorEligible($ticket, (int) $subIssue->source_vehicle_id);
+    }
+
+    public function storeDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        $this->requireDonorSet($ticket, $subIssue);
+        $data = $request->validate($this->donorPartRules());
+
+        $part = $subIssue->donorParts()->create($data);
+        $this->log($request, 'Donor Part Added', "Ticket #{$ticket->ticket_id} - added {$part->quantity} x {$part->part_name} from the donor vehicle.", $ticket->ticket_id);
+
+        return response()->json($part, 201);
+    }
+
+    public function updateDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
+    {
+        $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        $this->requireDonorSet($ticket, $subIssue);
+        $record = $subIssue->donorParts()->where('part_id', $part)->firstOrFail();
+        $record->update($request->validate($this->donorPartRules()));
+        $this->log($request, 'Donor Part Updated', "Ticket #{$ticket->ticket_id} - updated donor part {$record->part_name}.", $ticket->ticket_id);
+
+        return $record->fresh();
+    }
+
+    public function deleteDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
+    {
+        $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        $record = $subIssue->donorParts()->where('part_id', $part)->firstOrFail();
+        $name = $record->part_name;
+        $record->delete();
+        $this->log($request, 'Donor Part Removed', "Ticket #{$ticket->ticket_id} - removed donor part {$name}.", $ticket->ticket_id);
+
+        return response()->json(['message' => 'Donor part removed.']);
+    }
+
+    /**
+     * The assigned mechanic may always act on their own work order. An
+     * EXTERNAL-shop work order with no in-house mechanic is recorded by an
+     * Admin (ability external.handle): never a placeholder user, and never
+     * the Custodian who will later verify it.
+     */
+    private function authorizeWorkOrderActor(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue): void
+    {
+        $uid = $request->user()->id;
+        if ($subIssue->assigned_mechanic_id && (int) $subIssue->assigned_mechanic_id === (int) $uid) {
+            $this->requireAbility($request, 'subissue.log_repair');
+            return;
+        }
+        $externalNoMechanic = $subIssue->repair_type === 'external' && !$subIssue->assigned_mechanic_id;
+        abort_unless($externalNoMechanic && $request->user()->hasRole('Admin'), 403, 'This work order is not assigned to you.');
+        $this->requireAbility($request, 'external.handle');
+    }
+
+    /** The responsible person hands the vehicle (or part) to an outside shop. */
+    public function markExternalSent(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->assertBelongsToTicket($ticket, $subIssue);
+        $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
         abort_unless($subIssue->status === 'Under Repair', 422, "Only an Under Repair sub-issue can be sent out. Current: {$subIssue->status}.");
         abort_if($subIssue->external_sent_at, 422, 'This repair has already been sent out.');
 
@@ -1766,14 +1945,18 @@ class TicketController extends Controller
             'external_reason' => ['required', 'string', 'max:255'],
             'external_work_scope' => ['required', 'string'],
             'external_shop_contact' => ['nullable', 'string', 'max:255'],
+            'external_shop_address' => ['nullable', 'string', 'max:255'],
             'external_contact_person' => ['nullable', 'string', 'max:255'],
             'external_estimated_cost' => ['nullable', 'numeric', 'min:0'],
+            'external_expected_return' => ['nullable', 'date'],
         ]);
 
+        // Identity comes from the session, never from the form.
         $subIssue->update($data + [
             'repair_type' => 'external',
             'external_sent_at' => now(),
-            'external_sent_by' => $request->user()->id,
+            'external_sent_by' => $request->user()->name,
+            'external_handled_by' => $request->user()->id,
         ]);
         $this->log($request, 'Sent Out', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" sent to {$data['external_vendor']}.", $ticket->ticket_id);
 
@@ -1783,9 +1966,8 @@ class TicketController extends Controller
     /** The shop returns it; the mechanic records the outcome before writing up the repair. */
     public function markExternalReturned(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
-        $this->requireAbility($request, 'subissue.log_repair');
         $this->assertBelongsToTicket($ticket, $subIssue);
-        abort_unless($subIssue->assigned_mechanic_id === $request->user()->id, 403, 'This work order is not assigned to you.');
+        $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
         abort_unless($subIssue->external_sent_at, 422, 'This repair has not been sent out yet.');
         abort_if($subIssue->external_returned_at, 422, 'This repair has already been marked returned.');
 
@@ -1795,7 +1977,7 @@ class TicketController extends Controller
             'warranty_until' => ['nullable', 'date'],
         ]);
 
-        $subIssue->update($data + ['external_returned_at' => now()]);
+        $subIssue->update($data + ['external_returned_at' => now(), 'external_received_by' => $request->user()->id]);
         $this->log($request, 'Returned From Shop', "Ticket #{$ticket->ticket_id} — sub-issue \"{$subIssue->title}\" returned from {$subIssue->external_vendor}.", $ticket->ticket_id);
 
         return $subIssue->fresh();
@@ -1803,17 +1985,19 @@ class TicketController extends Controller
 
     public function logRepairs(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
-        $this->requireAbility($request, 'subissue.log_repair');
         $this->assertBelongsToTicket($ticket, $subIssue);
-
-        abort_unless($subIssue->assigned_mechanic_id === $request->user()->id, 403, 'This work order is not assigned to you.');
+        $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
         abort_unless($ticket->status === 'Active', 422, "Repairs can only be logged while the ticket is Active. Current status: {$ticket->status}.");
         abort_unless($subIssue->status === 'Under Repair', 422, "Repairs can only be logged when the sub-issue is Under Repair. Current: {$subIssue->status}.");
 
         $data = $request->validate([
-            'repair_logs'           => ['required', 'string'],
+            // A donor-part-only job (just swapping a part in) needs no repair
+            // narrative; a repair, or a repair + donor part, still does.
+            'repair_logs'           => ['required_unless:repair_type,cannibalized', 'nullable', 'string'],
             'parts_used'            => ['nullable', 'string'],
             'photo'                 => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:8192'],
+            'photos'                => ['nullable', 'array', 'max:10'],
+            'photos.*'              => ['file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:8192'],
             'repair_started_at'     => ['nullable', 'date'],
             'repair_completed_at'   => ['nullable', 'date'],
             'maintenance_cost'      => ['nullable', 'numeric', 'min:0'],
@@ -1853,22 +2037,51 @@ class TicketController extends Controller
             abort_if(in_array($donor->status, ['Inactive', 'Decommissioned'], true), 422, 'The donor vehicle is archived or decommissioned.');
         }
 
-        // A cannibalized repair is really two actions in one — fixing this
-        // vehicle by un-fixing another — so it doesn't go straight to
-        // Custodian verification like an in_house/external repair does. It
-        // parks at Pending Approval for an Admin to sign off first
-        // (approveCannibalization()/rejectCannibalization() below).
-        $needsCannibalizationApproval = $effectiveRepairType === 'cannibalized'
+        // A job can be a repair only, a donor part only, or a repair that also
+        // uses a donor part — all go straight to Custodian verification now;
+        // no Admin sign-off. Taking a part off another vehicle is still
+        // recorded on that vehicle (an Issue Report) so it is never invisible.
+        $usesDonorPart = $effectiveRepairType === 'cannibalized'
             && ($data['source_vehicle_id'] ?? $subIssue->source_vehicle_id);
 
-        DB::transaction(function () use ($ticket, $subIssue, $data, $request, $effectiveRepairType, $needsCannibalizationApproval) {
+        if ($usesDonorPart) {
+            // Older clients send one part inline; keep that working by turning it
+            // into a donor-part row (only when none exist yet).
+            if (!$subIssue->donorParts()->exists() && !empty($data['part_needed'])) {
+                $subIssue->donorParts()->create([
+                    'part_name' => $data['part_needed'], 'quantity' => max(1, (int) ($data['part_quantity'] ?? 1)),
+                    'part_condition' => $data['part_condition'] ?? null, 'installed_at' => isset($data['part_installed_at']) ? substr($data['part_installed_at'], 0, 10) : null,
+                    'reason' => $data['cannibal_reason'] ?? null,
+                ]);
+            }
+            abort_unless($subIssue->donorParts()->exists(), 422, 'Add at least one donor part before submitting a cannibalized repair.');
+        }
+
+        DB::transaction(function () use ($ticket, $subIssue, $data, $request, $effectiveRepairType, $usesDonorPart) {
             $existingLogs = $subIssue->repair_logs ? $subIssue->repair_logs . "\n\n" : '';
+            $logText = trim((string) ($data['repair_logs'] ?? ''));
+            if ($logText === '' && $usesDonorPart) {
+                $donorName = Vehicle::find($data['source_vehicle_id'] ?? $subIssue->source_vehicle_id)?->vehicle_name ?? 'another vehicle';
+                $logText = 'Part taken from ' . $donorName . ' and installed.';
+            }
+
+            $attachmentFiles = $subIssue->attachment_files ?? [];
+            foreach ($request->file('photos', []) as $file) {
+                $attachmentFiles[] = [
+                    'url' => $this->storeUploadedImage($file, 'repair-attachments'),
+                    'name' => $file->getClientOriginalName(),
+                    'size' => $file->getSize(),
+                    'added_by' => $request->user()->name,
+                    'added_at' => now()->toIso8601String(),
+                ];
+            }
 
             $subIssue->update([
-                'status'                    => $needsCannibalizationApproval ? 'Pending Approval' : 'For Inspection',
+                'status'                    => 'For Inspection',
                 'verification_assigned_to'  => $ticket->assigned_custodian_id,
-                'repair_logs'               => $existingLogs . '[' . now()->format('Y-m-d H:i') . '] ' . $data['repair_logs'],
+                'repair_logs'               => $existingLogs . '[' . now()->format('Y-m-d H:i') . '] ' . $logText,
                 'parts_used'                => $data['parts_used'] ?? $subIssue->parts_used,
+                'attachment_files'          => $attachmentFiles,
                 'attachment_url'            => $request->hasFile('photo')
                     ? $this->storeUploadedImage($request->file('photo'), 'repair-attachments')
                     : $subIssue->attachment_url,
@@ -1895,7 +2108,7 @@ class TicketController extends Controller
                 // previously-rejected cannibalized repair is resubmitted
                 // (same or different donor vehicle), it needs a fresh
                 // Pending review, not to still read Rejected.
-                'cannibalization_status'            => $needsCannibalizationApproval ? 'Pending' : null,
+                'cannibalization_status'            => null,
                 'cannibalization_rejection_reason'  => null,
                 'cannibalization_reviewed_by'       => null,
                 'cannibalization_reviewed_at'       => null,
@@ -1910,24 +2123,62 @@ class TicketController extends Controller
             $mechanicName = $request->user()->name;
             $vehicleName = $ticket->vehicle->vehicle_name;
 
-            if ($needsCannibalizationApproval) {
+            if ($usesDonorPart) {
+                $donorVehicle = Vehicle::findOrFail($data['source_vehicle_id'] ?? $subIssue->source_vehicle_id);
+                $issue = $this->fileDonorIssueReport($ticket, $subIssue->fresh('donorParts'), $donorVehicle, $vehicleName, $request);
+                $subIssue->update(['cannibalization_issue_report_id' => $issue->issue_report_id]);
                 $this->notifyAdmins(
-                    'Cannibalized Repair Needs Approval',
-                    "Mechanic {$mechanicName} logged a cannibalized repair for \"{$subIssue->title}\" on Ticket #{$ticket->ticket_id} ({$vehicleName}), using a part from another vehicle. Please review before it goes to verification.",
-                    'cannibalization_pending',
+                    'Part Taken From Another Vehicle',
+                    "Mechanic {$mechanicName} used a part from {$donorVehicle->vehicle_name} for \"{$subIssue->title}\" on Ticket #{$ticket->ticket_id} ({$vehicleName}). The donor vehicle now has an open issue report.",
+                    'cannibalization_recorded',
                     $ticket->ticket_id,
                     $ticket->vehicle->barangay_id
                 );
-            } else {
-                // Previously this told the Custodian "Please verify" on every
-                // individual log, while the ticket was still Active and so not
-                // yet verifiable. Now the ticket advances (and the Custodian
-                // is notified, once) only when the last repair is logged.
-                $this->advanceToVerificationIfReady($ticket, $request);
             }
+            // The Custodian is told once, when the last repair on the ticket
+            // is logged (advanceToVerificationIfReady()).
+            $this->advanceToVerificationIfReady($ticket, $request);
         });
 
         return $subIssue->fresh();
+    }
+
+    /**
+     * Records the donor vehicle's side of a cannibalized repair: an Issue
+     * Report so "this vehicle is now missing a part" is never invisible, the
+     * donor flagged Needs Inspection, and a history entry. Idempotent for the
+     * same donor (a re-logged repair doesn't add a second report).
+     */
+    private function fileDonorIssueReport(MaintenanceTicket $ticket, TicketSubIssue $subIssue, Vehicle $donorVehicle, string $vehicleName, Request $request): VehicleIssueReport
+    {
+        $existing = $subIssue->cannibalization_issue_report_id
+            ? VehicleIssueReport::where('issue_report_id', $subIssue->cannibalization_issue_report_id)
+                ->where('vehicle_id', $donorVehicle->vehicle_id)->first()
+            : null;
+        if ($existing) {
+            return $existing;
+        }
+
+        $issue = VehicleIssueReport::create([
+            'vehicle_id'        => $donorVehicle->vehicle_id,
+            'issue_type'        => 'Other',
+            'issue_description' => "Parts removed for use on {$vehicleName} (Ticket #{$ticket->ticket_id}: \"{$subIssue->title}\"): " . ($subIssue->donorParts->map(fn ($p) => "{$p->quantity} x {$p->part_name}")->implode(', ') ?: 'part details on the ticket') . '.',
+            'severity_level'    => 'Medium',
+            'reported_by'       => $request->user()->id,
+            'status'            => 'Pending',
+            'remarks'           => 'Auto-created when parts from this vehicle were used on another vehicle\'s repair.',
+        ]);
+        $donorVehicle->update(['condition' => 'Needs Inspection']);
+        VehicleHistory::create([
+            'vehicle_id'         => $donorVehicle->vehicle_id,
+            'activity_type'      => 'Issue Reported',
+            'description'        => "A part was removed from {$donorVehicle->vehicle_name} for use on {$vehicleName} (Ticket #{$ticket->ticket_id}).",
+            'related_table'      => 'vehicle_issue_reports',
+            'related_record_id'  => (string) $issue->issue_report_id,
+            'updated_by'         => $request->user()->id,
+        ]);
+
+        return $issue;
     }
 
     /**
@@ -2705,6 +2956,7 @@ class TicketController extends Controller
                 'issue_report_id', 'created_by', 'title', 'status', 'assigned_mechanic_id',
                 'maintenance_type', 'work_order_notes', 'mechanic_assigned_at', 'mechanic_assigned_by',
                 'repair_logs', 'parts_used', 'repair_started_at', 'repair_completed_at', 'maintenance_cost',
+                'attachment_url', 'attachment_files',
                 'verification_verdict', 'verification_notes', 'verified_by', 'verified_at',
                 'confirmation_verdict', 'confirmation_notes', 'confirmed_by', 'confirmed_at',
                 'deferred_reason', 'deferred_by', 'deferred_at', 'deferred_issue_report_id',
@@ -2727,7 +2979,7 @@ class TicketController extends Controller
 
             $this->recomputeVehicleStatus($ticket->vehicle_id, $request);
 
-            $archive->delete();
+            $archive->forceDelete();
 
             $this->log($request, 'Ticket Reopened', "Deleted Ticket #{$snapshot['ticket_id']} was reopened by Admin as new Ticket #{$ticket->ticket_id}.", $ticket->ticket_id);
 
@@ -2962,6 +3214,9 @@ class TicketController extends Controller
             'subIssues.verificationAssignedTo',
             'subIssues.sourceVehicle:vehicle_id,vehicle_name,plate_number',
             'subIssues.cannibalizationReviewedBy',
+            'subIssues.donorParts',
+            'subIssues.externalHandler:id,name',
+            'subIssues.externalReceiver:id,name',
         ];
     }
 

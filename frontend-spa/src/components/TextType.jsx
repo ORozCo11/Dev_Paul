@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, createElement, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { gsap } from 'gsap';
 import './TextType.css';
 
@@ -153,19 +153,12 @@ const TextType = ({
   const shouldHideCursor =
     hideCursorWhileTyping && (currentCharIndex < textArray[currentTextIndex].length || isDeleting);
 
-  return createElement(
-    Component,
-    {
-      ref: containerRef,
-      className: `text-type ${className}`,
-      ...props,
-    },
-    // Screen readers get the whole sentence, not the half-typed text.
-    <span className="sr-only">{textArray[currentTextIndex]}</span>,
-    <span className="text-type__content" style={{ color: getCurrentTextColor() || 'inherit' }} aria-hidden="true">
-      {reduceMotion ? textArray[0] : displayedText}
-    </span>,
-    showCursor && !reduceMotion && (
+  return (
+    <Component ref={containerRef} className={`text-type ${className}`} {...props}>
+    <span className="text-type__content" style={{ color: getCurrentTextColor() || 'inherit' }}>
+      {displayedText}
+    </span>
+    {showCursor && (
       <span
         aria-hidden="true"
         ref={cursorRef}
@@ -173,7 +166,8 @@ const TextType = ({
       >
         {cursorCharacter}
       </span>
-    ),
+    )}
+    </Component>
   );
 };
 

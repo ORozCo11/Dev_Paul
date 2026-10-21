@@ -30,9 +30,10 @@ return new class extends Migration
         });
 
         // Backfill — a barangay that already has a boundary on file (the 27
-        // seeded Mandaue barangays, the Mantalongon PSA file) got there
-        // before this status existed; it's real, already-good data, not
-        // something that should suddenly read as unreviewed.
+        // seeded Mandaue barangays, the GADM-derived Mantalongon outline)
+        // got there before this status existed. Nobody reviewed these rows:
+        // 'legacy' is treated as an unverified reference, and
+        // 2026_10_17_000001 downgrades their stored status to needs_review.
         DB::table('barangays')->whereNotNull('boundary')->update([
             'boundary_status' => 'verified',
             'boundary_source' => 'legacy',

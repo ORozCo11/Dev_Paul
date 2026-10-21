@@ -1,0 +1,311 @@
+[
+  {
+    "test": "first Administrator registration",
+    "status": 201,
+    "expected": [
+      201
+    ],
+    "pass": true,
+    "message": "Registration submitted. A Super Admin must approve your account (as the first Admin for your barangay) before you can sign in."
+  },
+  {
+    "test": "pending Administrator cannot login",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account is still awaiting approval from a Super Admin, as the first Admin for your barangay."
+  },
+  {
+    "test": "Super Admin approves first Administrator",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true,
+    "message": "User activated."
+  },
+  {
+    "test": "approved Administrator can login",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true,
+    "message": "Login authenticated successfully!"
+  },
+  {
+    "test": "duplicate email rejected",
+    "status": 422,
+    "expected": [
+      422
+    ],
+    "pass": true,
+    "message": "The email has already been taken.",
+    "errors": {
+      "email": [
+        "The email has already been taken."
+      ]
+    }
+  },
+  {
+    "test": "staff registration",
+    "status": 201,
+    "expected": [
+      201
+    ],
+    "pass": true,
+    "message": "Registration submitted. An administrator must approve your account before you can sign in."
+  },
+  {
+    "test": "Admin activates staff",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true,
+    "message": "User activated."
+  },
+  {
+    "test": "approved staff login",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true,
+    "message": "Login authenticated successfully!"
+  },
+  {
+    "test": "Super Admin denied fleet",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Super Admin accounts are limited to account administration and cannot access fleet data."
+  },
+  {
+    "test": "Mechanic denied user administration",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Only Admins can manage users."
+  },
+  {
+    "test": "Custodian denied direct catalog creation",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "Custodian submits schedule with new catalog name",
+    "status": 201,
+    "expected": [
+      201
+    ],
+    "pass": true
+  },
+  {
+    "test": "catalog creation bypass probe",
+    "catalogCreated": true
+  },
+  {
+    "test": "Custodian proposes internal repair",
+    "status": 201,
+    "expected": [
+      201
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin approves and assigns internal repair",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Mechanic logs repair",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Mechanic cannot self verify",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "Custodian verifies completed repair",
+    "status": 403,
+    "expected": [
+      200
+    ],
+    "pass": false,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "ticket closes automatically after verification",
+    "status": "For Verification",
+    "pass": false
+  },
+  {
+    "test": "Admin cannot complete mechanic schedule",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "Assigned mechanic completes recurring schedule",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "schedule completion response shape",
+    "keys": [
+      "schedule",
+      "record",
+      "next"
+    ]
+  },
+  {
+    "test": "Last Administrator cannot deactivate self",
+    "status": 422,
+    "expected": [
+      422,
+      403
+    ],
+    "pass": true,
+    "message": "You cannot deactivate your own account."
+  },
+  {
+    "test": "Admin reads dashboard",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads lookups",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads vehicles",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads categories",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads hubs",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads conditions",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads issues",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads maintenance-records",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads maintenance-schedules",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads histories",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads logs",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads notifications",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin reads reports",
+    "status": 422,
+    "expected": [
+      200,
+      405
+    ],
+    "pass": false,
+    "message": "The report type field is required.",
+    "errors": {
+      "report_type": [
+        "The report type field is required."
+      ]
+    }
+  }
+]

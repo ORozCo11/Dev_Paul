@@ -7,6 +7,7 @@ use App\Models\City;
 use App\Models\MaintenanceTicket;
 use App\Models\Province;
 use App\Models\RegistrationSetting;
+use App\Models\TicketArchiveLog;
 use App\Models\TicketSubIssue;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -48,6 +49,29 @@ class PhaseB3DataScopingTest extends TestCase
         $this->custodian = $this->user('Custodian');
         $this->mechanic = $this->user('Maintenance Personnel');
         $this->otherMechanic = $this->user('Maintenance Personnel');
+    }
+
+    #[Test]
+    public function archive_delete_and_restore_cannot_access_another_barangays_records(): void
+    {
+        Sanctum::actingAs($this->admin, ['*']);
+        $ticket = $this->ticket($this->vehicle());
+        $archive = TicketArchiveLog::create([
+            'ticket_id' => $ticket->ticket_id, 'vehicle_id' => $ticket->vehicle_id,
+            'ticket_title' => 'Closed work', 'vehicle_name' => 'Ambulance', 'plate_number' => 'TEST',
+            'final_status' => 'Closed', 'full_ticket_snapshot' => $ticket->toArray(),
+            'archived_by' => $this->admin->id, 'archived_at' => now(),
+        ]);
+        $otherBarangay = Barangay::create(['name' => 'Other Barangay', 'city_id' => $this->cityId]);
+        $otherAdmin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $otherBarangay->id, 'is_active' => true]);
+        Sanctum::actingAs($otherAdmin, ['*']);
+        $this->deleteJson("/api/ticket-archives/{$archive->archive_id}")->assertNotFound();
+        $this->getJson('/api/ticket-archives')->assertOk()->assertJsonCount(0);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->deleteJson("/api/ticket-archives/{$archive->archive_id}")->assertOk();
+        Sanctum::actingAs($otherAdmin, ['*']);
+        $this->putJson("/api/ticket-archives/{$archive->archive_id}/restore")->assertNotFound();
+        $this->getJson('/api/ticket-archives')->assertOk()->assertJsonCount(0);
     }
 
     private function user(string $role): User
@@ -413,6 +437,7 @@ class PhaseB3DataScopingTest extends TestCase
     #[Test]
     public function an_ordinary_staff_registration_notifies_the_barangays_existing_admins(): void
     {
+        Barangay::findOrFail($this->barangayId)->update(['psgc_code' => '0102801001']);
         $setting = RegistrationSetting::for($this->barangayId);
 
         $this->postJson('/api/register', [

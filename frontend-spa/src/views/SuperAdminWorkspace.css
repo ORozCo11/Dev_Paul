@@ -1,0 +1,223 @@
+﻿/* Portal-scoped structural layout and reusable administrative surfaces. */
+.superadmin-shell { --sa-bg:#f4f7fb; --sa-surface:#fff; --sa-subtle:#f8fafc; --sa-text:#0f172a; --sa-muted:#64748b; --sa-border:#e2e8f0; --surface:var(--sa-surface); --text-strong:var(--sa-text); --text-muted:var(--sa-muted); --border:var(--sa-border); min-height:100dvh; display:flex; flex-direction:column; color:var(--sa-text); }
+html[data-theme="dark"] .superadmin-shell { --sa-bg:#0b1220; --sa-surface:#111c2e; --sa-subtle:#17243a; --sa-text:#e2e8f0; --sa-muted:#a0aec0; --sa-border:#2c3c52; }
+.superadmin-shell *, .superadmin-shell *::before, .superadmin-shell *::after { box-sizing:border-box; }
+html:root[data-theme] .superadmin-shell .workspace { min-height:0; flex:1; }
+html:root[data-theme] .superadmin-shell .content-area { width:auto; min-width:0; max-width:100%; min-height:0; padding:24px; background:var(--sa-bg); }
+html:root[data-theme] .superadmin-shell .content-body { width:100%; max-width:none; min-width:0; margin:0; padding:0; }
+html:root[data-theme] .superadmin-shell .page-heading-row { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; min-height:0; margin:0 0 24px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.superadmin-shell .page-heading-text h1 { margin:0; font-size:27px; font-weight:750; line-height:1.3; letter-spacing:-.5px; color:var(--sa-text); }
+html:root[data-theme] .superadmin-shell .page-heading-text p { margin:6px 0 0; font-size:14px; line-height:1.5; color:var(--sa-muted); max-width:none; }
+html:root[data-theme] .superadmin-shell .topbar { min-height:64px; padding:10px 20px; }
+html:root[data-theme] .superadmin-shell .topbar select { min-height:32px; max-width:180px; }
+html:root[data-theme] .superadmin-shell .topbar select:disabled {
+  opacity:1;
+  color:var(--sa-text);
+  -webkit-text-fill-color:var(--sa-text);
+  background-color:var(--sa-surface);
+  cursor:not-allowed;
+}
+html:root[data-theme] .superadmin-shell .topbar .dev-impersonate button:disabled {
+  opacity:1;
+  color:#fff;
+  background:#2563eb;
+  cursor:not-allowed;
+}
+html:root[data-theme] .superadmin-shell .module-nav > button { font-size:13px; }
+.superadmin-shell .superadmin-tab { gap:20px; min-width:0; }
+.superadmin-shell .sa-management-card { min-width:0; border:1px solid var(--sa-border); border-radius:12px; background:var(--sa-surface); overflow:hidden; }
+.superadmin-shell .sa-card-summary { display:flex; align-items:center; gap:8px 20px; flex-wrap:wrap; padding:18px 20px; border-bottom:1px solid var(--sa-border); font-size:14px; }
+.superadmin-shell .sa-card-summary > strong { font-size:16px; }
+.superadmin-shell .sa-card-summary > span { color:var(--sa-muted); font-size:13px; }
+.superadmin-shell .sa-toolbar { display:flex; align-items:flex-end; flex-wrap:wrap; gap:14px; padding:18px 20px; border-bottom:1px solid var(--sa-border); }
+.superadmin-shell .sa-filter-field { display:grid; flex:1 1 145px; min-width:0; max-width:240px; gap:6px; font-size:13px; }
+.superadmin-shell .sa-filter-field > label { position:static; color:var(--sa-muted); font-weight:500; font-size:12px; }
+html:root[data-theme] .superadmin-shell select, html:root[data-theme] .superadmin-shell input:not([type="checkbox"]):not([type="file"]) { min-height:40px; width:100%; max-width:100%; padding:9px 12px; border:1px solid var(--sa-border); border-radius:7px; font:inherit; font-size:13px; background-color:var(--sa-surface); color:var(--sa-text); }
+html:root[data-theme] .superadmin-shell select { padding-right:30px; }
+html:root[data-theme] .superadmin-shell select:disabled { background-color:var(--sa-subtle); color:var(--sa-muted); }
+.superadmin-shell .sa-search { display:flex; align-items:center; gap:9px; flex:2 1 240px; min-width:0; min-height:40px; padding:0 12px; color:var(--sa-muted); border:1px solid var(--sa-border); border-radius:7px; background:var(--sa-surface); }
+html:root[data-theme] .superadmin-shell .sa-search input[type="search"] { min-width:0; width:100%; min-height:38px; padding:8px 0; border:0; box-shadow:none; background:transparent; outline:none; }
+.superadmin-shell .sa-search:focus-within { outline:2px solid #93c5fd; border-color:#2563eb; }
+.superadmin-shell .sa-search > svg { flex-shrink:0; }
+.superadmin-shell .sa-search button { display:grid; place-items:center; padding:3px; border:0; background:transparent; color:var(--sa-muted); cursor:pointer; }
+.superadmin-shell .sa-segments { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+.superadmin-shell .sa-segments button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:8px 12px; font:inherit; font-size:13px; font-weight:600; border:1px solid transparent; border-radius:7px; background:transparent; color:var(--sa-muted); cursor:pointer; }
+.superadmin-shell .sa-segments button[aria-pressed="true"] { background:#eff6ff; color:#1d4ed8; border-color:#dbeafe; }
+.superadmin-shell .sa-segments button span { padding:1px 6px; border-radius:5px; background:var(--sa-subtle); color:var(--sa-muted); font-size:12px; }
+html:root[data-theme] .superadmin-shell .primary-button, html:root[data-theme] .superadmin-shell .ghost-button, html:root[data-theme] .superadmin-shell .danger-button { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:38px; height:auto; padding:8px 12px; font-size:13px; line-height:1.4; font-weight:600; border-radius:7px; white-space:nowrap; cursor:pointer; }
+html:root[data-theme] .superadmin-shell .primary-button { background:#2563eb; border:1px solid #2563eb; color:white; box-shadow:none; }
+html:root[data-theme] .superadmin-shell .primary-button:hover { background:#1d4ed8; }
+html:root[data-theme] .superadmin-shell .ghost-button { border:1px solid var(--sa-border); background:var(--sa-surface); color:var(--sa-text); box-shadow:none; }
+html:root[data-theme] .superadmin-shell .ghost-button:hover { border-color:#93c5fd; background:var(--sa-subtle); }
+html:root[data-theme] .superadmin-shell .sa-destructive { color:#dc2626; }
+.superadmin-shell button:disabled { opacity:.5; cursor:not-allowed; }
+.superadmin-shell button:focus-visible, .superadmin-shell select:focus-visible, .superadmin-shell input:focus-visible { outline:3px solid #93c5fd; outline-offset:2px; }
+.superadmin-shell .sa-row-actions { display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+/* Tables turn into labelled records at mobile widths. */
+html:root[data-theme] .superadmin-shell .table-shell.sa-table { width:100%; margin:0; border:0; border-radius:0; box-shadow:none; background:var(--sa-surface); overflow-x:auto; }
+html:root[data-theme] .superadmin-shell .sa-table table { width:100%; min-width:720px; border-collapse:collapse; table-layout:auto; }
+html:root[data-theme] .superadmin-shell .sa-table th { padding:13px 18px; font-size:12px; font-weight:600; letter-spacing:normal; text-transform:none; text-align:left; color:var(--sa-muted); background:var(--sa-subtle); border-bottom:1px solid var(--sa-border); white-space:normal; }
+html:root[data-theme] .superadmin-shell .sa-table td { padding:15px 18px; font-size:13px; line-height:1.5; font-weight:400; text-align:left; vertical-align:middle; color:var(--sa-text); border-bottom:1px solid var(--sa-border); background:transparent; overflow-wrap:anywhere; }
+html:root[data-theme] .superadmin-shell .sa-table tbody tr { background:var(--sa-surface); }
+html:root[data-theme] .superadmin-shell .sa-table tbody tr:hover { background:var(--sa-subtle); }
+html:root[data-theme] .superadmin-shell .sa-table tbody tr:last-child td { border-bottom:0; }
+.superadmin-shell .sa-table strong { font-weight:600; }
+html:root[data-theme] .superadmin-shell .sa-table .sa-group-row th { padding:9px 18px; font-size:12px; color:#2563eb; background:var(--sa-subtle); }
+.superadmin-shell .sa-group-row svg { vertical-align:middle; margin-right:7px; }
+.superadmin-shell .sa-identity { display:flex; align-items:center; gap:10px; min-width:170px; }
+.superadmin-shell .sa-avatar { display:grid; place-items:center; width:36px; height:36px; flex-shrink:0; border-radius:50%; background:#eff6ff; color:#2563eb; font-size:12px; font-weight:700; text-transform:uppercase; }
+.superadmin-shell .sa-identity > div, .superadmin-shell .sa-stacked { display:grid; gap:3px; min-width:0; }
+.superadmin-shell .sa-identity strong { font-size:14px; }
+.superadmin-shell .sa-identity > div > span, .superadmin-shell .sa-stacked > span:not(.status-badge) { color:var(--sa-muted); font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
+.superadmin-shell .sa-warning { display:flex; gap:4px; align-items:center; color:#b45309 !important; }
+.superadmin-shell .sa-date-cell { min-width:130px; max-width:170px; font-variant-numeric:tabular-nums; }
+.superadmin-shell .sa-truncate { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; margin:0; line-height:1.5; overflow-wrap:anywhere; }
+.superadmin-shell .sa-description-cell { max-width:300px; min-width:180px; }
+.superadmin-shell .sa-log-details { max-width:400px; min-width:240px; }
+.superadmin-shell .sa-text-button { padding:5px 0; background:none; border:0; color:#2563eb; font:inherit; font-weight:600; cursor:pointer; }
+html:root[data-theme] .superadmin-shell .status-badge { display:inline-flex; width:fit-content; gap:5px; font-size:11px; font-weight:600; line-height:1.5; text-transform:none; letter-spacing:normal; padding:3px 8px; border-radius:6px; background:var(--sa-subtle); color:var(--sa-muted); border:1px solid var(--sa-border); white-space:nowrap; }
+html:root[data-theme] .superadmin-shell .status-badge:is(.active,.active-admin,.verified,.resolved,.activate,.approve) { background:#f0fdf4; color:#15803d; border-color:#dcfce7; }
+html:root[data-theme] .superadmin-shell .status-badge:is(.pending-approval,.initial-administrator,.needs-review,.no-active-admin,.open) { background:#fffbeb; color:#a16207; border-color:#fef3c7; }
+html:root[data-theme] .superadmin-shell .status-badge:is(.deactivated,.not-found,.delete,.deactivate) { background:#fef2f2; color:#b91c1c; border-color:#fee2e2; }
+.superadmin-shell .sa-pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:15px 20px; border-top:1px solid var(--sa-border); color:var(--sa-muted); font-size:12px; }
+.superadmin-shell .sa-page-buttons { display:flex; align-items:center; gap:4px; }
+.superadmin-shell .sa-page-buttons button { display:grid; place-items:center; min-width:32px; height:32px; padding:4px; border:1px solid var(--sa-border); border-radius:6px; background:var(--sa-surface); color:var(--sa-text); font:inherit; cursor:pointer; }
+.superadmin-shell .sa-page-buttons button[aria-current="page"] { background:#2563eb; color:white; border-color:#2563eb; }
+.superadmin-shell .sa-pagination label { display:flex; align-items:center; gap:8px; }
+html:root[data-theme] .superadmin-shell .sa-pagination select { width:70px; min-height:34px; padding:6px 23px 6px 9px; font-size:12px; }
+.superadmin-shell .sa-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; padding:36px 24px; text-align:center; }
+.superadmin-shell .sa-empty-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:50%; background:var(--sa-subtle); color:#2563eb; }
+.superadmin-shell .sa-empty strong { font-size:16px; font-weight:600; }
+.superadmin-shell .sa-empty p { max-width:440px; margin:0; color:var(--sa-muted); font-size:13px; line-height:1.6; }
+.superadmin-shell .sa-overview .focus-columns { grid-template-columns:minmax(0,1.85fr) minmax(0,1fr); align-items:start; }
+.superadmin-shell .focus-card, .superadmin-shell .focus-kpis > button { border-color:var(--sa-border); background:var(--sa-surface); box-shadow:none; }
+.superadmin-shell .sa-overview .focus-card > header p { color:var(--sa-muted); font-size:13px; line-height:1.5; margin:5px 0 0; }
+.superadmin-shell .sa-overview .focus-tasks li { padding:16px 0; }
+.superadmin-shell .sa-overview .focus-tasks li:first-child { padding-top:0; }
+.superadmin-shell .sa-queue-meta { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:6px; }
+.superadmin-shell .sa-queue-meta time { color:var(--sa-muted); font-size:12px; }
+.superadmin-shell .sa-platform-status .focus-donut { flex-direction:column; gap:16px; }
+.superadmin-shell .sa-platform-status .focus-donut ul { width:100%; flex:0 0 auto; }
+.superadmin-shell .sa-platform-status .focus-donut > :first-child { width:190px; max-width:100%; }
+.superadmin-shell .sa-count { border-radius:6px; padding:4px 8px; color:var(--sa-muted); background:var(--sa-subtle); white-space:nowrap; }
+/* Full records and management operations live in accessible drawers. */
+.superadmin-shell .sa-drawer-overlay { position:fixed; inset:0; z-index:600; background:#0f172a66; display:flex; justify-content:flex-end; }
+.superadmin-shell .sa-drawer { display:flex; flex-direction:column; width:min(560px,100%); height:100dvh; color:var(--sa-text); background:var(--sa-surface); box-shadow:-10px 0 30px #0f172a12; }
+.superadmin-shell .sa-drawer > header { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; padding:24px; border-bottom:1px solid var(--sa-border); }
+.superadmin-shell .sa-drawer h2 { margin:0; font-size:22px; line-height:1.4; }
+.superadmin-shell .sa-drawer header p { margin:5px 0 0; color:var(--sa-muted); font-size:13px; line-height:1.6; }
+.superadmin-shell .sa-drawer-body { padding:24px; overflow-y:auto; flex:1; min-height:0; }
+.superadmin-shell .sa-drawer-body h3 { font-size:16px; margin:0 0 12px; }
+.superadmin-shell .sa-drawer > footer { padding:18px 24px; border-top:1px solid var(--sa-border); }
+.superadmin-shell .sa-drawer .sa-identity { padding-bottom:22px; }
+.superadmin-shell .sa-detail-list { display:grid; grid-template-columns:140px minmax(0,1fr); gap:14px 16px; margin:0 0 28px; font-size:13px; line-height:1.6; }
+.superadmin-shell .sa-detail-list dt { color:var(--sa-muted); }
+.superadmin-shell .sa-detail-list dd { margin:0; overflow-wrap:anywhere; }
+.superadmin-shell .sa-detail-section { padding:22px 0; border-top:1px solid var(--sa-border); }
+.superadmin-shell .sa-detail-section p, .superadmin-shell .sa-role-form p { color:var(--sa-muted); font-size:13px; line-height:1.7; }
+.superadmin-shell .sa-detail-section .sa-filter-field { max-width:none; margin:16px 0; }
+.superadmin-shell .sa-full-text { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; line-height:1.8; }
+.superadmin-shell .sa-role-form { display:grid; gap:18px; }
+.superadmin-shell .sa-role-form p { margin:0; }
+.superadmin-shell .sa-role-form .sa-filter-field { max-width:none; }
+.superadmin-shell .confirm-overlay { z-index:700; }
+html:root[data-theme] .superadmin-shell .boundary-review-dialog { width:min(920px,94vw); max-width:920px; border-radius:12px; }
+.superadmin-shell .boundary-review-dialog .modal-body { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); gap:20px; }
+.superadmin-shell .boundary-review-dialog .modal-body > p { font-size:14px; line-height:1.7; }
+.superadmin-shell .boundary-review-dialog .form-actions { grid-column:1/-1; }
+html:root[data-theme] .superadmin-shell .smart-form label > span:first-child { position:static; transform:none; padding:0; margin-bottom:5px; background:transparent; text-transform:none; font-size:13px; letter-spacing:normal; }
+.superadmin-shell .sa-codes { max-width:1040px; margin-inline:auto; }
+.superadmin-shell .sa-codes .sa-filter-field { flex:1 1 200px; max-width:none; }
+.superadmin-shell .sa-code-details { display:grid; gap:18px; padding:24px; }
+.superadmin-shell .sa-code-details h3 { font-size:17px; margin:0 0 6px; }
+.superadmin-shell .sa-code-details p { font-size:13px; line-height:1.6; color:var(--sa-muted); margin:0; }
+.superadmin-shell .sa-code-details code { width:fit-content; max-width:100%; overflow-wrap:anywhere; user-select:all; padding:14px 20px; border:1px solid var(--sa-border); background:var(--sa-subtle); color:var(--sa-text); border-radius:8px; font-size:24px; letter-spacing:2px; }
+html:root[data-theme] .superadmin-shell .workspace-footer { margin-top:0; padding:20px 24px 20px 248px; gap:16px; }
+.superadmin-shell .workspace-footer-brand { gap:5px; }
+.superadmin-shell .workspace-footer-tagline { font-size:12px; }
+.superadmin-shell .workspace-footer-wordmark .vms-wordmark { font-size:26px; }
+.superadmin-shell .workspace-footer-actions { gap:8px; }
+.superadmin-shell .workspace-footer-buttons { gap:8px; }
+.superadmin-shell .workspace-footer-btn { font-size:12px; padding:7px 12px; }
+.superadmin-shell .workspace-footer-copyright { margin:0; }
+html:root[data-theme] .superadmin-shell:has(.sidebar-collapsed) .workspace-footer { padding-left:100px; }
+@media(max-width:1200px) { .superadmin-shell .focus-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } .superadmin-shell .sa-overview .focus-columns { grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); } }
+@media(max-width:1100px) { html:root[data-theme] .superadmin-shell .workspace-footer { padding-left:100px; } }
+@media(max-width:900px) {
+ .superadmin-shell .sa-overview .focus-columns { grid-template-columns:minmax(0,1fr); }
+ .superadmin-shell .sa-platform-status .focus-donut { flex-direction:row; }
+ .superadmin-shell .sa-platform-status .focus-donut ul { flex:1 1 180px; width:auto; }
+ html:root[data-theme] .superadmin-shell .topbar { flex-wrap:wrap; height:auto; }
+ html:root[data-theme] .superadmin-shell .topbar-left, html:root[data-theme] .superadmin-shell .topbar-brand-cluster, html:root[data-theme] .superadmin-shell .map-boundary-selector, html:root[data-theme] .superadmin-shell .dev-impersonate { min-width:0; max-width:100%; flex-wrap:wrap; }
+ .superadmin-shell .boundary-review-dialog .modal-body { grid-template-columns:minmax(0,1fr); }
+}
+@media(max-width:760px) {
+ html:root[data-theme] .superadmin-shell .content-area { padding:20px 14px; }
+ html:root[data-theme] .superadmin-shell .page-heading-row { margin-bottom:20px; }
+ .superadmin-shell .page-heading-text h1 { font-size:24px; }
+ .superadmin-shell .sa-toolbar, .superadmin-shell .sa-card-summary { padding:16px; }
+ .superadmin-shell .sa-search, .superadmin-shell .sa-filter-field { flex:1 1 100%; max-width:none; width:100%; }
+ html:root[data-theme] .superadmin-shell .sa-table table { min-width:0; display:block; }
+ .superadmin-shell .sa-table thead { display:none; }
+ .superadmin-shell .sa-table tbody { display:block; }
+ html:root[data-theme] .superadmin-shell .sa-table tr { display:block; padding:16px; border-bottom:1px solid var(--sa-border); }
+ html:root[data-theme] .superadmin-shell .sa-table td { display:grid; grid-template-columns:110px minmax(0,1fr); gap:10px; width:100%; min-width:0; max-width:none; padding:7px 0; border:0; text-align:left; }
+ .superadmin-shell .sa-table td::before { content:attr(data-label); color:var(--sa-muted); font-size:12px; padding-top:2px; }
+ html:root[data-theme] .superadmin-shell .sa-table td:first-child { display:block; margin-bottom:8px; font-size:15px; }
+ .superadmin-shell .sa-table td:first-child::before { display:none; }
+ html:root[data-theme] .superadmin-shell .sa-table td:last-child { display:block; padding-top:10px; }
+ .superadmin-shell .sa-table td:last-child::before { display:none; }
+ html:root[data-theme] .superadmin-shell .sa-table .sa-group-row { padding:0; }
+ html:root[data-theme] .superadmin-shell .sa-table .sa-group-row th { display:block; padding:10px 16px; }
+ .superadmin-shell .sa-identity { min-width:0; }
+ .superadmin-shell .sa-pagination { padding:16px; justify-content:flex-start; }
+ .superadmin-shell .sa-pagination > span { flex:1 1 100%; }
+ .superadmin-shell .sa-page-buttons { flex-wrap:wrap; }
+ .superadmin-shell .sa-pagination label { margin-left:auto; }
+ .superadmin-shell .sa-date-cell { max-width:none; }
+ .superadmin-shell .sa-drawer > header, .superadmin-shell .sa-drawer-body { padding:20px; }
+ .superadmin-shell .sa-detail-list { grid-template-columns:110px minmax(0,1fr); }
+ html:root[data-theme] .superadmin-shell .workspace-footer { padding-top:18px; padding-bottom:18px; }
+}
+@media(max-width:500px) {
+ .superadmin-shell .focus-kpis { grid-template-columns:minmax(0,1fr); }
+ .superadmin-shell .sa-overview .focus-tasks li > div { flex-basis:100%; }
+ .superadmin-shell .sa-overview .focus-tasks li > button { margin-left:0; }
+ .superadmin-shell .sa-toolbar .sa-segments { flex:1 1 100%; }
+ .superadmin-shell .workspace-footer-actions { align-items:flex-start; }
+ .superadmin-shell .workspace-footer-buttons { flex-wrap:wrap; }
+ .superadmin-shell .sa-pagination label { margin-left:0; }
+}
+
+.superadmin-shell .sa-load-error { padding: 24px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+
+/* Keep all support selectors visible without a tall mobile header. */
+html:root[data-theme] .superadmin-shell .topbar select { height: 34px; min-height: 34px; padding: 5px 28px 5px 10px; }
+@media (max-width: 900px) {
+ html:root[data-theme] .superadmin-shell .topbar { display: block; padding: 12px 16px; }
+ html:root[data-theme] .superadmin-shell .topbar-left { display: block; width: 100%; }
+ html:root[data-theme] .superadmin-shell .topbar-brand-cluster { display: grid; grid-template-columns: 24px 24px minmax(0, 1fr); gap: 10px; align-items: center; width: 100%; }
+ html:root[data-theme] .superadmin-shell .topbar-right { position: absolute; right: 16px; top: 10px; gap: 8px; }
+ html:root[data-theme] .superadmin-shell .map-boundary-selector { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+ html:root[data-theme] .superadmin-shell .dev-impersonate { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; width: 100%; }
+ html:root[data-theme] .superadmin-shell .topbar select { width: 100%; max-width: none; font-size: 12px; }
+ html:root[data-theme] .superadmin-shell .dev-impersonate > select { grid-column: 1; grid-row: 1; }
+ html:root[data-theme] .superadmin-shell .dev-impersonate > input { grid-column: 1 / -1; grid-row: 2; width: 100% !important; }
+ html:root[data-theme] .superadmin-shell .dev-impersonate > button { grid-column: 2; grid-row: 1; min-height: 34px; }
+}
+
+html:root[data-theme] .superadmin-shell .sa-text-button { border: 0; background: transparent; color: #2563eb; padding: 5px 0; box-shadow: none; font-size: 13px; }
+html:root[data-theme] .superadmin-shell .topbar .icon-btn { background: var(--sa-surface); border-color: var(--sa-border); color: var(--sa-muted); }
+html[data-theme="dark"] .superadmin-shell .sa-text-button { color: #93c5fd; }
+html[data-theme="dark"] .superadmin-shell .workspace-footer { padding-left: 276px; }
+@media (max-width: 1100px) { html[data-theme="dark"] .superadmin-shell .workspace-footer { padding-left: 100px; } }
+
+.superadmin-shell .boundary-registration-preview { margin-top:16px; overflow:hidden; border:1px solid var(--sa-border); border-radius:10px; background:var(--sa-subtle); }
+.superadmin-shell .boundary-registration-preview-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:14px 16px; border-bottom:1px solid var(--sa-border); background:var(--sa-surface); }
+.superadmin-shell .boundary-registration-preview-head div { display:grid; gap:4px; }
+.superadmin-shell .boundary-registration-preview-head strong { font-size:12px; text-transform:uppercase; letter-spacing:.025em; }
+.superadmin-shell .boundary-registration-preview-head span, .superadmin-shell .boundary-registration-preview-head small { color:var(--sa-muted); font-size:12px; }
+.superadmin-shell .boundary-registration-map { height:330px; background:#e2e8f0; }
+.superadmin-shell .boundary-registration-empty, .superadmin-shell .boundary-registration-note { margin:0; padding:16px; font-size:12px; line-height:1.55; }
+.superadmin-shell .boundary-registration-note { border-top:1px solid var(--sa-border); }
+@media(max-width:600px) { .superadmin-shell .boundary-registration-map { height:250px; } .superadmin-shell .boundary-registration-preview-head { flex-direction:column; } }

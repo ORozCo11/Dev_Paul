@@ -8,7 +8,9 @@ class Barangay extends Model
 {
     protected $fillable = [
         'name',
+        'psgc_code',
         'city_id',
+        'provisioned_at',
         'boundary',
         'boundary_status',
         'boundary_source',
@@ -20,6 +22,7 @@ class Barangay extends Model
 
     protected $casts = [
         'boundary' => 'array',
+        'provisioned_at' => 'datetime',
         'boundary_verified_at' => 'datetime',
         'pending_boundary' => 'array',
     ];

@@ -1,71 +1,116 @@
-# Barangay VMS — Must-Haves
+# Barangay VMS — Must-Haves and Requirement Alignment
 
-What the system must do to be considered complete, grouped by area. "Done" reflects the current `dev-paul` branch; "Gap" items are must-haves that are not fully met yet.
+Reviewed: 14 October 2026. Baseline: the supplied **VMS_MUST-HAVES.docx** (Vehicle Management System, Group 4). The baseline is retained as requirements evidence; the implementation notes below distinguish its wording from the current role and permission model.
 
-## 1. Fleet Records
+Status key: **Implemented** means an identifiable code path exists; it does not claim deployment acceptance. **Verify in deployment** means credentials, storage, or an end-to-end acceptance check is still needed. **Role alignment** means the capability exists but the responsible role differs from the supplied baseline and should be reviewed with the adviser.
 
-- [x] Register a vehicle with type, capacity, brand/model, plate/registration, photo, and current location.
-- [x] Support both Land and Water vehicle domains, with domain-specific fields (Hull Material/Engine Type for Water).
-- [x] Track vehicle status (Available / Under Maintenance / Inactive) and physical condition independently.
-- [x] Vehicle location on a map, grouped by named hubs; hubs cannot be deleted while vehicles are still assigned to them.
-- [x] Full activity history per vehicle (location changes, issues, condition checks, maintenance).
+## 1. Platform requirements from the supplied document
 
-## 2. Issue → Repair Workflow
+| Baseline requirement | Status | Current implementation / evidence |
+|---|---|---|
+| Web-based desktop platform | Implemented | React/Vite frontend and Laravel API; responsive layouts also support smaller screens. |
+| Admin, Custodian, and Maintenance Personnel access | Implemented | Central abilities in backend-api/config/permissions.php, backend role/ownership guards, frontend module gates. Multi-role accounts are supported. |
+| Organized, updated vehicle records | Implemented | FleetController vehicle endpoints, vehicle catalog and individual profiles, land/water type fields, photos and locations. |
+| Maintenance records and schedules | Implemented | FleetController record/schedule endpoints; ticket repairs, recurrence, approval and scheduled-to-ticket processing. |
+| Dashboard summaries of status and activities | Implemented | Distinct Admin decisions, Custodian inspection/verification, and personal Maintenance work dashboards. No invented trends or weather data. |
+| Secure cloud storage, backup and retrieval of images/files | Verify in deployment | Supabase/S3-compatible storage integration and authorized upload/download flows exist. Successful uploads, retrieval, retention and recovery depend on deployment credentials and storage configuration; backup/recovery has not been demonstrated by this UI change. |
 
-- [x] Anyone can report a vehicle issue with severity, category, and description.
-- [x] Admin creates a Maintenance Ticket from an issue (or from scratch), assigning a Custodian.
-- [x] 5-phase ticket lifecycle: Open → Custodian inspection → Active (repair/verify/confirm per sub-issue) → Closed.
-- [x] A ticket can be closed with unresolved sub-issues only via an explicit "decision close" that records why and whether the vehicle is fit for service.
-- [x] Recurring-failure detection: flags when the same fault on the same vehicle has come back.
-- [x] Aging flag on tickets open past 30 days.
+## 2. Administrator requirements
 
-## 3. Preventive Maintenance
+| Supplied requirement | Status | Current behavior |
+|---|---|---|
+| Manage all vehicle records | Implemented | Register, edit and archive barangay-scoped vehicles. Vehicle registration is a standard Custodian duty under the current permission map; the obsolete delegation checkbox has been removed. |
+| Manage vehicle categories/types | Implemented | Vehicle-type catalog and land/water domains. |
+| Update vehicle locations | Implemented | Vehicle locations and hub management with map views; occupied hubs cannot be deleted. |
+| Monitor conditions needing inspection/repair | Implemented | Vehicle condition/readiness views and fleet-condition analytics; recording physical condition checks is Custodian-only. |
+| Manage vehicle issue reports | Implemented | Review reports and linked tickets; dismiss obsolete reports with a reason. Custodians propose tickets. |
+| Manage maintenance records | Implemented | Maintenance record oversight and repair-ticket history; ownership and verification guards still apply. |
+| Schedule maintenance | Role alignment | Custodian books a schedule; Admin approves/declines and reassigns personnel. Admin does not originate a booking under the current permission map. |
+| View vehicle history | Implemented | Automatic per-vehicle event timeline. |
+| Generate vehicle, issue, maintenance and history reports | Implemented | Reports module plus relevant CSV/print exports. Validate required report formats with representative data for acceptance. |
+| Monitor logs and user activities | Implemented | Barangay-scoped activity log and platform-only Super Admin log. |
+| Dashboard summaries and recent updates | Implemented | Four primary KPIs, decisions queue, ticket workload, fleet condition and concise coverage warnings. Details are linked from the queue. |
+| Create user accounts | Implemented | Admin user.create permission and user-management flow; public signup additionally requires registration code and approval. |
 
-- [x] Schedule a service with a date, type, assigned mechanic, and optional recurrence (Month / Quarter / 6 Months / Year / custom interval).
-- [x] Completing a recurring schedule auto-creates the next occurrence.
-- [x] Urgency view of upcoming/overdue schedules (Overdue, 1–3 days, 4–7 days, 8+ days).
+## 3. Custodian requirements
 
-## 4. Roles & Access
+| Supplied requirement | Status | Current behavior |
+|---|---|---|
+| View vehicle details and availability | Implemented | Vehicle catalog and profiles; availability, physical condition and verified readiness remain separate. |
+| Search/filter vehicles | Implemented | Search, filters, table/card views and column controls. |
+| Report vehicle issues | Implemented | Issue reporting with category, severity, description and linked proposal flow. |
+| Upload issue photos | Verify in deployment | Issue-photo inputs/storage integration exist. Validate upload and authorized retrieval against configured cloud storage. |
+| Monitor submitted reports/status updates | Implemented | Report details, associated tickets and notifications. |
+| View ongoing/completed maintenance | Implemented | Maintenance ledger, ticket details, repair logs and verification history. |
+| Dashboard of available vehicles, issues and maintenance | Implemented with role focus | Verification, readiness and unresolved issue KPIs; one tasks queue, one condition chart and readiness by vehicle type. Availability is accessible from Vehicles. |
 
-- [x] Three fleet-facing roles — Admin, Custodian, Maintenance Personnel — each sees only the modules relevant to their work.
-- [x] A Super Admin role, separate from the fleet app, for platform-level account and Barangay administration.
-- [x] Every fleet record (vehicles, tickets, issues, schedules, hubs, activity log) is isolated to its own Barangay.
-- [x] New accounts require approval before they can log in — an existing Admin approves Custodian/Maintenance Personnel signups; a Super Admin approves a Barangay's first-ever Admin.
-- [x] A repair can never be verified by the same person who logged it, even under a different role on a dual-role account — only an Admin can step in for that case.
-- [x] A cannibalized repair (parts taken from another vehicle) requires Admin approval before it proceeds to verification; approving it opens an Issue Report on the donor vehicle.
-- [x] A Barangay can never be left with zero active Admins through deactivation or a role change — blocked with a clear error, and flagged as a standing warning (dashboard + Super Admin barangay list) while only one remains.
-- [x] Impersonation requires a written reason, expires in 30 minutes, is read-only (every write is rejected except ending the session), and is logged both to the impersonated account's own Barangay Activity Log and the Super Admin's account log — start and end.
-- [x] A Super Admin account can be provisioned outside local/testing via `php artisan superadmin:create` — no hardcoded/demo credentials exist in that path.
+Additional current responsibilities: propose maintenance tickets, record condition/readiness checks, book schedules, and independently verify completed repairs. Successful Custodian approval closes the ticket; Admin does not verify a repair.
 
-## 5. Auditability
+## 4. Maintenance Personnel requirements
 
-- [x] Every create/update/status-change is written to an Activity Log, attributable to a user and timestamped.
-- [x] Ticket detail view reflects other users' actions without a manual page reload.
+| Supplied requirement | Status | Current behavior |
+|---|---|---|
+| View reported vehicle issues | Implemented with scope | Own technical issue reports and authorized assigned tickets; unrelated staff workload is excluded. |
+| Add maintenance records | Implemented with scope | Record repair work on assigned sub-issues and use permitted maintenance-record actions. |
+| Update repair progress/completion | Implemented with scope | Assigned work logs and submission; a mechanic cannot independently verify or close their own repair. |
+| Manage maintenance schedules | Role alignment | View and perform assigned scheduled work. Booking/editing is Custodian-owned; approval/reassignment is Admin-owned. |
+| Add repair actions and remarks | Implemented | Repair log, parts, dates, evidence, donor-part records and supporting notes. |
+| Monitor upcoming maintenance | Implemented | Personal upcoming/overdue schedule KPIs and assigned-work queue. |
+| View maintenance history | Implemented | Work tracker, completed repair history and permitted maintenance records. |
+| Dashboard of issues, records and vehicles needing attention | Implemented with personal scope | Three personal KPIs, assigned work, workload by actual ticket status and recent completed work. Fleet-wide analytics remain in authorized fleet modules. |
 
-## 6. Reporting
+## 5. Current workflow and safeguards
 
-- [x] Exportable reports by category (fleet, maintenance, issues, users).
-- [x] CSV export and print view on the tables that need it (Vehicle History, Activity Log, Reports).
+- [x] Ticket proposals enter Pending Approval. Custodian proposes; Admin reviews/assigns; Maintenance Personnel repairs; assigned Custodian verifies and closes, or returns the work with a reason.
+- [x] Self-verification is blocked server-side, including multi-role accounts. Reassign an independent Custodian when needed; there is no Admin verification fallback.
+- [x] Cannibalized repairs record donor vehicles and parts and generate donor follow-up issues. The current flow does not require the retired Admin cannibalization approval step.
+- [x] External-shop handling and verification duties are separated.
+- [x] Schedule bookings require approval; recurrence and schedule-to-ticket processing remain intact.
+- [x] Fleet data is scoped by barangay. Super Admin sees platform/account data rather than fleet operations.
+- [x] Last-Admin and open-work deactivation guards remain enforced.
+- [x] Impersonation uses the existing authorized candidate list and reason requirement; production tokens expire after 30 minutes and writes are restricted server-side. Local development has explicit expiry/write exceptions.
+- [x] The account menu identifies the current user and role and offers End Impersonation during support sessions. Ending calls the existing logout endpoint for token revocation and audit logging before restoring the original session.
+- [x] Registration retains first-Administrator versus ordinary staff approval routing, registration-code checks, and inactive-until-approved behavior.
 
----
+## 6. UI requirements delivered in this revision
 
-## Known Gaps (must-have, not yet fully met)
+- [x] Three focused fleet dashboards with real data, scoped assignments, task links and useful empty states.
+- [x] Super Admin overview with four platform KPIs, an administrative queue and one account-status chart.
+- [x] Flat Super Admin navigation and a dedicated Barangay Management screen; existing recovery, boundary review, registration codes and account controls remain accessible.
+- [x] Province → City/Municipality → Barangay → Staff impersonation cascade, using barangay IDs to distinguish duplicate names.
+- [x] Search/filter improvements for users, barangays, concerns and platform activity.
+- [x] Three-step registration form, wider desktop layout and readable introduction.
+- [x] Cleaner ticket-creation hierarchy and compact schedule summaries with full details under View.
+- [x] Shared eight-tooth blue/white SVG brand gear, transparent background, contrasting center ring, stationary wordmark and existing rotation timing. Reduced-motion preference is respected.
 
-1. **Vehicle photo upload.** Currently broken in at least one environment due to invalid/missing Supabase storage credentials — this is a configuration issue, not a code defect, and needs valid credentials supplied by whoever owns the Supabase project.
-2. **User profile completeness from partial lookups.** A user's profile page can show blank Role/Phone/Address when opened from a form that only carried a name+email lookup (e.g. a ticket's assigned-custodian dropdown) instead of fetching the full record by ID.
-3. **Automated tests.** No automated frontend tests exist for the UI flows described above; verification has been manual/visual. A must-have for long-term maintainability, not yet started. (Backend feature/permission tests are now extensive — see `backend-api/tests/Feature/`.)
-4. **Impersonation read-only enforcement is backend-only.** `RestrictImpersonatedToReadOnly` rejects every write server-side, and a persistent banner tells the impersonator the session is read-only, but individual buttons/forms in the UI aren't disabled during an impersonated session — an attempted write still gets rejected, just via a 403 toast rather than the button not being there at all.
-5. **A single permission map does not exist yet.** Role checks are still spread across each controller method (`requireRole`, `hasRole`, etc.) rather than one central ability list — planned for Phase B of `VMS-IMPROVEMENT-PLAN.md`.
+## 7. Acceptance checks and remaining work
 
-## Resolved Gaps
+Regression fix follow-up, 21 October 2026: all **22 audit findings have local fixes**. **422 backend tests pass (1,770 assertions)**, ESLint is clean, the production build passes without a chunk-size warning, seven geometry/calendar tests pass, and **27 targeted browser assertions pass**. Storage now uses private managed objects and temporary signed links; the new migration was applied locally after a backup. Target-host bucket policy, persistent storage, legacy migration, and backup/restoration remain deployment acceptance checks. See [the fix report](REGRESSION-FIXES-2026-10-21.md) for evidence and rollout instructions.
 
-- **Registration security (resolved).** The first person to register for a new Barangay used to become its Admin automatically and instantly active, gated only by a shared "Staff Registration Code" that also gated ordinary staff signup — anyone holding that code could race to register first and claim Admin uncontested. **Fix:** every registrant, first-for-Barangay or not, now starts `is_active: false` with no `approved_at`; login is hard-blocked until approved. An existing Admin still approves ordinary Custodian/Maintenance Personnel signups, but a Barangay's first-ever Admin is instead approved by a Super Admin, who is notified the moment that registration happens and reviews it from a dedicated Pending Approvals queue (reject deletes the account outright; approve activates it). See `AuthController::register()`/`notifySuperAdmins()`, `SuperAdminController::pendingApprovals()`/`rejectUser()`, and the Super Admin portal's Pending Approvals tab.
-- **Super Admin unusable in production (resolved, Phase A1).** `users.role` was an `enum(['Admin','Custodian','Maintenance Personnel'])` — on a freshly-migrated PostgreSQL database this compiles to a real CHECK constraint that rejects `'Super Admin'` outright (SQLite happened to silently lose the same constraint via an unrelated table rebuild, masking the problem locally). **Fix:** `role` is now a plain validated string (migration `2026_09_25_000001_widen_users_role_column.php`), the demo seeder (`UserSeeder`) is gated to local/testing like the bootstrap migration already was, and `php artisan superadmin:create` is the only production-safe way to provision a real one.
-- **Self-verification of a repair (resolved, Phase A2).** A dual-role (Custodian + Maintenance Personnel) account could log a repair and then verify their own work. **Fix:** `TicketController::verifyRepair` now blocks the sub-issue's own mechanic regardless of role, with Admin as a general fallback verifier; `assignMechanic`/`reassignCustodian` warn (non-blocking) when an assignment would create this conflict.
-- **Cannibalized repairs had no approval gate (resolved, Phase A3).** Taking a part from another vehicle to fix this one went straight to verification with no record on the donor vehicle. **Fix:** a cannibalized repair now parks at `Pending Approval`; an Admin approves (auto-opens an Issue Report on the donor vehicle, marks it `Needs Inspection`) or rejects (back to `Under Repair`, reason required).
-- **A Barangay could be left with zero active Admins (resolved, Phase A4).** Nothing stopped a Super Admin from deactivating, or changing the role of, a Barangay's last remaining Admin. **Fix:** `GuardsLastAdmin` blocks it with a 422 from every relevant endpoint (`UserController::deactivate/update`, `SuperAdminController::deactivateUser/updateUserRole`), and a warning surfaces proactively before it happens (Admin dashboard, Super Admin's barangay list).
-- **Impersonation was unrestricted (resolved, Phase A5).** No reason required, a 4-hour expiry, full read/write access, and no visibility into the target Barangay's own Activity Log. **Fix:** reason required, 30-minute expiry, `RestrictImpersonatedToReadOnly` middleware blocks every write except ending/switching the session, start and end are both logged with the target's `barangay_id` set (visible to that Barangay's own Admin as well as the Super Admin), and a persistent banner marks the session throughout.
+Regression audit, 21 October 2026: **415 backend tests passed (1,730 assertions)**, six geometry tests passed, and the frontend build passed. Browser/API regression testing recorded **22 open findings (4 High, 13 Medium, 5 Low)** across functional behavior, interface consistency, documentation, and tooling/performance. Frontend lint reports **59 errors and 18 warnings**. Registration, approval, internal/external repairs, rework, vehicle lifecycle, scheduled maintenance, reports, notifications, and support were exercised with isolated QA data. This is not deployment acceptance or exhaustive coverage of every control. See [the current regression report](REGRESSION-REPORT-2026-10-21.md) for reproduction steps, evidence, previously fixed findings, and remaining coverage.
 
----
+Registration geography, 15 October 2026: the cascading selectors now use **42,046 preloaded PSGC barangay references**, including Cebu City's **80 barangays**. Free-text barangay creation is rejected server-side; selected city/parent relationships are validated. Boundaries are resolved by PSGC code, with missing matches shown as unavailable instead of substituting another barangay. **403 backend tests passed (1,622 assertions)** after this change. See [registration geography](REGISTRATION-GEOGRAPHY.md) for source dates, boundary coverage, deployment steps, and evidence.
 
-*This list reflects the state of the codebase as of the `Paul/UI-Cleanup-Filters-Tables-Vehicle-Types-Ticket-Detail` and `Paul/Forms-Persist-Draft-On-Back-Navigation` branches merged into `dev-paul`, plus Phase A (Critical fixes) of `VMS-IMPROVEMENT-PLAN.md`. Update it as gaps are closed or new must-haves are identified.*
+Boundary correction, 15 October 2026: Suba (Pob.), Bantayan now uses a detailed 1,281-vertex PSA/NAMRIA reference instead of the coarse triangle. Existing automatic references and new registrations share the correction; map rendering and location checks preserve holes and islands. **406 backend tests passed (1,649 assertions)** plus three geometry tests. See [registration geography](REGISTRATION-GEOGRAPHY.md#boundary-detail-correction--15-october-2026).
+
+Suba verification follow-up: the government-hosted PSA/GeoRisk polygon agrees with the imported outline; the northern screenshot vicinity lies in Binaobao in that reference. Provider place labels are now optional, and the app labels the selected reference polygon internally. This verifies reference consistency, not current legal boundaries. See [comparison and evidence](REGISTRATION-GEOGRAPHY.md#suba-boundary-and-satellite-label-verification--15-october-2026). Five geometry tests and the build pass.
+
+Boundary accuracy follow-up: imported polygons are now **unverified references**, including during registration. Super Admins can upload, preview, and confirm a replacement GeoJSON with its source recorded. Two automatic assignments were marked for review; live polygon coordinates and account/fleet/code data were unchanged. **Mantalongon's exact current geographic outline remains unresolved** pending a reliable replacement map. See [boundary accuracy findings and fixes](BOUNDARY-ACCURACY-2026-10-15.md).
+
+Regression audit, 15 October 2026: **397 backend tests passed (1,585 assertions)** and the frontend build passed. Browser/API checks and source review identified **19 findings**; REG-05, REG-11, REG-12, and REG-16 were subsequently fixed locally and browser-verified, leaving **15 open findings**. Baseline frontend lint reports **56 errors and 19 warnings**. See [the regression report](REGRESSION-REPORT-2026-10-15.md) for reproduction steps, evidence, severity, and coverage limits. Passing backend tests do not close the remaining findings or establish deployment acceptance.
+
+- [ ] Demonstrate cloud image/file upload, authorized retrieval, and backup/recovery in the target deployment.
+- [ ] Obtain adviser review of the role-alignment differences in sections 2 and 4. These notes record current behavior; they do not claim approval to amend the original baseline.
+- [ ] Complete user acceptance with representative accounts and real operational records, including an empty barangay and multi-role staff.
+- [ ] Confirm required generated report layouts and exports against the academic submission requirements.
+- [ ] Maintain automated browser coverage for critical registration, verification and support flows. Backend feature tests exist in backend-api/tests/Feature; a passing frontend build alone is insufficient evidence of every workflow.
+
+The original supplied document is not overwritten. Historical audit documents remain point-in-time records; their older Admin-confirmation, cannibalization-approval, and direct-ticket-creation descriptions should not be used as the current workflow contract.
+
+Super Admin follow-up, 21 October 2026: all nine Super Admin audit findings and related retest edge cases were fixed locally. **433 backend tests (1,825 assertions), 98 API/browser scenarios, and 7 frontend tests passed; lint reports zero errors/warnings and the production build passes.** New barangays remain managed before onboarding, operational role changes protect assigned work, complete platform activity is searchable, and failures/retries are isolated by resource. Orphan recovery retains operational roles. Reference-only boundary onboarding remains permitted when a live outline exists and no replacement is pending. See [Super Admin fixes and verification](SUPERADMIN-FIXES-2026-10-21.md) for evidence, migration requirements, and coverage limits.
+
+Later Super Admin recheck, 21 October 2026: the original 98 checks passed again, but expanded probes found **one new Low-severity issue: searching a concern by its displayed `CR-` reference returns no match**. Total API/browser result: 103 of 104 checks passed. Backend tests, frontend tests, lint and build still pass. See [the latest recheck](SUPERADMIN-RECHECK-2026-10-21.md).
+
+Concern-reference fix, 21 October 2026: SA-R01 is fixed. **All 104 Super Admin API/browser scenarios, 433 backend tests (1,825 assertions), and 7 frontend tests passed; lint and build passed.** Reference search also passed lowercase, whitespace, and numeric-ID checks. See [the fix and complete recheck](SUPERADMIN-REFERENCE-SEARCH-FIX-2026-10-21.md).
+
+Second Super Admin recheck, 21 October 2026: **111 API/browser scenarios, 433 backend tests (1,825 assertions), and 7 frontend tests passed.** Lint and build passed; no new findings or browser runtime exceptions were recorded. The additional control checks cover combined filters, pagination state, sidebar state, code cancellation/copy, and invalid boundary files. See [the latest recheck evidence](SUPERADMIN-SECOND-RECHECK-2026-10-21.md).

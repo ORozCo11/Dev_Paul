@@ -1,0 +1,9 @@
+.vms-gear { display: block; flex-shrink: 0; transform-box: view-box; transform-origin: center center; }
+.topbar-brand-cluster > .vms-gear { margin-right: -6px; }
+.auth-page-header-brand > .vms-gear { margin-right: -4px; }
+.vms-gear.auth-page-header-gear,
+.vms-gear.topbar-gear-icon,
+.vms-gear.auth-gear-icon { animation-duration: 6s; }
+@media (prefers-reduced-motion: reduce) {
+  .vms-gear { animation: none !important; }
+}

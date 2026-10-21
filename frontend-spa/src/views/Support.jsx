@@ -8,7 +8,7 @@ import api from '../api/axios';
 const FAQ = [
   {
     q: 'How do I report a vehicle issue?',
-    a: "As a Custodian, go to Issue Reports and click Report Issue. Describe the problem and the vehicle's condition — an Admin can turn it into a repair ticket from there.",
+    a: "As a Custodian, open Report Vehicle Issue to review issues and propose a maintenance ticket. Describe the problem and the planned repair. An Admin reviews the proposal and assigns the work. Maintenance Personnel can submit technical issue reports for a Custodian to review.",
   },
   {
     q: "How do I approve a new staff registration, and what's the Staff Registration Code?",

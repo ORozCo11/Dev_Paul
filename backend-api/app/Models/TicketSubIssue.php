@@ -61,6 +61,10 @@ class TicketSubIssue extends Model
         'external_shop_contact',
         'external_sent_by',
         'external_contact_person',
+        'external_shop_address',
+        'external_expected_return',
+        'external_handled_by',
+        'external_received_by',
         'external_estimated_cost',
         'warranty_until',
         'work_order_notes',
@@ -69,6 +73,7 @@ class TicketSubIssue extends Model
         'repair_logs',
         'parts_used',
         'attachment_url',
+        'attachment_files',
         'repair_started_at',
         'repair_completed_at',
         'maintenance_cost',
@@ -102,6 +107,7 @@ class TicketSubIssue extends Model
     ];
 
     protected $casts = [
+        'attachment_files' => 'array',
         'mechanic_assigned_at' => 'datetime',
         'verified_at'          => 'datetime',
         'confirmed_at'         => 'datetime',
@@ -146,6 +152,21 @@ class TicketSubIssue extends Model
     public function sourceVehicle()
     {
         return $this->belongsTo(Vehicle::class, 'source_vehicle_id', 'vehicle_id');
+    }
+
+    public function donorParts()
+    {
+        return $this->hasMany(DonorPart::class, 'sub_issue_id', 'sub_issue_id')->orderBy('part_id');
+    }
+
+    public function externalHandler()
+    {
+        return $this->belongsTo(User::class, 'external_handled_by');
+    }
+
+    public function externalReceiver()
+    {
+        return $this->belongsTo(User::class, 'external_received_by');
     }
 
     public function mechanicAssignedBy()

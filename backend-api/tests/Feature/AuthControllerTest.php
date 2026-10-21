@@ -89,7 +89,7 @@ class AuthControllerTest extends TestCase
     #[Test]
     public function registering_the_first_admin_for_a_barangay_starts_inactive_and_notifies_every_super_admin(): void
     {
-        $barangay = Barangay::create(['name' => 'Fresh Barangay', 'city_id' => $this->city->id]);
+        $barangay = Barangay::create(['name' => 'Fresh Barangay', 'city_id' => $this->city->id, 'psgc_code' => '0102801001']);
         $setting = RegistrationSetting::for($barangay->id);
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
 

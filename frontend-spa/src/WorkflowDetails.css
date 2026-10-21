@@ -1,0 +1,49 @@
+/* Detail pages and supporting repair records. */
+html .ticket-detail-panel .ticket-process-hero.ticket-process-hero--simple {
+  grid-template-columns: auto minmax(0, 1fr);
+  position: relative;
+  min-height: 140px;
+}
+html .ticket-overview-status-text .status-badge,
+html .ticket-overview-status-text > span[style] {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none;
+  padding: 0 !important;
+}
+.ticket-preview-badges.ticket-overview-status-text { gap: 6px 16px; }
+.ticket-overview-progress.ticket-overview-status-text { gap: 6px 14px; }
+.archive-deleted-toggle { display: inline-flex; align-items: center; gap: 8px; margin: 0 16px; color: #fff; font-size: 0.85rem; white-space: nowrap; }
+.archive-deleted-toggle input { width: 16px; height: 16px; accent-color: #173c95; }
+.sa-barangay-page { padding: 24px; }
+.sa-barangay-page-header { padding-bottom: 20px; border-bottom: 1px solid var(--border-subtle, #dbe5f3); }
+.sa-barangay-page-header h2 { margin: 18px 0 4px; }
+.sa-barangay-page-header p { margin: 0; color: var(--text-muted, #64748b); }
+.sa-barangay-page-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 40px; padding-top: 24px; }
+.sa-barangay-page-grid .sa-detail-list { margin: 0; align-content: start; }
+.sa-barangay-page-grid .sa-detail-section { margin: 0; padding: 0; border: 0; }
+.lr-side-column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.lr-side-column .lr-side { position: static; }
+.repair-file-cabinet { padding: 14px; border: 1px solid var(--border-subtle, #dbe5f3); border-radius: 10px; background: var(--surface, #fff); min-width: 0; }
+.repair-file-cabinet-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 10px; }
+.repair-file-cabinet-header h4 { display: flex; align-items: center; gap: 6px; margin: 0; }
+.repair-file-cabinet-header .row-actions { gap: 3px; }
+.smart-form .repair-file-cabinet .lr-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; min-width: 28px; height: 28px; padding: 0; color: #2563eb; }
+.repair-file-cabinet .lr-icon-btn svg { display: block; flex-shrink: 0; width: 15px; height: 15px; }
+.repair-file-cabinet button:disabled { opacity: 0.4; cursor: default; }
+.repair-file-list { list-style: none; padding: 0; margin: 0; max-height: 260px; overflow-y: auto; }
+.repair-file-list li { display: flex; align-items: center; gap: 7px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle, #e2e8f0); }
+.repair-file-list li > svg { flex-shrink: 0; color: #2563eb; }
+.repair-file-list li > input { width: 14px; height: 14px; flex-shrink: 0; }
+.repair-file-list li > div { min-width: 0; flex: 1; }
+.repair-file-list a, .repair-file-list .link-button { display: block; width: 100%; font-size: 0.78rem; text-align: left; overflow-wrap: anywhere; }
+.repair-file-list small { display: block; font-size: 0.65rem; margin-top: 3px; color: var(--text-muted, #64748b); }
+.repair-file-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 125px; margin: 12px 0 8px; border: 1px dashed #93b4f6; border-radius: 6px; background: transparent; color: #2563eb; cursor: pointer; }
+.repair-file-drop.is-dragging { background: #eff6ff; border-color: #2563eb; }
+.repair-file-drop small { font-size: 0.72rem; color: var(--text-muted, #64748b); }
+@media (max-width: 700px) {
+  .sa-barangay-page { padding: 16px; }
+  .sa-barangay-page-grid { grid-template-columns: 1fr; }
+  .archive-deleted-toggle { margin: 8px 0; }
+}

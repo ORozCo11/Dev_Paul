@@ -1,8 +1,11 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TouchMapGuard from './TouchMapGuard';
+import { BOUNDARY_REFERENCE_ATTRIBUTION } from '../utils/boundary';
+import BoundaryReferenceLabel from './BoundaryReferenceLabel';
+import BoundaryMapDetails from './BoundaryMapDetails';
 
 const ESRI_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const ESRI_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
@@ -68,8 +71,10 @@ function ResizeMapOnContainerResize() {
 // field), and re-centers itself when the parent moves the pin instead (the
 // admin typed an address that got geocoded). The service-area boundary is
 // drawn so it's obvious at a glance where a click will actually be accepted.
-export default function AddLocationMap({ marker, boundaryRings, onPick }) {
-  const bounds = useMemo(() => L.latLngBounds(boundaryRings.flat()), [boundaryRings]);
+export default function AddLocationMap({ marker, boundaryPolygons, boundaryLabel, boundaryVerified = false, onPick }) {
+  const [showPlaceLabels, setShowPlaceLabels] = useState(false);
+  const bounds = useMemo(() => boundaryPolygons.length ? L.latLngBounds(boundaryPolygons.flat(2)) : null, [boundaryPolygons]);
+  if (!bounds) return <p role="status">The selected barangay has no boundary reference yet. Ask the system administrator to review its boundary before adding a location.</p>;
   const initialCenter = bounds.getCenter();
 
   return (
@@ -81,16 +86,21 @@ export default function AddLocationMap({ marker, boundaryRings, onPick }) {
       attributionControl
     >
       <ResizeMapOnContainerResize />
-      <TileLayer url={ESRI_IMAGERY_URL} attribution={ESRI_ATTRIBUTION} maxZoom={19} crossOrigin="anonymous" />
-      <TileLayer url={ESRI_LABELS_URL} attribution="" maxZoom={19} crossOrigin="anonymous" />
+      <TileLayer url={ESRI_IMAGERY_URL} attribution={`${ESRI_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} maxZoom={19} crossOrigin="anonymous" />
+      {showPlaceLabels && <TileLayer url={ESRI_LABELS_URL} attribution="" maxZoom={19} crossOrigin="anonymous" />}
+      <div className="location-density-basemap-toggle" ref={(node) => { if (node) L.DomEvent.disableClickPropagation(node); }}>
+        <button type="button" aria-pressed={showPlaceLabels} className={showPlaceLabels ? 'is-active' : ''} title="Show place names supplied by the map provider. These do not define barangay boundaries." onClick={() => setShowPlaceLabels((value) => !value)}>Map labels</button>
+      </div>
+      <BoundaryMapDetails name={boundaryLabel} verified={boundaryVerified} />
       <ClickToPick onPick={onPick} />
-      {boundaryRings.map((ring, index) => (
+      {boundaryPolygons.map((ring, index) => (
         <Polygon
           key={index}
           positions={ring}
           pathOptions={{ color: '#facc15', fillColor: '#facc15', fillOpacity: 0.05, opacity: 1, weight: 3 }}
         />
       ))}
+      <BoundaryReferenceLabel polygons={boundaryPolygons} label={boundaryLabel} />
       {marker && <Marker position={[marker.lat, marker.lng]} icon={pickPin} />}
       <FlyToMarker marker={marker} />
       <TouchMapGuard />

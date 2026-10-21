@@ -1,0 +1,134 @@
+[
+  {
+    "test": "Custodian reports issue using current contract",
+    "status": 201,
+    "expected": [
+      201
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin dismisses issue with reason",
+    "status": 422,
+    "expected": [
+      200
+    ],
+    "pass": false,
+    "message": "The dismiss reason field is required.",
+    "errors": {
+      "dismiss_reason": [
+        "The dismiss reason field is required."
+      ]
+    }
+  },
+  {
+    "test": "Custodian records condition using current contract",
+    "status": 201,
+    "expected": [
+      201
+    ],
+    "pass": true
+  },
+  {
+    "test": "Admin cannot edit Custodian condition",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "Custodian edits own condition",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "Other barangay cannot view QA vehicle",
+    "status": 404,
+    "expected": [
+      404
+    ],
+    "pass": true,
+    "message": "No query results for model [App\\Models\\Vehicle] 16"
+  },
+  {
+    "test": "Empty barangay fleet",
+    "status": 200,
+    "expected": [
+      200
+    ],
+    "pass": true
+  },
+  {
+    "test": "empty fleet contains no foreign vehicles",
+    "count": 0,
+    "pass": true
+  },
+  {
+    "test": "Custodian document upload",
+    "status": 201,
+    "pass": true
+  },
+  {
+    "test": "document bytes available without token",
+    "status": 200,
+    "bytes": 68,
+    "public": true
+  },
+  {
+    "test": "Other barangay denied document list",
+    "status": 404,
+    "expected": [
+      404
+    ],
+    "pass": true,
+    "message": "No query results for model [App\\Models\\Vehicle] 16"
+  },
+  {
+    "test": "Custodian cannot delete vehicle document",
+    "status": 403,
+    "expected": [
+      403
+    ],
+    "pass": true,
+    "message": "Your account role cannot perform this action."
+  },
+  {
+    "test": "Admin deletes vehicle document",
+    "status": 200,
+    "expected": [
+      200,
+      204
+    ],
+    "pass": true,
+    "message": "Document deleted."
+  },
+  {
+    "test": "file bytes after document deletion",
+    "status": 200,
+    "stillPublic": true
+  },
+  {
+    "test": "Unauthenticated protected fleet denied",
+    "status": 500,
+    "expected": [
+      401
+    ],
+    "pass": false,
+    "message": "Route [login] not defined."
+  },
+  {
+    "test": "Invalid login denied",
+    "status": 401,
+    "expected": [
+      422,
+      401
+    ],
+    "pass": true,
+    "message": "Invalid credentials provided. Please check your email or password."
+  }
+]

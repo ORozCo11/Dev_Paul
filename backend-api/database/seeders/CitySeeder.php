@@ -29,7 +29,7 @@ class CitySeeder extends Seeder
                 continue;
             }
 
-            City::firstOrCreate(
+            City::updateOrCreate(
                 ['province_id' => $provinceId, 'name' => $city['name']],
                 ['code' => $city['code']],
             );

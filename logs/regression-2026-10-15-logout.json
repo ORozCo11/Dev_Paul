@@ -1,0 +1,7 @@
+{
+  "test": "normal logout revokes token",
+  "logoutStatus": 401,
+  "logoutHasAuthorization": false,
+  "replayStatus": 200,
+  "localCleared": true
+}
