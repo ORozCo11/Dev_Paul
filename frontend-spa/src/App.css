@@ -1078,6 +1078,16 @@
 .sidebar.collapsed .module-nav button { justify-content: center; padding: 10px; }
 .sidebar.collapsed .profile-card { justify-content: center; }
 
+/* The icon-only rail can still scroll when a role has many modules, but its
+   native scrollbar consumes too much of the 76px width and looks detached
+   from the navigation. Keep wheel, touch, and keyboard scrolling intact. */
+.sidebar.collapsed {
+  scrollbar-width: none;
+}
+.sidebar.collapsed::-webkit-scrollbar {
+  display: none;
+}
+
 /* PROFILE PANEL */
 .profile-panel {
   margin-top: auto;
