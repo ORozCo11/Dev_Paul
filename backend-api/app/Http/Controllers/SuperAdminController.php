@@ -592,7 +592,7 @@ class SuperAdminController extends Controller
     public function rejectUser(Request $request, User $user)
     {
         $this->requireAbility($request, 'user.reject', 'Only a Super Admin can perform this action.');
-        abort_if($user->approved_at !== null, 422, 'This account was already approved at some point — deactivate it instead of rejecting.');
+        abort_if($user->approved_at !== null || $user->is_active, 422, 'This account was already approved at some point — deactivate it instead of rejecting.');
 
         $name = $user->name;
         $email = $user->email;
@@ -615,6 +615,7 @@ class SuperAdminController extends Controller
 
         return User::with('barangay.city.province')
             ->whereNull('approved_at')
+            ->where('is_active', false)
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($u) => [
