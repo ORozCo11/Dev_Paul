@@ -2895,7 +2895,9 @@ class TicketController extends Controller
         DB::transaction(function () use ($ticket, $request) {
             $vehicleId = $ticket->vehicle_id;
             $ticket->load('subIssues');
-            $hadProgress = $ticket->subIssues->contains(fn (TicketSubIssue $s) => $s->status === 'Done');
+            // Done only happens as a ticket closes now, so a logged repair is
+            // what marks real work worth keeping recoverable.
+            $hadProgress = $ticket->subIssues->contains(fn (TicketSubIssue $s) => $s->status === 'Done' || filled($s->repair_logs));
 
             $this->resetLinkedIssueReports($ticket, 'Pending');
 
