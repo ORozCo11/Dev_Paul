@@ -12035,6 +12035,13 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
   if (!ticket) return null;
 
   const subIssues = ticket.sub_issues ?? [];
+  // The ticket is assigned as a whole, but the audit timestamp is recorded
+  // on its work items. Use the first assignment so the timeline describes
+  // the actual handoff to Maintenance Personnel, not the earlier Custodian
+  // proposal/inspection assignment.
+  const mechanicAssignment = [...subIssues]
+    .filter((subIssue) => subIssue.mechanic_assigned_at && subIssue.assigned_mechanic)
+    .sort((a, b) => new Date(a.mechanic_assigned_at) - new Date(b.mechanic_assigned_at))[0];
   const progress = ticket.progress ?? {
     done: subIssues.filter((s) => s.status === 'Done').length,
     deferred: subIssues.filter((s) => s.status === 'Deferred').length,
@@ -12300,7 +12307,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
               <div className="ticket-timeline">
                 {[
                   { label: 'Created', at: ticket.created_at, by: ticket.created_by, icon: 'clipboard' },
-                  ticket.assigned_at && { label: 'Assigned to Custodian', at: ticket.assigned_at, by: ticket.assigned_custodian, icon: 'search' },
+                  mechanicAssignment && { label: 'Assigned', at: mechanicAssignment.mechanic_assigned_at, to: ticket.assigned_mechanic ?? mechanicAssignment.assigned_mechanic, icon: 'wrench' },
                   // Pre-Diagnosed skips inspection entirely — inspected_by is
                   // stamped with whoever CREATED the ticket (usually Admin),
                   // not the Custodian above, so it's labelled by what actually
@@ -12317,6 +12324,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                       <p>{ev.label}</p>
                       <div className="ticket-timeline-meta">
                         {ev.by?.name && <span>by {ev.by.name}</span>}
+                        {ev.to?.name && <span>to {ev.to.name}</span>}
                         <QuietDate value={ev.at} />
                       </div>
                     </div>
