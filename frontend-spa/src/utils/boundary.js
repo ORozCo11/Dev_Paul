@@ -6,7 +6,8 @@ export const BOUNDARY_REFERENCE_ATTRIBUTION = 'Boundary reference data: PSA/NAMR
 
 function isLngLatPair(point) {
   return Array.isArray(point) && point.length >= 2
-    && Number.isFinite(point[0]) && Number.isFinite(point[1]);
+    && Number.isFinite(point[0]) && Number.isFinite(point[1])
+    && Math.abs(point[0]) <= 180 && Math.abs(point[1]) <= 90;
 }
 
 function toLatLngRing(ring) {
