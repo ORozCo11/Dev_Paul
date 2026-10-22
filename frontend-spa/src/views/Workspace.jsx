@@ -11856,7 +11856,9 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
             fields={[{ label: 'Decline Reason', name: 'decline_reason', type: 'textarea', rows: 2, required: true, placeholder: 'Let the Custodian know why this was declined' }]}
             key={`decline-proposal-${ticket.ticket_id}`}
             onCancel={() => setDeclining(false)}
-            onSubmit={(payload) => onDecline(payload)}
+            // The proposal stays on screen as Declined, so close the form or
+            // it keeps offering a second decline the server will refuse.
+            onSubmit={(payload) => onDecline(payload).then((ok) => { if (ok !== false) setDeclining(false); return ok; })}
             submitLabel="Decline Proposal"
             title=""
           />
