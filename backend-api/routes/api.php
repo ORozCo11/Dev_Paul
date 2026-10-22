@@ -76,7 +76,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
         // 'abilities' is added here rather than via a global User $appends —
         // this route is "who am I", the one place the frontend actually
         // needs the list (VMS-IMPROVEMENT-PLAN.md Phase B2).
-        return array_merge($user->toArray(), ['abilities' => $user->getAbilities()]);
+        return array_merge($user->toArray(), [
+            'abilities' => $user->getAbilities(),
+            'is_impersonating' => $user->currentAccessToken()?->name === 'impersonation_token',
+        ]);
     });
 
 

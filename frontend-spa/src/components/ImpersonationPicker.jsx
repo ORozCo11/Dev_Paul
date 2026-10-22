@@ -1,62 +1,83 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../api/axios';
-import { AdminActionDrawer } from './SuperAdminUI';
+import { openImpersonatedWorkspace, impersonationRootToken } from '../utils/impersonation';
+import './ImpersonationPicker.css';
 
-const destinations = { Admin: '/admin', Custodian: '/custodian', 'Maintenance Personnel': '/maintenance' };
+const supportedRoles = ['Admin', 'Custodian', 'Maintenance Personnel', 'Super Admin'];
+const keyOf = (value) => value == null ? 'platform' : String(value);
+const options = (rows, id, label, fallback) => [...new Map(rows.map((row) => [keyOf(row[id]), row[label] || fallback])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
 export default function ImpersonationPicker({ user }) {
-  const [candidates, setCandidates] = useState([]);
-  const [error, setError] = useState('');
-  const [province, setProvince] = useState('');
-  const [city, setCity] = useState('');
-  const [barangay, setBarangay] = useState('');
-  const [targetId, setTargetId] = useState('');
-  const [reviewing, setReviewing] = useState(false);
-  const [reason, setReason] = useState('');
+  const rootToken = impersonationRootToken(user);
+  if (!rootToken) return null;
+  return <AccountCascade key={user.id} user={user} rootToken={rootToken} />;
+}
+
+function AccountCascade({ user, rootToken }) {
+  const [accounts, setAccounts] = useState([]);
+  const [selection, setSelection] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+  const switchingRef = useRef(false);
   useEffect(() => {
     let current = true;
-    api.get('/impersonate/candidates').then(({ data }) => {
-      if (current) setCandidates(data.filter((account) => account.is_active && account.barangay_id && account.role !== 'Super Admin' && !account.roles?.includes('Super Admin')));
-    }).catch(() => { if (current) setError('Account switching is unavailable. Reload to try again.'); });
+    api.get('/impersonate/candidates', { headers: { Authorization: `Bearer ${rootToken}` } })
+      .then(({ data }) => { if (current) setAccounts(data); })
+      .catch(() => { if (current) setError('Account controls could not be loaded. Please retry.'); })
+      .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, []);
-  const options = (rows, key, label) => [...new Map(rows.filter((row) => row[key]).map((row) => [String(row[key]), row[label]])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  const provinceUsers = candidates.filter((row) => String(row.province_id) === province);
-  const cityUsers = provinceUsers.filter((row) => String(row.city_id) === city);
-  const users = cityUsers.filter((row) => String(row.barangay_id) === barangay);
-  const target = users.find((row) => String(row.id) === targetId);
-  const start = async (event) => {
-    event.preventDefault();
-    if (!target || busy) return;
-    setBusy(true);
-    setError('');
+  }, [rootToken, retry]);
+  const currentAccount = accounts.find((account) => String(account.id) === String(user.id));
+  const selected = selection ?? (currentAccount ? {
+    province: keyOf(currentAccount.province_id), city: keyOf(currentAccount.city_id),
+    barangay: keyOf(currentAccount.barangay_id), user: String(currentAccount.id),
+  } : { province: '', city: '', barangay: '', user: '' });
+  const provinceRows = accounts.filter((account) => keyOf(account.province_id) === selected.province);
+  const cityRows = provinceRows.filter((account) => keyOf(account.city_id) === selected.city);
+  const barangayRows = cityRows.filter((account) => keyOf(account.barangay_id) === selected.barangay);
+  const selectedUserId = barangayRows.some((account) => String(account.id) === selected.user)
+    ? selected.user
+    : String(barangayRows.find((account) => account.is_active && supportedRoles.includes(account.role))?.id ?? '');
+  const switchUser = async (id) => {
+    const account = barangayRows.find((row) => String(row.id) === id);
+    if (!account || !account.is_active || !supportedRoles.includes(account.role) || switchingRef.current) return;
+    if (id === String(user.id)) { setSelection({ ...selected, user: id }); return; }
+    switchingRef.current = true; setBusy(true); setError('');
     try {
-      const { data } = await api.post(`/impersonate/${target.id}`, { reason: reason.trim() });
-      const ownToken = localStorage.getItem('token') || sessionStorage.getItem('token');
-      if (ownToken && !localStorage.getItem('impersonator_token')) {
-        localStorage.setItem('impersonator_storage', localStorage.getItem('token') ? 'local' : 'session');
-        localStorage.setItem('impersonator_token', ownToken);
-        localStorage.setItem('impersonator_name', user.name);
-        localStorage.setItem('impersonator_role', user.role);
+      const { data } = await api.post(`/impersonate/${id}`, { reason: 'Account selected using the Impersonate button' }, { headers: { Authorization: `Bearer ${rootToken}` } });
+      if (user.role !== 'Impersonator') {
+        try { await api.post('/logout'); } catch (err) {
+          if (![401, 419].includes(err.response?.status)) {
+            await api.post('/logout', null, { headers: { Authorization: `Bearer ${data.access_token}` } }).catch(() => {});
+            throw err;
+          }
+        }
       }
-      localStorage.setItem('token', data.access_token);
-      sessionStorage.removeItem('token');
-      window.location.assign(destinations[data.user.role] ?? '/login');
-    } catch (requestError) {
-      setError(requestError.response?.data?.message || 'Could not impersonate this account.');
-      setBusy(false);
+      openImpersonatedWorkspace({ name: localStorage.getItem('impersonator_name') || user.name, role: 'Impersonator' }, data);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Could not open this account. Please try again.');
+      switchingRef.current = false; setBusy(false);
     }
   };
-  return <div className="sa-impersonation-picker">
-    <select aria-label="Impersonation province" value={province} onChange={(event) => { setProvince(event.target.value); setCity(''); setBarangay(''); setTargetId(''); }}><option value="">Province</option>{options(candidates, 'province_id', 'province_name').map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>
-    <select aria-label="Impersonation city or municipality" value={city} disabled={!province} onChange={(event) => { setCity(event.target.value); setBarangay(''); setTargetId(''); }}><option value="">City / Municipality</option>{options(provinceUsers, 'city_id', 'city_name').map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>
-    <select aria-label="Impersonation barangay" value={barangay} disabled={!city} onChange={(event) => { setBarangay(event.target.value); setTargetId(''); }}><option value="">Barangay</option>{options(cityUsers, 'barangay_id', 'barangay_name').map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select>
-    <select aria-label="Impersonation user" value={targetId} disabled={!barangay} onChange={(event) => setTargetId(event.target.value)}><option value="">User</option>{users.map((row) => <option key={row.id} value={row.id}>{row.name} · {row.role}</option>)}</select>
-    <button type="button" className="ghost-button" disabled={!target} onClick={() => { setReviewing(true); setError(''); }}>Impersonate</button>
-    {error && !reviewing && <span role="alert">{error}</span>}
-    {reviewing && target && <AdminActionDrawer title={`Impersonate ${target.name}`} description={`${target.barangay_name}, ${target.city_name}, ${target.province_name}`} onClose={() => { if (!busy) setReviewing(false); }}>
-      <form onSubmit={start} className="smart-form"><p>{import.meta.env.DEV ? 'Switch accounts to test this user’s workspace.' : 'This opens a read-only support session. You can return to your own account using the session banner.'}</p><label>Reason<textarea required minLength={5} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} /></label>{error && <p role="alert">{error}</p>}<button type="submit" className="primary-button" disabled={busy || reason.trim().length < 5}>{busy ? 'Switching…' : 'Start Session'}</button></form>
-    </AdminActionDrawer>}
+  return <div className="account-cascade" aria-label="Impersonation account controls">
+    <select aria-label="Impersonation province" value={selected.province} disabled={loading || busy} onChange={(event) => setSelection({ province: event.target.value, city: '', barangay: '', user: '' })}>
+      <option value="">{loading ? 'Loading provinces...' : 'Province'}</option>{options(accounts, 'province_id', 'province_name', 'Platform accounts').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+    </select>
+    <select aria-label="Impersonation city or municipality" value={selected.city} disabled={loading || busy || !selected.province} onChange={(event) => setSelection({ ...selected, city: event.target.value, barangay: '', user: '' })}>
+      <option value="">City / Municipality</option>{options(provinceRows, 'city_id', 'city_name', 'No city / municipality').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+    </select>
+    <select aria-label="Impersonation barangay" value={selected.barangay} disabled={loading || busy || !selected.city} onChange={(event) => setSelection({ ...selected, barangay: event.target.value, user: '' })}>
+      <option value="">Barangay</option>{options(cityRows, 'barangay_id', 'barangay_name', 'No barangay').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+    </select>
+    <div className="account-user-control">
+      <select aria-label="Impersonation user" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
+        {barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name} - {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}
+      </select>
+      <button className="account-impersonate-button" type="button" disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}>{busy ? 'Logging in...' : 'Impersonate'}</button>
+    </div>
+    {busy && <span className="account-cascade-status" role="status">Logging in...</span>}
+    {error && <span className="account-cascade-error" role="alert">{error} {!accounts.length && <button type="button" onClick={() => { setLoading(true); setError(''); setRetry((value) => value + 1); }}>Retry</button>}</span>}
   </div>;
 }
