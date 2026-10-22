@@ -5913,7 +5913,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
     const field = fields.find((f) => f.name === name);
     let nextValue = field?.uppercase ? value.toUpperCase() : value;
     if (field?.type === 'tel' && name === 'phone') {
-      nextValue = value.replace(/[^0-9]/g, '').slice(0, 10);
+      nextValue = value.replace(/[^0-9]/g, '').slice(0, 11);
     }
     // 'multi-file' fields render their own dropzone/input with a dedicated
     // onChange (see the field renderer below) — this generic handler only
