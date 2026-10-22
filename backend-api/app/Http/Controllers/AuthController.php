@@ -548,9 +548,11 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
+        ], [
+            'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
         ]);
 
         if ($request->hasFile('photo')) {

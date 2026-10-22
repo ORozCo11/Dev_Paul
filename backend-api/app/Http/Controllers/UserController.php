@@ -103,10 +103,12 @@ class UserController extends Controller
             'role' => ['required_without:roles', Rule::in(self::ROLES)],
             'roles' => ['required_without:role', 'array', 'min:1'],
             'roles.*' => [Rule::in(self::ROLES)],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
+        ], [
+            'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
         ]);
 
         $data = $this->normalizeRoles($request, $data);
@@ -140,10 +142,12 @@ class UserController extends Controller
             'role' => ['sometimes', 'required', Rule::in(self::ROLES)],
             'roles' => ['sometimes', 'required', 'array', 'min:1'],
             'roles.*' => [Rule::in(self::ROLES)],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
+        ], [
+            'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
         ]);
 
         $data = $this->normalizeRoles($request, $data);
