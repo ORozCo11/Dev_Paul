@@ -15070,7 +15070,6 @@ html .module-nav-badge { background-color: #dc2626 !important; }
 html[data-theme="light"] .vcn-text,
 html[data-theme="light"] button.cell-link,
 html[data-theme="light"] .user-avatar-name > span:last-child { color: #1d4ed8; }
-html[data-theme="light"] button.btn-view-action { color: #0369a1; }
 html[data-theme="light"] .report-category-card h4 { filter: brightness(0.75); }
 
 /* Dark theme. */
@@ -15212,7 +15211,17 @@ html[data-theme="dark"] .ticket-detail-panel .user-avatar-name > span:last-child
 html[data-theme="dark"] .date-badge-meta,
 html[data-theme="dark"] .date-badge-meta * { color: #93c5fd !important; }
 html[data-theme="light"] button.btn-view-action,
-html[data-theme="light"] .table-shell button.btn-view-action { color: #0369a1 !important; }
+html[data-theme="light"] .table-shell button.btn-view-action {
+  background:#0284c7;
+  border-color:#0284c7;
+  color:#ffffff !important;
+}
+html[data-theme="light"] button.btn-view-action:hover,
+html[data-theme="light"] .table-shell button.btn-view-action:hover {
+  background:#0369a1;
+  border-color:#0369a1;
+  color:#ffffff !important;
+}
 
 /* "Skip to content" — hidden until focused with the keyboard. */
 .skip-link {
@@ -16299,7 +16308,7 @@ html[data-theme] .ticket-card-grid .sch-card .sch-card-edit-cancel .sch-action.i
 html[data-theme] .ticket-card-grid .sch-card .sch-card-edit-cancel .sch-action.is-danger { border-color: #b91c1c; background: #b91c1c; color: #fff; }
 html[data-theme] .ticket-card-grid .sch-card .sch-card-edit-cancel .sch-action.is-danger:hover { border-color: #991b1b; background: #991b1b; color: #fff; }
 .my-tasks-verification-count { display: inline-flex; padding: 3px 8px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #1e40af; font-size: .75rem; line-height: 1.3; }
-.row-actions.condition-record-actions { display: inline-grid; grid-template-columns: repeat(3, 28px); gap: 6px; align-items: center; justify-content: center; min-width: 96px; }
+.row-actions.condition-record-actions { display: inline-grid; grid-template-columns: repeat(3, 36px); gap: 6px; align-items: center; justify-content: center; min-width: 120px; }
 .condition-record-actions .btn-confirm-action { grid-column: 1; }
 .condition-record-actions .btn-view-action { grid-column: 2; }
 .condition-record-actions .btn-edit-action { grid-column: 3; }
@@ -16321,10 +16330,10 @@ td:has(> .row-actions-visible) { min-width: 140px; }
 .module-grid:has(> .issue-summary-grid) td:has(> .row-actions-visible) { min-width: 150px; }
 .module-grid:has(> .issue-summary-grid) .row-actions-visible {
   display: inline-grid;
-  grid-template-columns: repeat(4, 28px);
+  grid-template-columns: repeat(4, 36px);
   gap: 6px;
   align-items: center;
-  min-width: 130px;
+  min-width: 162px;
 }
 .module-grid:has(> .issue-summary-grid) .row-actions-visible .icon-btn { grid-row: 1; margin: 0; }
 .module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-view-action { grid-column: 1; }
@@ -16388,3 +16397,29 @@ html:root .toast-notice:is(.error, .danger, .success, .warning, .info) { box-sha
 /* Keep screen-reader descriptions inside their table cell's scroll container. */
 .tpa-group { position: relative; }
 .tpa-sr { top: 0; left: 0; clip-path: inset(50%); }
+
+/* Shared table actions: keep glyphs centered and readable across modules. */
+html :is(table, .table-shell, .row-actions, .row-actions-popover) button.icon-btn {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:36px;
+  height:36px;
+  min-width:36px;
+  min-height:36px;
+  padding:0;
+  flex-shrink:0;
+  line-height:1;
+}
+html :is(table, .table-shell, .row-actions, .row-actions-popover) button.icon-btn > svg {
+  width:18px;
+  height:18px;
+  flex:0 0 18px;
+  color:inherit;
+  stroke:currentColor;
+}
+
+@media(max-width:767px) {
+  .row-actions.condition-record-actions { grid-template-columns:repeat(3,44px); min-width:144px; }
+  .module-grid:has(> .issue-summary-grid) .row-actions-visible { grid-template-columns:repeat(4,44px); min-width:194px; }
+}
