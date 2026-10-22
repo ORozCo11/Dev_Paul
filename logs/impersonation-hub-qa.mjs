@@ -13,6 +13,7 @@ const city=()=>page.getByRole('combobox',{name:'Impersonation city or municipali
 const barangay=()=>page.getByRole('combobox',{name:'Impersonation barangay',exact:true});
 const user=()=>page.getByRole('combobox',{name:'Impersonation user',exact:true});
 await user().waitFor();
+await page.waitForFunction(()=>!document.querySelector('select[aria-label="Impersonation user"]')?.disabled);
 assert.equal(await user().locator('option[value=""]').count(),0);
 const selectAccount=async id=>{const before=page.url();await user().selectOption(String(id));assert.equal(page.url(),before);await page.getByRole('button',{name:'Impersonate',exact:true}).click();};
 const rootToken=await page.evaluate(()=>localStorage.getItem('impersonator_token'));
@@ -33,6 +34,14 @@ await province().selectOption('platform');assert.equal(await city().inputValue()
 await city().selectOption('platform');await barangay().selectOption('platform');await selectAccount(superAdmin.id);await page.waitForURL('**/superadmin');
 await page.waitForFunction(id=>document.querySelector('select[aria-label="Impersonation user"]')?.value===String(id),superAdmin.id);
 assert.equal(await province().inputValue(),'platform');
+assert((await user().boundingBox()).width<=241);
+const desktopControls=await Promise.all([province(),city(),barangay(),user(),page.getByRole('button',{name:'Impersonate',exact:true})].map(control=>control.boundingBox()));
+for(const bounds of desktopControls.slice(0,4))assert(bounds.width>=105,'Header fields must remain readable');
+assert(Math.max(...desktopControls.map(bounds=>bounds.y))-Math.min(...desktopControls.map(bounds=>bounds.y))<2,'Header controls must share one row');
+await page.setViewportSize({width:390,height:844});
+assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
+assert((await user().boundingBox()).width>100);
+await page.setViewportSize({width:1440,height:1000});
 await province().selectOption(String(admin.province_id));await city().selectOption(String(admin.city_id));await barangay().selectOption(String(admin.barangay_id));await selectAccount(admin.id);await page.waitForURL('**/admin');
 await page.waitForFunction(id=>document.querySelector('select[aria-label="Impersonation user"]')?.value===String(id),admin.id);
 assert.equal(await page.evaluate(()=>localStorage.getItem('impersonator_token')),rootToken);

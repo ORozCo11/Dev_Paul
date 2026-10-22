@@ -47,7 +47,7 @@ function AccountCascade({ user, rootToken }) {
     switchingRef.current = true; setBusy(true); setError('');
     try {
       const { data } = await api.post(`/impersonate/${id}`, { reason: 'Account selected using the Impersonate button' }, { headers: { Authorization: `Bearer ${rootToken}` } });
-      if (user.role !== 'Impersonator') {
+      if (user.is_impersonating) {
         try { await api.post('/logout'); } catch (err) {
           if (![401, 419].includes(err.response?.status)) {
             await api.post('/logout', null, { headers: { Authorization: `Bearer ${data.access_token}` } }).catch(() => {});
@@ -55,7 +55,7 @@ function AccountCascade({ user, rootToken }) {
           }
         }
       }
-      openImpersonatedWorkspace({ name: localStorage.getItem('impersonator_name') || user.name, role: 'Impersonator' }, data);
+      openImpersonatedWorkspace({ name: localStorage.getItem('impersonator_name') || user.name, role: localStorage.getItem('impersonator_role') || user.role }, data);
     } catch (err) {
       setError(err.response?.data?.message || 'Could not open this account. Please try again.');
       switchingRef.current = false; setBusy(false);
@@ -73,6 +73,7 @@ function AccountCascade({ user, rootToken }) {
     </select>
     <div className="account-user-control">
       <select aria-label="Impersonation user" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
+        {!barangayRows.length && <option value="" disabled>{loading ? 'Loading accounts...' : selected.barangay ? 'No accounts available' : 'Select a barangay first'}</option>}
         {barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name} - {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}
       </select>
       <button className="account-impersonate-button" type="button" disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}>{busy ? 'Logging in...' : 'Impersonate'}</button>

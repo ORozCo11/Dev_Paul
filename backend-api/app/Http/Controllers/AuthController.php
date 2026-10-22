@@ -280,6 +280,7 @@ class AuthController extends Controller
         return User::with('barangay.city.province')
             ->where('id', '!=', $request->user()->id)
             ->where('role', '!=', 'Impersonator')
+            ->when($request->user()->hasRole('Super Admin'), fn ($q) => $q->where('role', '!=', 'Super Admin'))
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'role', 'roles', 'is_active', 'barangay_id'])
             ->map(fn ($u) => [
@@ -318,6 +319,8 @@ class AuthController extends Controller
         abort_unless($this->canImpersonate($request), 403, 'Sign in to the dedicated account switcher to impersonate an account.');
         abort_if($user->hasRole('Impersonator') || $user->id === $request->user()->id,
             403, 'The account switcher cannot impersonate itself or another switcher.');
+        abort_if($request->user()->hasRole('Super Admin') && $user->hasRole('Super Admin'),
+            403, 'A Super Admin cannot impersonate another Super Admin.');
         abort_if(!$user->is_active, 422, 'That account is deactivated.');
 
         // Every account switch records the initiating account and reason.

@@ -3,10 +3,10 @@ export function clearImpersonationSession() {
 }
 
 export function impersonationRootToken(user) {
-  if (user?.role === 'Impersonator' && user.abilities?.includes('impersonation.start')) {
+  if (!user?.is_impersonating && ['Impersonator', 'Super Admin'].includes(user?.role) && user.abilities?.includes('impersonation.start')) {
     return localStorage.getItem('token') || sessionStorage.getItem('token');
   }
-  return user?.is_impersonating === true && localStorage.getItem('impersonator_role') === 'Impersonator'
+  return user?.is_impersonating === true && ['Impersonator', 'Super Admin'].includes(localStorage.getItem('impersonator_role'))
     ? localStorage.getItem('impersonator_token') : null;
 }
 

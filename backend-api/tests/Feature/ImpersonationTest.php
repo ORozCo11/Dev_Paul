@@ -59,12 +59,25 @@ class ImpersonationTest extends TestCase
     }
 
     #[Test]
+    public function super_admin_can_impersonate_staff_but_not_another_super_admin(): void
+    {
+        $super = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
+        $other = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
+        $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
+        $this->assertContains('impersonation.start', $super->getAbilities());
+        Sanctum::actingAs($super, $super->allRoles());
+        $this->getJson('/api/impersonate/candidates')->assertOk()
+            ->assertJsonFragment(['id' => $target->id])->assertJsonMissing(['id' => $other->id]);
+        $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Investigate reported account issue'])->assertOk();
+        $this->postJson("/api/impersonate/{$other->id}", ['reason' => 'Attempt elevated access'])->assertForbidden();
+    }
+
+    #[Test]
     public function only_the_dedicated_login_can_start_impersonation_in_every_environment(): void
     {
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
         $blocked = collect([
             ['email' => 'admin@barangay.gov', 'role' => 'Admin'],
-            ['email' => 'different-superadmin@test.com', 'role' => 'Super Admin'],
             ['email' => 'other@test.com', 'role' => 'Impersonator'],
         ])->map(fn ($attributes) => User::factory()->create($attributes + ['roles' => [$attributes['role']]]));
         $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);

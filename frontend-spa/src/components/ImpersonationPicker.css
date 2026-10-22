@@ -21,12 +21,13 @@
   html:has(.topbar .account-cascade) .workspace > .sidebar { top:var(--topbar-height, 156px) !important; }
 }
 
-.account-user-control { display:flex; align-items:center; gap:6px; min-width:0; }
+.account-user-control { display:flex; align-items:center; gap:6px; min-width:0; max-width:350px; }
+.account-user-control select { width:220px; min-width:0; max-width:240px; text-overflow:ellipsis; }
 .account-impersonate-button { min-height:34px; padding:6px 12px; border:1px solid #2563eb; border-radius:6px; background:#2563eb; color:#fff; font:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
 .account-user-control .account-impersonate-button:disabled { opacity:1; cursor:default; }
 .account-impersonate-button:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
 @media(max-width:800px) {
-  .account-user-control { grid-column:1 / -1; }
+  .account-user-control { grid-column:1 / -1; max-width:none; }
   .account-user-control select { flex:1; width:0; }
   .account-impersonate-button { min-height:40px; }
 }

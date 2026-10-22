@@ -250,3 +250,23 @@ html[data-theme="dark"] .superadmin-shell .workspace-footer { padding-left: 276p
   .sa-impersonation-picker { width:100%; }
   .sa-impersonation-picker > select { flex:1 1 40%; max-width:100%; }
 }
+
+/* Keep desktop account controls compact rather than filling the header. */
+html:root[data-theme] .superadmin-shell .topbar { flex-wrap:nowrap; }
+html:root[data-theme] .superadmin-shell .topbar-left { flex:1 1 auto; flex-wrap:nowrap; min-width:0; width:auto; }
+html:root[data-theme] .superadmin-shell .topbar .account-cascade { display:flex; flex:0 0 auto; flex-wrap:nowrap; width:auto; min-width:0; }
+html:root[data-theme] .superadmin-shell .topbar .account-cascade select { flex:0 0 auto; width:150px; min-width:120px; max-width:180px; min-height:34px; }
+html:root[data-theme] .superadmin-shell .topbar .account-user-control { display:flex; flex:0 0 auto; grid-column:auto; min-width:0; max-width:350px; }
+html:root[data-theme] .superadmin-shell .topbar .account-user-control select { flex:1 1 220px; width:220px; max-width:240px; }
+html:root[data-theme] .superadmin-shell .topbar .account-impersonate-button { flex:none; min-height:34px; }
+html:root[data-theme] .superadmin-shell .topbar .topbar-brand-cluster { flex:none; width:auto; display:flex; }
+
+@media(max-width:800px) {
+  html:root[data-theme] .superadmin-shell .topbar { flex-wrap:wrap; }
+  html:root[data-theme] .superadmin-shell .topbar-left { flex-wrap:wrap; }
+  html:root[data-theme] .superadmin-shell .topbar .account-cascade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); flex-basis:100%; width:100%; }
+  html:root[data-theme] .superadmin-shell .topbar .account-cascade select { width:100%; min-width:0; max-width:none; min-height:40px; }
+  html:root[data-theme] .superadmin-shell .topbar .account-user-control { grid-column:1 / -1; max-width:none; }
+  html:root[data-theme] .superadmin-shell .topbar .account-user-control select { width:0; min-width:0; }
+  html:root[data-theme] .superadmin-shell .topbar .account-impersonate-button { min-height:40px; }
+}

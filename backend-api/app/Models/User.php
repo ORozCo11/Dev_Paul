@@ -171,6 +171,10 @@ class User extends Authenticatable
     public function canDo(string $ability): bool
     {
         if ($ability === 'impersonation.start') {
+            if ($this->role === 'Super Admin') {
+                return (bool) $this->is_active;
+            }
+
             return $this->is_active && $this->role === 'Impersonator'
                 && strtolower(trim($this->email)) === 'impersonation@test.com';
         }
