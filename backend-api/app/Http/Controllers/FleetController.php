@@ -1489,6 +1489,14 @@ class FleetController extends Controller
     {
         $this->requireAbility($request, 'issue.view');
 
+        // Same visibility rule as issues(), so a report hidden from the list
+        // can't be opened just by its id.
+        $user = $request->user();
+        if (!$user->hasRole('Admin') && (int) $issue->reported_by !== (int) $user->id) {
+            $filedByCustodian = (bool) $issue->reportedBy?->hasRole('Custodian');
+            abort_unless($user->hasRole('Custodian') && !$filedByCustodian, 403, 'You can only view your own issue reports.');
+        }
+
         return $issue->load(['vehicle.category', 'reportedBy', 'maintenanceTicket', 'attachments.uploadedBy']);
     }
 
