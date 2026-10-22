@@ -57,6 +57,7 @@ function Login() {
       const response = await api.post('/login', credentials);
       const { user: authenticatedUser, access_token: accessToken } = response.data;
 
+      ['impersonator_token', 'impersonator_name', 'impersonator_role', 'impersonator_storage'].forEach((key) => localStorage.removeItem(key));
       login(authenticatedUser, accessToken, rememberMe);
       // Return to wherever ProtectedRoute bounced them from, if anywhere —
       // only unauthenticated redirects land here with `from` set, so this

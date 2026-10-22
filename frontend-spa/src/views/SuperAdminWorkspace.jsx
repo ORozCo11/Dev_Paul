@@ -1,3 +1,4 @@
+import ImpersonationPicker from '../components/ImpersonationPicker';
 import EndImpersonationAction from '../components/EndImpersonationAction';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import VMSLogo from '../components/VMSLogo';
@@ -642,6 +643,7 @@ export default function SuperAdminWorkspace() {
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
+          <ImpersonationPicker user={user} />
         </div>
 
         <div className="topbar-right"><EndImpersonationAction compact />

@@ -1,3 +1,4 @@
+import ImpersonationPicker from '../components/ImpersonationPicker';
 import VehicleTripLog from '../components/VehicleTripLog';
 import { recordNumber, ticketNumber } from '../utils/recordNumber';
 import { ticketTimeline } from '../utils/ticketTimeline';
@@ -2583,7 +2584,8 @@ function Workspace() {
 
   // Map-boundary pickers. Rendered in
   // the top bar on wider screens and inside the drawer on phones.
-  const topbarPickers = (
+  const hasImpersonationControls = localStorage.getItem('impersonator_role') === 'Impersonator' && !!localStorage.getItem('impersonator_token');
+  const topbarPickers = hasImpersonationControls ? null : (
     <>
       <div className="map-boundary-selector" title="Choose which registered barangay outline the Vehicle Location map draws.">
         <select
@@ -2636,6 +2638,7 @@ function Workspace() {
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
+          {hasImpersonationControls ? <ImpersonationPicker user={user} /> : (
           <div className="map-boundary-selector" title="Choose which registered barangay outline the Vehicle Location map draws.">
             <select
               aria-label="Map boundary province"
@@ -2666,6 +2669,7 @@ function Workspace() {
               )}
             </select>
           </div>
+          )}
         </div>
 
         <div className="topbar-right">

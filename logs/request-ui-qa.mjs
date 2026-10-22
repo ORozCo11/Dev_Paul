@@ -30,8 +30,9 @@ await page.route('http://127.0.0.1:8001/api/**',async route=>{
  await route.fulfill({json:data});
 });
 await page.addInitScript(()=>{localStorage.setItem('token','qa-fixture');localStorage.setItem('vms_maintenance_view','card');});
-await page.goto('http://127.0.0.1:5174/admin/vehicles/1');
+await page.goto('http://localhost:5173/admin/vehicles/1');
 await page.waitForLoadState('networkidle');
+assert.equal(await page.locator('.account-cascade').count(),0);
 await page.getByRole('heading',{name:'Trip log',exact:true}).waitFor();
 await page.getByText('QA Driver 23',{exact:true}).waitFor();
 await page.getByRole('button',{name:'Next',exact:true}).click();

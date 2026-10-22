@@ -7,7 +7,7 @@ export default function EndImpersonationAction({ compact = false }) {
   const [error, setError] = useState('');
   const originalToken = localStorage.getItem('impersonator_token');
   const isSwitcher = localStorage.getItem('impersonator_role') === 'Impersonator';
-  if (!originalToken) return null;
+  if (!originalToken || isSwitcher) return null;
   const end = async () => {
     if (busy) return;
     setBusy(true);
@@ -21,7 +21,7 @@ export default function EndImpersonationAction({ compact = false }) {
       sessionStorage.removeItem('token');
       (sessionOnly ? sessionStorage : localStorage).setItem('token', originalToken);
       ['impersonator_token', 'impersonator_name', 'impersonator_role', 'impersonator_storage'].forEach((key) => localStorage.removeItem(key));
-      window.location.assign(({ Impersonator: '/impersonation?choose=1', 'Super Admin': '/superadmin', Admin: '/admin', Custodian: '/custodian', 'Maintenance Personnel': '/maintenance' })[role] ?? '/login');
+      window.location.assign(({ 'Super Admin': '/superadmin', Admin: '/admin', Custodian: '/custodian', 'Maintenance Personnel': '/maintenance' })[role] ?? '/login');
     } catch {
       setError('Could not end the support session. Please try again.');
       setBusy(false);
@@ -29,7 +29,7 @@ export default function EndImpersonationAction({ compact = false }) {
   };
   return <>
     <button type="button" className={compact ? 'ghost-button' : 'profile-menu-item'} disabled={busy} onClick={end}>
-      <Icon name="arrowLeft" size={15} />{busy ? 'Switching...' : isSwitcher ? 'Switch account' : 'End Impersonation'}
+      <Icon name="arrowLeft" size={15} />{busy ? 'Ending session...' : 'End Impersonation'}
     </button>
     {error && <p className="profile-menu-impersonation-error" role="alert">{error}</p>}
   </>;
