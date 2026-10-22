@@ -17,16 +17,12 @@ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.inne
 await page.setViewportSize({width:1440,height:1000});
 await page.getByRole('searchbox',{name:'Search accounts'}).fill('admin@barangay.gov');
 await page.getByRole('row').filter({has:page.getByText('admin@barangay.gov',{exact:true})}).getByRole('button',{name:'Impersonate',exact:true}).click();
-await page.getByRole('textbox',{name:'Reason for impersonation'}).fill('Verify dedicated account switching');
-await page.getByRole('button',{name:'Open workspace',exact:true}).click();
 await page.waitForURL('**/admin');await page.getByRole('button',{name:'Account menu',exact:true}).click();
 await page.getByRole('button',{name:'End Impersonation',exact:true}).click();
 await page.getByRole('heading',{name:'Choose an account',exact:true}).waitFor();
 await page.getByRole('row').filter({has:page.getByText('superadmin@barangay.gov',{exact:true})}).getByRole('button',{name:'Impersonate',exact:true}).click();
-await page.getByRole('textbox',{name:'Reason for impersonation'}).fill('Verify platform account return path');
-await page.getByRole('button',{name:'Open workspace',exact:true}).click();
 await page.waitForURL('**/superadmin');await page.getByRole('button',{name:'End Impersonation',exact:true}).click();
 await page.getByRole('heading',{name:'Choose an account',exact:true}).waitFor();
 await page.reload();await page.getByRole('heading',{name:'Choose an account',exact:true}).waitFor();
 await page.getByRole('button',{name:'Sign out',exact:true}).click();await page.waitForURL('**/login');
-assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Real login opens independent switcher','Accounts across barangays listed','Mobile layout','Search','Enter Admin and return','Enter Super Admin and return','Reload and sign out'],pageErrors:errors}));await browser.close();
+assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Real login opens independent switcher','Accounts across barangays listed','Mobile layout','Search','One-click Admin login and return','One-click Super Admin login and return','Reload and sign out'],pageErrors:errors}));await browser.close();

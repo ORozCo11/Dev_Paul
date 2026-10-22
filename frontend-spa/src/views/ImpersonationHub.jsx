@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContextObject';
 import api from '../api/axios';
@@ -23,9 +23,8 @@ export default function ImpersonationHub() {
   const [barangay, setBarangay] = useState('');
   const [role, setRole] = useState('');
   const [page, setPage] = useState(1);
-  const [target, setTarget] = useState(null);
-  const [reason, setReason] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [openingId, setOpeningId] = useState(null);
+  const switchingRef = useRef(false);
   useEffect(() => {
     let current = true;
     api.get('/impersonate/candidates').then(({ data }) => { if (current) setAccounts(data); })
@@ -40,12 +39,12 @@ export default function ImpersonationHub() {
   const barangayCount = new Set(accounts.map((row) => row.barangay_id).filter(Boolean)).size;
   const pages = Math.max(1, Math.ceil(filtered.length / 10));
   const currentPage = Math.min(page, pages);
-  const start = async (event) => {
-    event.preventDefault();
-    if (!target || busy) return;
-    setBusy(true); setError('');
+  const start = async (account) => {
+    if (switchingRef.current) return;
+    switchingRef.current = true;
+    setOpeningId(account.id); setError('');
     try {
-      const { data } = await api.post(`/impersonate/${target.id}`, { reason: reason.trim() });
+      const { data } = await api.post(`/impersonate/${account.id}`, { reason: 'Account selected from the dedicated account switcher' });
       const original = localStorage.getItem('token') || sessionStorage.getItem('token');
       localStorage.setItem('impersonator_storage', localStorage.getItem('token') ? 'local' : 'session');
       localStorage.setItem('impersonator_token', original);
@@ -54,11 +53,12 @@ export default function ImpersonationHub() {
       localStorage.setItem('token', data.access_token); sessionStorage.removeItem('token');
       window.location.assign(routes[data.user.role] ?? '/unauthorized');
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not open this account.'); setBusy(false);
+      setError(err.response?.data?.message || 'Could not open this account.');
+      setOpeningId(null); switchingRef.current = false;
     }
   };
   return <div className="impersonation-hub">
-    <header className="switcher-header"><a href="/impersonation" className="switcher-brand"><VMSLogo variant="blue" size={34} /><span>vms <small>Account switcher</small></span></a><div><span>{user.email}</span><button type="button" className="ghost-button" onClick={async () => { await logout(); navigate('/login', { replace: true }); }}>Sign out</button></div></header>
+    <header className="switcher-header"><a href="/impersonation" className="switcher-brand"><VMSLogo variant="blue" size={34} /><span>vms <small>Account switcher</small></span></a><div><span>{user.email}</span><button type="button" className="ghost-button" disabled={openingId !== null} onClick={async () => { await logout(); navigate('/login', { replace: true }); }}>Sign out</button></div></header>
     <main>
       <div className="switcher-heading"><span className="switcher-eyebrow">ACCOUNT ACCESS</span><h1>Choose an account</h1><p>Find a user in any barangay and open their workspace. Use End Impersonation in their profile menu to return here.</p></div>
       <section className="switcher-panel" aria-label="Account switcher">
@@ -71,13 +71,13 @@ export default function ImpersonationHub() {
           <label>Role<select value={role} onChange={(event) => { setRole(event.target.value); setPage(1); }}><option value="">All roles</option>{[...new Set(accounts.map((row) => row.role))].sort().map((value) => <option key={value}>{value}</option>)}</select></label>
         </div>
         {loading && <p className="switcher-message" role="status">Loading accounts…</p>}
-        {error && <div className="notice error" role="alert">{error} {!target && <button type="button" className="ghost-button" onClick={() => { setLoading(true); setError(''); setRetry((value) => value + 1); }}>Retry</button>}</div>}
+        {error && <div className="notice error" role="alert">{error} <button type="button" className="ghost-button" onClick={() => { setLoading(true); setError(''); setRetry((value) => value + 1); }}>Retry</button></div>}
         {!loading && <><div className="switcher-table"><table><thead><tr><th>Account</th><th>Role</th><th>Barangay</th><th>City / Province</th><th>Status</th><th>Action</th></tr></thead><tbody>
-          {filtered.slice((currentPage - 1) * 10, currentPage * 10).map((account) => <tr key={account.id}><td><strong>{account.name}</strong><small>{account.email}</small></td><td data-label="Role">{account.role}</td><td data-label="Barangay">{account.barangay_name || 'No assigned barangay'}</td><td data-label="City / Province">{[account.city_name, account.province_name].filter(Boolean).join(', ') || 'Platform account'}</td><td data-label="Status"><span className={`switcher-status ${account.is_active ? 'is-active' : ''}`}>{account.is_active ? 'Active' : 'Inactive'}</span></td><td><button className="primary-button" type="button" disabled={!account.is_active || !routes[account.role]} onClick={() => { setTarget(account); setReason(''); setError(''); }}><Icon name="chevronRight" size={15} /> Impersonate</button></td></tr>)}
+          {filtered.slice((currentPage - 1) * 10, currentPage * 10).map((account) => <tr key={account.id}><td><strong>{account.name}</strong><small>{account.email}</small></td><td data-label="Role">{account.role}</td><td data-label="Barangay">{account.barangay_name || 'No assigned barangay'}</td><td data-label="City / Province">{[account.city_name, account.province_name].filter(Boolean).join(', ') || 'Platform account'}</td><td data-label="Status"><span className={`switcher-status ${account.is_active ? 'is-active' : ''}`}>{account.is_active ? 'Active' : 'Inactive'}</span></td><td><button className="primary-button" type="button" disabled={openingId !== null || !account.is_active || !routes[account.role]} onClick={() => start(account)}><Icon name="chevronRight" size={15} /> {openingId === account.id ? 'Opening...' : 'Impersonate'}</button></td></tr>)}
           {!filtered.length && <tr><td colSpan={6} className="switcher-message">No accounts match these filters.</td></tr>}
         </tbody></table></div><nav className="switcher-pagination" aria-label="Account pages"><span>{filtered.length} matching accounts</span><div><button className="ghost-button" type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</button><span>Page {currentPage} of {pages}</span><button className="ghost-button" type="button" disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>Next</button></div></nav></>}
       </section>
     </main>
-    {target && <div className="switcher-modal-backdrop"><section className="switcher-dialog" role="dialog" aria-modal="true" aria-labelledby="switcher-dialog-title"><h2 id="switcher-dialog-title">Open {target.name}'s workspace</h2><p>{target.email} · {target.role}</p><form onSubmit={start}><label>Reason for impersonation<textarea autoFocus required minLength={5} maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} /></label><p className="muted">This account switch will be recorded. You can return to the switcher from the account's profile menu.</p>{error && <p className="notice error" role="alert">{error}</p>}<div><button type="button" className="ghost-button" disabled={busy} onClick={() => { setTarget(null); setError(''); }}>Cancel</button><button type="submit" className="primary-button" disabled={busy || reason.trim().length < 5}>{busy ? 'Opening…' : 'Open workspace'}</button></div></form></section></div>}
+
   </div>;
 }

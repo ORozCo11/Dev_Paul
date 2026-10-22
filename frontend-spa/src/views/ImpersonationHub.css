@@ -28,12 +28,6 @@
 .switcher-pagination { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; color:#64748b; font-size:13px; border-top:1px solid #e8edf5; gap:15px; }
 .switcher-pagination > div { display:flex; align-items:center; gap:12px; }
 .switcher-message { padding:30px; text-align:center; }
-.switcher-modal-backdrop { position:fixed; inset:0; background:#10203980; display:flex; align-items:center; justify-content:center; z-index:2000; padding:20px; }
-.switcher-dialog { width:100%; max-width:520px; padding:28px; background:#fff; border-radius:14px; box-shadow:0 20px 60px #10203930; }
-.switcher-dialog h2 { font-size:21px; margin-top:0; }
-.switcher-dialog p { font-size:13px; line-height:1.6; }
-.switcher-dialog textarea { min-height:110px; }
-.switcher-dialog form > div { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
 @media(max-width:700px) { .switcher-header { padding:16px; align-items:flex-start; } .switcher-header > div { flex-direction:column; align-items:flex-end; gap:8px; font-size:11px; } .impersonation-hub main { padding:28px 16px; } .switcher-filters { grid-template-columns:repeat(2,minmax(0,1fr)); padding:16px; } .switcher-table th,.switcher-table td { padding:14px; } .switcher-pagination { flex-direction:column; } }
 
 @media(max-width:700px) {
