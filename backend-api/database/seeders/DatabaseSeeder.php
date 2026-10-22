@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             PhilippineBarangaySeeder::class,
             BarangayBoundarySeeder::class,
             UserSeeder::class,
+            ReferenceBarangayRegistrationSeeder::class,
             FleetReferenceSeeder::class,
             MockDataSeeder::class,
             DemoActivitySeeder::class,
