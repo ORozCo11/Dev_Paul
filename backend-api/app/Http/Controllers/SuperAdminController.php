@@ -538,8 +538,9 @@ class SuperAdminController extends Controller
         $query = User::with('barangay.city.province');
 
         if ($request->filled('q')) {
-            $search = $request->string('q');
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
+            // Escape LIKE wildcards so "%" and "_" match literally, same as activityLog().
+            $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], (string) $request->string('q')).'%';
+            $query->where(fn ($q) => $q->whereRaw("name LIKE ? ESCAPE '!'", [$pattern])->orWhereRaw("email LIKE ? ESCAPE '!'", [$pattern]));
         }
 
         return $query->orderBy('name')->get()->map(fn ($u) => [
