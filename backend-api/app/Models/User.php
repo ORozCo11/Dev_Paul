@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBarangayNumber;
+
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +15,7 @@ class User extends Authenticatable
 {
     // Make sure it is included here inside the class wrapper:
     use HasApiTokens, Notifiable, HasFactory;
+    use HasBarangayNumber;
 
     /**
      * The attributes that are mass assignable.
@@ -147,20 +150,13 @@ class User extends Authenticatable
     public function getAbilities(): array
     {
         return collect(config('permissions'))
-            ->filter(fn (array $roles) => $this->hasAnyRole($roles))
+            ->filter(fn (array $roles, string $ability) => $this->canDo($ability))
             ->keys()
             ->values()
             ->all();
     }
 
-    /**
-     * Production-readiness audit finding #6 — vehicle.create's role grant
-     * (Admin, Custodian) says WHO is ever eligible; this is the per-account
-     * delegation check layered on top, same pattern as every other
-     * ownership/live-state guard in this codebase (not folded into
-     * config/permissions.php, which only ever expresses role membership).
-     * Admin is always allowed; a Custodian needs can_register_vehicles.
-     */
+    /** Registration is a standard duty of Admin and Custodian accounts. */
     public function canRegisterVehicles(): bool
     {
         if ($this->hasRole('Admin')) {
@@ -174,6 +170,11 @@ class User extends Authenticatable
 
     public function canDo(string $ability): bool
     {
+        if ($ability === 'impersonation.start') {
+            return $this->is_active && $this->role === 'Impersonator'
+                && strtolower(trim($this->email)) === 'impersonation@test.com';
+        }
+
         // Note: config('permissions.' . $ability) would be wrong here — Laravel's
         // config() helper splits every dot into a nested lookup, but
         // config/permissions.php stores each ability as a single flat key that

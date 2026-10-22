@@ -6,7 +6,6 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CityController;
-use App\Http\Controllers\ConcernReportController;
 use App\Http\Controllers\FleetController;
 use App\Http\Controllers\CannibalizationController;
 use App\Http\Controllers\HubController;
@@ -14,6 +13,7 @@ use App\Http\Controllers\TicketController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProvinceController;
 use App\Http\Controllers\SuperAdminController;
+use App\Http\Controllers\ConcernReportController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehicleImportController;
 use App\Http\Controllers\VehicleTypeFieldController;
@@ -21,6 +21,9 @@ use App\Http\Controllers\VehicleUsageController;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\RestrictImpersonatedToReadOnly;
 use App\Http\Middleware\RestrictSuperAdminScope;
+
+Route::get('/files/{file}', [\App\Http\Controllers\ManagedFileController::class, 'show'])
+    ->where('file', '[A-Za-z0-9-]+\.[a-z0-9]+')->middleware('signed')->name('files.show');
 
 /*
 |--------------------------------------------------------------------------
@@ -60,8 +63,9 @@ Route::post('/concern-reports', [ConcernReportController::class, 'store'])->midd
 | Protected Routes (Requires a Valid Sanctum Token in Header)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class])->group(function () {
-    
+Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middleware\RestrictImpersonationScope::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class, \App\Http\Middleware\SignManagedFiles::class])->group(function () {
+    Route::get('/files/refresh', [\App\Http\Controllers\ManagedFileController::class, 'refresh']);
+
     // Session termination route
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -75,12 +79,11 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
         return array_merge($user->toArray(), ['abilities' => $user->getAbilities()]);
     });
 
-    // DEV-ONLY impersonation (fast role-switching for testing). These handlers
-    // return 404 unless APP_ENV is local/testing, so they don't exist in prod.
-    Route::get('/impersonate/candidates', [AuthController::class, 'impersonationCandidates']);
-    Route::post('/impersonate/{user}', [AuthController::class, 'impersonate']);
 
     Route::get('/greeting', [AuthController::class, 'greeting']);
+    Route::get('/impersonate/candidates', [AuthController::class, 'impersonationCandidates']);
+    Route::post('/impersonate/default', [AuthController::class, 'impersonateDefault'])->middleware('throttle:10,1');
+    Route::post('/impersonate/{user}', [AuthController::class, 'impersonate'])->middleware('throttle:10,1');
     // Verifies the current password, so rate-limit it against guessing too.
     Route::put('/profile/password', [AuthController::class, 'updatePassword'])->middleware('throttle:10,1');
     Route::put('/profile', [AuthController::class, 'updateProfile']);

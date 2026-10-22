@@ -22,8 +22,8 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class RestrictSuperAdminScope
 {
-    private const ALLOWED_PREFIXES = ['superadmin', 'impersonate', 'notifications'];
-    private const ALLOWED_EXACT = ['logout', 'user', 'profile', 'profile/password', 'greeting'];
+    private const ALLOWED_PREFIXES = ['superadmin', 'notifications', 'impersonate'];
+    private const ALLOWED_EXACT = ['logout', 'user', 'profile', 'profile/password', 'greeting', 'files/refresh'];
 
     public function handle(Request $request, Closure $next): Response
     {

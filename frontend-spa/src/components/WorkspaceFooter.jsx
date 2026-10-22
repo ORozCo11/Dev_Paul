@@ -1,10 +1,7 @@
 import VMSLogo from './VMSLogo';
 import { Link } from 'react-router-dom';
 
-// Footer for the authenticated app shell (Workspace, Super Admin) — its own
-// "Visit Support Center" / "Contact Us" buttons live here since a logged-in
-// user is the more likely audience for those. Public pages (Login, About,
-// Support, etc.) use the separate, lighter AuthFooter instead.
+// Footer for the authenticated app shell.
 export default function WorkspaceFooter() {
   return (
     <footer className="workspace-footer">
@@ -13,13 +10,9 @@ export default function WorkspaceFooter() {
           <VMSLogo variant="white" size={28} className="workspace-footer-gear-icon" />
           <span className="vms-wordmark vms-wordmark-md workspace-footer-vms-text">vms</span>
         </div>
-        <p className="workspace-footer-tagline">A System to Manage Your Barangay's Fleet.</p>
+        <p className="workspace-footer-tagline">A system to manage your barangays fleet</p>
       </div>
       <div className="workspace-footer-actions">
-        <div className="workspace-footer-buttons">
-          <Link to="/support" className="workspace-footer-btn workspace-footer-btn-light">Visit Support Center</Link>
-          <Link to="/support#contact" className="workspace-footer-btn workspace-footer-btn-dark">Contact Us</Link>
-        </div>
         <p className="workspace-footer-copyright">
           © {new Date().getFullYear()} Barangay Vehicle Management System. All rights reserved.
         </p>

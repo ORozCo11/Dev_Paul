@@ -26,7 +26,7 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class RestrictImpersonatedToReadOnly
 {
-    private const ALLOWED_WRITE_PREFIXES = ['impersonate', 'logout'];
+    private const ALLOWED_WRITE_PREFIXES = ['logout'];
 
     public function handle(Request $request, Closure $next): Response
     {

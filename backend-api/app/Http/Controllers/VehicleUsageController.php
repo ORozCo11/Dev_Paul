@@ -23,11 +23,22 @@ class VehicleUsageController extends Controller
     {
         $this->requireAbility($request, 'usage.view');
 
-        return $vehicle->hasMany(VehicleUsageLog::class, 'vehicle_id', 'vehicle_id')
-            ->with('loggedBy:id,name')
-            ->orderByDesc('started_at')
-            ->limit(50)
-            ->get();
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+        $query = $vehicle->hasMany(VehicleUsageLog::class, 'vehicle_id', 'vehicle_id')
+            ->with('loggedBy:id,name')->orderByDesc('started_at')->orderByDesc('usage_id');
+
+        if ($request->has('page') || $request->has('per_page')) {
+            $result = $query->paginate($data['per_page'] ?? 10);
+            return response()->json(array_merge($result->toArray(), [
+                'open_trip' => $vehicle->hasMany(VehicleUsageLog::class, 'vehicle_id', 'vehicle_id')
+                    ->whereNull('ended_at')->first(),
+            ]));
+        }
+
+        return $query->limit(50)->get();
     }
 
     public function start(Request $request, Vehicle $vehicle)
@@ -38,13 +49,15 @@ class VehicleUsageController extends Controller
         abort_if(VehicleUsageLog::where('vehicle_id', $vehicle->vehicle_id)->whereNull('ended_at')->exists(), 422, 'This vehicle already has an open trip. End it first.');
 
         $data = $request->validate([
-            'purpose' => ['required', 'string', 'max:255'],
+            'purpose' => ['nullable', 'string', 'max:255'],
             'destination' => ['nullable', 'string', 'max:255'],
             'driver_name' => ['nullable', 'string', 'max:255'],
             'started_at' => ['nullable', 'date', 'before_or_equal:now'],
             'odometer_start' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string'],
         ]);
+
+        $data['purpose'] = $data['purpose'] ?? 'Dispatch';
 
         $log = DB::transaction(function () use ($data, $vehicle, $request) {
             $log = VehicleUsageLog::create($data + ['vehicle_id' => $vehicle->vehicle_id, 'logged_by' => $request->user()->id, 'started_at' => $data['started_at'] ?? now()]);

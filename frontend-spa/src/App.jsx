@@ -1,18 +1,28 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import { lazy, Suspense, useContext } from 'react';
+import ManagedFileLinks from './components/ManagedFileLinks';
+import { AuthContext } from './context/AuthContextObject';
 import Login from './views/Login';
-import Register from './views/Register';
-import Privacy from './views/Privacy';
-import Terms from './views/Terms';
-import About from './views/About';
-import Developers from './views/Developers';
-import Support from './views/Support';
-import Workspace from './views/Workspace';
-import SuperAdminWorkspace from './views/SuperAdminWorkspace';
+const Register = lazy(() => import('./views/Register'));
+const Privacy = lazy(() => import('./views/Privacy'));
+const Terms = lazy(() => import('./views/Terms'));
+const About = lazy(() => import('./views/About'));
+const Support = lazy(() => import('./views/Support'));
+const Developers = lazy(() => import('./views/Developers'));
+const Workspace = lazy(() => import('./views/Workspace'));
+const ImpersonationHub = lazy(() => import('./views/ImpersonationHub'));
+const SuperAdminWorkspace = lazy(() => import('./views/SuperAdminWorkspace'));
 import './App.css';
-import './DarkMode.css';
 import './WorkflowDetails.css';
+
+function FleetWorkspace() {
+  const { user } = useContext(AuthContext);
+  // Changing identity or roles starts a fresh workspace. Ordinary profile
+  // refreshes preserve the selected module and any in-progress form.
+  return <Workspace key={JSON.stringify([user?.id, user?.role, user?.roles])} />;
+}
 
 function Unauthorized() {
   return (
@@ -30,21 +40,24 @@ function Unauthorized() {
 function App() {
   return (
     <Router>
+      <ManagedFileLinks />
       <ErrorBoundary>
+        <Suspense fallback={<main className="auth-page" role="status">Loading…</main>}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/about" element={<About />} />
-          <Route path="/developers" element={<Developers />} />
           <Route path="/support" element={<Support />} />
+          <Route path="/developers" element={<Developers />} />
+          <Route path="/impersonation" element={<ProtectedRoute allowedRoles={['Impersonator']}><ImpersonationHub /></ProtectedRoute>} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route
             path="/admin/*"
             element={
               <ProtectedRoute allowedRoles={['Admin']}>
-                <Workspace />
+                <FleetWorkspace />
               </ProtectedRoute>
             }
           />
@@ -52,7 +65,7 @@ function App() {
             path="/custodian/*"
             element={
               <ProtectedRoute allowedRoles={['Custodian']}>
-                <Workspace />
+                <FleetWorkspace />
               </ProtectedRoute>
             }
           />
@@ -60,7 +73,7 @@ function App() {
             path="/maintenance/*"
             element={
               <ProtectedRoute allowedRoles={['Maintenance Personnel']}>
-                <Workspace />
+                <FleetWorkspace />
               </ProtectedRoute>
             }
           />
@@ -74,6 +87,7 @@ function App() {
           />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        </Suspense>
       </ErrorBoundary>
     </Router>
   );

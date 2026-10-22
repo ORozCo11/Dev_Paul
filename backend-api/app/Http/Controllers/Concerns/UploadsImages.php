@@ -3,27 +3,34 @@
 namespace App\Http\Controllers\Concerns;
 
 use Illuminate\Support\Facades\Storage;
+use App\Models\ManagedFile;
+use Illuminate\Support\Str;
 
 trait UploadsImages
 {
     private function storeUploadedImage($file, string $directory): string
     {
-        $filename = uniqid(rtrim($directory, '-') . '_', true) . '.' . $this->safeStoredExtension($file);
+        $filename = Str::uuid() . '.' . $this->safeStoredExtension($file);
+        $disk = 'supabase';
 
         try {
-            $path = Storage::disk('supabase')->putFileAs($directory, $file, $filename, 'public');
-
-            return $this->publicStorageUrl($path);
+            $path = Storage::disk($disk)->putFileAs($directory, $file, $filename, 'private');
+            if (!$path) throw new \RuntimeException('Storage did not save the file.');
         } catch (\Throwable $throwable) {
             // Don't fail the request, but make the fallback visible — a silent
             // fallback previously hid broken Supabase credentials for a long time.
             \Illuminate\Support\Facades\Log::warning(
                 "Supabase upload failed for {$directory}/{$filename}; stored locally instead. ({$throwable->getMessage()})"
             );
-            $path = Storage::disk('public')->putFileAs($directory, $file, $filename, 'public');
-
-            return $this->publicLocalStorageUrl($path);
+            $disk = 'local';
+            $path = Storage::disk($disk)->putFileAs($directory, $file, $filename, 'private');
+            if (!$path) throw new \RuntimeException('Could not save the uploaded file.');
         }
+        $asset = ManagedFile::create([
+            'id' => $filename, 'disk' => $disk, 'path' => $path, 'directory' => $directory,
+            'barangay_id' => auth()->user()?->barangay_id, 'uploaded_by' => auth()->id(),
+        ]);
+        return $asset->reference();
     }
 
     /**
@@ -49,17 +56,4 @@ trait UploadsImages
         return $file->extension() ?: 'bin';
     }
 
-    private function publicStorageUrl(string $path): string
-    {
-        $baseUrl = rtrim((string) config('filesystems.disks.supabase.url'), '/');
-
-        return $baseUrl === '' ? $path : $baseUrl . '/' . ltrim($path, '/');
-    }
-
-    private function publicLocalStorageUrl(string $path): string
-    {
-        $baseUrl = rtrim((string) config('app.url'), '/');
-
-        return $baseUrl . '/storage/' . ltrim($path, '/');
-    }
 }

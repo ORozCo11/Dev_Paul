@@ -113,7 +113,7 @@ class ConvertDueSchedulesToTickets extends Command
         $normalizedTitle = $this->normalizeTicketTitle($issueSummary);
         $duplicate = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)
             ->whereNotIn('status', ['Closed', 'Cancelled'])
-            ->get(['ticket_id', 'ticket_title'])
+            ->get(['ticket_id', 'barangay_number', 'ticket_title'])
             ->first(fn ($t) => $this->normalizeSummaryForVehicle($t->ticket_title, $vehicle->vehicle_name) === $normalizedTitle);
 
         if ($duplicate) {
@@ -133,7 +133,7 @@ class ConvertDueSchedulesToTickets extends Command
                 'assigned_custodian_id' => $custodian->id,
                 'assigned_at' => now(),
             ]);
-            $ticket->update(['ticket_title' => MaintenanceTicket::composeTitle($ticket->ticket_id, $vehicle->vehicle_name, $issueSummary)]);
+            $ticket->update(['ticket_title' => MaintenanceTicket::composeTitle($ticket->barangay_number ?? $ticket->ticket_id, $vehicle->vehicle_name, $issueSummary)]);
 
             // A rider for Admin to review, same as a human proposal's
             // suggested_mechanic_id — not a real dispatch. approveTicket()
@@ -168,14 +168,14 @@ class ConvertDueSchedulesToTickets extends Command
                 'action' => 'Auto-Propose Ticket',
                 'module' => 'Maintenance Tickets',
                 'affected_record_id' => (string) $ticket->ticket_id,
-                'details' => "Ticket #{$ticket->ticket_id} auto-proposed (Pending Approval) from due Maintenance Schedule #{$schedule->schedule_id} ({$vehicle->vehicle_name}) — awaiting Admin review.",
+                'details' => "Ticket #{$ticket->display_number} auto-proposed (Pending Approval) from due Maintenance Schedule #{$schedule->schedule_id} ({$vehicle->vehicle_name}) — awaiting Admin review.",
                 'barangay_id' => $vehicle->barangay_id,
             ]);
 
             Notification::create([
                 'user_id' => $custodian->id,
                 'title' => 'Scheduled Maintenance Proposed as a Ticket',
-                'message' => "Your scheduled {$schedule->maintenance_type} for {$vehicle->vehicle_name} was due, so Ticket #{$ticket->ticket_id} was proposed for it and is awaiting Admin review.",
+                'message' => "Your scheduled {$schedule->maintenance_type} for {$vehicle->vehicle_name} was due, so Ticket #{$ticket->display_number} was proposed for it and is awaiting Admin review.",
                 'type' => 'schedule_due_ticket_created',
                 'ticket_id' => $ticket->ticket_id,
             ]);
@@ -184,7 +184,7 @@ class ConvertDueSchedulesToTickets extends Command
                 Notification::create([
                     'user_id' => $admin->id,
                     'title' => 'New Ticket Proposal Awaiting Review',
-                    'message' => "A due Maintenance Schedule auto-proposed Ticket #{$ticket->ticket_id} — \"{$schedule->maintenance_type}\" for {$vehicle->vehicle_name}. Review, edit if needed, then approve or decline.",
+                    'message' => "A due Maintenance Schedule auto-proposed Ticket #{$ticket->display_number} — \"{$schedule->maintenance_type}\" for {$vehicle->vehicle_name}. Review, edit if needed, then approve or decline.",
                     'type' => 'ticket_proposed',
                     'ticket_id' => $ticket->ticket_id,
                 ]);

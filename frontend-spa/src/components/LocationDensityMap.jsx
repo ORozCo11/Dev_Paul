@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import TouchMapGuard from './TouchMapGuard';
 import { MapContainer, Marker, Polygon, Popup, TileLayer, Tooltip, useMap, ZoomControl } from 'react-leaflet';
 import { toPng } from 'html-to-image';
 import api from '../api/axios';
@@ -359,7 +360,14 @@ function LocationDensityMap({
   }, [onHubsChange]);
 
   useEffect(() => {
-    fetchHubs().catch(() => {});
+    let cancelled = false;
+    // Start external I/O after commit; a torn-down mount never starts it.
+    queueMicrotask(() => {
+      if (cancelled) return;
+      fetchHubs().catch(() => {});
+
+    });
+    return () => { cancelled = true; };
   }, [fetchHubs]);
 
   // When the naming modal opens, focus the input.
@@ -558,7 +566,7 @@ function LocationDensityMap({
             ? '"Add Hub" opens the add-location form, or use "By Coordinates" to type its name and lat/lng directly.'
             : 'Hubs shown here are shared by every workspace user.'}
         </span>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {selectedVehicleId != null && (
             <button
               type="button"
@@ -875,6 +883,7 @@ function LocationDensityMap({
         <ResetMapView requestKey={resetViewRequest} bounds={boundaryBounds} />
         <ResizeMapOnToggle trigger={isMaximized} />
         <ResizeMapOnContainerResize />
+        <TouchMapGuard />
       </MapContainer>
 
       {pendingLatLng && (

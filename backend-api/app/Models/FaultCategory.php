@@ -42,6 +42,9 @@ class FaultCategory extends Model
      * need the resolved string (e.g. saving it onto a ticket/record). */
     public static function resolve(?string $name): ?string
     {
-        return static::findOrCreateByName($name)?->name;
+        $name = trim($name ?? '');
+        if ($name === '') return null;
+
+        return static::whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->value('name') ?? $name;
     }
 }

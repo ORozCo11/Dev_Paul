@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, createElement, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { gsap } from 'gsap';
 import './TextType.css';
 
@@ -34,6 +34,11 @@ const TextType = ({
   const containerRef = useRef(null);
 
   const textArray = useMemo(() => (Array.isArray(text) ? text : [text]), [text]);
+  // With "reduce motion" on, show the text at once — no typing, no blinking.
+  const reduceMotion = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
+    []
+  );
 
   const getRandomSpeed = useCallback(() => {
     if (!variableSpeed) return typingSpeed;
@@ -65,7 +70,7 @@ const TextType = ({
   }, [startOnVisible]);
 
   useEffect(() => {
-    if (showCursor && cursorRef.current) {
+    if (!reduceMotion && showCursor && cursorRef.current) {
       gsap.set(cursorRef.current, { opacity: 1 });
       gsap.to(cursorRef.current, {
         opacity: 0,
@@ -75,10 +80,10 @@ const TextType = ({
         ease: 'power2.inOut',
       });
     }
-  }, [showCursor, cursorBlinkDuration]);
+  }, [showCursor, cursorBlinkDuration, reduceMotion]);
 
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible || reduceMotion) return;
 
     let timeout;
     const currentText = textArray[currentTextIndex];
@@ -148,24 +153,21 @@ const TextType = ({
   const shouldHideCursor =
     hideCursorWhileTyping && (currentCharIndex < textArray[currentTextIndex].length || isDeleting);
 
-  return createElement(
-    Component,
-    {
-      ref: containerRef,
-      className: `text-type ${className}`,
-      ...props,
-    },
+  return (
+    <Component ref={containerRef} className={`text-type ${className}`} {...props}>
     <span className="text-type__content" style={{ color: getCurrentTextColor() || 'inherit' }}>
       {displayedText}
-    </span>,
-    showCursor && (
+    </span>
+    {showCursor && (
       <span
+        aria-hidden="true"
         ref={cursorRef}
         className={`text-type__cursor ${cursorClassName} ${shouldHideCursor ? 'text-type__cursor--hidden' : ''}`}
       >
         {cursorCharacter}
       </span>
-    ),
+    )}
+    </Component>
   );
 };
 

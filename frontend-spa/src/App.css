@@ -1140,7 +1140,7 @@
 .profile-info-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .profile-info-item dt { font-size: 0.72rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
 .profile-info-item dd { color: #e2e8f0; font-size: 0.85rem; font-weight: 500; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
- 
+
 .profile-actions { display: flex; flex-direction: column; gap: 10px; }
 .profile-actions .smart-form h3 { font-size: 0.9rem; color: #e2e8f0 !important; padding-bottom: 8px; border-bottom: 1px solid #334155; margin-bottom: 6px; }
 .profile-actions .smart-form label span { color: #94a3b8 !important; font-size: 0.78rem !important; }
@@ -1154,7 +1154,7 @@
 .profile-actions .smart-form input:focus { border-color: #3b82f6 !important; }
 .profile-actions .form-actions { justify-content: stretch; }
 .profile-actions .primary-button { width: 100%; height: 36px; font-size: 0.88rem; }
- 
+
 .logout-button {
   display: flex; align-items: center; justify-content: center; gap: 8px;
   width: 100%; padding: 10px;
@@ -2133,15 +2133,12 @@ html[data-theme="light"] .sole-admin-flag { color: #d97706; }
   border-bottom: 1px solid var(--border-subtle, #eef2f7);
   background: none;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
   font: inherit;
   color: inherit;
 }
 .latest-issue-timeline-item:last-child {
   border-bottom: none;
-}
-.latest-issue-timeline-item:hover {
-  background: var(--surface-hover, #f8fafc);
 }
 .latest-issue-timeline-dot {
   position: absolute;
@@ -2520,7 +2517,7 @@ table a:hover {
   letter-spacing: 0.04em;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
- 
+
 /* STATUS BADGES */
 .status-badge {
   display: inline-flex;
@@ -2562,7 +2559,7 @@ table a:hover {
   border-color: #bfdbfe;
   color: #1d4ed8;
 }
- 
+
 /* FORMS */
 .smart-form {
   display: flex;
@@ -3354,7 +3351,7 @@ td:has(> .date-badge) { text-align: center; }
   justify-content: flex-end;
   margin-top: 10px;
 }
- 
+
 /* BUTTONS */
 .primary-button, .primary-link {
   display: inline-flex;
@@ -3387,7 +3384,7 @@ td:has(> .date-badge) { text-align: center; }
   cursor: not-allowed;
   box-shadow: none;
 }
- 
+
 /* SUB-BUTTONS */
 .ghost-button, .row-actions button, .report-heading button, table button, .table-shell button {
   display: inline-flex;
@@ -3510,11 +3507,11 @@ table button.icon-btn svg,
   box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
 }
 
- 
+
 .report-heading button { background: linear-gradient(180deg, #eff6ff, #dbeafe); color: #1e3a8a; }
- 
+
 .auth-subtitle, .report-heading p, .module-description { color: #334155; }
- 
+
 /* REPORT */
 .report-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; gap: 16px; }
 .report-heading h3 { font-size: 1.2rem; font-weight: 800; }
@@ -14799,6 +14796,549 @@ html .subissue-card-head .subissue-title { flex: 1 1 180px; min-width: 0; overfl
 @media (max-width: 900px) {
   .ticket-summary-filters .issue-filter-panel { grid-template-columns: minmax(0, 1fr); }
 }
+/* ==========================================================================
+   Phone layout (≤767px) — compact one-row top bar, sidebar as a slide-out
+   drawer, a bottom navigation bar, and phone-sized forms, dialogs, popovers
+   and touch targets. Tablet and desktop keep their existing layouts.
+   ========================================================================== */
+.sidebar-mobile-extras,
+.mobile-bottom-nav,
+.mobile-nav-backdrop { display: none; }
+
+@media (max-width: 767px) {
+  :root { --topbar-height: 56px; }
+
+  /* Top bar: one row — menu, logo, theme toggle, profile. */
+  html .topbar {
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    height: 56px;
+    padding: 0 12px !important;
+    gap: 8px;
+  }
+  html .topbar .topbar-pickers { display: none; }
+  html .topbar .topbar-right { flex-wrap: nowrap !important; justify-content: flex-end !important; gap: 8px; }
+  html .topbar .sidebar-toggle-btn { width: 44px; height: 44px; display: inline-grid; place-items: center; }
+  html .topbar .icon-btn { width: 44px; height: 44px; }
+
+  /* Content uses the full width; the sidebar is no longer a grid column. */
+  html .workspace,
+  html .workspace.sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr) !important;
+    padding-top: 56px !important;
+  }
+  html .workspace:has(.mobile-bottom-nav) .content-area { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+  html .content-area > *:not(.topbar) { padding-left: 12px; padding-right: 12px; }
+
+  /* Sidebar → slide-out drawer with full labels and badges. */
+  html .workspace > .sidebar {
+    position: fixed !important;
+    top: 56px !important;
+    left: 0;
+    bottom: 0;
+    height: auto !important;
+    width: min(86vw, 320px) !important;
+    max-width: none !important;
+    transform: translateX(-105%);
+    transition: transform 0.2s ease;
+    z-index: 320;
+    overflow-y: auto;
+    padding-bottom: 24px;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.35);
+    visibility: hidden;
+  }
+  html .workspace.mobile-nav-open > .sidebar { transform: none; visibility: visible; }
+  html .workspace > .sidebar .module-nav button span,
+  html .workspace > .sidebar .module-nav-badge { display: inline-flex !important; }
+  html .workspace > .sidebar .module-nav button {
+    justify-content: flex-start !important;
+    gap: 12px;
+    padding: 12px 14px !important;
+    min-height: 48px;
+  }
+  html .workspace > .sidebar .module-nav-badge { margin-left: auto; }
+  .sidebar-mobile-extras {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 12px 4px;
+  }
+  .sidebar-mobile-extras .map-boundary-selector,
+  .sidebar-mobile-extras .dev-impersonate { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .sidebar-mobile-extras > *,
+  .sidebar-mobile-extras form { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 100%; }
+  .sidebar-mobile-extras select,
+  .sidebar-mobile-extras input,
+  .sidebar-mobile-extras button { width: 100% !important; max-width: none !important; min-height: 44px; }
+  .mobile-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 56px 0 0 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 310;
+  }
+
+  /* Bottom navigation bar. */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 330;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--surface, #ffffff);
+    border-top: 1px solid var(--border, #e2e8f0);
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+  }
+  .mobile-bottom-nav button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    color: var(--text-muted, #64748b);
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mobile-bottom-nav button.active { color: var(--primary, #2563eb); }
+  .mobile-bottom-nav-icon { position: relative; display: inline-flex; }
+  .mobile-bottom-nav-icon svg { width: 22px; height: 22px; }
+  .mobile-bottom-nav-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-bottom-nav .module-nav-badge {
+    position: absolute; top: -6px; right: -14px;
+    min-width: 18px; height: 18px; padding: 0 5px;
+    font-size: 0.62rem; line-height: 18px; border-radius: 999px;
+  }
+
+  /* 16px inputs so iOS doesn't zoom in on focus. */
+  html input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  html select,
+  html textarea { font-size: 16px !important; }
+
+  /* Status cards: two per row instead of one tall column. */
+  html .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
+  html .metric-grid .metric-card { padding: 12px; min-width: 0; }
+
+  /* Dialogs become bottom sheets that fit the screen. */
+  html .modal-overlay { padding: 0 !important; align-items: flex-end !important; }
+  html .modal-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92dvh !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+  html .modal-box .form-actions,
+  html .form-actions { flex-wrap: wrap; }
+  html .form-actions > button { flex: 1 1 auto; min-height: 44px; }
+  html .wizard-steps { flex-wrap: wrap; gap: 8px; }
+
+  /* Popovers that were wider than a phone. */
+  html .notifications-dropdown {
+    position: fixed !important;
+    top: 64px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-height: 70dvh !important;
+  }
+  html .multi-select-panel,
+  html .column-chooser-panel { max-width: calc(100vw - 24px); }
+
+  /* Bigger tap targets for row actions. */
+  html table button.icon-btn,
+  html .row-actions .icon-btn { width: 40px !important; height: 40px !important; }
+
+  /* Maps: shorter so the page can still be scrolled past them. */
+  html .location-density-map-shell,
+  html .location-density-map { min-height: 360px !important; }
+
+  /* Card grids: one card per row. */
+  html .ticket-card-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+/* Keyboard focus is always visible. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid #2563eb !important;
+  outline-offset: 2px;
+}
+
+/* Respect reduced-motion everywhere, not just a few components. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* Phone: every data table becomes a stack of cards — one card per row,
+   each value labelled with its column name (td[data-label]). */
+@media (max-width: 767px) {
+  html .table-shell { overflow-x: visible !important; border: none !important; background: transparent !important; box-shadow: none !important; }
+  html .table-shell table { min-width: 0 !important; width: 100% !important; display: block; border: none !important; }
+  html .table-shell colgroup,
+  html .table-shell thead { display: none !important; }
+  html .table-shell tbody { display: block; }
+  html .table-shell tbody tr {
+    display: block;
+    margin: 0 0 10px;
+    padding: 6px 12px;
+    background: var(--surface, #ffffff) !important;
+    border: 1px solid var(--border, #e2e8f0) !important;
+    border-radius: 12px;
+  }
+  html .table-shell tbody tr:has(+ .table-subrow) {
+    margin-bottom: 0;
+    border-bottom: none !important;
+    border-radius: 12px 12px 0 0;
+  }
+  html .table-shell tbody tr.table-subrow {
+    border-top: 1px dashed var(--border, #e2e8f0) !important;
+    border-radius: 0 0 12px 12px;
+  }
+  html .table-shell tbody td {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: auto !important;
+    min-height: 36px;
+    padding: 6px 0 !important;
+    border: none !important;
+    text-align: right !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  html .table-shell tbody td + td { border-top: 1px solid var(--border-subtle, #eef2f7) !important; }
+  html .table-shell tbody td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    max-width: 45%;
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-muted, #64748b);
+  }
+  html .table-shell tbody td[data-label=""]::before,
+  html .table-shell tbody tr.table-subrow td::before { content: none; }
+  html .table-shell tbody tr.table-subrow td { display: block !important; text-align: left !important; }
+  html .table-shell tbody td .row-actions { justify-content: flex-end; flex-wrap: wrap; }
+}
+
+/* Phone: forms never grow wider than the screen. */
+@media (max-width: 767px) {
+  html .form-context-layout,
+  html .form-context-layout > *,
+  html .smart-form,
+  html .smart-form > *,
+  html .smart-form label { min-width: 0 !important; }
+  html .smart-form input:not([type="checkbox"]):not([type="radio"]),
+  html .smart-form select,
+  html .smart-form textarea,
+  html .smart-form .creatable-select { width: 100% !important; max-width: 100% !important; }
+  html .form-context-layout { grid-template-columns: minmax(0, 1fr) !important; }
+}
+/* Public pages: the header nav wraps on tablets too (it overflowed 641–840px). */
+@media (max-width: 900px) {
+  .auth-page-header-inner { flex-wrap: wrap; gap: 12px 20px; padding: 18px 24px; }
+  .auth-page-header-right { flex-wrap: wrap; gap: 12px 20px; }
+  .auth-page-nav { gap: 16px; }
+}
+/* Phone: the bottom bar steps aside while any dialog or overlay is open. */
+@media (max-width: 767px) {
+  body:has(.modal-overlay, .confirm-overlay, .ticket-detail-overlay, .toast-notice-overlay, .loading-overlay) .mobile-bottom-nav { display: none; }
+}
+/* ==========================================================================
+   Contrast fixes (WCAG AA 4.5:1 for text) found by scanning every page in
+   both themes. Colours only — no layout changes.
+   ========================================================================== */
+/* Filter chips: pale coloured text on pale chips → same hue, darker. */
+.emergency-readiness-row-tag { filter: brightness(0.8); }
+/* Red count pills: #ef4444 → #dc2626 behind white text. */
+html .count-badge,
+html .module-nav-badge { background-color: #dc2626 !important; }
+
+/* Light theme: link-blue names were 4.1:1 on white. */
+html[data-theme="light"] .vcn-text,
+html[data-theme="light"] button.cell-link,
+html[data-theme="light"] .user-avatar-name > span:last-child { color: #1d4ed8; }
+html[data-theme="light"] button.btn-view-action { color: #0369a1; }
+html[data-theme="light"] .report-category-card h4 { filter: brightness(0.75); }
+
+/* Dark theme. */
+html[data-theme="dark"] .vcn-text,
+html[data-theme="dark"] button.cell-link,
+html[data-theme="dark"] .user-avatar-name > span:last-child,
+html[data-theme="dark"] .superadmin-page-kicker { color: #60a5fa !important; }
+html[data-theme="dark"] .table-shell th,
+html[data-theme="dark"] table thead th { color: #cbd5e1 !important; }
+html[data-theme="dark"] .page-heading-text h2,
+html[data-theme="dark"] .page-heading-text h3 { color: var(--text-strong, #f8fafc) !important; }
+html[data-theme="dark"] .page-heading-text p { color: var(--text-muted, #a1a5ad) !important; }
+html[data-theme="dark"] .report-category-card h4 { filter: brightness(1.45); }
+html[data-theme="dark"] .issue-filter-severity-card { background: var(--surface-2, #15161a) !important; }
+html[data-theme="dark"] .issue-filter-severity-label { color: var(--text, #e5e7eb) !important; }
+/* Numbers that were hard-coded near-black and vanished on dark cards. */
+html[data-theme="dark"] .metric-card strong,
+html[data-theme="dark"] .metric-card-body strong { color: var(--text-strong, #f8fafc) !important; }
+
+/* Dark theme: the Ticket Details page is built from light cards with
+   hard-coded white backgrounds, so in dark mode it renders as a light
+   "paper" panel — its own text colours switch back to the light palette. */
+html[data-theme="dark"] .ticket-detail-panel {
+  --bg: #eef1f6;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --surface-hover: #eef2f7;
+  --border: #e2e8f0;
+  --border-subtle: #eef2f7;
+  --text: #1e293b;
+  --text-strong: #0f172a;
+  --text-muted: #64748b;
+  --text-faint: #94a3b8;
+  --primary-soft: rgba(37, 99, 235, 0.10);
+  --primary-border: rgba(37, 99, 235, 0.30);
+  color: #1e293b;
+  background: #ffffff !important;
+}
+html[data-theme="dark"] .ticket-detail-panel .ticket-process-stat { background: #ffffff !important; }
+
+/* Inside the light ticket panel (dark theme), links keep the light-theme blue. */
+html[data-theme="dark"] .ticket-detail-panel .vcn-text,
+html[data-theme="dark"] .ticket-detail-panel button.cell-link,
+html[data-theme="dark"] .ticket-detail-panel .user-avatar-name > span:last-child { color: #1d4ed8 !important; }
+
+/* Phone: finger-sized controls (44px) for filters, search, pagination,
+   view switchers and dialog close buttons. */
+@media (max-width: 767px) {
+  html .multi-select-dropdown > button,
+  html .filter-select,
+  html .date-filter-input input[type="text"],
+  html .filter-apply-btn,
+  html .local-search-input,
+  html .view-dropdown-btn,
+  html .view-tabs button,
+  html .locations-tab-bar button,
+  html .smart-form select,
+  html .smart-form input:not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
+  html .table-pagination button,
+  html .table-pagination-pages button,
+  html .table-pagination-size button,
+  html .pagination-arrow { min-width: 40px; min-height: 40px; }
+  html .date-filter-input-icon,
+  html .local-search-clear,
+  html .modal-close-btn,
+  html .notification-close-btn { min-width: 44px; min-height: 44px; }
+  html .issue-filter-status-chip { min-height: 44px; }
+  html .issue-filter-status-chip input,
+  html .smart-form input[type="checkbox"] { width: 20px; height: 20px; }
+}
+/* Touch screens: "Tap to move map" control (TouchMapGuard). */
+.map-touch-guard {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 1000;
+}
+.map-touch-guard button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.82);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.3);
+  cursor: pointer;
+}
+.map-touch-guard button[aria-pressed="true"] { background: #2563eb; }.map-touch-guard button { white-space: nowrap; }
+.mobile-bottom-nav .module-nav-badge { color: #ffffff !important; }
+@media (max-width: 767px) {
+  html .location-density-toolbar { flex-wrap: wrap; gap: 8px; }
+  html .location-density-toolbar > * { min-width: 0; max-width: 100%; }
+}@media (max-width: 767px) {
+  html .locations-tab-bar { flex-wrap: wrap; }
+  html .locations-tab-bar > button { flex: 1 1 140px; min-width: 0; white-space: normal; }
+  /* Safety net: stray overflow inside a page must not widen the whole
+     phone layout (which would push the bottom bar and header off-screen). */
+  html .workspace,
+  html .content-area { overflow-x: clip; }
+}@media (max-width: 767px) {
+  /* Filter panels: every row stacks and shrinks to the screen. */
+  html .issue-filter-panel { grid-template-columns: minmax(0, 1fr) !important; }
+  html .issue-filter-panel > *,
+  html .issue-filter-row > *,
+  html .issue-filter-dates > *,
+  html .filter-date-group,
+  html .date-filter-input { min-width: 0 !important; max-width: 100%; }
+  html .issue-filter-row,
+  html .issue-filter-dates { display: flex; flex-wrap: wrap; gap: 10px; }
+  html .issue-filter-row > .filter-date-group { flex: 1 1 140px; }
+  html .issue-filter-dates > .filter-date-group { flex: 1 1 100%; }
+  html .issue-filter-panel .filter-select,
+  html .issue-filter-panel .multi-select-dropdown { min-width: 0 !important; width: 100%; }
+  html .issue-filter-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+  /* List-panel headers: title on its own line, tools wrap below it. */
+  html .panel-header-bar { flex-wrap: wrap; gap: 10px; }
+  html .panel-header-bar > div { flex-wrap: wrap; max-width: 100%; min-width: 0; gap: 8px; }
+  html .ready-to-close-header { flex-wrap: wrap; gap: 10px; }
+  html .ready-to-close-search { min-width: 0; flex: 1 1 180px; }
+
+  /* Table cards: long names wrap instead of running off the card. */
+  html .table-shell tbody td > * { min-width: 0; max-width: 100%; }
+  html .table-shell .vehicle-cell { min-width: 0; }
+  html .table-shell .vehicle-cell-name { white-space: normal !important; min-width: 0; text-align: right; }
+}@media (max-width: 767px) {
+  html .vehicle-cell { min-width: 0; max-width: 100%; }
+  html .vehicle-cell-name,
+  html .vehicle-cell-name .vcn-text { white-space: normal !important; min-width: 0; overflow-wrap: anywhere; }
+  html .metric-card-body { min-width: 0; overflow-wrap: anywhere; }
+}
+
+/* Date badge year text and dashboard "view" links (contrast). */
+html[data-theme="dark"] .date-badge-meta,
+html[data-theme="dark"] .date-badge-meta * { color: #93c5fd !important; }
+html[data-theme="light"] button.btn-view-action,
+html[data-theme="light"] .table-shell button.btn-view-action { color: #0369a1 !important; }
+
+/* "Skip to content" — hidden until focused with the keyboard. */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2000;
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus { transform: none; }
+#main-content:focus { outline: none; }@media (max-width: 767px) {
+  html .user-avatar-name.cell-link,
+  html button.vehicle-cell-name,
+  html button.cell-link { min-height: 40px; display: inline-flex; align-items: center; }
+  html button.filter-select,
+  html .multi-select-dropdown > button { height: auto !important; min-height: 44px !important; }
+  html table button.icon-btn,
+  html .row-actions .icon-btn,
+  html .btn-confirm-action.icon-btn,
+  html .btn-view-action.icon-btn,
+  html .btn-edit-action.icon-btn,
+  html .btn-delete-action.icon-btn { width: 44px !important; height: 44px !important; }
+  html .table-pagination button,
+  html .pagination-page { min-width: 44px; min-height: 44px; }
+}@media (max-width: 767px) {
+  html button.vehicle-cell-name.cell-link,
+  html .table-shell button.vehicle-cell-name.cell-link { min-height: 40px !important; display: inline-flex !important; align-items: center; }
+  html .filter-apply-btn,
+  html .export-btn,
+  html .icon-add-btn,
+  html .profile-menu-trigger { min-height: 44px !important; min-width: 44px; }
+}@media (max-width: 767px) {
+  html .workspace-footer-links { flex-wrap: wrap; gap: 4px 16px; }
+  html .workspace-footer-links a,
+  html .auth-legal a { display: inline-flex; align-items: center; min-height: 44px; }
+}@media (max-width: 767px) {
+  html .dual-range-input { height: 28px; }
+  html .issue-filter-status-chip input,
+  html .smart-form input[type="checkbox"],
+  html .auth-remember input { width: 24px !important; height: 24px !important; }
+}@media (max-width: 767px) {
+  html .auth-page-nav a,
+  html .auth-page-shell footer a { display: inline-flex; align-items: center; min-height: 44px; }
+}@media (max-width: 767px) {
+  html button.btn-view-action:not(.icon-btn) { min-height: 40px; display: inline-flex; align-items: center; }
+}
+/* The top-bar pickers wrapper must not affect layout on wider screens —
+   its children sit in one row in the top bar exactly as before. */
+.topbar-pickers { display: contents; }
+/* ==========================================================================
+   Ticket status colours — one palette for every ticket view (see
+   TICKET_STATUS_TONE / ticketStatusClass in Workspace.jsx).
+   --ts: border/accent · --ts-bg / --ts-text: status pill (light theme)
+   ========================================================================== */
+.ts-pending   { --ts: #f59e0b; --ts-bg: #fef3c7; --ts-text: #92400e; --ts-text-dark: #fcd34d; }
+.ts-declined  { --ts: #ef4444; --ts-bg: #fee2e2; --ts-text: #991b1b; --ts-text-dark: #fca5a5; }
+.ts-active    { --ts: #3b82f6; --ts-bg: #dbeafe; --ts-text: #1e40af; --ts-text-dark: #93c5fd; }
+.ts-verify    { --ts: #8b5cf6; --ts-bg: #ede9fe; --ts-text: #5b21b6; --ts-text-dark: #c4b5fd; }
+.ts-closed    { --ts: #22c55e; --ts-bg: #dcfce7; --ts-text: #166534; --ts-text-dark: #86efac; }
+.ts-cancelled { --ts: #94a3b8; --ts-bg: #f1f5f9; --ts-text: #334155; --ts-text-dark: #cbd5e1; }
+.ts-unknown   { --ts: #cbd5e1; --ts-bg: #f8fafc; --ts-text: #475569; --ts-text-dark: #cbd5e1; }
+
+/* Card: one uniform 2px border in the status colour on all four sides,
+   following the rounded corners; neutral background. (2px rather than 1.5px:
+   browsers round 1.5px down to 1px on standard-density screens.) */
+html .ticket-card.ticket-card-status {
+  border: 2px solid var(--ts) !important;
+  background: var(--surface, #ffffff) !important;
+}
+html .ticket-card.ticket-card-status:hover {
+  border-color: var(--ts) !important;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ts) 18%, transparent);
+}
+html .ticket-card.ticket-card-status:focus-visible {
+  outline: 3px solid var(--ts) !important;
+  outline-offset: 2px;
+}
+html .ticket-card.ticket-card-status .ticket-card-title,
+html .ticket-card.ticket-card-status .ticket-card-vehicle { overflow-wrap: anywhere; min-width: 0; }
+
+/* Status pill: tinted background, readable text, thin border in the colour. */
+html .status-badge.ticket-status-pill {
+  background: var(--ts-bg) !important;
+  color: var(--ts-text) !important;
+  border: 1px solid var(--ts) !important;
+}
+html[data-theme="dark"] .status-badge.ticket-status-pill {
+  background: color-mix(in srgb, var(--ts) 20%, transparent) !important;
+  color: var(--ts-text-dark) !important;
+}
+/* The ticket page renders as a light panel in dark mode — keep light pills there. */
+html[data-theme="dark"] .ticket-detail-panel .status-badge.ticket-status-pill {
+  background: var(--ts-bg) !important;
+  color: var(--ts-text) !important;
+}
+
+
+/* Ticket identifier: "TICKET" and "#12" at the same size (13px) and colour;
+   the label semibold, the number bold. */
+html .ticket-card.ticket-card-status .ticket-card-id {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ts-text);
+  white-space: nowrap;
+}
+html .ticket-card.ticket-card-status .ticket-card-id-label {
+  font-size: inherit;
+  font-weight: 600;
+  letter-spacing: inherit;
+  color: inherit;
+}
+html[data-theme="dark"] .ticket-card.ticket-card-status .ticket-card-id { color: var(--ts-text-dark); }
+/* Ticket card footer: status pill and priority badge side by side. */
+.ticket-card-badges { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
 /* Stat-card rows stay on ONE line on desktop (Total + every bucket), however
    many cards a module has: columns come from --stat-cols (set by
    ModuleStatCards / the dashboard), tiles are compact and labels never
@@ -14826,14 +15366,14 @@ html .ticket-card-id { font-size: 1rem; font-weight: 800; letter-spacing: 0.04em
 .ticket-card-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 /* Ticket cards carry their status colour on the border (and a thicker top
-   edge) so state reads at a glance: Active amber, For Verification purple,
-   Closed green, Declined red, Proposal yellow, Cancelled grey. */
+   edge) so state reads at a glance: Active blue, For Verification purple,
+   Closed green, Declined red, Proposal amber, Cancelled grey. */
 html .ticket-card { border-width: 2px; border-top-width: 5px; --tc: #d9e6f8; border-color: var(--tc); }
-html .ticket-card.tc-active { --tc: #f59e0b; }
+html .ticket-card.tc-active { --tc: #3b82f6; }
 html .ticket-card.tc-for-verification { --tc: #7c3aed; }
 html .ticket-card.tc-closed { --tc: #16a34a; }
 html .ticket-card.tc-declined { --tc: #dc2626; }
-html .ticket-card.tc-pending-approval { --tc: #eab308; }
+html .ticket-card.tc-pending-approval { --tc: #f59e0b; }
 html .ticket-card.tc-cancelled { --tc: #94a3b8; }
 html .ticket-card:hover { border-color: var(--tc); box-shadow: 0 10px 28px rgba(15,23,42,0.14); }
 html[data-theme] .ticket-card { border-width: 2px; border-top-width: 5px; border-color: var(--tc); }
@@ -15829,42 +16369,29 @@ html:root .toast-notice:is(.error, .danger, .success, .warning, .info) { box-sha
 .module-filter-toggle.is-open svg { transform:rotate(180deg); }
 .module-filter-panel:has(.module-filter-toggle) { padding:14px 18px; }
 .module-filter-panel .module-filter-toggle + .filter-bar-container { margin-top:14px; }
-
-/* About page: the system overview and fleet capabilities are a paired, two-panel
-   showcase. The arrow buttons deliberately exchange their left/right positions
-   rather than opening another long section below. */
-.about-showcase { box-sizing: border-box; min-height: calc(100vh - 112px); display: flex; align-items: center; padding: 28px clamp(16px, 3vw, 48px) 40px; background: #eef4fb; }
-.about-showcase-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 1400px; margin: 0 auto; }
-.about-showcase-panel { min-width: 0; min-height: 560px; }
-.about-showcase .about-system-panel { display: block; min-height: 0; padding: clamp(30px, 4vw, 64px); border-radius: 20px; background: linear-gradient(135deg, #102c63, #1d4ed8); box-shadow: 0 16px 38px rgba(15, 23, 42, .12); transition: order .3s ease; }
-.about-showcase .about-system-panel .auth-hero-inner { width: 100%; max-width: 590px; margin: 0; text-align: left; }
-.about-showcase .about-system-panel .auth-hero-subtitle { max-width: none; }
-.about-showcase .about-system-panel .about-hero-body { width: 100%; max-width: none; }
-.about-showcase .about-features-panel { padding: clamp(30px, 4vw, 56px); border-radius: 20px; background: #fff; box-shadow: 0 16px 38px rgba(15, 23, 42, .12); transition: order .3s ease; }
-.about-showcase .about-features-inner { width: 100%; max-width: none; margin: 0; text-align: left; }
-.about-showcase .about-features-title { margin: 0 0 28px; color: #173d80; font-size: clamp(1.5rem, 2.5vw, 2.25rem); line-height: 1.18; }
-.about-features-kicker { margin: 0 0 9px; color: #2563eb; font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
-.about-showcase .about-features-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.about-showcase .about-feature-card { min-width: 0; padding: 14px; border: 1px solid #dbe7f8; border-radius: 12px; background: #f8fbff; text-align: left; }
-.about-showcase .about-feature-icon { margin: 0 0 8px; }
-.about-showcase .about-feature-name { font-size: .87rem; }
-.about-showcase .about-feature-desc { font-size: .76rem; line-height: 1.45; }
-.about-feature-pagination { display: flex; justify-content: center; gap: 7px; margin-top: 20px; }
-.about-feature-pagination span { width: 7px; height: 7px; border-radius: 999px; background: #cbd5e1; transition: width .2s ease, background .2s ease; }
-.about-feature-pagination .is-active { width: 24px; background: #2563eb; }
-.about-showcase-controls { display: flex; align-items: center; justify-content: center; gap: 16px; max-width: 1400px; margin: 18px auto 0; color: #47617f; font-size: .8rem; font-weight: 650; }
-.about-showcase-controls button { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 13px; border: 1px solid #bfd2ee; border-radius: 8px; background: #fff; color: #1d4ed8; font: inherit; font-weight: 750; cursor: pointer; transition: background .16s ease, transform .16s ease; }
-.about-showcase-controls button:hover { background: #dbeafe; }
-.about-showcase-controls button:active { transform: scale(.97); }
-.about-showcase-controls button:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
-@media (max-width: 900px) {
-  .about-showcase-panels { grid-template-columns: 1fr; }
-  .about-showcase-panel { min-height: 0; }
+@media (max-width: 620px) {
+  .module-grid, .module-grid > *, .module-grid .panel,
+  .panel-header-bar, .schedule-panel-tools, .location-density-toolbar { min-width: 0; max-width: 100%; }
+  .panel-header-bar { flex-wrap: wrap; gap: 10px; }
+  .panel-header-bar > div, .schedule-panel-tools { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+  .panel-header-bar .local-search-bar { flex: 1 1 140px; min-width: 0; max-width: 100%; }
+  .panel-header-bar .local-search-input { min-width: 0; width: 100%; }
+  .locations-tab-bar { flex-wrap: wrap; }
+  .locations-tab-bar .locations-tab-button { flex: 1 1 120px; min-width: 0; white-space: normal; }
+  .location-density-toolbar, .location-density-toolbar > div { flex-wrap: wrap; max-width: 100%; min-width: 0; }
+  .location-density-toolbar .location-density-btn { min-width: 0; white-space: normal; }
+  .registration-code-panel { flex-direction: column; align-items: stretch !important; }
+  .registration-code-panel > div:last-child { flex-wrap: wrap; min-width: 0; }
+  .registration-code-panel code { overflow-wrap: anywhere; }
 }
-@media (max-width: 520px) {
-  .about-showcase { padding: 16px 12px 28px; }
-  .about-showcase .about-features-grid { grid-template-columns: 1fr; }
-  .about-showcase-controls { gap: 8px; }
-  .about-showcase-controls span { display: none; }
+/* The location cascade also wraps; measuring the header keeps content below it. */
+.topbar { min-height: 64px; }
+@media (max-width: 620px) {
+  .topbar-left { flex-wrap: wrap; width: 100%; min-width: 0; gap: 8px; }
+  .map-boundary-selector { flex: 1 1 100%; min-width: 0; max-width: 100%; }
+  .map-boundary-selector select { flex: 1 1 80px; width: 0; min-width: 0; max-width: 100%; }
+  .dev-impersonate { flex-wrap: wrap; max-width: 100%; }
 }
-
+/* Keep screen-reader descriptions inside their table cell's scroll container. */
+.tpa-group { position: relative; }
+.tpa-sr { top: 0; left: 0; clip-path: inset(50%); }

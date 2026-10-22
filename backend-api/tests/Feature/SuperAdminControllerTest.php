@@ -99,7 +99,7 @@ class SuperAdminControllerTest extends TestCase
     }
 
     #[Test]
-    public function only_super_admin_can_delete_a_concern_report(): void
+    public function concern_reports_cannot_be_managed_by_tenant_admins(): void
     {
         $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
         $report = ConcernReport::create([
@@ -109,12 +109,15 @@ class SuperAdminControllerTest extends TestCase
         ]);
 
         Sanctum::actingAs($admin, ['*']);
-        $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertStatus(403);
+        $this->getJson('/api/superadmin/concern-reports')->assertForbidden();
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/resolve")->assertForbidden();
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/reopen")->assertForbidden();
+        $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertForbidden();
         $this->assertDatabaseHas('concern_reports', ['id' => $report->id]);
     }
 
     #[Test]
-    public function super_admin_can_delete_a_concern_report_and_it_is_actually_removed(): void
+    public function super_admin_can_review_resolve_reopen_and_delete_existing_concerns(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
         $report = ConcernReport::create([
@@ -124,9 +127,34 @@ class SuperAdminControllerTest extends TestCase
         ]);
 
         Sanctum::actingAs($superAdmin, ['*']);
+        $this->getJson('/api/superadmin/concern-reports')->assertOk()->assertJsonFragment(['id' => $report->id]);
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/resolve")->assertOk()->assertJsonPath('status', 'Resolved');
+        $this->assertDatabaseHas('concern_reports', ['id' => $report->id, 'resolved_by' => $superAdmin->id]);
+        $this->assertNotNull($report->fresh()->resolved_at);
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/reopen")->assertOk()->assertJsonPath('status', 'Open');
+        $this->assertDatabaseHas('concern_reports', ['id' => $report->id, 'status' => 'Open']);
+        $this->assertNull($report->fresh()->resolved_by);
+        $this->assertNull($report->fresh()->resolved_at);
         $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertOk();
-
         $this->assertDatabaseMissing('concern_reports', ['id' => $report->id]);
+    }
+
+    #[Test]
+    public function public_can_submit_concerns_but_cannot_read_the_inbox(): void
+    {
+        $this->postJson('/api/concern-reports', ['concern_type' => 'Other', 'description' => 'Unable to reach our administrator'])->assertCreated();
+        $this->assertDatabaseHas('concern_reports', ['description' => 'Unable to reach our administrator', 'status' => 'Open']);
+        $this->getJson('/api/superadmin/concern-reports')->assertUnauthorized();
+        $this->postJson('/api/concern-reports', ['concern_type' => 'Invalid'])->assertUnprocessable()->assertJsonValidationErrors(['concern_type', 'description']);
+    }
+
+    #[Test]
+    public function public_concern_submissions_are_rate_limited(): void
+    {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson('/api/concern-reports', ['concern_type' => 'Other', 'description' => 'A concern'])->assertCreated();
+        }
+        $this->postJson('/api/concern-reports', ['concern_type' => 'Other', 'description' => 'Another concern'])->assertStatus(429);
     }
 
     #[Test]

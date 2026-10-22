@@ -24,13 +24,9 @@ return [
     'vehicle_type.delete' => ['Admin'],
 
     // Vehicles
-    // Registration is data entry, not a transfer of accountability — a
-    // Custodian may register a vehicle when the barangay delegates that to
-    // them, but vehicle.edit stays Admin-only below, so the protected
-    // master record can't be freely changed afterward by whoever typed it in.
+    // Registration is a standard Admin/Custodian duty; editing remains Admin-only.
     'vehicle.create' => ['Admin', 'Custodian'],
-    // Bulk import registers vehicles, so FleetController::storeVehicle's
-    // per-account delegation check (canRegisterVehicles) still applies on top.
+    // Bulk import follows the same role eligibility as single registration.
     'vehicle.import' => ['Admin', 'Custodian'],
     // Vehicle Usage Log: who took which vehicle where, and when it came back.
     'usage.view' => ['Admin', 'Custodian'],
@@ -216,7 +212,7 @@ return [
     'registration_code.regenerate' => ['Admin'],
 
     // Impersonation
-    'impersonation.start' => ['Admin', 'Super Admin'],
+    'impersonation.start' => ['Impersonator'],
 
     // Super Admin platform administration
     'barangay.view_all' => ['Super Admin'],

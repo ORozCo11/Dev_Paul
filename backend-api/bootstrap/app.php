@@ -13,6 +13,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // API authentication failures must never resolve a web login route.
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/login');
         // Defense-in-depth: strip control/null bytes from all input, and add
         // security headers (nosniff, anti-clickjacking, CSP) to every response.
         $middleware->append(\App\Http\Middleware\SanitizeInput::class);

@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBarangayNumber;
+
 use App\Models\Concerns\BelongsToBarangay;
 use Illuminate\Database\Eloquent\Model;
 
 class Vehicle extends Model
 {
     use BelongsToBarangay;
+    use HasBarangayNumber;
 
     protected $primaryKey = 'vehicle_id';
 

@@ -8,7 +8,7 @@ import api from '../api/axios';
 const FAQ = [
   {
     q: 'How do I report a vehicle issue?',
-    a: "As a Custodian, go to Issue Reports and click Report Issue. Describe the problem and the vehicle's condition — an Admin can turn it into a repair ticket from there.",
+    a: "As a Custodian, open Report Vehicle Issue to review issues and propose a maintenance ticket. Describe the problem and the planned repair. An Admin reviews the proposal and assigns the work. Maintenance Personnel can submit technical issue reports for a Custodian to review.",
   },
   {
     q: "How do I approve a new staff registration, and what's the Staff Registration Code?",
@@ -80,6 +80,7 @@ export default function Support() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     setResult(null);
     setSubmitting(true);
     try {
@@ -126,7 +127,7 @@ export default function Support() {
             submission.
           </p>
 
-          <form className="auth-form auth-form-grid support-form" onSubmit={handleSubmit} noValidate>
+          <form className="auth-form auth-form-grid support-form" onSubmit={handleSubmit}>
             <label className="auth-field auth-field-full">
               <span>What's the concern?</span>
               <div className="auth-input-wrapper auth-input-plain">
@@ -179,7 +180,7 @@ export default function Support() {
               </div>
             </label>
 
-            {result && <p className={`notice ${result.type} auth-field-full`}>{result.text}</p>}
+            {result && <p className={`notice ${result.type} auth-field-full`} role={result.type === 'error' ? 'alert' : 'status'}>{result.text}</p>}
 
             <button className="primary-button auth-submit-btn auth-field-full" type="submit" disabled={submitting}>
               {submitting ? 'Submitting…' : 'Submit Concern'}

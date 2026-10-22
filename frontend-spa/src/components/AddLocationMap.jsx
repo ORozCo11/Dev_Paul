@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import TouchMapGuard from './TouchMapGuard';
 import { BOUNDARY_REFERENCE_ATTRIBUTION } from '../utils/boundary';
 import BoundaryReferenceLabel from './BoundaryReferenceLabel';
 import BoundaryMapDetails from './BoundaryMapDetails';
@@ -102,6 +103,7 @@ export default function AddLocationMap({ marker, boundaryPolygons, boundaryLabel
       <BoundaryReferenceLabel polygons={boundaryPolygons} label={boundaryLabel} />
       {marker && <Marker position={[marker.lat, marker.lng]} icon={pickPin} />}
       <FlyToMarker marker={marker} />
+      <TouchMapGuard />
     </MapContainer>
   );
 }

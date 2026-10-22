@@ -31,6 +31,7 @@ class UserSeeder extends Seeder
 
         // Remove any other users not part of this fixed demo roster.
         User::whereNotIn('email', [
+            'impersonation@test.com',
             'superadmin@barangay.gov',
             'admin@barangay.gov',
             'custodian@barangay.gov',
@@ -116,5 +117,7 @@ class UserSeeder extends Seeder
                 ],
             );
         }
+
+        $this->call(ImpersonationAccountSeeder::class);
     }
 }

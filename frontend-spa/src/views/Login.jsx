@@ -13,6 +13,7 @@ const roleRoutes = {
   Custodian: '/custodian',
   'Maintenance Personnel': '/maintenance',
   'Super Admin': '/superadmin',
+  Impersonator: '/impersonation',
 };
 
 function Login() {
@@ -61,7 +62,7 @@ function Login() {
       // only unauthenticated redirects land here with `from` set, so this
       // can never send someone to a page their role doesn't allow (a wrong
       // role goes to /unauthorized instead, not back through /login).
-      const destination = location.state?.from
+      const destination = authenticatedUser.role === 'Impersonator' ? '/impersonation' : location.state?.from
         ? `${location.state.from.pathname}${location.state.from.search ?? ''}`
         : (roleRoutes[authenticatedUser.role] ?? '/unauthorized');
       navigate(destination, { replace: true });
@@ -87,12 +88,12 @@ function Login() {
           <h1 id="login-title" className="auth-login-heading">Login</h1>
         </div>
 
-        <form className="auth-form" autoComplete="off" onSubmit={handleSubmit} noValidate>
+        <form className="auth-form" onSubmit={handleSubmit} noValidate>
           <label className="auth-field">
             <span>Email Address</span>
             <div className="auth-input-wrapper auth-input-plain">
               <input
-                autoComplete="off"
+                autoComplete="email"
                 name="email"
                 onChange={handleChange}
                 placeholder="Email address"
@@ -107,7 +108,7 @@ function Login() {
             <span>Password</span>
             <div className="auth-input-wrapper auth-input-plain">
               <input
-                autoComplete="new-password"
+                autoComplete="current-password"
                 name="password"
                 onChange={handleChange}
                 placeholder="Password"
@@ -136,7 +137,7 @@ function Login() {
             Remember Me
           </label>
 
-          {error ? <p className="notice error">{error}</p> : null}
+          {error ? <p className="notice error" role="alert">{error}</p> : null}
 
           <button className="primary-button auth-submit-btn" disabled={submitting} type="submit">
             {submitting ? (

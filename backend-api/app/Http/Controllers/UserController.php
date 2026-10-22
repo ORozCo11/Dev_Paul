@@ -103,7 +103,7 @@ class UserController extends Controller
             'role' => ['required_without:roles', Rule::in(self::ROLES)],
             'roles' => ['required_without:role', 'array', 'min:1'],
             'roles.*' => [Rule::in(self::ROLES)],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
@@ -140,7 +140,7 @@ class UserController extends Controller
             'role' => ['sometimes', 'required', Rule::in(self::ROLES)],
             'roles' => ['sometimes', 'required', 'array', 'min:1'],
             'roles.*' => [Rule::in(self::ROLES)],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
@@ -162,6 +162,10 @@ class UserController extends Controller
         // only OTHER Admin.
         if (array_key_exists('roles', $data) && !in_array('Admin', $data['roles'], true)) {
             $this->abortIfLastActiveAdmin($user, 'removing their Admin role');
+        }
+
+        if (array_key_exists('roles', $data)) {
+            $this->abortIfHasOpenWork($user, 'changing their roles', $data['roles']);
         }
 
         if (!empty($data['password'])) {

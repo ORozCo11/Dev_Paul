@@ -990,6 +990,7 @@ class FleetController extends Controller
 
             $openTickets = $openTicketsByVehicle->get($vehicle->vehicle_id) ?? collect();
             $vehicle->open_ticket_id = optional($openTickets->first())->ticket_id;
+            $vehicle->open_ticket_number = optional($openTickets->first())->display_number;
             $vehicle->awaiting_closure = $vehicle->status !== 'Available'
                 && $openTickets->contains(fn ($t) => $t->status === 'Active' && $t->isEligibleToClose());
         });
@@ -1000,11 +1001,8 @@ class FleetController extends Controller
     public function storeVehicle(Request $request)
     {
         $this->requireAbility($request, 'vehicle.create');
-        // Production-readiness audit finding #6 — the ability above only
-        // says Admin/Custodian are the eligible roles; this is the real
-        // per-account delegation check (Admin always; Custodian only if
-        // granted) an Admin sets per Custodian from the Edit User form.
-        abort_unless($request->user()->canRegisterVehicles(), 403, 'Vehicle registration has not been delegated to your account. Ask your Admin to enable it.');
+        // Keep single registration and import aligned with role eligibility.
+        abort_unless($request->user()->canRegisterVehicles(), 403, 'Your account cannot register vehicles.');
 
         $data = $this->validateVehicle($request);
 
@@ -1076,11 +1074,11 @@ class FleetController extends Controller
 
         $openTickets = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)
             ->whereNotIn('status', ['Closed', 'Cancelled'])
-            ->get(['ticket_id', 'ticket_title']);
+            ->get(['ticket_id', 'barangay_number', 'ticket_title']);
         if ($openTickets->isNotEmpty()) {
             abort(response()->json([
                 'message' => 'Close or cancel this vehicle\'s open ticket(s) before deactivating it.',
-                'open_tickets' => $openTickets->map(fn ($t) => ['ticket_id' => $t->ticket_id, 'ticket_title' => $t->ticket_title])->values(),
+                'open_tickets' => $openTickets->map(fn ($t) => ['ticket_id' => $t->ticket_id, 'barangay_number' => $t->barangay_number, 'ticket_title' => $t->ticket_title])->values(),
             ], 422));
         }
 
@@ -1143,11 +1141,11 @@ class FleetController extends Controller
 
         $openTickets = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)
             ->whereNotIn('status', ['Closed', 'Cancelled'])
-            ->get(['ticket_id', 'ticket_title']);
+            ->get(['ticket_id', 'barangay_number', 'ticket_title']);
         if ($openTickets->isNotEmpty()) {
             abort(response()->json([
                 'message' => 'Close or cancel this vehicle\'s open ticket(s) before decommissioning it.',
-                'open_tickets' => $openTickets->map(fn ($t) => ['ticket_id' => $t->ticket_id, 'ticket_title' => $t->ticket_title])->values(),
+                'open_tickets' => $openTickets->map(fn ($t) => ['ticket_id' => $t->ticket_id, 'barangay_number' => $t->barangay_number, 'ticket_title' => $t->ticket_title])->values(),
             ], 422));
         }
 
@@ -1292,7 +1290,7 @@ class FleetController extends Controller
         $activeTicket = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)
             ->whereNotIn('status', ['Closed', 'Cancelled'])
             ->orderByDesc('ticket_id')
-            ->first(['ticket_id', 'ticket_title']);
+            ->first(['ticket_id', 'barangay_number', 'ticket_title']);
 
         return response()->json([
             'state'              => $this->responseReadinessState($vehicle, $latest),
@@ -1300,6 +1298,7 @@ class FleetController extends Controller
             'latest_checklist'   => $latest?->checklist,
             'freshness_hours'    => self::READINESS_FRESHNESS_HOURS,
             'active_ticket_id'   => $activeTicket?->ticket_id,
+            'active_ticket_number' => $activeTicket?->display_number,
             'active_ticket_title' => $activeTicket?->ticket_title,
             'history'            => $vehicle->readinessChecks()
                 ->with('checkedBy:id,name')
@@ -1358,7 +1357,7 @@ class FleetController extends Controller
             return collect();
         }
 
-        $query = VehicleConditionCheck::with(['vehicle.category', 'checkedBy', 'resultingTicket:ticket_id,status,ticket_title']);
+        $query = VehicleConditionCheck::with(['vehicle.category', 'checkedBy', 'resultingTicket:ticket_id,barangay_number,status,ticket_title']);
 
         $query->when($request->filled('vehicle_id'), fn ($q) => $q->where('vehicle_id', $request->vehicle_id))
             ->when($request->filled('condition_result'), fn ($q) => $q->where('condition_result', $request->condition_result));
@@ -1897,6 +1896,7 @@ class FleetController extends Controller
 
         if ($request->hasFile('file')) {
             $data['file_url'] = $this->storeUploadedImage($request->file('file'), 'vehicle-documents');
+            \App\Models\ManagedFile::removeReference($document->file_url);
         }
         unset($data['file']);
 
@@ -1911,6 +1911,7 @@ class FleetController extends Controller
         $this->requireAbility($request, 'document.delete');
 
         $this->log($request, 'Delete', 'Vehicle Documents', $document->document_id, "Deleted document \"{$document->title}\"");
+        \App\Models\ManagedFile::removeReference($document->file_url);
         $document->delete();
 
         return response()->json(['message' => 'Document deleted.']);
@@ -2452,6 +2453,7 @@ class FleetController extends Controller
             'assignedToUser',
             // Nested so the "View Maintenance Record" detail modal has full
             // info (vehicle, personnel, verifier) without a second fetch.
+            'resultingTicket:ticket_id,barangay_number,ticket_title,status',
             'resultingMaintenance.vehicle',
             'resultingMaintenance.sourceVehicle',
             'resultingMaintenance.maintenancePersonnel',

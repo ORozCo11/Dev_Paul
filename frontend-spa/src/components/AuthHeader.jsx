@@ -8,6 +8,7 @@ const roleRoutes = {
   Custodian: '/custodian',
   'Maintenance Personnel': '/maintenance',
   'Super Admin': '/superadmin',
+  Impersonator: '/impersonation',
 };
 
 // Shared header for the public-facing pages (Login, About, Developers) —
@@ -15,9 +16,7 @@ const roleRoutes = {
 // one connected site instead of disconnected standalone screens.
 export default function AuthHeader() {
   const { user } = useContext(AuthContext);
-  // A logged-in user can land here too (e.g. "Visit Support Center" from
-  // their workspace footer) — without this, Register/Login would be their
-  // only way back, and Login doesn't re-route someone already signed in.
+  // Signed-in visitors can return directly to their dashboard.
   const dashboardPath = user ? (roleRoutes[user.role] ?? '/admin') : null;
 
   return (
@@ -35,7 +34,7 @@ export default function AuthHeader() {
             <Link to={dashboardPath ?? '/login'}>Home</Link>
             <Link to="/about">About</Link>
             <Link to="/developers">Team</Link>
-            <Link to="/support">Support</Link>
+            <Link to="/support">Support Center</Link>
           </nav>
           {dashboardPath ? (
             <Link to={dashboardPath} className="auth-page-header-login-btn">Back to Dashboard</Link>

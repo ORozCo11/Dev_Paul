@@ -19,7 +19,7 @@ Status key: **Implemented** means an identifiable code path exists; it does not 
 
 | Supplied requirement | Status | Current behavior |
 |---|---|---|
-| Manage all vehicle records | Implemented | Register, edit and archive barangay-scoped vehicles. Custodians can register vehicles under the current permission map. |
+| Manage all vehicle records | Implemented | Register, edit and archive barangay-scoped vehicles. Vehicle registration is a standard Custodian duty under the current permission map; the obsolete delegation checkbox has been removed. |
 | Manage vehicle categories/types | Implemented | Vehicle-type catalog and land/water domains. |
 | Update vehicle locations | Implemented | Vehicle locations and hub management with map views; occupied hubs cannot be deleted. |
 | Monitor conditions needing inspection/repair | Implemented | Vehicle condition/readiness views and fleet-condition analytics; recording physical condition checks is Custodian-only. |
@@ -85,6 +85,10 @@ Additional current responsibilities: propose maintenance tickets, record conditi
 
 ## 7. Acceptance checks and remaining work
 
+Regression fix follow-up, 21 October 2026: all **22 audit findings have local fixes**. **422 backend tests pass (1,770 assertions)**, ESLint is clean, the production build passes without a chunk-size warning, seven geometry/calendar tests pass, and **27 targeted browser assertions pass**. Storage now uses private managed objects and temporary signed links; the new migration was applied locally after a backup. Target-host bucket policy, persistent storage, legacy migration, and backup/restoration remain deployment acceptance checks. See [the fix report](REGRESSION-FIXES-2026-10-21.md) for evidence and rollout instructions.
+
+Regression audit, 21 October 2026: **415 backend tests passed (1,730 assertions)**, six geometry tests passed, and the frontend build passed. Browser/API regression testing recorded **22 open findings (4 High, 13 Medium, 5 Low)** across functional behavior, interface consistency, documentation, and tooling/performance. Frontend lint reports **59 errors and 18 warnings**. Registration, approval, internal/external repairs, rework, vehicle lifecycle, scheduled maintenance, reports, notifications, and support were exercised with isolated QA data. This is not deployment acceptance or exhaustive coverage of every control. See [the current regression report](REGRESSION-REPORT-2026-10-21.md) for reproduction steps, evidence, previously fixed findings, and remaining coverage.
+
 Registration geography, 15 October 2026: the cascading selectors now use **42,046 preloaded PSGC barangay references**, including Cebu City's **80 barangays**. Free-text barangay creation is rejected server-side; selected city/parent relationships are validated. Boundaries are resolved by PSGC code, with missing matches shown as unavailable instead of substituting another barangay. **403 backend tests passed (1,622 assertions)** after this change. See [registration geography](REGISTRATION-GEOGRAPHY.md) for source dates, boundary coverage, deployment steps, and evidence.
 
 Boundary correction, 15 October 2026: Suba (Pob.), Bantayan now uses a detailed 1,281-vertex PSA/NAMRIA reference instead of the coarse triangle. Existing automatic references and new registrations share the correction; map rendering and location checks preserve holes and islands. **406 backend tests passed (1,649 assertions)** plus three geometry tests. See [registration geography](REGISTRATION-GEOGRAPHY.md#boundary-detail-correction--15-october-2026).
@@ -102,3 +106,11 @@ Regression audit, 15 October 2026: **397 backend tests passed (1,585 assertions)
 - [ ] Maintain automated browser coverage for critical registration, verification and support flows. Backend feature tests exist in backend-api/tests/Feature; a passing frontend build alone is insufficient evidence of every workflow.
 
 The original supplied document is not overwritten. Historical audit documents remain point-in-time records; their older Admin-confirmation, cannibalization-approval, and direct-ticket-creation descriptions should not be used as the current workflow contract.
+
+Super Admin follow-up, 21 October 2026: all nine Super Admin audit findings and related retest edge cases were fixed locally. **433 backend tests (1,825 assertions), 98 API/browser scenarios, and 7 frontend tests passed; lint reports zero errors/warnings and the production build passes.** New barangays remain managed before onboarding, operational role changes protect assigned work, complete platform activity is searchable, and failures/retries are isolated by resource. Orphan recovery retains operational roles. Reference-only boundary onboarding remains permitted when a live outline exists and no replacement is pending. See [Super Admin fixes and verification](SUPERADMIN-FIXES-2026-10-21.md) for evidence, migration requirements, and coverage limits.
+
+Later Super Admin recheck, 21 October 2026: the original 98 checks passed again, but expanded probes found **one new Low-severity issue: searching a concern by its displayed `CR-` reference returns no match**. Total API/browser result: 103 of 104 checks passed. Backend tests, frontend tests, lint and build still pass. See [the latest recheck](SUPERADMIN-RECHECK-2026-10-21.md).
+
+Concern-reference fix, 21 October 2026: SA-R01 is fixed. **All 104 Super Admin API/browser scenarios, 433 backend tests (1,825 assertions), and 7 frontend tests passed; lint and build passed.** Reference search also passed lowercase, whitespace, and numeric-ID checks. See [the fix and complete recheck](SUPERADMIN-REFERENCE-SEARCH-FIX-2026-10-21.md).
+
+Second Super Admin recheck, 21 October 2026: **111 API/browser scenarios, 433 backend tests (1,825 assertions), and 7 frontend tests passed.** Lint and build passed; no new findings or browser runtime exceptions were recorded. The additional control checks cover combined filters, pagination state, sidebar state, code cancellation/copy, and invalid boundary files. See [the latest recheck evidence](SUPERADMIN-SECOND-RECHECK-2026-10-21.md).
