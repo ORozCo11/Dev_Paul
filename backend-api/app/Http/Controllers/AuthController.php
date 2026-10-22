@@ -265,55 +265,21 @@ class AuthController extends Controller
         ], 200);
     }
 
-    /**
-     * DEV-ONLY for an Admin: returns 404 outside local/testing, so an
-     * ordinary barangay Admin's shortcut never exists in a deployed app.
-     * A Super Admin is exempt — production impersonation, for real account
-     * support/recovery, is exactly what that role is for; every use is
-     * still logged (see impersonate() below).
-     */
-    private function assertImpersonationEnabled(Request $request): void
-    {
-        if ($request->user()?->hasRole('Super Admin')) {
-            return;
-        }
-        abort_unless(app()->environment(['local', 'testing']), 404);
-    }
-
-    /**
-     * True for the real Admin/Super Admin who kicked off impersonation, AND
-     * for every account they've since jumped into — the 'impersonated'
-     * ability travels with the token so switching accounts (or back to
-     * yourself) mid-session doesn't require logging out. A genuine
-     * Custodian's normal login token never carries this ability, since it's
-     * only ever added by impersonate() below, which itself requires the
-     * caller to already pass this same check — a real Custodian has no way
-     * to obtain it.
-     */
+    /** Only the dedicated account-switcher login can start a session. */
     private function canImpersonate(Request $request): bool
     {
         return (bool) $request->user()?->canDo('impersonation.start')
-            || (app()->environment('local') && $request->user()?->currentAccessToken()?->name === 'impersonation_token');
+            && $request->user()?->currentAccessToken()?->name !== 'impersonation_token';
     }
 
-    /**
-     * List accounts an authenticated user can jump into. For an Admin this
-     * is DEV-ONLY (see assertImpersonationEnabled); for a Super Admin it
-     * works in production too — that's the real account-recovery path.
-     *
-     * Deliberately spans every barangay, not just the caller's own — an
-     * Admin's use of this is dev-only and never exists in production, so
-     * the usual "don't leak other tenants' data" concern doesn't apply to
-     * them; a Super Admin is explicitly meant to see across every barangay.
-     * The frontend groups the result by province/barangay so the caller can
-     * jump to any staff account in any barangay.
-     */
+    /** All accounts across barangays, including platform accounts without a barangay. */
     public function impersonationCandidates(Request $request)
     {
-        $this->assertImpersonationEnabled($request);
-        abort_unless($this->canImpersonate($request), 403, 'Only an Admin or Super Admin can impersonate another account.');
+        abort_unless($this->canImpersonate($request), 403, 'Sign in to the dedicated account switcher to impersonate an account.');
 
         return User::with('barangay.city.province')
+            ->where('id', '!=', $request->user()->id)
+            ->where('role', '!=', 'Impersonator')
             ->orderBy('name')
             ->get(['id', 'name', 'email', 'role', 'roles', 'is_active', 'barangay_id'])
             ->map(fn ($u) => [
@@ -332,33 +298,15 @@ class AuthController extends Controller
             ]);
     }
 
-    /**
-     * Issue a token for another account so the caller can switch roles
-     * without logging out and back in. For an Admin: DEV-ONLY, guarded by
-     * environment (404 in production), the canImpersonate check, AND, on
-     * the client, by import.meta.env.DEV — all three must hold. For a
-     * Super Admin: works in production too, for real account support —
-     * every use is logged below.
-     */
+    /** Enter a selected account's workspace and keep an audit trail. */
     public function impersonate(Request $request, User $user)
     {
-        $this->assertImpersonationEnabled($request);
-        abort_unless($this->canImpersonate($request), 403, 'Only an Admin or Super Admin can impersonate another account.');
-        // Server-side guard, independent of the frontend candidate list
-        // (which already filters role !== 'Super Admin' out of what it
-        // shows): nobody — not even another Super Admin — may impersonate a
-        // Super Admin account via a direct API call. Checked before the
-        // is_active gate so the rejection reason is unambiguous either way.
-        abort_if($user->hasRole('Super Admin'), 403, 'Super Admin accounts cannot be impersonated.');
-        // Deliberately allowed to cross barangays — see impersonationCandidates
-        // above.
+        abort_unless($this->canImpersonate($request), 403, 'Sign in to the dedicated account switcher to impersonate an account.');
+        abort_if($user->hasRole('Impersonator') || $user->id === $request->user()->id,
+            403, 'The account switcher cannot impersonate itself or another switcher.');
         abort_if(!$user->is_active, 422, 'That account is deactivated.');
 
-        // A written reason, on every impersonation (dev-only included, so the
-        // habit — and the log's shape — is the same one that matters in
-        // production): this is a deliberate support/recovery action taken on
-        // someone else's behalf, not idle browsing, and the reason is what
-        // lets whoever reviews the log later actually judge that.
+        // Every account switch records the initiating account and reason.
         $data = $request->validate([
             'reason' => ['required', 'string', 'min:5', 'max:500'],
         ], [
@@ -374,26 +322,25 @@ class AuthController extends Controller
         // In 'local' only, no expiry at all — a dev jumping between many
         // accounts to test a feature shouldn't get logged out mid-session
         // ("Unauthenticated") just for taking longer than 30 minutes.
-        // Production/Super Admin support use is unaffected.
+        // Deployed support sessions retain their 30-minute expiry.
         $impersonationExpiry = app()->environment('local') ? null : now()->addMinutes(30);
         $token = $user->createToken('impersonation_token', [...$user->allRoles(), 'impersonated'], $impersonationExpiry)->plainTextToken;
 
-        $actingAsSuperAdmin = $request->user()?->hasRole('Super Admin');
         ActivityLog::create([
             'user_id'     => $request->user()?->id,
             'role'        => $request->user()?->role,
             'action'      => 'Impersonate',
-            'module'      => $actingAsSuperAdmin ? 'Super Admin' : 'Dev Tools',
+            'module'      => 'Impersonation',
             // Explicitly set (not left to BelongsToBarangay's creating-hook
             // default, which would stamp the ACTOR's own barangay_id — null
-            // for a Super Admin) so this entry is visible in the TARGET
+            // for the switcher) so this entry is visible in the TARGET
             // barangay's own Activity Log (FleetController::logs(), scoped
             // by BelongsToBarangay's global scope) as well as here via
             // SuperAdminController::activityLog()'s module filter, from the
             // same single row.
             'barangay_id' => $user->barangay_id,
             'details'     => ($request->user()?->name ?? 'Someone') . " impersonated {$user->name}"
-                . ($actingAsSuperAdmin ? '.' : ' (dev only).')
+                . '.'
                 . " Reason: {$data['reason']}",
         ]);
 

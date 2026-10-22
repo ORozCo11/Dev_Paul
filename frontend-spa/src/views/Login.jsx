@@ -13,6 +13,7 @@ const roleRoutes = {
   Custodian: '/custodian',
   'Maintenance Personnel': '/maintenance',
   'Super Admin': '/superadmin',
+  Impersonator: '/impersonation',
 };
 
 function Login() {
@@ -61,7 +62,7 @@ function Login() {
       // only unauthenticated redirects land here with `from` set, so this
       // can never send someone to a page their role doesn't allow (a wrong
       // role goes to /unauthorized instead, not back through /login).
-      const destination = location.state?.from
+      const destination = authenticatedUser.role === 'Impersonator' ? '/impersonation' : location.state?.from
         ? `${location.state.from.pathname}${location.state.from.search ?? ''}`
         : (roleRoutes[authenticatedUser.role] ?? '/unauthorized');
       navigate(destination, { replace: true });

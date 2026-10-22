@@ -63,7 +63,7 @@ Route::post('/concern-reports', [ConcernReportController::class, 'store'])->midd
 | Protected Routes (Requires a Valid Sanctum Token in Header)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class, \App\Http\Middleware\SignManagedFiles::class])->group(function () {
+Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middleware\RestrictImpersonationScope::class, RestrictSuperAdminScope::class, RestrictImpersonatedToReadOnly::class, \App\Http\Middleware\SignManagedFiles::class])->group(function () {
     Route::get('/files/refresh', [\App\Http\Controllers\ManagedFileController::class, 'refresh']);
 
     // Session termination route

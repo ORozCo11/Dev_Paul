@@ -1,3 +1,4 @@
+import EndImpersonationAction from '../components/EndImpersonationAction';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import VMSLogo from '../components/VMSLogo';
 import '../components/RoleDashboard.css';
@@ -15,7 +16,6 @@ import { geoJsonToPolygons } from '../utils/boundary';
 import { ActivityLogTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
 import SupportCenterTab from './SupportCenterTab';
-import ImpersonationPicker from '../components/ImpersonationPicker';
 
 
 // Kept separate from every other role's landing route — a Super Admin never
@@ -642,10 +642,9 @@ export default function SuperAdminWorkspace() {
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
-          <ImpersonationPicker user={user} />
         </div>
 
-        <div className="topbar-right">
+        <div className="topbar-right"><EndImpersonationAction />
           <div className="notifications-dropdown-container" ref={notificationsRef}>
             <button
               className="icon-btn notification-btn"

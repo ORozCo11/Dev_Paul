@@ -212,7 +212,7 @@ return [
     'registration_code.regenerate' => ['Admin'],
 
     // Impersonation
-    'impersonation.start' => ['Admin', 'Super Admin'],
+    'impersonation.start' => ['Impersonator'],
 
     // Super Admin platform administration
     'barangay.view_all' => ['Super Admin'],

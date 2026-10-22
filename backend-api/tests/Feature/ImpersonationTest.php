@@ -29,10 +29,10 @@ class ImpersonationTest extends TestCase
     }
 
     #[Test]
-    public function super_admin_can_switch_accounts_in_production_with_an_audited_reason(): void
+    public function dedicated_switcher_can_open_staff_and_super_admin_accounts_with_an_audited_reason(): void
     {
         app()['env'] = 'production';
-        $actor = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
+        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
         Sanctum::actingAs($actor, $actor->allRoles());
         $this->getJson('/api/impersonate/candidates')->assertOk()->assertJsonFragment(['id' => $target->id]);
@@ -43,12 +43,76 @@ class ImpersonationTest extends TestCase
     }
 
     #[Test]
-    public function ordinary_admin_impersonation_remains_local_only(): void
+    public function only_the_dedicated_login_can_start_impersonation_in_every_environment(): void
     {
-        app()['env'] = 'production';
-        $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
-        Sanctum::actingAs($admin, $admin->allRoles());
-        $this->getJson('/api/impersonate/candidates')->assertNotFound();
+        $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
+        $blocked = collect([
+            ['email' => 'admin@barangay.gov', 'role' => 'Admin'],
+            ['email' => 'different-superadmin@test.com', 'role' => 'Super Admin'],
+            ['email' => 'other@test.com', 'role' => 'Impersonator'],
+        ])->map(fn ($attributes) => User::factory()->create($attributes + ['roles' => [$attributes['role']]]));
+        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        foreach (['local', 'testing', 'production'] as $environment) {
+            app()['env'] = $environment;
+            Sanctum::actingAs($actor, $actor->allRoles());
+            $this->getJson('/api/impersonate/candidates')->assertOk();
+            $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Check account workspace'])->assertOk();
+            foreach ($blocked as $account) {
+                Sanctum::actingAs($account, $account->allRoles());
+                $this->assertNotContains('impersonation.start', $account->getAbilities());
+                $this->getJson('/api/impersonate/candidates')->assertForbidden();
+                $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Try switching accounts'])->assertForbidden();
+            }
+        }
+        $actor->update(['role' => 'Admin', 'roles' => ['Admin']]);
+        $this->assertFalse($actor->canDo('impersonation.start'));
+    }
+
+    #[Test]
+    public function switcher_seeder_provides_the_requested_login_and_no_direct_administrative_access(): void
+    {
+        $before = User::count();
+        $this->seed(\Database\Seeders\ImpersonationAccountSeeder::class);
+        $this->seed(\Database\Seeders\ImpersonationAccountSeeder::class);
+        $this->assertDatabaseCount('users', $before + 1);
+        $data = $this->postJson('/api/login', ['email' => 'impersonation@test.com', 'password' => 'test123'])
+            ->assertOk()->assertJsonPath('user.role', 'Impersonator')
+            ->assertJsonPath('user.abilities', ['impersonation.start'])->json();
+        $this->withHeader('Authorization', 'Bearer '.$data['access_token'])->getJson('/api/vehicles')->assertForbidden();
+        $this->withHeader('Authorization', 'Bearer '.$data['access_token'])->getJson('/api/superadmin/barangays')->assertForbidden();
+        $this->withHeader('Authorization', 'Bearer '.$data['access_token'])->getJson('/api/user')->assertOk();
+    }
+
+    #[Test]
+    public function switcher_candidates_cover_every_barangay_and_platform_accounts(): void
+    {
+        $a = \App\Models\Barangay::create(['name' => 'First Barangay']);
+        $b = \App\Models\Barangay::create(['name' => 'Second Barangay']);
+        $first = User::factory()->create(['role' => 'Admin', 'barangay_id' => $a->id]);
+        $second = User::factory()->create(['role' => 'Custodian', 'barangay_id' => $b->id]);
+        $superAdmin = User::where('email', 'superadmin@barangay.gov')->firstOrFail();
+        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        Sanctum::actingAs($actor, $actor->allRoles());
+        $this->getJson('/api/impersonate/candidates')->assertOk()
+            ->assertJsonFragment(['id' => $first->id])->assertJsonFragment(['id' => $second->id])
+            ->assertJsonFragment(['id' => $superAdmin->id])->assertJsonMissing(['id' => $actor->id]);
+        foreach ([$first, $second, $superAdmin] as $target) {
+            $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Inspect selected workspace'])
+                ->assertOk()->assertJsonPath('user.id', $target->id);
+        }
+    }
+
+    #[Test]
+    public function switched_accounts_cannot_start_nested_sessions_even_locally(): void
+    {
+        app()['env'] = 'local';
+        $target = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
+        $other = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
+        $token = $this->impersonationToken($target);
+        $this->withHeader('Authorization', "Bearer {$token}")->getJson('/api/impersonate/candidates')->assertForbidden();
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/impersonate/{$other->id}", ['reason' => 'Try another switch'])->assertForbidden();
+        $this->withHeader('Authorization', "Bearer {$token}")->postJson('/api/logout')->assertOk();
     }
 
     private function impersonationToken(User $user): string

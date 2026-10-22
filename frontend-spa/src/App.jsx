@@ -12,6 +12,7 @@ const About = lazy(() => import('./views/About'));
 const Support = lazy(() => import('./views/Support'));
 const Developers = lazy(() => import('./views/Developers'));
 const Workspace = lazy(() => import('./views/Workspace'));
+const ImpersonationHub = lazy(() => import('./views/ImpersonationHub'));
 const SuperAdminWorkspace = lazy(() => import('./views/SuperAdminWorkspace'));
 import './App.css';
 import './WorkflowDetails.css';
@@ -50,6 +51,7 @@ function App() {
           <Route path="/about" element={<About />} />
           <Route path="/support" element={<Support />} />
           <Route path="/developers" element={<Developers />} />
+          <Route path="/impersonation" element={<ProtectedRoute allowedRoles={['Impersonator']}><ImpersonationHub /></ProtectedRoute>} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route
             path="/admin/*"

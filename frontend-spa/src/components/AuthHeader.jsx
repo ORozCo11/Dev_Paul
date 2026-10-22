@@ -8,6 +8,7 @@ const roleRoutes = {
   Custodian: '/custodian',
   'Maintenance Personnel': '/maintenance',
   'Super Admin': '/superadmin',
+  Impersonator: '/impersonation',
 };
 
 // Shared header for the public-facing pages (Login, About, Developers) —

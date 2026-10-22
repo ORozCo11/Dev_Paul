@@ -20,7 +20,7 @@ export default function EndImpersonationAction() {
       sessionStorage.removeItem('token');
       (sessionOnly ? sessionStorage : localStorage).setItem('token', originalToken);
       ['impersonator_token', 'impersonator_name', 'impersonator_role', 'impersonator_storage'].forEach((key) => localStorage.removeItem(key));
-      window.location.assign(({ 'Super Admin': '/superadmin', Admin: '/admin', Custodian: '/custodian', 'Maintenance Personnel': '/maintenance' })[role] ?? '/login');
+      window.location.assign(({ Impersonator: '/impersonation', 'Super Admin': '/superadmin', Admin: '/admin', Custodian: '/custodian', 'Maintenance Personnel': '/maintenance' })[role] ?? '/login');
     } catch {
       setError('Could not end the support session. Please try again.');
       setBusy(false);

@@ -78,7 +78,7 @@ class TokenExpirationTest extends TestCase
     {
         app()['env'] = 'production';
         $this->freezeTime();
-        $admin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
+        $admin = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
         $admin->createToken('auth_token', $admin->allRoles());
         \Laravel\Sanctum\Sanctum::actingAs($admin, ['*']);

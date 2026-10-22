@@ -44,7 +44,7 @@ class SuperAdminController extends Controller
      * surface here. Using an allowlist (rather than excluding fleet modules
      * by name) means a newly added fleet module is excluded by default.
      */
-    private const ACCOUNT_MODULES = ['Super Admin', 'Dev Tools', 'Profile'];
+    private const ACCOUNT_MODULES = ['Super Admin', 'Dev Tools', 'Profile', 'Impersonation'];
 
     private function log(Request $request, string $action, string $details): void
     {
