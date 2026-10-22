@@ -10172,7 +10172,7 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
           line up across a row of cards regardless of how much optional
           content (overdue flag, location, verification badge) a given card
           has above it. */}
-      <div className="sch-card-actions" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <div className={`sch-card-actions${row.status === 'Pending Approval' && canDo(currentUser, 'schedule.decline') ? ' is-review' : ''}`} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
         {canViewSchedule && <button className="sch-action is-info" onClick={() => onViewSchedule(row)} type="button"><Icon name="eye" size={14} /> View</button>}
         {canComplete && (
           <button className="sch-action is-success" onClick={() => onComplete(row)} type="button"><Icon name="checkCircle" size={14} /> Complete</button>

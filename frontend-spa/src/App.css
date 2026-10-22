@@ -16285,6 +16285,9 @@ html .sch-card-actions .sch-action.is-primary:hover { border-color: #1d4ed8; bac
 .ticket-card-grid .sch-card-actions { display: flex; flex-wrap: wrap; gap: 5px; padding-top: 8px; }
 .ticket-card-grid .sch-card-edit-cancel { display: contents; }
 .ticket-card-grid .sch-card-actions .sch-action { flex: 0 1 auto; min-width: 0; min-height: 36px; gap: 6px; padding: 6px 10px; font-size: .75rem; white-space: normal; overflow-wrap: anywhere; }
+/* View / Approve / Decline share one row instead of Decline wrapping alone. */
+.ticket-card-grid .sch-card-actions.is-review { flex-wrap: nowrap; }
+.ticket-card-grid .sch-card-actions.is-review .sch-action { flex: 1 1 0; gap: 5px; padding: 6px 8px; white-space: nowrap; overflow-wrap: normal; }
 .ticket-card-grid .sch-card .sch-card-head { flex-wrap: wrap; }
 .ticket-card-grid .sch-card .sch-card-heading { flex: 1 1 160px; }
 .ticket-card-grid .sch-card .sch-card-statuses { flex-direction: row; flex-wrap: wrap; align-items: center; }
