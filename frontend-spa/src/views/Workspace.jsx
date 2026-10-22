@@ -5434,7 +5434,7 @@ function profileFields(existingPhotoUrl) {
   return [
     { label: 'Full Name', name: 'name', required: true, type: 'text' },
     { label: 'Email', name: 'email', required: true, type: 'text', placeholder: 'name@barangay.gov' },
-    { label: 'Phone', name: 'phone', type: 'tel', pattern: '[0-9]{10}', placeholder: '09XXXXXXXXX', title: 'Phone must be exactly 10 digits' },
+    { label: 'Phone', name: 'phone', type: 'tel', pattern: '09[0-9]{9}', maxLength: 11, placeholder: '09XXXXXXXXX', title: 'Phone must be 11 digits starting with 09' },
     { label: 'Address', name: 'address', type: 'text' },
     { label: 'Profile Photo', name: 'photo', accept: 'image/*', type: 'file', existingUrl: existingPhotoUrl },
   ];
@@ -7429,7 +7429,7 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
     if (!values.name.trim()) next.name = 'Full Name is required.';
     if (!values.email.trim()) next.email = 'Email is required.';
     else if (!/^\S+@\S+\.\S+$/.test(values.email.trim())) next.email = 'Enter a valid email address.';
-    if (values.phone && !/^[0-9]{10}$/.test(values.phone)) next.phone = 'Phone must be exactly 10 digits.';
+    if (values.phone && !/^09[0-9]{9}$/.test(values.phone)) next.phone = 'Phone must be 11 digits starting with 09 (e.g. 09171234567).';
     if (!values.roles.length) next.roles = 'Select at least one role.';
     const wantsPassword = !isEditing || values.password || values.password_confirmation;
     if (wantsPassword) {
