@@ -2946,6 +2946,10 @@ class TicketController extends Controller
                 'status'                => $snapshot['status'],
                 'assigned_custodian_id' => $snapshot['assigned_custodian_id'] ?? null,
                 'assigned_at'           => $snapshot['assigned_at'] ?? null,
+                // The ticket's one mechanic — without it they can't submit it
+                // for verification and Admin loses Reassign Mechanic.
+                'assigned_mechanic_id'  => $snapshot['assigned_mechanic_id'] ?? null,
+                'down_since'            => $snapshot['down_since'] ?? null,
                 'inspection_notes'      => $snapshot['inspection_notes'] ?? null,
                 'inspection_result'     => $snapshot['inspection_result'] ?? null,
                 'inspected_by'          => $snapshot['inspected_by'] ?? null,
@@ -2953,7 +2957,7 @@ class TicketController extends Controller
             ]);
 
             $subIssueFields = [
-                'issue_report_id', 'created_by', 'title', 'status', 'assigned_mechanic_id',
+                'issue_report_id', 'created_by', 'title', 'status', 'assigned_mechanic_id', 'prior_mechanic_ids',
                 'maintenance_type', 'work_order_notes', 'mechanic_assigned_at', 'mechanic_assigned_by',
                 'repair_logs', 'parts_used', 'repair_started_at', 'repair_completed_at', 'maintenance_cost',
                 'attachment_url', 'attachment_files',
