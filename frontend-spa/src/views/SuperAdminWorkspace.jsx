@@ -14,6 +14,8 @@ import { formatDate } from '../utils/adminDate';
 import { geoJsonToPolygons } from '../utils/boundary';
 import { ActivityLogTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
+import SupportCenterTab from './SupportCenterTab';
+import ImpersonationPicker from '../components/ImpersonationPicker';
 
 
 // Kept separate from every other role's landing route — a Super Admin never
@@ -26,6 +28,7 @@ import { AuthContext } from '../context/AuthContextObject';
 const TABS = [
   ['dashboard', 'Platform Overview'], ['barangays', 'Barangay Management'], ['pending', 'Pending Approvals'],
   ['users', 'Users'], ['codes', 'Registration Codes'], ['activity', 'Activity Log'],
+  ['support', 'Support Center'],
 ];
 
 const TAB_DESCRIPTIONS = {
@@ -36,6 +39,7 @@ const TAB_DESCRIPTIONS = {
   codes: 'View and regenerate staff registration codes for registered barangays.',
   activity: 'A chronological record of platform and Super Admin activity.',
   settings: 'Manage your Super Admin account settings and security.',
+  support: 'Review and manage concerns submitted through the public Support Center.',
 };
 
 // Only the notification types a Super Admin can actually receive need an
@@ -76,6 +80,7 @@ const TAB_ICONS = {
   codes: <Icon name="key" size={18} className="nav-icon" />,
   activity: <Icon name="clipboard" size={18} className="nav-icon" />,
   settings: <Icon name="key" size={18} className="nav-icon" />,
+  support: <Icon name="mail" size={18} className="nav-icon" />,
 };
 
 function ProfileMenu({ user, open, setOpen, onOpenSettings, onLogout }) {
@@ -637,6 +642,7 @@ export default function SuperAdminWorkspace() {
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
+          <ImpersonationPicker user={user} />
         </div>
 
         <div className="topbar-right">
@@ -798,6 +804,8 @@ export default function SuperAdminWorkspace() {
               <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} barangays={barangays} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
+            ) : activeTab === 'support' ? (
+              <SupportCenterTab onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
             ) : (
               <SettingsTab setNotice={setNotice} />
             )}

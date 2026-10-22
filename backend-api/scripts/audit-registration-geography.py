@@ -19,6 +19,38 @@ provinces = [dict(row) for row in db.execute('select id, name, code from provinc
 cities = [dict(row) for row in db.execute('select id, name, code, province_id from cities')]
 barangays = [dict(row) for row in db.execute('select id, name, psgc_code, city_id from barangays')]
 errors = []
+province_codes = [row['code'] for row in catalog['provinces']]
+city_codes = [row['code'] for row in catalog['cities']]
+barangay_codes = [row['psgc_code'] for entries in catalog['barangays'].values() for row in entries]
+for label, codes in (('province', province_codes), ('city', city_codes), ('barangay', barangay_codes)):
+    if len(codes) != len(set(codes)):
+        errors.append(f'Duplicate bundled {label} codes')
+for city in catalog['cities']:
+    if city['provinceCode'] not in province_codes:
+        errors.append(f"Bundled city has missing province: {city['code']}")
+    if not catalog['barangays'].get(city['code']):
+        errors.append(f"Bundled city has no barangays: {city['code']}")
+for code in catalog['barangays']:
+    if code not in city_codes:
+        errors.append(f'Barangay group has missing city: {code}')
+official = json.loads((root / 'database/data/psgc-official-summary.json').read_text(encoding='utf-8'))
+real_provinces = [row for row in catalog['provinces'] if not row['code'].startswith('PSEUDO-')]
+province_names = {row['name'].casefold().strip() for row in real_provinces}
+city_names = {row['name'].casefold().strip() for row in catalog['cities']}
+freshness_findings = []
+for label, actual, expected in (
+    ('provinces', len(real_provinces), official['provinces']),
+    ('cities_and_municipalities', len(city_codes), official['cities'] + official['municipalities']),
+    ('barangays', len(barangay_codes), official['barangays']),
+):
+    if actual != expected:
+        freshness_findings.append({'level': label, 'bundled': actual, 'official': expected, 'difference': actual - expected})
+for name in official['required_province_names']:
+    if name.casefold() not in province_names:
+        freshness_findings.append({'missing_province': name})
+for code, name in official['required_municipalities'].items():
+    if name.casefold() not in city_names:
+        freshness_findings.append({'missing_municipality': name, 'official_psgc_code': code})
 province_by_code = {row['code']: row for row in provinces}
 city_by_code = {row['code']: row for row in cities}
 barangay_by_code = {row['psgc_code']: row for row in barangays if row['psgc_code']}
@@ -78,17 +110,21 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             print(f'{index}/{len(checks)} checked', flush=True)
 report = {
     'checked_at_utc': datetime.now(timezone.utc).isoformat(),
-    'scope': 'Bundled catalog, database identity/parent coverage, and all live registration dropdown responses; not an audit of latest official PSGC changes.',
+    'scope': 'Bundled hierarchy, database identity/parent coverage, all registration dropdown responses, and PSA 2026-Q3 summary/targeted missing-unit comparison; not a complete official row-by-row comparison.',
     'catalog': {'provinces_and_groups': len(catalog['provinces']), 'cities_and_municipalities': len(catalog['cities']),
                 'barangays': sum(map(len, catalog['barangays'].values()))},
     'database': {'provinces_and_groups': len(provinces), 'cities_and_municipalities': len(cities),
                  'coded_barangays': len(barangay_by_code), 'total_barangays': len(barangays)},
     'live_dropdown_responses_checked': len(checks),
     'errors': errors,
-    'passed': not errors,
+    'internal_consistency_passed': not errors,
+    'official_summary': official,
+    'official_freshness_findings': freshness_findings,
+    'complete_against_current_official_psgc': False if freshness_findings else None,
+    'passed': not errors and not freshness_findings,
 }
 output = root.parent / 'logs/registration-geography-audit.json'
 output.parent.mkdir(exist_ok=True)
 output.write_text(json.dumps(report, indent=2), encoding='utf-8')
 print(json.dumps(report, indent=2))
-raise SystemExit(bool(errors))
+raise SystemExit(bool(errors or freshness_findings))

@@ -74,13 +74,17 @@ class TokenExpirationTest extends TestCase
     }
 
     #[Test]
-    public function the_removed_impersonation_endpoint_cannot_issue_tokens(): void
+    public function production_impersonation_tokens_expire_after_thirty_minutes(): void
     {
-        $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
+        app()['env'] = 'production';
+        $this->freezeTime();
+        $admin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
         $admin->createToken('auth_token', $admin->allRoles());
         \Laravel\Sanctum\Sanctum::actingAs($admin, ['*']);
-        $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Removed feature'])->assertNotFound();
-        $this->assertDatabaseCount('personal_access_tokens', 1);
+        $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Investigate a reported account issue'])->assertOk();
+        $this->assertDatabaseCount('personal_access_tokens', 2);
+        $token = $target->tokens()->where('name', 'impersonation_token')->firstOrFail();
+        $this->assertSame(now()->addMinutes(30)->toDateTimeString(), $token->expires_at->toDateTimeString());
     }
 }

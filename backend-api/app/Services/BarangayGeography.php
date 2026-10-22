@@ -8,6 +8,7 @@ class BarangayGeography
 {
     public const SOURCE = 'namria_hdx_reference_2025';
     public const LEGACY_SOURCE = 'namria_psgc_reference_2023';
+    public const SOURCE_URL = 'https://data.humdata.org/dataset/cod-ab-phl';
 
     /** Code-keyed reference geometry; never substitute a same-named barangay. */
     public function boundary(Barangay $barangay): ?array
@@ -39,7 +40,7 @@ class BarangayGeography
 
     public function resolvedBoundary(Barangay $barangay): ?array
     {
-        if ($barangay->boundary !== null && !$this->hasAutomaticLegacyBoundary($barangay)) {
+        if ($this->usesStoredBoundary($barangay)) {
             return $barangay->boundary;
         }
         return $this->boundary($barangay);
@@ -47,7 +48,23 @@ class BarangayGeography
 
     public function hasAutomaticLegacyBoundary(Barangay $barangay): bool
     {
-        return $barangay->boundary_source === self::LEGACY_SOURCE && $barangay->boundary_verified_by === null;
+        return $barangay->boundary !== null && !$this->usesStoredBoundary($barangay);
+    }
+
+    public function usesStoredBoundary(Barangay $barangay): bool
+    {
+        // A documented administrator choice remains an explicit override. For
+        // code-selected registration, every other stored polygon is a cache:
+        // unsourced seed polygons and even an older SOURCE cache must never
+        // override the current PSGC-keyed reference. Uncoded legacy tenants
+        // cannot be selected on registration and keep their existing map.
+        return $barangay->boundary !== null && (!$barangay->psgc_code
+            || ($barangay->boundary_verified_by !== null && is_string($barangay->boundary_source) && trim($barangay->boundary_source) !== ''));
+    }
+
+    public function resolvedBoundarySource(Barangay $barangay): ?string
+    {
+        return $this->usesStoredBoundary($barangay) ? $barangay->boundary_source : self::SOURCE;
     }
 
     public function isUnreviewedReference(Barangay $barangay): bool
@@ -137,7 +154,7 @@ class BarangayGeography
 
     public function attachBoundary(Barangay $barangay): void
     {
-        if ($barangay->boundary !== null && !$this->hasAutomaticLegacyBoundary($barangay)) {
+        if ($this->usesStoredBoundary($barangay)) {
             if ($this->isUnreviewedReference($barangay) && $barangay->boundary_status === 'verified') {
                 $barangay->update([
                     'boundary_status' => 'needs_review', 'boundary_verified_at' => null,
@@ -148,18 +165,20 @@ class BarangayGeography
             return;
         }
         $geometry = $this->boundary($barangay);
-        if ($geometry) {
-            $barangay->update([
-                'boundary' => $geometry,
-                'boundary_source' => self::SOURCE,
-                'boundary_status' => 'needs_review',
-                'boundary_verified_at' => null,
-                'pending_boundary' => $barangay->pending_boundary ?? $geometry,
-                'pending_boundary_source' => $barangay->pending_boundary_source ?? self::SOURCE,
-            ]);
-        } elseif ($this->hasAutomaticLegacyBoundary($barangay)) {
-            // An unavailable detailed match must not keep serving a coarse triangle.
-            $barangay->update(['boundary' => null, 'boundary_source' => null, 'boundary_status' => 'not_found', 'boundary_verified_at' => null]);
+        $values = [
+            'boundary' => $geometry,
+            'boundary_source' => $geometry ? self::SOURCE : null,
+            'boundary_status' => $geometry ? 'needs_review' : 'not_found',
+            'boundary_verified_at' => null,
+            'boundary_verified_by' => null,
+        ];
+        // Keep a replacement uploaded for review, but replace stale automatic
+        // candidates too; otherwise Confirm could resurrect the wrong outline.
+        if (!is_string($barangay->pending_boundary_source) || !str_starts_with($barangay->pending_boundary_source, self::UPLOADED_SOURCE_PREFIX)) {
+            $values['pending_boundary'] = $geometry;
+            $values['pending_boundary_source'] = $geometry ? self::SOURCE : null;
         }
+        $barangay->fill($values);
+        if ($barangay->isDirty()) $barangay->save();
     }
 }

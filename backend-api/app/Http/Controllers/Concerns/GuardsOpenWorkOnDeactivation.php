@@ -36,9 +36,9 @@ trait GuardsOpenWorkOnDeactivation
         MaintenanceTicket::where('assigned_custodian_id', $user->id)
             ->when($remainingRoles !== null && in_array('Custodian', $remainingRoles, true), fn ($query) => $query->whereRaw('1 = 0'))
             ->whereNotIn('status', ['Closed', 'Cancelled'])
-            ->get(['ticket_id', 'ticket_title'])
+            ->get(['ticket_id', 'barangay_number', 'ticket_title'])
             ->each(function (MaintenanceTicket $ticket) use (&$items) {
-                $items[] = "Ticket #{$ticket->ticket_id} \"{$ticket->ticket_title}\" — assigned Custodian";
+                $items[] = "Ticket #{$ticket->display_number} \"{$ticket->ticket_title}\" — assigned Custodian";
             });
 
         TicketSubIssue::where('assigned_mechanic_id', $user->id)

@@ -14,8 +14,9 @@ class RefreshReferenceBoundaries extends Command
     public function handle(BarangayGeography $geography): int
     {
         $count = 0;
-        Barangay::whereIn('boundary_source', [BarangayGeography::LEGACY_SOURCE, BarangayGeography::SOURCE])
+        Barangay::whereNotNull('psgc_code')
             ->whereNull('boundary_verified_by')
+            ->where(fn ($query) => $query->whereNotNull('boundary')->orWhereIn('boundary_source', [BarangayGeography::LEGACY_SOURCE, BarangayGeography::SOURCE, 'legacy']))
             ->with('city')
             ->chunkById(20, function ($barangays) use ($geography, &$count) {
                 foreach ($barangays as $barangay) {

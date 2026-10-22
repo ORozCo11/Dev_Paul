@@ -318,6 +318,8 @@ php artisan key:generate
 php artisan migrate --seed     # creates SQLite DB + seeds accounts & mock data
 ```
 
+For an existing database, run `php artisan migrate` to apply updates. The barangay numbering migration assigns separate record and ticket numbers to each barangay while preserving database IDs and relationships. Each module starts at 1; deleted numbers are not reused.
+
 By default the app uses **SQLite** (`DB_CONNECTION=sqlite`). Create the file if it doesn't exist:
 ```bash
 touch database/database.sqlite
@@ -421,3 +423,14 @@ Additional generated documentation lives in `docs/`:
 ---
 
 *Barangay Vehicle Management System — a smarter way to manage your barangay's emergency fleet.*
+
+
+## October 22, 2026 review
+
+Vehicle profiles and the fleet dispatch action now provide a paginated trip log with driver, destination, purpose, departure/return times (Philippine time), notes, and recorder. Admin and Custodian permissions apply. This is a usage record; dispatch planning and routing remain outside scope.
+
+Maintenance Tickets default to Pending Approval and Active for Admin. Latest Reports is paginated. Maintenance Records always uses a list. Condition Monitoring summarizes the latest inspection for each active vehicle. Schedule actions use labeled buttons.
+
+The location catalog is internally consistent but outdated against the September 2026 PSA summary. See [the geography audit](docs/geography-audit-2026-10-22.md) for confirmed gaps and verification limits. Run `python backend-api/scripts/audit-registration-geography.py` while the API is running on port 8001; a nonzero exit currently indicates the documented official-data discrepancies.
+
+After pulling this update, run `php artisan migrate` from `backend-api` to apply the included barangay record-number migration.

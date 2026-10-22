@@ -33,6 +33,7 @@ export default function AuthHeader() {
             <Link to={dashboardPath ?? '/login'}>Home</Link>
             <Link to="/about">About</Link>
             <Link to="/developers">Team</Link>
+            <Link to="/support">Support Center</Link>
           </nav>
           {dashboardPath ? (
             <Link to={dashboardPath} className="auth-page-header-login-btn">Back to Dashboard</Link>

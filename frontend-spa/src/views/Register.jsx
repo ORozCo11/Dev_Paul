@@ -1,7 +1,8 @@
 import LoadingOverlay from '../components/LoadingOverlay';
 import './Register.css';
+import 'leaflet/dist/leaflet.css';
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, Polygon, TileLayer } from 'react-leaflet';
+import { MapContainer, Polygon, TileLayer, useMap } from 'react-leaflet';
 import { Link, Navigate } from 'react-router-dom';
 import api from '../api/axios';
 import Icon from '../components/Icon';
@@ -9,7 +10,22 @@ import Aurora from '../components/Aurora';
 import AuthHeader from '../components/AuthHeader';
 import AuthFooter from '../components/AuthFooter';
 import { AuthContext } from '../context/AuthContextObject';
-import { geoJsonToPolygons } from '../utils/boundary';
+import { BOUNDARY_REFERENCE_ATTRIBUTION, geoJsonToPolygons } from '../utils/boundary';
+
+function BoundaryPreviewViewport({ polygons }) {
+  const map = useMap();
+  useEffect(() => {
+    const fit = () => {
+      map.invalidateSize();
+      map.fitBounds(polygons.flat(2), { padding: [16, 16], maxZoom: 16 });
+    };
+    const observer = new ResizeObserver(fit);
+    observer.observe(map.getContainer());
+    fit();
+    return () => observer.disconnect();
+  }, [map, polygons]);
+  return null;
+}
 
 const roleRoutes = {
   Admin: '/admin',
@@ -115,6 +131,7 @@ function Register() {
   // says — this is purely a UX preview, never the source of truth.
   const [isFirstForBarangay, setIsFirstForBarangay] = useState(null);
   const [boundaryPreview, setBoundaryPreview] = useState(null);
+  const [boundaryRetry, setBoundaryRetry] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,7 +176,7 @@ function Register() {
     let cancelled = false;
     api.get(`/barangays/${form.barangay_id}`).then(({ data }) => { if (!cancelled) setBoundaryPreview(data); }).catch(() => { if (!cancelled) setBoundaryPreview({ error: true }); });
     return () => { cancelled = true; };
-  }, [form.barangay_id]);
+  }, [form.barangay_id, boundaryRetry]);
 
   const boundaryPolygons = useMemo(() => geoJsonToPolygons(boundaryPreview?.boundary), [boundaryPreview]);
 
@@ -488,11 +505,13 @@ function Register() {
             {form.barangay_id && <p className="field-hint auth-field-full">Your selected barangay sets your account&apos;s service area. Its map outline may require administrator review.</p>}
             {form.barangay_id && <section className="register-boundary-preview auth-field-full" aria-live="polite">
               <header><strong>Boundary preview</strong><span>PSGC {boundaryPreview?.psgc_code ?? 'Loading…'}</span></header>
+              {boundaryPreview?.name && <p className="register-boundary-identity">{[boundaryPreview.name, boundaryPreview.city_name, boundaryPreview.province_name].filter(Boolean).join(', ')}</p>}
               {boundaryPolygons.length ? <div className="register-boundary-map"><MapContainer key={JSON.stringify(boundaryPreview.boundary)} bounds={boundaryPolygons.flat(2)} style={{ height: '100%', width: '100%' }} scrollWheelZoom={false}>
-                <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <BoundaryPreviewViewport polygons={boundaryPolygons} />
+                <TileLayer attribution={`&copy; OpenStreetMap contributors | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 {boundaryPolygons.map((polygon, index) => <Polygon key={index} positions={polygon} pathOptions={{ color: '#ef4444', weight: 2, fillOpacity: .12 }} />)}
-              </MapContainer></div> : <p>{boundaryPreview?.error ? 'Boundary preview could not be loaded.' : boundaryPreview ? 'No authoritative reference boundary is available for this PSGC record.' : 'Retrieving the PSGC-matched boundary…'}</p>}
-              <small>Reference preview only; it is not a legal boundary certification.</small>
+              </MapContainer></div> : <p>{boundaryPreview?.error ? <>Boundary preview could not be loaded. <button type="button" className="ghost-button" onClick={() => { setBoundaryPreview(null); setBoundaryRetry((value) => value + 1); }}>Retry</button></> : boundaryPreview ? 'No code-matched reference outline is available for this barangay. An administrator can provide a sourced boundary after registration.' : 'Retrieving the PSGC-matched boundary…'}</p>}
+              <small>{boundaryPreview?.boundary && (boundaryPreview.boundary_source_url ? <><a href={boundaryPreview.boundary_source_url} target="_blank" rel="noreferrer">PSA/NAMRIA reference via HDX</a>. </> : <>Administrator-applied boundary. </>)}Reference preview; boundary changes may require an updated LGU source.</small>
             </section>}
 
             {isFirstForBarangay === true && (

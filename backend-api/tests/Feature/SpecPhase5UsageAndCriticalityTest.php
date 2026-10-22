@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleCategory;
 use App\Models\VehicleHub;
+use App\Models\VehicleUsageLog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
@@ -82,6 +83,37 @@ class SpecPhase5UsageAndCriticalityTest extends TestCase
         $this->assertSame(['Critical', 'High', 'Normal'], array_column($watch, 'criticality'));
         $this->assertSame('In maintenance', $watch[0]['reason']);
         $this->assertCount(3, $watch);
+    }
+
+    #[Test]
+    public function trip_history_pages_include_old_trips_details_and_open_trip_on_every_page(): void
+    {
+        $vehicle = $this->vehicle($this->van, 'HISTORY 1');
+        Sanctum::actingAs($this->admin, ['*']);
+        $open = VehicleUsageLog::create([
+            'vehicle_id' => $vehicle->vehicle_id, 'logged_by' => $this->admin->id,
+            'purpose' => 'Ongoing response', 'started_at' => now()->subDays(60),
+        ]);
+        for ($i = 0; $i < 55; $i++) {
+            VehicleUsageLog::create([
+                'vehicle_id' => $vehicle->vehicle_id, 'logged_by' => $this->admin->id,
+                'driver_name' => 'Driver '.$i, 'destination' => 'Municipal hall',
+                'purpose' => 'Supply run', 'notes' => 'Delivered supplies',
+                'started_at' => now()->subDays(56 - $i), 'ended_at' => now()->subDays(56 - $i)->addHour(),
+            ]);
+        }
+        $first = $this->getJson("/api/vehicles/{$vehicle->vehicle_id}/usage?page=1&per_page=10")
+            ->assertOk()->assertJsonPath('total', 56)->assertJsonPath('last_page', 6)
+            ->assertJsonCount(10, 'data')->assertJsonPath('data.0.driver_name', 'Driver 54')
+            ->assertJsonPath('data.0.destination', 'Municipal hall')
+            ->assertJsonPath('data.0.notes', 'Delivered supplies')
+            ->assertJsonPath('open_trip.usage_id', $open->usage_id)->json('data');
+        $last = $this->getJson("/api/vehicles/{$vehicle->vehicle_id}/usage?page=6&per_page=10")
+            ->assertOk()->assertJsonCount(6, 'data')->assertJsonPath('open_trip.usage_id', $open->usage_id)->json('data');
+        $this->assertEmpty(array_intersect(array_column($first, 'usage_id'), array_column($last, 'usage_id')));
+        $this->assertSame($open->usage_id, $last[5]['usage_id']);
+        $this->getJson("/api/vehicles/{$vehicle->vehicle_id}/usage?per_page=101")->assertUnprocessable();
+        $this->getJson("/api/vehicles/{$vehicle->vehicle_id}/usage?page=0")->assertUnprocessable();
     }
 
     #[Test]

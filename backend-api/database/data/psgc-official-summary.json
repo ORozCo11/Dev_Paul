@@ -1,0 +1,23 @@
+{
+  "as_of": "2026-09-30",
+  "verified_on": "2026-10-22",
+  "source_url": "https://psa.gov.ph/classification/psgc/summary",
+  "publication_url": "https://psa.gov.ph/system/files/scd/PSGC-3Q-2026-Publication-Datafile.xlsx",
+  "provinces": 82,
+  "cities": 149,
+  "municipalities": 1493,
+  "barangays": 42010,
+  "required_province_names": ["Maguindanao del Norte", "Maguindanao del Sur"],
+  "required_municipalities": {
+    "1999901000": "Kapalawan",
+    "1999902000": "Old Kaabakan",
+    "1999903000": "Kadayangan",
+    "1999904000": "Nabalawag",
+    "1999905000": "Pahamuddin",
+    "1999906000": "Malidegao",
+    "1999907000": "Ligawasan",
+    "1999908000": "Tugunan"
+  },
+  "municipalities_source_url": "https://psa.gov.ph/classification/psgc/municipalities/1900000000",
+  "limitations": "Summary comparison and targeted missing-unit checks; not a code-by-code comparison with the complete official masterlist. Masterlist download returned HTTP 403; official API requires an access token."
+}

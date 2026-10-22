@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\ScopedThroughVehicle;
+use App\Models\Concerns\HasBarangayNumber;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class TicketArchiveLog extends Model
 {
     use ScopedThroughVehicle;
+    use HasBarangayNumber;
     use SoftDeletes;
 
     protected $primaryKey = 'archive_id';
@@ -21,6 +23,7 @@ class TicketArchiveLog extends Model
 
     protected $fillable = [
         'ticket_id',
+        'ticket_number',
         'vehicle_id',
         'ticket_title',
         'vehicle_name',

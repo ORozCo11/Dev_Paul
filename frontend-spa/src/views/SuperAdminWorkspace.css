@@ -242,3 +242,11 @@ html[data-theme="dark"] .superadmin-shell .workspace-footer { padding-left: 276p
   .superadmin-shell .sa-application-actions .sa-row-actions { width:100%; flex-wrap:wrap; }
   .superadmin-shell .sa-application-actions button { flex:1 1 auto; min-height:44px; }
 }
+.sa-impersonation-picker { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.sa-impersonation-picker > select { width:auto; max-width:175px; min-width:95px; }
+.sa-impersonation-picker > [role="alert"] { flex-basis:100%; font-size:.75rem; color:#b91c1c; }
+@media (max-width:767px) {
+  .superadmin-shell .topbar-left { flex-wrap:wrap; }
+  .sa-impersonation-picker { width:100%; }
+  .sa-impersonation-picker > select { flex:1 1 40%; max-width:100%; }
+}

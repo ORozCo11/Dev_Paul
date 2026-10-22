@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBarangayNumber;
+
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +15,7 @@ class User extends Authenticatable
 {
     // Make sure it is included here inside the class wrapper:
     use HasApiTokens, Notifiable, HasFactory;
+    use HasBarangayNumber;
 
     /**
      * The attributes that are mass assignable.

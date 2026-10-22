@@ -80,6 +80,7 @@ export default function Support() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     setResult(null);
     setSubmitting(true);
     try {
@@ -126,7 +127,7 @@ export default function Support() {
             submission.
           </p>
 
-          <form className="auth-form auth-form-grid support-form" onSubmit={handleSubmit} noValidate>
+          <form className="auth-form auth-form-grid support-form" onSubmit={handleSubmit}>
             <label className="auth-field auth-field-full">
               <span>What's the concern?</span>
               <div className="auth-input-wrapper auth-input-plain">

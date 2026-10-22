@@ -293,7 +293,7 @@ class AuthController extends Controller
     private function canImpersonate(Request $request): bool
     {
         return (bool) $request->user()?->canDo('impersonation.start')
-            || (bool) $request->user()?->currentAccessToken()?->can('impersonated');
+            || (app()->environment('local') && $request->user()?->currentAccessToken()?->name === 'impersonation_token');
     }
 
     /**
@@ -548,7 +548,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
         ]);

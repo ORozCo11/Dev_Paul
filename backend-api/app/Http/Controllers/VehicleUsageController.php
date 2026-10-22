@@ -23,11 +23,22 @@ class VehicleUsageController extends Controller
     {
         $this->requireAbility($request, 'usage.view');
 
-        return $vehicle->hasMany(VehicleUsageLog::class, 'vehicle_id', 'vehicle_id')
-            ->with('loggedBy:id,name')
-            ->orderByDesc('started_at')
-            ->limit(50)
-            ->get();
+        $data = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+        $query = $vehicle->hasMany(VehicleUsageLog::class, 'vehicle_id', 'vehicle_id')
+            ->with('loggedBy:id,name')->orderByDesc('started_at')->orderByDesc('usage_id');
+
+        if ($request->has('page') || $request->has('per_page')) {
+            $result = $query->paginate($data['per_page'] ?? 10);
+            return response()->json(array_merge($result->toArray(), [
+                'open_trip' => $vehicle->hasMany(VehicleUsageLog::class, 'vehicle_id', 'vehicle_id')
+                    ->whereNull('ended_at')->first(),
+            ]));
+        }
+
+        return $query->limit(50)->get();
     }
 
     public function start(Request $request, Vehicle $vehicle)

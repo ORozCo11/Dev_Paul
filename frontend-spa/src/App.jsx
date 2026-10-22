@@ -9,6 +9,7 @@ const Register = lazy(() => import('./views/Register'));
 const Privacy = lazy(() => import('./views/Privacy'));
 const Terms = lazy(() => import('./views/Terms'));
 const About = lazy(() => import('./views/About'));
+const Support = lazy(() => import('./views/Support'));
 const Developers = lazy(() => import('./views/Developers'));
 const Workspace = lazy(() => import('./views/Workspace'));
 const SuperAdminWorkspace = lazy(() => import('./views/SuperAdminWorkspace'));
@@ -47,6 +48,7 @@ function App() {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/about" element={<About />} />
+          <Route path="/support" element={<Support />} />
           <Route path="/developers" element={<Developers />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route

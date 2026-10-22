@@ -43,4 +43,4 @@ html .register-page .auth-split-hero-content p { color: #e2e8f0; font-size: 16px
 .register-boundary-preview header span, .register-boundary-preview small { color:#64748b; font-size:11px; }
 .register-boundary-preview p, .register-boundary-preview small { display:block; margin:0; padding:10px 12px; line-height:1.5; }
 .register-boundary-preview small { border-top:1px solid #d7e1ef; }
-.register-boundary-map { height:110px; background:#e2e8f0; }
+.register-boundary-map { height:240px; background:#e2e8f0; }

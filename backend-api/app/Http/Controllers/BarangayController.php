@@ -59,7 +59,7 @@ class BarangayController extends Controller
      */
     public function show(Barangay $barangay)
     {
-        $barangay->load('city:id,name,code,province_id');
+        $barangay->load('city:id,name,code,province_id', 'city.province:id,name');
         $geography = app(\App\Services\BarangayGeography::class);
         $geometry = $geography->resolvedBoundary($barangay);
         return [
@@ -69,12 +69,14 @@ class BarangayController extends Controller
             'city_id' => $barangay->city_id,
             'city_name' => $barangay->city?->name,
             'province_id' => $barangay->city?->province_id,
+            'province_name' => $barangay->city?->province?->name,
             'boundary' => $geometry,
             // 'verified' means a Super Admin confirmed an uploaded outline that
             // names its source document; every other outline is a reference.
-            'boundary_status' => $geometry ? ($geography->isReviewed($barangay) ? 'verified' : 'needs_review') : $barangay->boundary_status,
+            'boundary_status' => $geometry ? ($geography->isReviewed($barangay) ? 'verified' : 'needs_review') : 'not_found',
             'boundary_verified' => $geometry !== null && $geography->isReviewed($barangay),
-            'boundary_source' => $geometry ? ($barangay->boundary !== null && !$geography->hasAutomaticLegacyBoundary($barangay) ? $barangay->boundary_source : \App\Services\BarangayGeography::SOURCE) : null,
+            'boundary_source' => $geometry ? $geography->resolvedBoundarySource($barangay) : null,
+            'boundary_source_url' => $geometry && $geography->resolvedBoundarySource($barangay) === \App\Services\BarangayGeography::SOURCE ? \App\Services\BarangayGeography::SOURCE_URL : null,
         ];
     }
 }

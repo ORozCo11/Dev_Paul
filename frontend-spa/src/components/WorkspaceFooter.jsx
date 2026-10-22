@@ -10,7 +10,7 @@ export default function WorkspaceFooter() {
           <VMSLogo variant="white" size={28} className="workspace-footer-gear-icon" />
           <span className="vms-wordmark vms-wordmark-md workspace-footer-vms-text">vms</span>
         </div>
-        <p className="workspace-footer-tagline">A System to Manage Your Barangay's Fleet.</p>
+        <p className="workspace-footer-tagline">A system to manage your barangays fleet</p>
       </div>
       <div className="workspace-footer-actions">
         <p className="workspace-footer-copyright">

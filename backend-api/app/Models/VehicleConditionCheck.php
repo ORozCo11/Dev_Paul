@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasBarangayNumber;
+
 use App\Models\Concerns\ScopedThroughVehicle;
 use Illuminate\Database\Eloquent\Model;
 
 class VehicleConditionCheck extends Model
 {
     use ScopedThroughVehicle;
+    use HasBarangayNumber;
 
     protected $primaryKey = 'condition_check_id';
 

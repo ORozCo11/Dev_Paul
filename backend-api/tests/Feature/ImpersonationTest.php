@@ -8,24 +8,47 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
-// The removed feature cannot issue sessions; legacy sessions can still exit safely.
+// Account switching must preserve role, environment, and read-only boundaries.
 class ImpersonationTest extends TestCase
 {
     use RefreshDatabase;
 
     #[Test]
-    public function impersonation_endpoints_are_removed_for_guests_and_all_roles(): void
+    public function guests_and_ordinary_staff_cannot_start_impersonation(): void
     {
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
-        $this->getJson('/api/impersonate/candidates')->assertNotFound();
-        $this->postJson("/api/impersonate/{$target->id}", [])->assertNotFound();
-        foreach (['Admin', 'Custodian', 'Maintenance Personnel', 'Super Admin'] as $role) {
+        $this->getJson('/api/impersonate/candidates')->assertUnauthorized();
+        $this->postJson("/api/impersonate/{$target->id}", [])->assertUnauthorized();
+        foreach (['Custodian', 'Maintenance Personnel'] as $role) {
             $actor = User::factory()->create(['role' => $role, 'roles' => [$role]]);
             Sanctum::actingAs($actor, ['*']);
-            $this->getJson('/api/impersonate/candidates')->assertNotFound();
-            $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Removed feature'])->assertNotFound();
+            $this->getJson('/api/impersonate/candidates')->assertForbidden();
+            $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Inspect a reported problem'])->assertForbidden();
         }
         $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    #[Test]
+    public function super_admin_can_switch_accounts_in_production_with_an_audited_reason(): void
+    {
+        app()['env'] = 'production';
+        $actor = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
+        $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
+        Sanctum::actingAs($actor, $actor->allRoles());
+        $this->getJson('/api/impersonate/candidates')->assertOk()->assertJsonFragment(['id' => $target->id]);
+        $this->postJson("/api/impersonate/{$target->id}", [])->assertUnprocessable();
+        $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Investigate reported account issue'])->assertOk()->assertJsonPath('user.id', $target->id);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Impersonate', 'user_id' => $actor->id]);
+        $this->postJson("/api/impersonate/{$actor->id}", ['reason' => 'Attempt elevated access'])->assertForbidden();
+    }
+
+    #[Test]
+    public function ordinary_admin_impersonation_remains_local_only(): void
+    {
+        app()['env'] = 'production';
+        $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
+        Sanctum::actingAs($admin, $admin->allRoles());
+        $this->getJson('/api/impersonate/candidates')->assertNotFound();
     }
 
     private function impersonationToken(User $user): string
@@ -59,7 +82,7 @@ class ImpersonationTest extends TestCase
         // Existing sessions can exit, but cannot start another impersonation.
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson("/api/impersonate/{$mechanic->id}", ['reason' => 'Same ticket, different account'])
-            ->assertNotFound();
+            ->assertForbidden();
 
         $this->withHeader('Authorization', "Bearer {$token}")
             ->postJson('/api/logout')

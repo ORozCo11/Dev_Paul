@@ -1,3 +1,6 @@
+import VehicleTripLog from '../components/VehicleTripLog';
+import { recordNumber, ticketNumber } from '../utils/recordNumber';
+import { ticketTimeline } from '../utils/ticketTimeline';
 import LoadingOverlay from '../components/LoadingOverlay';
 import EndImpersonationAction from '../components/EndImpersonationAction';
 import './TicketCreation.css';
@@ -767,17 +770,6 @@ function Workspace() {
   // come back for a second visit. Holds the vehicle to check, or null.
   const [readinessPromptTarget, setReadinessPromptTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
-  // Card/List toggle for Maintenance Records, remembered per browser the same
-  // way the Tickets module does it (separate key so the two don't clobber
-  // each other). Defaults to the table — these rows carry more columns worth
-  // scanning than a ticket does.
-  const [maintenanceViewMode, setMaintenanceViewMode] = useState(
-    () => localStorage.getItem('vms_maintenance_view') || 'table'
-  );
-  const changeMaintenanceViewMode = (mode) => {
-    setMaintenanceViewMode(mode);
-    localStorage.setItem('vms_maintenance_view', mode);
-  };
   // Admin's Maintenance Schedule defaults to the card ("ticket") view rather
   // than the plain table — a schedule reads more like a ticket now that its
   // row-level actions are ownership-gated (see scheduleColumns). Everyone
@@ -875,7 +867,7 @@ function Workspace() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState([]);
   const [filterCapacity, setFilterCapacity] = useState([]);
-  const [filterStatus, setFilterStatus] = useState([]);
+  const [filterStatus, setFilterStatus] = useState(() => activeModule === 'tickets' && hasRole(user, 'Admin') ? ['Pending Approval', 'Active'] : []);
   const [filterPriority, setFilterPriority] = useState([]);
   // Location/Domain filters — Vehicle Management only (FilterBar shows
   // these whenever it's given the setters, so only this module's own call
@@ -1131,7 +1123,7 @@ function Workspace() {
      setSearchQuery('');
      setFilterCategory([]);
      setFilterCapacity([]);
-     setFilterStatus([]);
+     setFilterStatus(activeModule === 'tickets' && hasRole(user, 'Admin') ? ['Pending Approval', 'Active'] : []);
      setFilterPriority([]);
      setFilterLocation([]);
      setFilterDomain([]);
@@ -1320,7 +1312,7 @@ function Workspace() {
     const reporterIsCustodian = (ticketLookups.custodians ?? []).some((c) => c.id === reporterId);
     setPrefilledTicketData({
       vehicle_id: issue.vehicle_id,
-      ticket_title: `[Issue #${issue.issue_report_id}] ${issue.issue_type}`,
+      ticket_title: `[Issue #${recordNumber(issue, 'issue_report_id')}] ${issue.issue_type}`,
       // Severity and ticket priority share the same Low / Medium / High scale.
       priority: issue.severity_level,
       ticket_description: `Original Reported Issue: ${issue.issue_description}\nSeverity: ${issue.severity_level}`,
@@ -2147,12 +2139,30 @@ function Workspace() {
   // below) reflect the whole fleet's coverage, not only vehicles someone
   // has gotten around to inspecting.
   const conditionRowsForStats = useMemo(() => {
-    const vehiclesWithRecord = new Set((records.conditions ?? []).map((r) => r.vehicle_id));
-    const uncheckedRows = (lookups.vehicles ?? [])
-      .filter((vehicle) => !vehiclesWithRecord.has(vehicle.vehicle_id))
-      .map(() => ({ condition_result: 'Not Checked' }));
-    return [...(records.conditions ?? []), ...uncheckedRows];
+    const latest = new Map();
+    [...(records.conditions ?? [])].sort((a, b) => String(b.checked_at ?? b.created_at ?? '').localeCompare(String(a.checked_at ?? a.created_at ?? '')) || (b.condition_check_id ?? 0) - (a.condition_check_id ?? 0)).forEach((row) => {
+      if (!latest.has(String(row.vehicle_id))) latest.set(String(row.vehicle_id), row);
+    });
+    return (lookups.vehicles ?? []).filter((vehicle) => !['Inactive', 'Decommissioned'].includes(vehicle.status)).map((vehicle) => latest.get(String(vehicle.vehicle_id)) ?? { condition_result: 'Not Checked' });
   }, [records.conditions, lookups.vehicles]);
+
+  const vehicleStats = useMemo(() => {
+    const rows = records.vehicles ?? [];
+    const countByStatus = (status) => rows.filter((row) => row.status === status).length;
+    // Retired (Inactive/Decommissioned) vehicles were never expected to
+    // respond, so they're excluded from both sides of this split — otherwise
+    // a fleet that's mostly retired reads as "not ready to respond" when
+    // it's really just not in service.
+    const inServiceRows = rows.filter((row) => row.readiness_state !== 'retired');
+    return {
+      total: rows.length,
+      Available: countByStatus('Available'),
+      'Under Maintenance': countByStatus('Under Maintenance'),
+      Inactive: countByStatus('Inactive'),
+      ReadyToRespond: inServiceRows.filter((row) => row.readiness_state === 'ready').length,
+      NotReady: inServiceRows.filter((row) => row.readiness_state !== 'ready').length,
+    };
+  }, [records.vehicles]);
 
   const conditionStats = useMemo(
     () => countByValues(conditionRowsForStats, (r) => r.condition_result, ['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']),
@@ -2200,23 +2210,7 @@ function Workspace() {
     return { total: rows.length, Active: active, Pending: pending, Verified: verified };
   }, [records.ticketVerifications, user.id]);
 
-  const vehicleStats = useMemo(() => {
-    const rows = records.vehicles ?? [];
-    const countByStatus = (status) => rows.filter((row) => row.status === status).length;
-    // Retired (Inactive/Decommissioned) vehicles were never expected to
-    // respond, so they're excluded from both sides of this split — otherwise
-    // a fleet that's mostly retired reads as "not ready to respond" when
-    // it's really just not in service.
-    const inServiceRows = rows.filter((row) => row.readiness_state !== 'retired');
-    return {
-      total: rows.length,
-      Available: countByStatus('Available'),
-      'Under Maintenance': countByStatus('Under Maintenance'),
-      Inactive: countByStatus('Inactive'),
-      ReadyToRespond: inServiceRows.filter((row) => row.readiness_state === 'ready').length,
-      NotReady: inServiceRows.filter((row) => row.readiness_state !== 'ready').length,
-    };
-  }, [records.vehicles]);
+
 
   // For the Vehicle Location module, every vehicle shown on the map should also
   // appear in the records list. We merge the saved location records (history)
@@ -2707,6 +2701,10 @@ function Workspace() {
             <option key={province.id} value={province.id}>{province.name}</option>
           ))}
         </select>
+        <select aria-label="Map boundary city" value={mapCityId} onChange={handleMapCityChange} disabled={!mapProvinceId}>
+          <option value="">Select city</option>
+          {(mapProvinces.find((province) => String(province.id) === String(mapProvinceId))?.cities ?? []).map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}
+        </select>
         <select
           aria-label="Map boundary barangay"
           disabled={barangayOptions.length === 0}
@@ -3007,7 +3005,7 @@ function Workspace() {
                       navigate(`${roleRoutes[user.role]}/tickets/${t.ticket_id}`);
                     }}
                   >
-                    Ticket #{t.ticket_id}{t.ticket_title ? ` — ${t.ticket_title}` : ''}
+                    Ticket #{ticketNumber(t)}{t.ticket_title ? ` — ${t.ticket_title}` : ''}
                   </button>
                 ))}
               </div>
@@ -3871,13 +3869,10 @@ function Workspace() {
         <ModulePanel
           description="Periodic inspection log — a Custodian's routine check-in on a vehicle's physical condition (e.g. a monthly walkaround), separate from Maintenance Records (which logs actual repair work already performed). Each entry here can update the vehicle's Condition field on the fleet list."
           statCards={
-            <ModuleStatCards
-              totalLabel="Total Records"
-              total={conditionStats.total}
-              cards={CONDITION_STAT_CARDS}
-              counts={conditionStats}
-              activeFilter={filterStatus}
-              onFilterChange={setFilterStatus}
+            <StackedBarChart
+              title="Current fleet condition"
+              showPercentages
+              segments={CONDITION_STAT_CARDS.map((card) => ({ label: card.label, value: conditionStats[card.key] ?? 0, color: card.color }))}
             />
           }
           filterBar={
@@ -4150,7 +4145,6 @@ function Workspace() {
           <div className="panel-header-bar">
             <h3>Maintenance Records <span className="count-badge">{visibleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ViewModeDropdown value={maintenanceViewMode} onChange={changeMaintenanceViewMode} />
               {/* No general "+ Add" entry point here anymore — repair data
                   is now entered through Tickets; Maintenance Schedule
                   completions create records through their own path. */}
@@ -4158,34 +4152,20 @@ function Workspace() {
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search maintenance..."
-                columnChooser={maintenanceViewMode === 'card' ? undefined : maintenanceColumnChooser}
+                columnChooser={maintenanceColumnChooser}
               />
             </div>
           </div>
-          {maintenanceViewMode === 'card' ? (
-            <PaginatedCardGrid
-              items={visibleRows}
-              keyOf={(row) => row.maintenance_id}
-              emptyMessage="No maintenance records yet — click the + button to log one."
-              renderItem={(row) => (
-                <MaintenanceRecordCard
-                  record={row}
-                  onClick={() => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`)}
-                />
-              )}
-            />
-          ) : (
             <PaginatedTable
               columns={maintenanceColumnChooser.visibleColumns}
               onReorderColumn={maintenanceColumnChooser.reorderColumn}
-              emptyMessage="No maintenance records yet — click the + button to log one."
+              emptyMessage="No maintenance records yet. Completed maintenance work will appear here."
               rows={visibleRows}
               compact
               onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`)}
             />
-          )}
         </ModulePanel>
-        <FormModal open={!!editTarget?.__verify} title={`Verify Maintenance #${editTarget?.maintenance_id}`} onClose={() => setEditTarget(null)}>
+        <FormModal open={!!editTarget?.__verify} title={`Verify Maintenance #${recordNumber(editTarget, 'maintenance_id')}`} onClose={() => setEditTarget(null)}>
           <SmartForm
             fields={verificationFields}
             key={editTarget?.maintenance_id}
@@ -4215,7 +4195,7 @@ function Workspace() {
               onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`)}
             />
           </ModulePanel>
-          <FormModal open={!!editTarget} title={`Verify Maintenance #${editTarget?.maintenance_id}`} onClose={() => setEditTarget(null)}>
+          <FormModal open={!!editTarget} title={`Verify Maintenance #${recordNumber(editTarget, 'maintenance_id')}`} onClose={() => setEditTarget(null)}>
             <SmartForm
               fields={verificationFields}
               key={editTarget?.maintenance_id}
@@ -5224,7 +5204,7 @@ function IssueViewPage({ issueId, allHubs = [], user, onCreateTicketFromIssue, o
     <ModulePanel description="Full details of this reported vehicle issue.">
       <div className="vehicle-profile-header">
         <div className="vehicle-profile-identity">
-          <span className="ticket-detail-id">Issue #{issue.issue_report_id}</span>
+          <span className="ticket-detail-id">Issue #{recordNumber(issue, 'issue_report_id')}</span>
           <h3 className="ticket-detail-title">{issue.issue_type}</h3>
           <div className="ticket-detail-meta">
             <TicketStatusBadge value={issue.severity_level} />
@@ -5304,9 +5284,9 @@ function IssueViewPage({ issueId, allHubs = [], user, onCreateTicketFromIssue, o
                     <strong>Linked Ticket:</strong>{' '}
                     {actions?.viewTicket ? (
                       <button type="button" className="issue-view-identity-link" style={{ display: 'inline', fontSize: 'inherit' }} onClick={() => actions.viewTicket(issue.maintenance_ticket)}>
-                        Ticket #{issue.maintenance_ticket.ticket_id}
+                        Ticket #{ticketNumber(issue.maintenance_ticket)}
                       </button>
-                    ) : <>Ticket #{issue.maintenance_ticket.ticket_id}</>}
+                    ) : <>Ticket #{ticketNumber(issue.maintenance_ticket)}</>}
                     {' '}<TicketStatusBadge value={issue.maintenance_ticket.status} />
                   </p>
                 )}
@@ -5418,7 +5398,7 @@ function profileFields(existingPhotoUrl) {
   return [
     { label: 'Full Name', name: 'name', required: true, type: 'text' },
     { label: 'Email', name: 'email', required: true, type: 'text', placeholder: 'name@barangay.gov' },
-    { label: 'Phone', name: 'phone', type: 'tel', pattern: '[0-9]{10}', placeholder: '09XXXXXXXXX', title: 'Phone must be exactly 10 digits' },
+    { label: 'Phone', name: 'phone', type: 'tel', maxLength: 11, pattern: '09[0-9]{9}', placeholder: '09XXXXXXXXX', title: 'Phone must be 11 digits starting with 09' },
     { label: 'Address', name: 'address', type: 'text' },
     { label: 'Profile Photo', name: 'photo', accept: 'image/*', type: 'file', existingUrl: existingPhotoUrl },
   ];
@@ -5897,7 +5877,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
     const field = fields.find((f) => f.name === name);
     let nextValue = field?.uppercase ? value.toUpperCase() : value;
     if (field?.type === 'tel' && name === 'phone') {
-      nextValue = value.replace(/[^0-9]/g, '').slice(0, 10);
+      nextValue = value.replace(/[^0-9]/g, '').slice(0, 11);
     }
     // 'multi-file' fields render their own dropzone/input with a dedicated
     // onChange (see the field renderer below) — this generic handler only
@@ -7133,7 +7113,7 @@ function OpenItemsWarning({ kind, rows, basePath }) {
             const id = r.issue_report_id ?? r.ticket_id;
             const label = r.issue_report_id
               ? `#${r.issue_report_id} ${r.issue_type} (${r.severity_level}) — ${r.status}`
-              : `#${r.ticket_id} ${r.ticket_title} — ${r.status}`;
+              : `#${ticketNumber(r)} ${r.ticket_title} — ${r.status}`;
             const href = basePath ? `${basePath}/${r.issue_report_id ? 'issues' : 'tickets'}/${id}` : null;
             return (
               <li key={id} style={{ fontSize: '0.85rem', color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -7413,7 +7393,7 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
     if (!values.name.trim()) next.name = 'Full Name is required.';
     if (!values.email.trim()) next.email = 'Email is required.';
     else if (!/^\S+@\S+\.\S+$/.test(values.email.trim())) next.email = 'Enter a valid email address.';
-    if (values.phone && !/^[0-9]{10}$/.test(values.phone)) next.phone = 'Phone must be exactly 10 digits.';
+    if (values.phone && !/^09[0-9]{9}$/.test(values.phone)) next.phone = 'Phone must be 11 digits starting with 09.';
     if (!values.roles.length) next.roles = 'Select at least one role.';
     const wantsPassword = !isEditing || values.password || values.password_confirmation;
     if (wantsPassword) {
@@ -7479,7 +7459,7 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
               <input id="u-email" type="email" value={values.email} placeholder="name@barangay.gov" onChange={(e) => set('email', e.target.value)} />
             </FxField>
             <FxField id="u-phone" label="Phone" error={errors.phone}>
-              <input id="u-phone" type="tel" inputMode="numeric" value={values.phone} placeholder="09XXXXXXXXX" onChange={(e) => set('phone', e.target.value)} />
+              <input id="u-phone" type="tel" inputMode="numeric" maxLength={11} pattern="09[0-9]{9}" value={values.phone} placeholder="09XXXXXXXXX" onChange={(e) => set('phone', e.target.value.replace(/\D/g, '').slice(0, 11))} />
             </FxField>
             <FxField id="u-address" label="Address">
               <input id="u-address" type="text" value={values.address} onChange={(e) => set('address', e.target.value)} />
@@ -8235,15 +8215,7 @@ function ReportsModule({ lookups, onGenerate }) {
 
 // NOTE: no "In Use" card — the status exists in the DB enum but this system
 // tracks availability only (no dispatch flow ever sets a vehicle to In Use).
-const VEHICLE_STAT_CARDS = [
-  { key: 'Available', label: 'Available', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
-  { key: 'Under Maintenance', label: 'Under Maintenance', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
-  { key: 'Inactive', label: 'Inactive', icon: 'archive', bg: '#fee2e2', color: '#dc2626' },
-  // Distinct from "Available" — a vehicle can be Available yet never (or no
-  // longer) proven ready by an actual readiness check. See responseReadinessState().
-  { key: 'ReadyToRespond', label: 'Ready to Respond', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
-  { key: 'NotReady', label: 'Not Ready to Respond', icon: 'alert', bg: '#fee2e2', color: '#dc2626' },
-];
+
 
 const ISSUE_STAT_CARDS = [
   { key: 'Pending', label: 'Pending', icon: 'alert', bg: '#fef3c7', color: '#d97706' },
@@ -8251,17 +8223,6 @@ const ISSUE_STAT_CARDS = [
   { key: 'In Maintenance', label: 'In Maintenance', icon: 'wrench', bg: '#fee2e2', color: '#dc2626' },
   { key: 'Resolved', label: 'Resolved', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
-
-// Severity filter chips — same colors as the Issue Reports bar chart's own
-// High/Medium/Low segments (see the StackedBarChart segments above).
-const ISSUE_SEVERITY_CHIP_BG = { High: '#fee2e2', Medium: '#fef3c7', Low: '#e0f2fe' };
-const ISSUE_SEVERITY_CHIP_COLOR = { High: '#dc2626', Medium: '#f59e0b', Low: '#0ea5e9' };
-// Darker text for the same hues, so chip labels reach 4.5:1 on their pale
-// chip backgrounds (the base colours stay for icons and bars).
-const CHIP_TEXT_COLOR = {
-  '#dc2626': '#991b1b', '#f59e0b': '#92400e', '#d97706': '#92400e', '#a16207': '#713f12',
-  '#0ea5e9': '#075985', '#16a34a': '#166534', '#64748b': '#334155',
-};
 
 // Simplified per product direction: the urgency breakdown (Overdue/1-3
 // Days/4-7 Days) was its own set of cards here — removed in favor of a
@@ -8283,6 +8244,16 @@ const SCHEDULE_STAT_CARDS = [
 // Only shown to a Maintenance-Personnel-only viewer — "how many vehicles do
 // I still need to do", not the fleet-wide count everyone else also sees.
 const MY_ASSIGNED_SCHEDULE_CARD = { key: 'MyAssigned', label: 'Assigned to You', icon: 'wrench', bg: '#eff6ff', color: '#1d4ed8' };
+
+const VEHICLE_STAT_CARDS = [
+  { key: 'Available', label: 'Available', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
+  { key: 'Under Maintenance', label: 'Under Maintenance', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
+  { key: 'Inactive', label: 'Inactive', icon: 'archive', bg: '#fee2e2', color: '#dc2626' },
+  // Distinct from "Available" — a vehicle can be Available yet never (or no
+  // longer) proven ready by an actual readiness check. See responseReadinessState().
+  { key: 'ReadyToRespond', label: 'Ready to Respond', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
+  { key: 'NotReady', label: 'Not Ready to Respond', icon: 'alert', bg: '#fee2e2', color: '#dc2626' },
+];
 
 const CONDITION_STAT_CARDS = [
   { key: 'Good', label: 'Good', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
@@ -8422,7 +8393,7 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFil
 
 function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus, onViewTicket, onReadinessCheck, onDispatch) {
   const columns = [
-    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.vehicle_id },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'vehicle_id') },
     { key: 'type', label: 'Type', render: (row) => row.category?.category_name ?? 'Unassigned' },
     { key: 'brand_model', label: 'Brand / Model', render: (row) => `${row.brand} ${row.model}` },
     {
@@ -8529,7 +8500,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
               Edit/Delete always land in the same column across rows instead
               of shifting depending on whether a row has this button. */}
           {row.open_ticket_id && onViewTicket ? (
-            <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.open_ticket_id })} type="button" title={`View Ticket #${row.open_ticket_id}`} aria-label={`View Ticket #${row.open_ticket_id}`}><Icon name="ticket" size={14} /></button>
+            <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.open_ticket_id })} type="button" title={`View Ticket #${row.open_ticket_number ?? row.open_ticket_id}`} aria-label={`View Ticket #${row.open_ticket_number ?? row.open_ticket_id}`}><Icon name="ticket" size={14} /></button>
           ) : (
             <span className="icon-btn-spacer" aria-hidden="true" />
           )}
@@ -8537,7 +8508,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
             (row.status === 'Inactive' || row.status === 'Decommissioned') ? (
               <span className="icon-btn-spacer" aria-hidden="true" />
             ) : (
-              <button className="btn-view-action icon-btn" onClick={() => onDispatch(row)} type="button" title="Dispatch status" aria-label="Dispatch status"><Icon name="vehicle" size={14} /></button>
+              <button className="btn-view-action icon-btn" onClick={() => onDispatch(row)} type="button" title="Trip log and dispatch" aria-label="Trip log and dispatch"><Icon name="vehicle" size={14} /></button>
             )
           )}
           {canCheckReadiness && (
@@ -8589,7 +8560,7 @@ function categoryColumns(onEdit, deleteRecord) {
 
 function userColumns(onEdit, onToggleActive, currentUserId) {
   return [
-    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.id },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'id') },
     { key: 'user', label: 'User', locked: true, render: (row) => <UserAvatarName user={row} /> },
     { key: 'email', label: 'Email', render: (row) => row.email },
     { key: 'phone', label: 'Phone', className: 'cell-center', render: (row) => row.phone ?? '-' },
@@ -8649,7 +8620,7 @@ function UserCard({ user: person, onClick }) {
 
 function locationColumns(currentUser, onViewOnMap, onEdit) {
   return [
-  { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.location_record_id ?? 'Current' },
+  { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'location_record_id') ?? 'Current' },
   { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
   { key: 'status', label: 'Status', className: 'cell-center', render: (row) => <StatusBadge value={row.vehicle?.status ?? '-'} /> },
   { key: 'current_location', label: 'Current Location', render: (row) => row.current_location ?? '-' },
@@ -8700,7 +8671,7 @@ function locationColumns(currentUser, onViewOnMap, onEdit) {
 
 function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onAddCondition) {
   const columns = [
-    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.condition_check_id ?? '-' },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'condition_check_id') ?? '-' },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'result', label: 'Result', className: 'cell-center', render: (row) => <StatusBadge value={row.condition_result} /> },
     { key: 'checked_by', label: 'Checked By', className: 'cell-center', render: (row) => <UserAvatarName user={row.checked_by} /> },
@@ -8811,6 +8782,8 @@ function LatestIssueCard({ issues = [] }) {
     [issues]
   );
 
+  const pagination = usePagination(sorted.length, { pageSizeOptions: [5, 10, 25], initialPageSize: 5 });
+
   return (
     <aside className="panel latest-issue-card latest-issue-timeline">
       <div className="latest-issue-card-head">
@@ -8821,7 +8794,7 @@ function LatestIssueCard({ issues = [] }) {
         {sorted.length === 0 ? (
           <p className="muted">No issues reported yet.</p>
         ) : (
-          sorted.map((row) => (
+          sorted.slice(pagination.start, pagination.end).map((row) => (
             <div
               key={row.issue_report_id}
               className="latest-issue-timeline-item"
@@ -8839,6 +8812,7 @@ function LatestIssueCard({ issues = [] }) {
           ))
         )}
       </div>
+      <PaginationControls {...pagination} />
     </aside>
   );
 }
@@ -9264,7 +9238,7 @@ function RowActionsMenu({ children, alwaysVisible = false }) {
 
 function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, onView, deleteRecord, user, onViewTicket, onDismiss) {
   const columns = [
-    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => row.issue_report_id },
+    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'issue_report_id') },
     {
       key: 'issue',
       label: 'Issue',
@@ -9318,7 +9292,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
             className="issue-reporter-link"
             onClick={(e) => { e.stopPropagation(); onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id }); }}
           >
-            Ticket #{row.maintenance_ticket.ticket_id}
+            Ticket #{ticketNumber(row.maintenance_ticket)}
           </button>
         )
         : <span className="muted" title="No ticket has been started for this report yet">—</span>),
@@ -9335,7 +9309,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
       render: (row) => (
         <RowActionsMenu alwaysVisible>
           {row.maintenance_ticket && onViewTicket ? (
-            <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id })} type="button" title={`View Ticket #${row.maintenance_ticket.ticket_id}`} aria-label={`View Ticket #${row.maintenance_ticket.ticket_id}`}><Icon name="eye" size={14} /></button>
+            <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id })} type="button" title={`View Ticket #${ticketNumber(row.maintenance_ticket)}`} aria-label={`View Ticket #${ticketNumber(row.maintenance_ticket)}`}><Icon name="eye" size={14} /></button>
           ) : (
             <button className="btn-view-action icon-btn" onClick={() => onView(row)} type="button" title="View" aria-label="View"><Icon name="eye" size={14} /></button>
           )}
@@ -9364,7 +9338,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
       render: (row) => (
         <RowActionsMenu alwaysVisible>
           {row.maintenance_ticket && onViewTicket ? (
-            <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id })} type="button" title={`View Ticket #${row.maintenance_ticket.ticket_id}`} aria-label={`View Ticket #${row.maintenance_ticket.ticket_id}`}><Icon name="eye" size={14} /></button>
+            <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id })} type="button" title={`View Ticket #${ticketNumber(row.maintenance_ticket)}`} aria-label={`View Ticket #${ticketNumber(row.maintenance_ticket)}`}><Icon name="eye" size={14} /></button>
           ) : (
             <button className="btn-view-action icon-btn" onClick={() => onView(row)} type="button" title="View" aria-label="View"><Icon name="eye" size={14} /></button>
           )}
@@ -9384,7 +9358,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
 
 function maintenanceColumns(role, setEditTarget, updateRecord, onViewRecord, user) {
   const columns = [
-    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => row.maintenance_id },
+    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'maintenance_id') },
     { key: 'vehicle', label: 'Vehicle', width: '15%', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
     { key: 'plate', label: 'Plate Number', width: '8%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     {
@@ -9483,89 +9457,6 @@ function isClosedUnverified(record) {
 // Card-view counterpart to the Maintenance Records table — mirrors TicketCard
 // (and reuses its themed .ticket-card-* classes) so both modules read as the
 // same product rather than two different card systems.
-function MaintenanceRecordCard({ record, onClick }) {
-  const stageIndex = maintenanceStageIndex(record);
-  const isDone = record.progress_status === 'Completed';
-  const unverified = isClosedUnverified(record);
-  const stagesDone = stageIndex + 1;
-
-  return (
-    <div className="ticket-card maintenance-record-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(); } }}>
-      <div className="ticket-card-top">
-        <span className="ticket-card-id">Record #{record.maintenance_id}</span>
-        <StatusBadge value={record.progress_status} />
-      </div>
-      <div className="maintenance-record-source"><StatusBadge value={record.source} /></div>
-      <div className="ticket-card-content-wrapper">
-        <div className="ticket-card-info">
-          <p className="ticket-card-title">{record.maintenance_type}</p>
-          <p className="ticket-card-vehicle">
-            {record.vehicle?.vehicle_name}{record.vehicle?.plate_number ? ` · ${record.vehicle.plate_number}` : ''}
-          </p>
-        </div>
-        {record.vehicle?.photo_url && (
-          <div className="ticket-card-photo">
-            <img src={resolvePhotoUrl(record.vehicle.photo_url)} alt={record.vehicle.vehicle_name} />
-          </div>
-        )}
-      </div>
-
-      {/* Same four stages as the detail page, compressed to a single bar —
-          green only once it's genuinely finished. */}
-      <div style={{ margin: '8px 0 2px' }}>
-        <div style={{ height: 6, borderRadius: 999, background: '#e2e8f0', overflow: 'hidden' }}>
-          <div style={{
-            height: '100%',
-            width: `${(stagesDone / MAINTENANCE_PROGRESS_STAGES.length) * 100}%`,
-            background: isDone ? '#16a34a' : '#d97706',
-            borderRadius: 999,
-          }} />
-        </div>
-        <span className="muted" style={{ fontSize: '0.72rem' }}>
-          {MAINTENANCE_PROGRESS_STAGES[stageIndex] ?? record.progress_status} · stage {stagesDone} of {MAINTENANCE_PROGRESS_STAGES.length}
-        </span>
-      </div>
-
-      {(unverified || record.is_external || record.source_vehicle) && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, margin: '6px 0 2px' }}>
-          {unverified && (
-            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }} title="Closed by Admin without Custodian verification.">
-              UNVERIFIED CLOSE
-            </span>
-          )}
-          {record.is_external && (
-            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd' }} title={record.external_vendor || 'External shop'}>
-              EXTERNAL
-            </span>
-          )}
-          {record.source_vehicle && (
-            <span style={{ fontSize: '0.66rem', fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }} title={`${record.part_name ? `${record.part_name} c` : 'C'}annibalized from ${record.source_vehicle.vehicle_name}`}>
-              ⚙ {record.part_name ? `${record.part_name} — ` : ''}{record.source_vehicle.vehicle_name}
-            </span>
-          )}
-        </div>
-      )}
-
-      <div className="ticket-card-bottom">
-        {record.verification_result
-          ? <StatusBadge value={record.verification_result} />
-          : <span className="muted" style={{ fontSize: '0.72rem' }}>{record.maintenance_personnel?.name ?? record.performed_by_other ?? '—'}</span>}
-        {(record.verified_by?.name || record.maintenance_personnel?.name) && (
-          <TicketPersonnelAvatars people={[record.verified_by?.name && { ...record.verified_by, role: 'Custodian' }, record.maintenance_personnel?.name && { ...record.maintenance_personnel, role: 'Maintenance Personnel' }].filter(Boolean)} />
-        )}
-        <span className="ticket-card-date">{formatDate(record.date_completed ?? record.date_started)}</span>
-      </div>
-    </div>
-  );
-}
-
-// Read-rich detail PAGE for a single Maintenance Record — same spirit as the
-// Ticket detail page (a visual progress trail instead of a flat status
-// word), but for the linear Assigned -> ... -> Completed chain a Record
-// follows instead of a ticket's per-sub-issue breakdown. Reachable both from
-// the Maintenance Records table and from a completed Schedule row, so
-// there's one consistent "view what actually happened" experience instead
-// of only ever landing in the plain edit form.
 function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose, canManage }) {
   const [closing, setClosing] = useState(false);
   const onHold = record.progress_status === 'On Hold - Awaiting Parts';
@@ -9580,10 +9471,10 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
   const closedUnverified = isClosedUnverified(record);
 
   return (
-    <ModulePanel description={`Maintenance #${record.maintenance_id}`}>
+    <ModulePanel description={`Maintenance #${recordNumber(record, 'maintenance_id')}`}>
       <div className="maintenance-record-detail">
         <header className="maintenance-report-heading">
-          <div><span className="maintenance-detail-label">Service record #{record.maintenance_id}</span><h2>{record.maintenance_type || 'Maintenance record'}</h2><p>Repair details, completion evidence, and verification.</p></div>
+          <div><span className="maintenance-detail-label">Service record #{recordNumber(record, 'maintenance_id')}</span><h2>{record.maintenance_type || 'Maintenance record'}</h2><p>Repair details, completion evidence, and verification.</p></div>
           <StatusBadge value={record.progress_status} />
         </header>
         <div className="maintenance-record-hero">
@@ -9792,7 +9683,7 @@ function MaintenanceRecordProfilePage({ maintenanceId, onConfirm, onReopen, onDe
 
 function maintenanceStatusColumns(setEditTarget, currentUserId) {
   return [
-    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.maintenance_id },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'maintenance_id') },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'type', label: 'Type', className: 'cell-center', render: (row) => row.maintenance_type },
     { key: 'source', label: 'Source', className: 'cell-center', render: (row) => <StatusBadge value={row.source} /> },
@@ -9820,7 +9711,7 @@ function maintenanceStatusColumns(setEditTarget, currentUserId) {
 function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRecord, restoreRecord, onReassign, onViewTicket, onApprove, onDecline) {
   const currentUserId = currentUser?.id;
   return [
-    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => row.schedule_id },
+    { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'schedule_id') },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'type', label: 'Type', className: 'cell-center', render: (row) => row.maintenance_type },
     {
@@ -9907,54 +9798,14 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
       locked: true,
       className: 'cell-center',
       render: (row) => (
-        <div className="row-actions" style={{ flexWrap: 'wrap' }}>
-          {row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket && (
-            <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" title={`This schedule became Ticket #${row.resulting_ticket_id} — open it`} aria-label={`Open Ticket #${row.resulting_ticket_id}`}><Icon name="ticket" size={14} /></button>
-          )}
-          {row.status === 'Scheduled' && !row.resulting_ticket_id && onComplete && (currentUserId != null && String(row.assigned_to) === String(currentUserId)) && (
-            <button className="btn-confirm-action icon-btn" onClick={() => onComplete(row)} type="button" title="Mark as Done" aria-label="Mark as Done"><Icon name="checkCircle" size={14} /></button>
-          )}
-          {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && (
-            <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label="View Maintenance Record"><Icon name="wrench" size={14} /></button>
-          )}
-          {/* Admin reviews a Custodian's booked schedule before it goes live
-              — same propose/approve/decline shape as a ticket proposal. A
-              Declined row can still be approved directly (no undecline
-              needed first), same as tickets. */}
-          {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && (
-            <button className="btn-confirm-action icon-btn" onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} /></button>
-          )}
-          {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && (
-            <button className="btn-delete-action icon-btn" onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} /></button>
-          )}
-          {/* Edit/Delete/Restore are Custodian-only abilities (config/
-              permissions.php: schedule.edit/.delete/.restore => ['Custodian']
-              — Admin doesn't hold them), gated by canDo rather than role so
-              this actually matches what the backend will accept. Any
-              Custodian may edit or cancel any schedule in their barangay,
-              not only the ones they booked. A Maintenance Personnel assigned to it only
-              ever gets to act on it via Mark as Done above. */}
-          {canDo(currentUser, 'schedule.edit') && (
-            <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
-          )}
-          {/* schedule.reassign (Admin only, config/permissions.php) — Admin's
-              one remaining lever over an already-booked schedule: hand a
-              still-open Scheduled row to a different Maintenance Personnel
-              without cancelling and re-booking it (see the ability's own
-              comment there for why this stayed with Admin). */}
-          {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && (
-            <button className="btn-view-action icon-btn" onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} /></button>
-          )}
-          {/* Cancelling a schedule is a soft cancel — the row survives — so a
-              cancelled one gets Restore instead of a Delete that would do
-              nothing. Same swap vehicleColumns makes for archived vehicles. */}
-          {row.status === 'Cancelled'
-            ? canDo(currentUser, 'schedule.restore') && restoreRecord && (
-              <button className="btn-confirm-action icon-btn" onClick={() => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored.', 'Restore this cancelled schedule back to Scheduled?')} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /></button>
-            )
-            : canDo(currentUser, 'schedule.delete') && (
-              <button className="btn-delete-action icon-btn" onClick={() => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.', `Cancel the ${row.maintenance_type} schedule for ${row.vehicle?.vehicle_name ?? 'this vehicle'}? It can be restored later if needed.`)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /></button>
-            )}
+        <div className="schedule-table-actions">
+          <MaintenanceScheduleActions
+            row={row} currentUser={currentUser} onEdit={onEdit} onComplete={onComplete}
+            onViewRecord={onViewRecord} onReassign={onReassign} onViewTicket={onViewTicket}
+            onApprove={onApprove} onDecline={onDecline}
+            onRestore={restoreRecord ? () => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored.', 'Restore this cancelled schedule back to Scheduled?') : undefined}
+            onDelete={() => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.', `Cancel the ${row.maintenance_type} schedule for ${row.vehicle?.vehicle_name ?? 'this vehicle'}? It can be restored later if needed.`)}
+          />
         </div>
       ),
     },
@@ -10021,7 +9872,7 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
               {row.vehicle?.photo_url ? <img src={resolvePhotoUrl(row.vehicle.photo_url)} alt={row.vehicle.vehicle_name} /> : <Icon name="vehicle" size={26} />}
             </button>
             <div className="schedule-detail-heading">
-              <div className="schedule-detail-eyebrow">Maintenance schedule <span>#{row.schedule_id}</span></div>
+              <div className="schedule-detail-eyebrow">Maintenance schedule <span>#{recordNumber(row, 'schedule_id')}</span></div>
               <h2>{row.maintenance_type}</h2>
               <p>{row.vehicle?.vehicle_name || 'Vehicle not assigned'}{row.vehicle?.plate_number ? <span> · {row.vehicle.plate_number}</span> : null}</p>
             </div>
@@ -10036,7 +9887,7 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
           <section className="schedule-detail-main">
             <div className="schedule-detail-section-heading">
               <div><span className="schedule-detail-kicker">Service plan</span><h3>Schedule information</h3></div>
-              <span className="schedule-detail-count"><Icon name="calendar" size={14} /> Schedule #{row.schedule_id}</span>
+              <span className="schedule-detail-count"><Icon name="calendar" size={14} /> Schedule #{recordNumber(row, 'schedule_id')}</span>
             </div>
             <dl className="schedule-detail-facts">
               <div className={`schedule-detail-fact${overdue ? ' is-alert' : ''}`}><dt><Icon name="calendar" size={15} /> Scheduled date</dt><dd>{dateLabel}</dd></div>
@@ -10055,8 +9906,8 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
               <span className="schedule-detail-kicker">Workflow</span>
               <div className="schedule-detail-workflow-title"><span className="schedule-detail-workflow-icon"><Icon name={linkedTicket ? 'ticket' : linkedRecord ? 'wrench' : 'calendar'} size={17} /></span><h3>{linkedTicket ? 'Maintenance ticket' : linkedRecord ? 'Maintenance record' : row.status === 'Pending Approval' ? 'Approval pending' : 'Schedule tracking'}</h3></div>
               <p>{statusMessage}</p>
-              {linkedTicket && <button type="button" className="btn-view-action sch-linked-action schedule-detail-link" onClick={() => actions.onViewTicket({ ticket_id: row.resulting_ticket_id })}><Icon name="ticket" size={15} /> Open Ticket #{row.resulting_ticket_id}</button>}
-              {linkedRecord && <button type="button" className="btn-view-action sch-linked-action schedule-detail-link" onClick={() => actions.onViewRecord(row)}><Icon name="wrench" size={15} /> Open Record #{row.resulting_maintenance_id}</button>}
+              {linkedTicket && <button type="button" className="btn-view-action sch-linked-action schedule-detail-link" onClick={() => actions.onViewTicket({ ticket_id: row.resulting_ticket_id })}><Icon name="ticket" size={15} /> Open Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</button>}
+              {linkedRecord && <button type="button" className="btn-view-action sch-linked-action schedule-detail-link" onClick={() => actions.onViewRecord(row)}><Icon name="wrench" size={15} /> Open Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</button>}
               {row.status === 'Completed' && completedRecord && <div className={`schedule-detail-verification${completedRecord.progress_status === 'Completed' ? ' is-done' : ''}`}><span>{completedRecord.progress_status === 'Completed' ? 'Verification complete' : 'Record awaiting verification'}</span><strong>{completedRecord.date_completed ? formatDate(completedRecord.date_completed) : completedRecord.progress_status}</strong></div>}
             </section>
             <section className="schedule-detail-actions"><span className="schedule-detail-kicker">Available actions</span><h3>Schedule actions</h3><MaintenanceScheduleActions row={row} currentUser={currentUser} {...actions} /></section>
@@ -10073,16 +9924,16 @@ function MaintenanceScheduleActions({ row, currentUser, onComplete, onEdit, onDe
   const becameTicket = row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket;
   return (
     <div className="sch-card-actions">
-      {canComplete && <button className="btn-confirm-action icon-btn" onClick={() => onComplete(row)} type="button" title="Mark as Done" aria-label="Mark as Done"><Icon name="checkCircle" size={14} /></button>}
-      {becameTicket && <button className="btn-view-action sch-linked-action" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" title={`This schedule became Ticket #${row.resulting_ticket_id} — open it`}><Icon name="ticket" size={14} /> Ticket #{row.resulting_ticket_id}</button>}
-      {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className="btn-view-action sch-linked-action" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record"><Icon name="wrench" size={14} /> Record #{row.resulting_maintenance_id}</button>}
-      {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className="btn-confirm-action icon-btn" onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} /></button>}
-      {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className="btn-delete-action icon-btn" onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} /></button>}
-      {canDo(currentUser, 'schedule.edit') && <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>}
-      {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className="btn-view-action icon-btn" onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} /></button>}
+      {canComplete && <button className="sch-action is-success" onClick={() => onComplete(row)} type="button" title="Mark as Done" aria-label="Mark as Done"><Icon name="checkCircle" size={14} /><span>Mark as Done</span></button>}
+      {becameTicket && <button className="sch-action is-info" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" title={`This schedule became Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })} — open it`}><Icon name="ticket" size={14} /> Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</button>}
+      {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className="sch-action is-info" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record"><Icon name="wrench" size={14} /> Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</button>}
+      {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className="sch-action is-success" onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} /><span>Approve</span></button>}
+      {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className="sch-action is-danger" onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} /><span>Decline</span></button>}
+      {canDo(currentUser, 'schedule.edit') && <button className="sch-action" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /><span>Edit</span></button>}
+      {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className="sch-action is-info" onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} /><span>Reassign</span></button>}
       {row.status === 'Cancelled'
-        ? canDo(currentUser, 'schedule.restore') && onRestore && <button className="btn-confirm-action icon-btn" onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /></button>
-        : canDo(currentUser, 'schedule.delete') && <button className="btn-delete-action icon-btn" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /></button>}
+        ? canDo(currentUser, 'schedule.restore') && onRestore && <button className="sch-action is-success" onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /><span>Restore</span></button>
+        : canDo(currentUser, 'schedule.delete') && <button className="sch-action is-danger" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /><span>Cancel Schedule</span></button>}
     </div>
   );
 }
@@ -10124,7 +9975,7 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
       <div className="sch-card-head">
         <div className="sch-card-heading">
           <h4 className="sch-card-title" title={row.maintenance_type}>{row.maintenance_type || 'Maintenance'}</h4>
-          <span className="sch-card-id">Schedule #{row.schedule_id}</span>
+          <span className="sch-card-id">Schedule #{recordNumber(row, 'schedule_id')}</span>
         </div>
         <div className="sch-card-statuses">
           <span className={`sch-status-badge ${ticketStatusClass || `is-${statusClass}`}`}>{row.status}</span>
@@ -10178,7 +10029,7 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
           <button className="sch-action is-success" onClick={() => onComplete(row)} type="button"><Icon name="checkCircle" size={14} /> Complete</button>
         )}
         {becameTicket && (
-          <button className="sch-action is-primary" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button"><Icon name="ticket" size={14} /> View ticket #{row.resulting_ticket_id}</button>
+          <button className="sch-action is-primary" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button"><Icon name="ticket" size={14} /> View ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</button>
         )}
         {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && (
           <button className="sch-action is-success" onClick={() => onViewRecord(row)} type="button"><Icon name="wrench" size={14} /> View record #{row.resulting_maintenance_id}</button>
@@ -10223,7 +10074,7 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
 }
 
 const historyColumns = [
-  { key: 'id', label: 'ID', locked: true, render: (row) => row.history_id },
+  { key: 'id', label: 'ID', locked: true, render: (row) => recordNumber(row, 'history_id') },
   { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', render: (row) => row.vehicle?.plate_number ?? '-' },
   { key: 'activity', label: 'Activity', render: (row) => row.activity_type },
   { key: 'related_record', label: 'Related Record', render: (row) => row.related_record_id ?? '-' },
@@ -10233,7 +10084,7 @@ const historyColumns = [
 ];
 
 const VEHICLE_HISTORY_EXPORT_COLUMNS = [
-  { label: 'ID', value: (r) => r.history_id },
+  { label: 'ID', value: (r) => recordNumber(r, 'history_id') },
   { label: 'Vehicle', value: (r) => (r.vehicle ? `${r.vehicle.vehicle_name} (${r.vehicle.plate_number})` : '') },
   { label: 'Activity', value: (r) => r.activity_type },
   { label: 'Related Record', value: (r) => r.related_record_id ?? '' },
@@ -11070,7 +10921,7 @@ function exportRowsToCsv(filename, columns, rows) {
 }
 
 const VEHICLE_EXPORT_COLUMNS = [
-  { label: 'ID', value: (r) => r.vehicle_id },
+  { label: 'ID', value: (r) => recordNumber(r, 'vehicle_id') },
   { label: 'Vehicle Name', value: (r) => r.vehicle_name },
   { label: 'Plate Number', value: (r) => r.plate_number },
   { label: 'Type', value: (r) => r.category?.category_name ?? 'Unassigned' },
@@ -11084,7 +10935,7 @@ const VEHICLE_EXPORT_COLUMNS = [
 ];
 
 const USER_EXPORT_COLUMNS = [
-  { label: 'ID', value: (r) => r.id },
+  { label: 'ID', value: (r) => recordNumber(r, 'id') },
   { label: 'Name', value: (r) => r.name },
   { label: 'Email', value: (r) => r.email },
   { label: 'Phone', value: (r) => r.phone ?? '' },
@@ -11093,7 +10944,7 @@ const USER_EXPORT_COLUMNS = [
 ];
 
 const SCHEDULE_EXPORT_COLUMNS = [
-  { label: 'ID', value: (r) => r.schedule_id },
+  { label: 'ID', value: (r) => recordNumber(r, 'schedule_id') },
   { label: 'Vehicle', value: (r) => (r.vehicle ? `${r.vehicle.vehicle_name} (${r.vehicle.plate_number})` : '') },
   { label: 'Type', value: (r) => r.maintenance_type },
   { label: 'Date', value: (r) => r.scheduled_date },
@@ -11179,6 +11030,7 @@ function flattenSubIssueRows(tickets, mechanicId = null) {
       rows.push({
         ...subIssue,
         ticket_id: ticket.ticket_id,
+        barangay_number: ticket.barangay_number,
         ticket_title: ticket.ticket_title,
         ticket_description: ticket.ticket_description,
         ticket_status: ticket.status,
@@ -11204,6 +11056,7 @@ function groupMechanicRowsByTicket(rows) {
     if (!map.has(row.ticket_id)) {
       map.set(row.ticket_id, {
         ticket_id: row.ticket_id,
+        barangay_number: row.barangay_number,
         ticket_title: row.ticket_title,
         vehicle: row.vehicle,
         subIssues: [],
@@ -11258,6 +11111,7 @@ function flattenWorkTrackerRows(tickets, user) {
       rows.push({
         _rowKey: `wt-${ticket.ticket_id}-${si.sub_issue_id}`,
         ticket_id: ticket.ticket_id,
+        barangay_number: ticket.barangay_number,
         ticket_title: ticket.ticket_title,
         sub_issue_id: si.sub_issue_id,
         title: si.title,
@@ -11321,6 +11175,7 @@ function groupWorkTrackerByTicket(rows) {
     if (!map.has(row.ticket_id)) {
       map.set(row.ticket_id, {
         ticket_id: row.ticket_id,
+        barangay_number: row.barangay_number,
         ticket_title: row.ticket_title,
         vehicle: row.vehicle,
         subIssues: [],
@@ -11462,7 +11317,7 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
             onChange={setSearch}
             placeholder="Search vehicle, plate, or ticket..."
             onExport={() => exportRowsToCsv('work-tracker.csv', [
-              { label: 'Ticket', value: (r) => `#${r.ticket_id} ${r.ticket_title}` },
+              { label: 'Ticket', value: (r) => `#${ticketNumber(r)} ${r.ticket_title}` },
               { label: 'Vehicle', value: (r) => r.vehicle?.vehicle_name ?? '' },
               { label: 'Plate Number', value: (r) => r.vehicle?.plate_number ?? '' },
               { label: 'Sub-Issue', value: (r) => r.title ?? '' },
@@ -12072,7 +11927,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
   const requestDelete = () => {
     onRequestConfirmation({
       title: 'Delete Ticket',
-      message: `Are you sure you want to completely delete Ticket #${ticket.ticket_id}? This action cannot be undone.`,
+      message: `Are you sure you want to completely delete Ticket #${ticketNumber(ticket)}? This action cannot be undone.`,
       confirmLabel: 'Delete Ticket',
       variant: 'danger',
       onConfirm: () => onDelete(ticket),
@@ -12082,7 +11937,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
   const requestCancel = () => {
     onRequestConfirmation({
       title: 'Cancel Ticket',
-      message: `Are you sure you want to cancel Ticket #${ticket.ticket_id}? Work on it stops here — it can be uncancelled later if needed.`,
+      message: `Are you sure you want to cancel Ticket #${ticketNumber(ticket)}? Work on it stops here — it can be uncancelled later if needed.`,
       confirmLabel: 'Cancel Ticket',
       variant: 'primary',
       onConfirm: () => onCancel(ticket),
@@ -12104,7 +11959,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
           </div>
           <div className="ticket-process-hero-main">
             <div className="ticket-process-kicker">
-              <span>Ticket #{ticket.ticket_id}</span>
+              <span>Ticket #{ticketNumber(ticket)}</span>
               {typeof daysOpen === 'number' && (
                 <span>{daysOpen === 0 ? 'Opened today' : `${daysOpen} day${daysOpen === 1 ? '' : 's'} open`}</span>
               )}
@@ -12289,26 +12144,18 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
             <section className="ticket-section">
               <h4><Icon name="calendar" size={14} /> Ticket Timeline</h4>
               <div className="ticket-timeline">
-                {[
-                  { label: 'Created', at: ticket.created_at, by: ticket.created_by, icon: 'clipboard' },
-                  ticket.assigned_at && { label: 'Assigned to Custodian', at: ticket.assigned_at, by: ticket.assigned_custodian, icon: 'search' },
-                  // Pre-Diagnosed skips inspection entirely — inspected_by is
-                  // stamped with whoever CREATED the ticket (usually Admin),
-                  // not the Custodian above, so it's labelled by what actually
-                  // happened instead of implying an inspection that didn't.
-                  ticket.inspected_at && { label: ticket.inspected_by?.id === ticket.assigned_custodian_id ? 'Inspected' : 'Pre-diagnosed', at: ticket.inspected_at, by: ticket.inspected_by, icon: 'search' },
-                  ticket.closed_at && { label: 'Closed', at: ticket.closed_at, by: ticket.closed_by, icon: 'checkCircle' },
-                ].filter(Boolean).map((ev, i, all) => (
-                  <div key={ev.label} className="ticket-timeline-item">
+                {ticketTimeline(ticket).map((ev, i, all) => (
+                  <div key={ev.id} className="ticket-timeline-item">
                     <div className="ticket-timeline-marker">
                       <span className="ticket-timeline-dot"><Icon name={ev.icon} size={11} /></span>
                       {i < all.length - 1 && <span className="ticket-timeline-line" />}
                     </div>
                     <div className="ticket-timeline-content">
                       <p>{ev.label}</p>
+                      {ev.details && <p className="muted">{ev.details}</p>}
                       <div className="ticket-timeline-meta">
                         {ev.by?.name && <span>by {ev.by.name}</span>}
-                        <QuietDate value={ev.at} />
+                        <span>{new Date(ev.at).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', ...(ev.dateOnly ? {} : { timeStyle: 'short' }) })}</span>
                       </div>
                     </div>
                   </div>
@@ -12624,7 +12471,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
               <button className="primary-button" type="button" onClick={() => setVerifying(true)}>
                 <Icon name="checkCircle" size={14} /> Verify Repair
               </button>
-              <FormModal open={verifying} title={`Verify Repair — Ticket #${ticket.ticket_id}`} onClose={() => setVerifying(false)}>
+              <FormModal open={verifying} title={`Verify Repair — Ticket #${ticketNumber(ticket)}`} onClose={() => setVerifying(false)}>
                 <TicketVerificationForm
                   onCancel={() => setVerifying(false)}
                   onSubmit={(payload) => onVerifyTicket(ticket, payload).then((ok) => { if (ok !== false) setVerifying(false); })}
@@ -12938,7 +12785,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
         <div className="info-callout" style={{ marginBottom: '16px', background: 'rgba(59, 130, 246, 0.1)', borderColor: '#3b82f6' }}>
           <span style={{ marginRight: '8px', color: '#3b82f6', display: 'inline-flex' }}><Icon name="link" size={16} /></span>
           <p className="module-description" style={{ color: '#3b82f6', margin: 0 }}>
-            Linking this ticket to <strong>Issue Report #{prefilledTicketData.issue_report_id}</strong>.
+            Linking this ticket to <strong>Issue Report #{recordNumber(prefilledTicketData, 'issue_report_id')}</strong>.
           </p>
         </div>
       )}
@@ -12958,7 +12805,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
               {openTicketsOnVehicle.map((t) => (
                 <li key={t.ticket_id} style={{ fontSize: '0.85rem', color: '#92400e', display: 'flex', alignItems: 'center', gap: 8, listStyle: 'none', marginLeft: -18 }}>
                   <span>&bull;</span>
-                  <span style={{ flex: 1 }}>#{t.ticket_id} "{t.ticket_title}" — {t.status}</span>
+                  <span style={{ flex: 1 }}>#{ticketNumber(t)} "{t.ticket_title}" — {t.status}</span>
                   {/* Opens in a new tab — the Admin is mid-way through this
                       Create Ticket form and shouldn't lose it just to check
                       whether this is the same problem. */}
@@ -13669,7 +13516,6 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
 // =========================================================================
 
 function TicketModule({
-  onViewIssue,
   tickets,
   allTickets,
   ticketLookups,
@@ -14309,7 +14155,7 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
   );
 }
 
-function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canCheckReadiness = false, canRequestInspection = false, setNotice, onSaved, onRequestConfirmation }) {
+function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canViewUsage = false, canLogUsage = false, canManage = false, canManageDocuments = false, canViewDocuments = false, canCheckReadiness = false, canRequestInspection = false, setNotice, onSaved, onRequestConfirmation }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(new URLSearchParams(location.search).get('tab') === 'edit');
@@ -14586,7 +14432,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
                 <div className="vehicle-profile-status-item"><span>Criticality</span><span className={`vehicle-criticality ${criticalityClass}`} title={vehicle.criticality ? 'Set for this vehicle' : 'Inherited from vehicle type'}>{criticality}</span></div>
               </div>
               <dl className="vehicle-profile-keydates">
-                <div><dt>Active maintenance ticket</dt><dd>{readiness?.active_ticket_id ? <button type="button" className="vehicle-profile-ticket-link" onClick={() => navigate(`${basePath}/tickets/${readiness.active_ticket_id}`)}><Icon name="ticket" size={14} /> {readiness.active_ticket_title ?? `Ticket #${readiness.active_ticket_id}`} <Icon name="chevronRight" size={13} /></button> : <span className="muted">{!readinessLoaded ? 'Loading ticket status…' : readinessLoadFailed ? 'Status unavailable' : 'No active ticket'}</span>}</dd></div>
+                <div><dt>Active maintenance ticket</dt><dd>{readiness?.active_ticket_id ? <button type="button" className="vehicle-profile-ticket-link" onClick={() => navigate(`${basePath}/tickets/${readiness.active_ticket_id}`)}><Icon name="ticket" size={14} /> {readiness.active_ticket_title ?? `Ticket #${readiness.active_ticket_number ?? readiness.active_ticket_id}`} <Icon name="chevronRight" size={13} /></button> : <span className="muted">{!readinessLoaded ? 'Loading ticket status…' : readinessLoadFailed ? 'Status unavailable' : 'No active ticket'}</span>}</dd></div>
                 <div><dt>Last readiness check</dt><dd>{readiness?.last_checked ? formatDate(readiness.last_checked) : <span className="muted">{!readinessLoaded ? 'Loading check history…' : readinessLoadFailed ? 'History unavailable' : readiness?.state === 'unchecked' ? 'Never checked' : 'No check recorded'}</span>}</dd></div>
                 <div><dt>Current location</dt><dd>{vehicle.current_location ?? <span className="muted">Not set</span>}</dd></div>
                 {vehicle.estimated_return_date && <div><dt>Estimated return</dt><dd>{formatForecastDate(vehicle.estimated_return_date)}</dd></div>}
@@ -14605,6 +14451,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
         </section>
 
       </div>
+      {canViewUsage && <VehicleTripLog key={vehicle.vehicle_id} vehicle={vehicle} canLog={canLogUsage} onChanged={onSaved} />}
       {/* Print-only — kept off-screen (see .veh-print-report), shown by the
           Reports card's print button via window.print(). Portaled straight
           to <body> so it never inherits the app shell's own responsive
@@ -14837,7 +14684,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
       <div className="ticket-card-content-wrapper">
         <div className="ticket-card-info">
           <div className="ticket-card-top">
-            <span className="ticket-card-id">Ticket #{ticket.ticket_id}</span>
+            <span className="ticket-card-id">Ticket #{ticketNumber(ticket)}</span>
           </div>
           <p className="ticket-card-title">{ticket.ticket_title}</p>
           <p className="ticket-card-vehicle">{ticket.vehicle?.vehicle_name} · {ticket.vehicle?.plate_number}</p>
@@ -14905,7 +14752,7 @@ function CustodianInspectionModule({
   const isPendingView = activeFilter !== 'Inspected';
 
   const inspectionColumnDefs = useMemo(() => [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => ticketNumber(r) },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (r) => <VehicleCell vehicle={r.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
     { key: 'title', label: 'Title', render: (r) => r.ticket_title },
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
@@ -15054,7 +14901,7 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
   return (
     <ModulePanel description="Review the vehicle in person and submit your physical inspection findings.">
       <div className="vehicle-profile-header">
-        <h3 className="ticket-detail-title" style={{ margin: 0 }}>Inspect Ticket #{ticket.ticket_id}</h3>
+        <h3 className="ticket-detail-title" style={{ margin: 0 }}>Inspect Ticket #{ticketNumber(ticket)}</h3>
         {ticket.priority && <TicketStatusBadge value={ticket.priority} />}
       </div>
 
@@ -15285,7 +15132,7 @@ function CustodianVerificationModule({
           checklist, no notes, no reject path (see verifyTicket()). Reuses
           the same TicketVerificationForm the ticket detail page's own
           "Verify Repair" section uses. */}
-      <FormModal open={!!editTarget} title={`Verify Repair — ${editTarget?.ticket_title ?? `Ticket #${editTarget?.ticket_id}`}`} onClose={onCancelEdit}>
+      <FormModal open={!!editTarget} title={`Verify Repair — ${editTarget?.ticket_title ?? `Ticket #${ticketNumber(editTarget)}`}`} onClose={onCancelEdit}>
         <TicketVerificationForm
           key={editTarget?.ticket_id}
           onCancel={onCancelEdit}
@@ -15807,7 +15654,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
         <div className="lr-header-main">
           <h3 className="lr-vehicle">{ticket.vehicle?.vehicle_name ?? 'Vehicle'}</h3>
           <p className="lr-header-meta">
-            {[ticket.vehicle?.plate_number, ticket.maintenance_type, `Ticket #${ticket.ticket_id}`].filter(Boolean).join(' · ')}
+            {[ticket.vehicle?.plate_number, ticket.maintenance_type, `Ticket #${ticketNumber(ticket)}`].filter(Boolean).join(' · ')}
           </p>
         </div>
         <TicketStatusPill status={ticket.status} />
@@ -16045,7 +15892,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 
           <div className="lr-side-actions">
             <p className="lr-hint">
-              Recorded under Ticket #{ticket.ticket_id} · {namedPartCount} part{namedPartCount === 1 ? '' : 's'} · {attachments.length ? `${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : 'no evidence attached'}
+              Recorded under Ticket #{ticketNumber(ticket)} · {namedPartCount} part{namedPartCount === 1 ? '' : 's'} · {attachments.length ? `${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : 'no evidence attached'}
             </p>
             <button className="primary-button lr-submit" type="submit">Submit Repair Log</button>
             <button className="ghost-button lr-cancel" onClick={onBack} type="button">Cancel</button>
@@ -16069,14 +15916,14 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 // permanent fixture of the page, not something that randomly appears.
 function readyToCloseColumns(onCloseTicket) {
   return [
-    { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => <span className="row-title-text">#{r.ticket_id}</span> },
+    { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => <span className="row-title-text">#{ticketNumber(r)}</span> },
     { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> },
     { key: 'title', label: 'Title', render: (r) => r.ticket_title },
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     { key: 'progress', label: 'Sub-Issues', className: 'cell-center', render: (r) => `${r.progress?.done ?? 0}/${r.progress?.total ?? 0} done` },
     { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
     ...(onCloseTicket ? [{ key: 'action', label: 'Action', className: 'cell-center', render: (r) => (
-      <button type="button" className="ready-to-close-action" aria-label={`Close ticket #${r.ticket_id}`} title="Verify the repair before closing this ticket" onClick={(event) => { event.stopPropagation(); onCloseTicket(r); }} onKeyDown={(event) => event.stopPropagation()}>
+      <button type="button" className="ready-to-close-action" aria-label={`Close ticket #${ticketNumber(r)}`} title="Verify the repair before closing this ticket" onClick={(event) => { event.stopPropagation(); onCloseTicket(r); }} onKeyDown={(event) => event.stopPropagation()}>
         <Icon name="checkCircle" size={15} /> Close Ticket
       </button>
     ) }] : []),
@@ -16092,7 +15939,7 @@ function TicketsReadyToClosePanel({ tickets, onViewTicket, onCloseTicket }) {
     const q = search.trim().toLowerCase();
     if (!q) return tickets;
     return tickets.filter((t) => (
-      String(t.ticket_id).includes(q)
+      String(ticketNumber(t)).includes(q)
       || t.ticket_title?.toLowerCase().includes(q)
       || t.vehicle?.vehicle_name?.toLowerCase().includes(q)
       || t.vehicle?.plate_number?.toLowerCase().includes(q)
@@ -16134,7 +15981,7 @@ function TicketsReadyToClosePanel({ tickets, onViewTicket, onCloseTicket }) {
 
 function ticketTableColumns(unreadByTicket = {}) {
   return [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => r.ticket_id },
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => ticketNumber(r) },
     {
       key: 'title',
       label: 'Title',
@@ -16174,8 +16021,8 @@ function ticketTableColumns(unreadByTicket = {}) {
 // =========================================================================
 
 const ticketArchiveColumns = [
-  { key: 'archive_id', label: 'Archive ID', locked: true, className: 'cell-center', render: (r) => r.archive_id },
-  { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => r.ticket_id },
+  { key: 'archive_id', label: 'Archive ID', locked: true, className: 'cell-center', render: (r) => recordNumber(r, 'archive_id') },
+  { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => ticketNumber(r) },
   { key: 'title', label: 'Title', render: (r) => r.ticket_title },
   { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle ?? { vehicle_name: r.vehicle_name, plate_number: r.plate_number }} /> },
   { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
@@ -17417,84 +17264,8 @@ function CapabilityImpactCard({ items, onNavigate, basePath }) {
 // the station or out on a trip, and take it out / mark it returned. Uses the
 // existing Usage Log endpoints (the server enforces who may do this).
 function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
-  const [trips, setTrips] = useState([]);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.get(`/vehicles/${vehicle.vehicle_id}/usage`)
-      .then((res) => { if (!cancelled) setTrips(res.data); })
-      .catch(() => { if (!cancelled) { setLoadFailed(true); setError('Could not load dispatch status. Close and reopen to retry.'); } })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [vehicle.vehicle_id]);
-
-  const open = trips.find((t) => !t.ended_at);
-  const retired = ['Inactive', 'Decommissioned'].includes(vehicle.status);
-  const canTakeOut = !loading && !loadFailed && !open && vehicle.status === 'Available';
-
-  const run = async (fn) => {
-    if (busy || loading) return;
-    setBusy(true); setError('');
-    try {
-      const { data } = await fn();
-      setTrips((previous) => [data, ...previous.filter((trip) => trip.usage_id !== data.usage_id)]);
-      onChanged?.();
-    } catch (err) {
-      setError(err.response?.data?.message || (err.response?.data?.errors && Object.values(err.response.data.errors)[0]?.[0]) || 'Could not save.');
-    } finally { setBusy(false); }
-  };
-
-  const state = loading ? { label: 'Loading dispatch status...', tone: 'off' } : loadFailed ? { label: 'Dispatch status unavailable', tone: 'off' } : open ? { label: 'Dispatched', tone: 'out' } : retired ? { label: vehicle.status, tone: 'off' }
-    : vehicle.status === 'Under Maintenance' ? { label: 'Under Maintenance — not available', tone: 'off' } : { label: 'In station — available', tone: 'in' };
-
-  return (
-    <div className="dispatch-modal">
-      <div className={`dispatch-state is-${state.tone}`}>
-        <Icon name="vehicle" size={18} />
-        <div>
-          <strong>{state.label}</strong>
-          <small>{vehicle.vehicle_name} · {vehicle.plate_number}{open ? ` · out since ${formatDate(open.started_at)}` : ''}</small>
-        </div>
-      </div>
-      {error && <div className="notice error">{error}</div>}
-
-      {open && (
-        <div className="dispatch-block">
-          <h4>Return this vehicle</h4>
-          <p className="muted">Mark the vehicle as returned to the station.</p>
-          <button type="button" className="primary-button" disabled={busy} onClick={() => run(() => api.put(`/usage-logs/${open.usage_id}/end`, {}))}>{busy ? 'Saving...' : 'Return'}</button>
-        </div>
-      )}
-
-      {canTakeOut && (
-        <div className="dispatch-block">
-          <h4>Dispatch this vehicle</h4>
-          <p className="muted">Mark the vehicle as dispatched from the station.</p>
-          <button type="button" className="primary-button" disabled={busy} onClick={() => run(() => api.post(`/vehicles/${vehicle.vehicle_id}/usage`, {}))}>{busy ? 'Saving...' : 'Dispatch'}</button>
-        </div>
-      )}
-
-      {!loading && !loadFailed && !open && !canTakeOut && (
-        <p className="muted">{retired ? 'This vehicle is archived or decommissioned.' : 'A vehicle can only be dispatched while it is Available. Finish its repair first.'}</p>
-      )}
-
-      <div className="dispatch-block">
-        <h4>Recent trips</h4>
-        {trips.length === 0 ? <p className="muted">No trips recorded yet.</p> : (
-          <ul className="dispatch-trips">
-            {trips.slice(0, 6).map((t) => (
-              <li key={t.usage_id}><strong>{t.ended_at ? 'Returned' : 'Dispatched'}</strong><span>{formatDate(t.started_at)}{t.ended_at ? ` – ${formatDate(t.ended_at)}` : ' · out now'}</span></li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="can-actions"><button type="button" className="ghost-button" onClick={onClose}>Close</button></div>
-    </div>
-  );
+  const { user } = useContext(AuthContext);
+  return <><VehicleTripLog vehicle={vehicle} canLog={canDo(user, 'usage.log')} onChanged={onChanged} /><div className="can-actions"><button type="button" className="ghost-button" onClick={onClose}>Close</button></div></>;
 }
 
 
