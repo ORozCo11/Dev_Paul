@@ -76,4 +76,16 @@ class AdminCreatedUserApprovalTest extends TestCase
         $this->deleteJson("/api/superadmin/users/{$pending->id}/reject")->assertOk();
         $this->assertNull($pending->fresh());
     }
+
+    #[Test]
+    public function the_backfill_approves_existing_active_accounts_but_not_pending_registrations(): void
+    {
+        $active = User::factory()->create(['is_active' => true, 'approved_at' => null]);
+        $pending = User::factory()->create(['is_active' => false, 'approved_at' => null]);
+
+        (require database_path('migrations/2026_10_22_000001_backfill_approved_at_for_admin_created_users.php'))->up();
+
+        $this->assertNotNull($active->fresh()->approved_at);
+        $this->assertNull($pending->fresh()->approved_at);
+    }
 }
