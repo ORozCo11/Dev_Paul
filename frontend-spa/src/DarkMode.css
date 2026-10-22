@@ -178,7 +178,8 @@ html[data-theme="dark"] .ticket-card-grid .sch-card .sch-action.is-success { bac
 html[data-theme="dark"] .ticket-card-grid .sch-card .sch-action.is-warning { background: #3d3018; color: #fde68a; border-color: #9a7834; }
 html[data-theme="dark"] .issue-filter-status-chip { background: #263449 !important; color: #e2e8f0 !important; }
 html[data-theme="dark"] .issue-filter-status-chip[data-status="Closed"] { background: #14352b !important; color: #a7f3d0 !important; }
-html[data-theme="dark"] .issue-filter-status-chip:is([data-status="Pending Approval"], [data-status="Active"]) { background: #3d3018 !important; color: #fde68a !important; }
+html[data-theme="dark"] .issue-filter-status-chip[data-status="Pending Approval"] { background: #3d3018 !important; color: #fde68a !important; }
+html[data-theme="dark"] .issue-filter-status-chip[data-status="Active"] { background: #193456 !important; color: #bfdbfe !important; }
 html[data-theme="dark"] .issue-filter-status-chip[data-status="Declined"] { background: #421f2d !important; color: #fecdd3 !important; }
 html[data-theme="dark"] .issue-filter-status-chip[data-status="For Verification"] { background: #302450 !important; color: #ddd6fe !important; }
 html[data-theme="dark"] #root > .auth-page > .auth-card { background: var(--surface); color: var(--text); }

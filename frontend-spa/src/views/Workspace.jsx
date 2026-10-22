@@ -8142,12 +8142,12 @@ const MAINTENANCE_RECORD_STAT_CARDS = [
 // straight to Pending Approval); it only ever existed on tickets created
 // before the one-mechanic-per-ticket redesign.
 const TICKET_STAT_CARDS = [
-  { key: 'Pending Approval', label: 'Proposals', icon: 'clipboard', bg: '#fef9c3', color: '#a16207' },
+  { key: 'Pending Approval', label: 'Proposals', icon: 'clipboard', bg: '#fef3c7', color: '#92400e' },
   // "For Verification" was here, but that's a Custodian action, not
   // something Admin does anything with — Declined is the one Admin needs a
   // quick count of, since those proposals are waiting on a reconsider.
   { key: 'Declined', label: 'Declined', icon: 'close', bg: '#fee2e2', color: '#dc2626' },
-  { key: 'Active', label: 'Active', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
+  { key: 'Active', label: 'Active', icon: 'wrench', bg: '#dbeafe', color: '#1e40af' },
   { key: 'Closed', label: 'Closed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
   { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#f1f5f9', color: '#64748b' },
 ];
@@ -8177,7 +8177,7 @@ const TICKET_WORK_ORDER_STAT_CARDS = [
 // for it; the old label read as just another ticket-status bucket instead
 // of the one that needs this Custodian's action.
 const TICKET_VERIFICATION_STAT_CARDS = [
-  { key: 'Active', label: 'Active', icon: 'wrench', bg: '#fef9c3', color: '#a16207' },
+  { key: 'Active', label: 'Active', icon: 'wrench', bg: '#dbeafe', color: '#1e40af' },
   { key: 'Pending', label: 'To Verify', icon: 'checkCircle', bg: '#fef3c7', color: '#d97706' },
   { key: 'Verified', label: 'Verified', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
@@ -11292,12 +11292,12 @@ function TicketVerificationForm({ onCancel, onSubmit }) {
 // =========================================================================
 
 function TicketStatusBadge({ value, size = 'normal' }) {
+  if (['Pending Approval', 'Active', 'Open'].includes(value)) {
+    return <TicketStatusPill status={value} size={size} />;
+  }
   const colorMap = {
-    'Open': 'ticket-open',
-    'Active': 'ticket-repair',
     'For Maintenance': 'ticket-formaint',
     'Under Repair': 'ticket-repair',
-    'Pending Approval': 'ticket-formaint',
     'Declined': 'ticket-cancelled',
     'For Verification': 'ticket-forinspect',
     'For Inspection': 'ticket-forinspect',
@@ -11343,8 +11343,8 @@ function ticketStatusClass(status) {
 
 // The ticket's overall status as a tinted pill in its status colour —
 // separate from priority (TicketStatusBadge keeps its own priority colours).
-function TicketStatusPill({ status }) {
-  return <span className={`status-badge ticket-status-pill ${ticketStatusClass(status)}`}>{status ?? 'Unknown'}</span>;
+function TicketStatusPill({ status, size = 'normal' }) {
+  return <span className={`status-badge ticket-status-pill ${ticketStatusClass(status)} ${size === 'large' ? 'badge-large' : ''}`}>{status ?? 'Unknown'}</span>;
 }
 
 // =========================================================================
@@ -15925,7 +15925,7 @@ const PHASE_STEP_ICONS = {
 
 const PHASE_STEP_COLORS = {
   'Pending Approval': '#a16207',
-  'Active': '#d97706',
+  'Active': '#2563eb',
   'For Verification': '#7c3aed',
   'Closed': '#16a34a',
 };
