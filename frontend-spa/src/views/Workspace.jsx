@@ -7495,7 +7495,7 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
               <input id="u-email" type="email" value={values.email} placeholder="name@barangay.gov" onChange={(e) => set('email', e.target.value)} />
             </FxField>
             <FxField id="u-phone" label="Phone" error={errors.phone}>
-              <input id="u-phone" type="tel" inputMode="numeric" value={values.phone} placeholder="09XXXXXXXXX" onChange={(e) => set('phone', e.target.value)} />
+              <input id="u-phone" type="tel" inputMode="numeric" value={values.phone} placeholder="09XXXXXXXXX" maxLength={11} onChange={(e) => set('phone', e.target.value.replace(/[^0-9]/g, '').slice(0, 11))} />
             </FxField>
             <FxField id="u-address" label="Address">
               <input id="u-address" type="text" value={values.address} onChange={(e) => set('address', e.target.value)} />
