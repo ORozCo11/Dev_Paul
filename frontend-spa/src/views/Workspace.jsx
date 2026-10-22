@@ -1391,8 +1391,10 @@ function Workspace() {
       await api.delete(`/tickets/${ticket.ticket_id}`);
       setNotice({ type: 'success', text: 'Ticket deleted successfully.' });
       await refreshCurrent();
+      return true;
     } catch (error) {
       showError(error, setNotice);
+      return false;
     }
   };
 
@@ -12753,7 +12755,7 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
       onLogRepairs={(t, si) => navigate(`${roleRoutes[user.role]}/work-orders/${t.ticket_id}/${si.sub_issue_id}/log-repairs`)}
       onCancel={(t) => sendTicketAction(`/tickets/${t.ticket_id}/cancel`, {}, 'Ticket cancelled.').then(afterAction)}
       onUncancel={(t) => sendTicketAction(`/tickets/${t.ticket_id}/uncancel`, {}, 'Ticket restored.').then(afterAction)}
-      onDelete={(t) => onDeleteTicket(t).then(onBack)}
+      onDelete={(t) => onDeleteTicket(t).then((ok) => { if (ok) onBack(); })}
       onApproveProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/approve`, payload, 'Ticket proposal approved.').then(afterAction)}
       // Declining no longer deletes the ticket — it becomes a visible,
       // reversible Declined status, so this stays on the page and refreshes
