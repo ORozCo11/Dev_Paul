@@ -1202,6 +1202,8 @@ class TicketWorkflowTest extends TestCase
         $this->putJson("/api/tickets/{$activeId}/cancel", [])->assertOk();
 
         $this->assertSame('Available', $vehicle->fresh()->status);
+        $this->getJson('/api/dashboard')->assertOk();
+        $this->assertSame('Available', $vehicle->fresh()->status);
     }
 
     #[Test]

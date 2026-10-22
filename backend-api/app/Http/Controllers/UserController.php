@@ -112,6 +112,7 @@ class UserController extends Controller
         $data = $this->normalizeRoles($request, $data);
         $data['password'] = Hash::make($data['password']);
         $data['is_active'] = true;
+        $data['approved_at'] = now();
         // Always the creating Admin's own barangay — never client-supplied,
         // so an Admin can't plant a user into a barangay they don't manage.
         $data['barangay_id'] = $request->user()->barangay_id;
@@ -197,6 +198,7 @@ class UserController extends Controller
         }
 
         $user->update($data);
+        if (array_key_exists('password', $data)) $user->tokens()->delete();
 
         $this->log($request, 'Edit', $user->id, "Updated user \"{$user->name}\"" . ($changeNotes ? ' (' . implode('; ', $changeNotes) . ')' : ''));
 
@@ -243,6 +245,8 @@ class UserController extends Controller
         ];
 
         if (!empty($data['role'])) {
+            abort_if($user->approved_at !== null || $user->is_active, 422, 'Role confirmation is only available for pending accounts. Use Edit User to change an existing account role.');
+            $this->abortIfHasOpenWork($user, 'changing their roles', [$data['role']]);
             $update['role'] = $data['role'];
             $update['roles'] = [$data['role']];
         }

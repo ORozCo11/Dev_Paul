@@ -161,7 +161,7 @@ class SuperAdminControllerTest extends TestCase
     public function pending_approvals_lists_only_accounts_never_approved(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
-        $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'approved_at' => null]);
+        $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'approved_at' => null, 'is_active' => false]);
         $approved = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian'], 'approved_at' => now()]);
 
         Sanctum::actingAs($superAdmin, ['*']);
@@ -176,7 +176,7 @@ class SuperAdminControllerTest extends TestCase
     public function rejecting_a_never_approved_registration_deletes_the_account(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
-        $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'approved_at' => null]);
+        $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'approved_at' => null, 'is_active' => false]);
 
         Sanctum::actingAs($superAdmin, ['*']);
         $this->deleteJson("/api/superadmin/users/{$pending->id}/reject")->assertOk();

@@ -8,6 +8,8 @@ const mechanics=[{id:3,name:'Mechanic Alpha',role:'Maintenance Personnel',is_act
 const base={id:2,name:'QA Custodian',email:'qa@test.invalid',role:'Custodian',roles:['Custodian'],is_active:true,barangay_id:1,approved_at:'2026-01-01',abilities:['ticket.propose','ticket.view','schedule.view','schedule.edit','schedule.delete','condition.view','issue.create','catalog.create']};
 let ticket={ticket_id:1,ticket_title:'MT-0001 - Rescue - Engine',ticket_description:'Original details',priority:'High',status:'Pending Approval',vehicle_id:1,vehicle,assigned_custodian_id:2,assigned_custodian:base,created_at:'2026-10-23T00:00:00Z',progress:{total:2,done:0,deferred:0},sub_issues:[{sub_issue_id:11,title:'Engine',status:'Open',maintenance_type:'Engine Repair',repair_type:'in_house'},{sub_issue_id:12,title:'Brakes',status:'Open',maintenance_type:'Brake Repair',repair_type:'in_house'}]};
 const payloads=[];
+let scheduleLocked=true;
+let scheduleStatus='Scheduled';
 async function fixture(role,path){
  const context=await browser.newContext({viewport:{width:1440,height:1050}});
  const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',error=>{errors.push(error.message);console.log('PAGEERROR',error.message);});page.on('console',message=>{if(message.type()==='error')console.log('CONSOLE',message.text());});
@@ -23,8 +25,9 @@ async function fixture(role,path){
  else if(key==='/tickets/1/approve'){const payload=req.postDataJSON();payloads.push({key,payload});ticket={...ticket,status:'Active',sub_issues:ticket.sub_issues.map((sub,index)=>({...sub,status:'Under Repair',assigned_mechanic_id:payload.sub_issues[index].assigned_mechanic_id}))};data=ticket;}
  else if(key==='/tickets/propose'){payloads.push({key,payload:req.postDataJSON()});data={...ticket,ticket_id:2};}
  else if(key==='/tickets'||key==='/tickets/work-orders')data=[ticket];
+ else if(key==='/maintenance-schedules/1'&&req.method()==='PUT'){payloads.push({key,payload:req.postDataJSON()});data={status:'Pending Approval'};}
  else if(key==='/maintenance-types')data=['Engine Repair','Brake Repair'];
- else if(key==='/maintenance-schedules')data=[{schedule_id:1,vehicle_id:1,vehicle,maintenance_type:'Service',status:'Scheduled',created_by:2,scheduled_date:'2026-10-24',resulting_ticket_id:1,resulting_ticket:{...ticket,status:'Active'}}];
+ else if(key==='/maintenance-schedules')data=[{schedule_id:1,vehicle_id:1,vehicle,maintenance_type:'Service',status:scheduleStatus,created_by:2,scheduled_date:'2026-10-24',assigned_to:3,notes:'Existing plan',resulting_ticket_id:scheduleLocked?1:null,resulting_ticket:scheduleLocked?{...ticket,status:'Active'}:null}];
  else if(key==='/dashboard')data={};
  else if(key==='/barangays/1')data={id:1,name:'QA Barangay',city_name:'QA City',boundary:null};
  else if(key.endsWith('/log-repairs')){payloads.push({key,payload:req.postDataJSON()});data=ticket;}
@@ -68,7 +71,21 @@ const approved=payloads.find(row=>row.key.endsWith('/approve'));assert.deepEqual
 await admin.context.close();
 const schedule=await fixture('Custodian','/custodian/schedules/1');page=schedule.page;
 assert.equal(await page.getByRole('button',{name:'Edit',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:/^Cancel( Schedule)?$/}).count(),0);await schedule.context.close();
+scheduleLocked=false;
+const editSchedule=await fixture('Custodian','/custodian/schedules/1/edit');page=editSchedule.page;
+await page.getByRole('textbox',{name:/^notes$/i}).fill('Revised shared plan').catch(async error=>{console.error((await page.locator('body').innerText()).slice(-6000));throw error;});
+await page.getByRole('button',{name:'Update Schedule',exact:true}).click();await page.waitForTimeout(500);
+const schedulePayload=payloads.find(row=>row.key==='/maintenance-schedules/1')?.payload;
+assert(schedulePayload,'Schedule edit should submit');assert.equal(schedulePayload.status,undefined);assert.equal(schedulePayload.assigned_to,undefined);assert.equal(schedulePayload.notes,'Revised shared plan');
+await editSchedule.context.close();
+scheduleStatus='Pending Approval';
+const pendingSchedule=await fixture('Custodian','/custodian/schedules/1/edit');page=pendingSchedule.page;
+await choose(page,page.getByRole('combobox',{name:/^assigned to$/i}),'Beta','Mechanic Beta');
+await page.getByRole('button',{name:'Update Schedule',exact:true}).click();await page.waitForTimeout(500);
+const pendingPayload=payloads.filter(row=>row.key==='/maintenance-schedules/1').at(-1)?.payload;
+assert.equal(Number(pendingPayload.assigned_to),4);assert.equal(pendingPayload.status,undefined);
+await pendingSchedule.context.close();
 const log=await fixture('Maintenance Personnel','/maintenance/work-orders/1/11/log-repairs');page=log.page;
 await page.getByRole('button',{name:'Submit Repair Log',exact:true}).waitFor();assert.equal(await page.getByText('Repair Date',{exact:true}).count(),0);assert.equal(await page.getByLabel('Start',{exact:true}).count(),0);assert.equal(await page.getByLabel('Completion',{exact:true}).count(),0);
 await log.context.close();
-assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Searchable vehicle selection','Full-width vehicle photo and details below','Both repair methods colored','Single-line introduction','External Details and optional Repair Type','Priority beside estimate','No ticket percentage or description','Per-sub-issue mechanic assignments','Activated schedule locked','Repair date inputs removed'],errors}));await browser.close();
+assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Searchable vehicle selection','Full-width vehicle photo and details below','Both repair methods colored','Single-line introduction','External Details and optional Repair Type','Priority beside estimate','No ticket percentage or description','Per-sub-issue mechanic assignments','Activated schedule locked','Approved schedule edits omit status and reassignment; pending plans retain mechanic selection','Repair date inputs removed'],errors}));await browser.close();

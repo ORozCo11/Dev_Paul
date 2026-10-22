@@ -44,6 +44,7 @@ trait GuardsOpenWorkOnDeactivation
         TicketSubIssue::where('assigned_mechanic_id', $user->id)
             ->when($remainingRoles !== null && in_array('Maintenance Personnel', $remainingRoles, true), fn ($query) => $query->whereRaw('1 = 0'))
             ->whereNotIn('status', ['Done', 'Deferred'])
+            ->whereHas('ticket', fn ($tickets) => $tickets->whereNotIn('status', ['Closed', 'Cancelled']))
             ->with('ticket:ticket_id,ticket_title')
             ->get()
             ->each(function (TicketSubIssue $subIssue) use (&$items) {

@@ -26,19 +26,23 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    const currentToken = () => localStorage.getItem('token') || sessionStorage.getItem('token');
     const checkUserSession = async () => {
       if (token) {
         try {
-          const response = await api.get('/user');
+          const response = await api.get('/user', { headers: { Authorization: `Bearer ${token}` } });
+          if (cancelled || currentToken() !== token) return;
           if (!response.data.is_impersonating) clearImpersonationSession();
           setUser(response.data);
-        } catch {
-          logout();
+        } catch (error) {
+          if (!cancelled && currentToken() === token && error.response?.status === 401) logout();
         }
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     };
     checkUserSession();
+    return () => { cancelled = true; };
   }, [token]);
 
   const login = (userData, userToken, remember = true) => {
@@ -59,9 +63,12 @@ export const AuthProvider = ({ children }) => {
   // Re-pull the logged-in user from the API (e.g. after they edit their own
   // profile) so the topbar name/avatar reflect the change without a reload.
   const refreshUser = async () => {
+    const refreshToken = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!refreshToken) return;
     try {
-      const response = await api.get('/user');
-      setUser(response.data);
+      const response = await api.get('/user', { headers: { Authorization: `Bearer ${refreshToken}` } });
+      const currentToken = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (currentToken === refreshToken) setUser(response.data);
     } catch {
       // keep the current user if the refresh fails
     }

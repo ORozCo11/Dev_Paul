@@ -174,18 +174,21 @@ class VehicleImportController extends Controller
         $this->authorizeImport($request, $import);
         abort_unless($import->status === 'previewed', 422, 'This import has already been processed.');
 
-        $ext = pathinfo($import->stored_path, PATHINFO_EXTENSION);
-        abort_unless(Storage::disk('local')->exists($import->stored_path), 410, 'The uploaded file is no longer available. Upload it again.');
+        $storedPath = $import->stored_path;
+        DB::transaction(function () use ($request, $import) {
+            $import = VehicleImport::whereKey($import->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeImport($request, $import);
+            abort_unless($import->status === 'previewed', 422, 'This import has already been processed.');
+            $ext = pathinfo($import->stored_path, PATHINFO_EXTENSION);
+            abort_unless(Storage::disk('local')->exists($import->stored_path), 410, 'The uploaded file is no longer available. Upload it again.');
 
-        // Re-read and re-validate from the stored file: the client only names
-        // which preview to confirm, never what rows to insert.
-        $rows = $this->readRows(Storage::disk('local')->path($import->stored_path), $ext);
-        $analysis = $this->analyze($rows, $request->user());
-
-        $imported = 0;
-        $failed = $analysis['errors'];
-        DB::transaction(function () use ($analysis, $request, &$imported) {
-            foreach ($analysis['valid_data'] as $rowNo => $data) {
+            // Revalidate the stored upload under the import lock; completion,
+            // inserted vehicles, history, and audit log must commit together.
+            $rows = $this->readRows(Storage::disk('local')->path($import->stored_path), $ext);
+            $analysis = $this->analyze($rows, $request->user());
+            $imported = 0;
+            $failed = $analysis['errors'];
+            foreach ($analysis['valid_data'] as $data) {
                 $vehicle = Vehicle::create($data + ['status' => 'Available', 'condition' => 'Good']);
                 VehicleHistory::create([
                     'vehicle_id' => $vehicle->vehicle_id,
@@ -197,30 +200,31 @@ class VehicleImportController extends Controller
                 ]);
                 $imported++;
             }
+
+            $import->update([
+                'status' => 'completed',
+                'total_rows' => $analysis['total'],
+                'valid_rows' => $analysis['valid'],
+                'error_rows' => $analysis['errors'],
+                'warning_rows' => $analysis['warnings'],
+                'imported_rows' => $imported,
+                'failed_rows' => $failed,
+                'findings' => $analysis['findings'],
+                'completed_at' => now(),
+                'stored_path' => null,
+            ]);
+            ActivityLog::create([
+                'user_id' => $request->user()->id,
+                'role' => $request->attributes->get('vms_acted_as_role') ?? $request->user()->role,
+                'action' => 'Import',
+                'module' => 'Vehicle Management',
+                'affected_record_id' => (string) $import->id,
+                'details' => "Imported vehicles from {$import->file_name}: {$imported} added, {$failed} skipped of {$analysis['total']} rows ({$analysis['warnings']} with warnings).",
+            ]);
         });
-
-        $import->update([
-            'status' => 'completed',
-            'total_rows' => $analysis['total'],
-            'valid_rows' => $analysis['valid'],
-            'error_rows' => $analysis['errors'],
-            'warning_rows' => $analysis['warnings'],
-            'imported_rows' => $imported,
-            'failed_rows' => $failed,
-            'findings' => $analysis['findings'],
-            'completed_at' => now(),
-        ]);
-        Storage::disk('local')->delete($import->stored_path);
-        $import->update(['stored_path' => null]);
-
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'role' => $request->attributes->get('vms_acted_as_role') ?? $request->user()->role,
-            'action' => 'Import',
-            'module' => 'Vehicle Management',
-            'affected_record_id' => (string) $import->id,
-            'details' => "Imported vehicles from {$import->file_name}: {$imported} added, {$failed} skipped of {$analysis['total']} rows ({$analysis['warnings']} with warnings).",
-        ]);
+        if ($storedPath) {
+            Storage::disk('local')->delete($storedPath);
+        }
 
         return response()->json($this->summary($import->fresh()));
     }

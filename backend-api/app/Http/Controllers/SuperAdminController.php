@@ -592,7 +592,7 @@ class SuperAdminController extends Controller
     public function rejectUser(Request $request, User $user)
     {
         $this->requireAbility($request, 'user.reject', 'Only a Super Admin can perform this action.');
-        abort_if($user->approved_at !== null, 422, 'This account was already approved at some point — deactivate it instead of rejecting.');
+        abort_if($user->is_active || $user->approved_at !== null, 422, 'This account is active or was already approved at some point — deactivate it instead of rejecting.');
 
         $name = $user->name;
         $email = $user->email;
@@ -615,6 +615,7 @@ class SuperAdminController extends Controller
 
         return User::with('barangay.city.province')
             ->whereNull('approved_at')
+            ->where('is_active', false)
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($u) => [
@@ -640,6 +641,7 @@ class SuperAdminController extends Controller
         $this->requireAbility($request, 'user.change_role_platform', 'Only a Super Admin can perform this action.');
         abort_if($user->id === $request->user()->id, 422, 'You cannot change your own role.');
         abort_if($user->hasRole('Super Admin'), 422, 'Super Admin roles cannot be changed through this endpoint.');
+        abort_if($user->hasRole('Impersonator'), 422, 'The dedicated impersonation account cannot be converted to a barangay staff account.');
 
         $data = $request->validate([
             'role' => ['required', Rule::in(self::ROLES)],

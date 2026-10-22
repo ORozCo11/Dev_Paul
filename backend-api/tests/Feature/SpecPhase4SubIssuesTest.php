@@ -63,7 +63,7 @@ class SpecPhase4SubIssuesTest extends TestCase
     public function only_admin_can_add_edit_and_delete_an_open_sub_issue_on_an_active_ticket(): void
     {
         Sanctum::actingAs($this->admin, ['*']);
-        $id = $this->postJson($this->url(), ['title' => 'Radiator leak'])->assertCreated()->json('sub_issue_id');
+        $id = $this->postJson($this->url(), ['title' => 'Radiator leak', 'assigned_mechanic_id' => $this->mechanic->id])->assertCreated()->json('sub_issue_id');
         $this->putJson($this->url("/{$id}"), ['title' => 'Radiator hose leak'])->assertOk()->assertJsonPath('title', 'Radiator hose leak');
         $this->deleteJson($this->url("/{$id}"))->assertOk();
         Sanctum::actingAs($this->custodian, ['*']);

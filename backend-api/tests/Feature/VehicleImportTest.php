@@ -238,4 +238,24 @@ class VehicleImportTest extends TestCase
         $csv->assertOk()->assertDownload('vehicle-import-template.csv');
         $this->assertStringContainsString('Plate Number', $csv->streamedContent());
     }
+
+    #[Test]
+    public function a_failure_finishing_an_import_rolls_back_its_vehicles_and_preserves_the_upload(): void
+    {
+        Sanctum::actingAs($this->admin, ['*']);
+        $id = $this->preview($this->csv([$this->row()]))->assertCreated()->json('id');
+        $import = VehicleImport::findOrFail($id);
+        $path = $import->stored_path;
+        VehicleImport::updating(function ($model) {
+            if ($model->status === 'completed') throw new \RuntimeException('Simulated completion failure');
+        });
+        try {
+            $this->postJson("/api/vehicle-imports/{$id}/commit")->assertStatus(500);
+            $this->assertSame(0, Vehicle::count());
+            $this->assertSame('previewed', $import->fresh()->status);
+            Storage::disk('local')->assertExists($path);
+        } finally {
+            VehicleImport::flushEventListeners();
+        }
+    }
 }

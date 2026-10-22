@@ -1711,6 +1711,13 @@ function Workspace() {
         };
       }
 
+      if (moduleKey === 'schedules' && existing) {
+        finalPayload = { ...finalPayload };
+        delete finalPayload.status;
+        if ((records.schedules ?? []).find((row) => String(row.schedule_id) === String(existing.schedule_id))?.status === 'Scheduled') {
+          delete finalPayload.assigned_to;
+        }
+      }
       request = moduleRequest(moduleKey, existing, finalPayload);
       const response = await sendPayload(request.method, request.path, finalPayload);
 
@@ -2903,7 +2910,7 @@ function Workspace() {
             <FormPage
               description="Plan preventative maintenance and track schedule status."
               onBack={() => { setPrefilledScheduleData(null); returnToModule('schedules'); }}
-              fields={scheduleFields(lookups, allHubs, Boolean(editScheduleId), !editScheduleId && !canDo(user, 'schedule.create'))}
+              fields={scheduleFields(lookups, allHubs, Boolean(editScheduleId), !editScheduleId && !canDo(user, 'schedule.create'), scheduleInitialValues?.status)}
               initialValues={scheduleInitialValues}
               onSubmit={(payload) => submitFormPage('schedules', editScheduleId ? { schedule_id: editScheduleId } : null, payload)}
               submitLabel={editScheduleId ? 'Update Schedule' : (canDo(user, 'schedule.create') ? 'Add Schedule' : 'Send Suggestion')}
@@ -3973,7 +3980,7 @@ function Workspace() {
           onComplete={openCompleteSchedule}
           onEdit={(row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`)}
           onDelete={(row) => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.', `Cancel the ${row.maintenance_type} schedule for ${row.vehicle?.vehicle_name ?? 'this vehicle'}? It can be restored later if needed.`)}
-          onRestore={(row) => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored.', 'Restore this cancelled schedule back to Scheduled?')}
+          onRestore={(row) => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored for Admin approval.', 'Restore this schedule for Admin approval?')}
           onViewRecord={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`)}
           onReassign={setReassignScheduleTarget}
           onViewTicket={openTicketProfile}
@@ -4073,7 +4080,7 @@ function Workspace() {
                   onComplete={openCompleteSchedule}
                   onEdit={(r) => navigate(`${roleRoutes[user.role]}/schedules/${r.schedule_id}/edit`)}
                   onDelete={(r) => deleteRecord(`/maintenance-schedules/${r.schedule_id}`, 'Schedule cancelled.', `Cancel the ${r.maintenance_type} schedule for ${r.vehicle?.vehicle_name ?? 'this vehicle'}? It can be restored later if needed.`)}
-                  onRestore={(r) => restoreRecord(`/maintenance-schedules/${r.schedule_id}/restore`, 'Schedule restored.', 'Restore this cancelled schedule back to Scheduled?')}
+                  onRestore={(r) => restoreRecord(`/maintenance-schedules/${r.schedule_id}/restore`, 'Schedule restored for Admin approval.', 'Restore this schedule for Admin approval?')}
                   onViewRecord={(r) => navigate(`${roleRoutes[user.role]}/maintenance/${r.resulting_maintenance_id}`)}
                   onReassign={setReassignScheduleTarget}
                   onViewTicket={openTicketProfile}
@@ -7765,7 +7772,7 @@ function maintenanceFields(lookups, role, liveValues = EMPTY_OBJ) {
 
 const NEW_ISSUE_OPTION = { value: '__new_issue__', label: '+ Add New Issue…' };
 
-function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = false) {
+function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = false, status = null) {
   const hubOptions = allHubs.map((hub) => ({ value: hub.name, label: hub.name }));
 
   // A Custodian's suggestion only needs what Admin must see: which vehicle,
@@ -7802,14 +7809,10 @@ function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = fal
     // A known hub, or "Other" for an outside repair shop not in that list.
     { label: 'Service Location', name: 'service_location', type: 'select-or-other', options: hubOptions, otherLabel: 'Other / External Shop', otherPlaceholder: 'e.g. Toyota Service Center', group: '3. Location & assignment' },
     { label: 'Assigned To', name: 'assigned_to', options: options(lookups.maintenance_personnel, 'id', 'name'), type: 'select', group: '3. Location & assignment' },
-    // Completed is deliberately never offered here — marking a schedule done
-    // goes through the dedicated "Mark Done" action (creates the proof-of-work
-    // record and, if recurring, the next occurrence); this field only ever
-    // needs to cancel an existing one. Not shown at all when creating new.
-    ...(isEdit ? [{ label: 'Status', name: 'status', options: ['Scheduled', 'Cancelled'], type: 'select', fullWidth: true, group: '3. Location & assignment' }] : []),
+    // Status transitions use dedicated actions to preserve approval and proof of work.
     { label: 'Notes', name: 'notes', type: 'textarea', placeholder: 'Add preparation, symptoms, or instructions for the mechanic.', group: '4. Notes' },
   ];
-  return keep ? all.filter((f) => keep.includes(f.name)) : all;
+  return all.filter((f) => (!isEdit || status !== 'Scheduled' || f.name !== 'assigned_to') && (!keep || keep.includes(f.name)));
 }
 
 const REPORT_CATALOG = [
@@ -9525,7 +9528,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
             row={row} currentUser={currentUser} onEdit={onEdit} onComplete={onComplete}
             onViewRecord={onViewRecord} onReassign={onReassign} onViewTicket={onViewTicket}
             onApprove={onApprove} onDecline={onDecline}
-            onRestore={restoreRecord ? () => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored.', 'Restore this cancelled schedule back to Scheduled?') : undefined}
+            onRestore={restoreRecord ? () => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored for Admin approval.', 'Restore this schedule for Admin approval?') : undefined}
             onDelete={() => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.', `Cancel the ${row.maintenance_type} schedule for ${row.vehicle?.vehicle_name ?? 'this vehicle'}? It can be restored later if needed.`)}
           />
         </div>
@@ -9652,17 +9655,21 @@ function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onComp
       {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className={actionClass('is-info')} onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label={`View Maintenance Record #${recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}`}><Icon name="wrench" size={14} />{!iconOnly && <span>Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</span>}</button>}
       {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className={actionClass('is-success')} onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} />{!iconOnly && <span>Approve</span>}</button>}
       {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className={actionClass('is-danger')} onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} />{!iconOnly && <span>Decline</span>}</button>}
-      {(!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.edit')) && <button className={actionClass('')} onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} />{!iconOnly && <span>Edit</span>}</button>}
-      {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className={actionClass('is-info')} onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} />{!iconOnly && <span>Reassign</span>}</button>}
+      {(canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit')) && <button className={actionClass('')} onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} />{!iconOnly && <span>Edit</span>}</button>}
+      {!schedulePlanLocked(row) && canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className={actionClass('is-info')} onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} />{!iconOnly && <span>Reassign</span>}</button>}
       {row.status === 'Cancelled'
-        ? canDo(currentUser, 'schedule.restore') && onRestore && <button className={actionClass('is-success')} onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} />{!iconOnly && <span>Restore</span>}</button>
-        : (!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.delete')) && <button className={actionClass('is-danger')} onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} />{!iconOnly && <span>Cancel Schedule</span>}</button>}
+        ? canManageSchedulePlan(row) && canDo(currentUser, 'schedule.restore') && onRestore && <button className={actionClass('is-success')} onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} />{!iconOnly && <span>Restore</span>}</button>
+        : (canManageSchedulePlan(row) && canDo(currentUser, 'schedule.delete')) && <button className={actionClass('is-danger')} onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} />{!iconOnly && <span>Cancel Schedule</span>}</button>}
     </div>
   );
 }
 
-function scheduleTicketActivated(row) {
-  return !!row.resulting_ticket_id && ['Active', 'For Verification', 'Closed', 'Cancelled'].includes(row.resulting_ticket?.status);
+function schedulePlanLocked(row) {
+  return row.status === 'Completed' || !!row.resulting_ticket_id || !!row.resulting_maintenance_id;
+}
+
+function canManageSchedulePlan(row) {
+  return !schedulePlanLocked(row);
 }
 
 function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onViewVehicle, onViewSchedule, onApprove, onDecline }) {
@@ -9774,24 +9781,23 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
             permissions.php — Admin doesn't hold schedule.edit/.delete/
             .restore), gated by canDo so this matches what the backend
             actually accepts — see scheduleColumns' matching Action column
-            for the full reasoning. Any Custodian may edit any schedule in
-            their barangay. */}
+            for the full reasoning. Custodians can change unlocked plans within their barangay. */}
         {/* schedule.reassign (Admin only) — Admin's one remaining lever over
             an already-booked schedule. */}
-        {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && (
+        {!schedulePlanLocked(row) && canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && (
           <button className="sch-action is-warning" onClick={() => onReassign(row)} type="button"><Icon name="undo" size={14} /> Reassign</button>
         )}
-        {((!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.edit')) || canDo(currentUser, row.status === 'Cancelled' ? 'schedule.restore' : 'schedule.delete')) && <div className="sch-card-edit-cancel">
-          {(!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.edit')) && (
+        {((canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit')) || canDo(currentUser, row.status === 'Cancelled' ? 'schedule.restore' : 'schedule.delete')) && <div className="sch-card-edit-cancel">
+          {(canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit')) && (
             <button className="sch-action is-info" onClick={() => onEdit(row)} type="button"><Icon name="edit" size={14} /> Edit</button>
           )}
           {/* Same swap as the table: a cancelled schedule offers Restore, not a
               Delete that would just re-cancel something already cancelled. */}
           {row.status === 'Cancelled'
-            ? canDo(currentUser, 'schedule.restore') && onRestore && (
+            ? canManageSchedulePlan(row) && canDo(currentUser, 'schedule.restore') && onRestore && (
               <button className="sch-action is-success" onClick={() => onRestore(row)} type="button"><Icon name="undo" size={14} /> Restore</button>
             )
-            : (!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.delete')) && (
+            : (canManageSchedulePlan(row) && canDo(currentUser, 'schedule.delete')) && (
               <button className="sch-action is-danger" onClick={() => onDelete(row)} type="button"><Icon name="trash" size={14} /> Cancel</button>
             )}
         </div>}
@@ -10351,7 +10357,7 @@ function moduleRequest(moduleKey, editTarget, payload) {
 
   if (moduleKey === 'schedules') {
     return (editTarget && editTarget.schedule_id)
-      ? { method: 'put', path: `/maintenance-schedules/${editTarget.schedule_id}`, success: 'Schedule updated.' }
+      ? { method: 'put', path: `/maintenance-schedules/${editTarget.schedule_id}`, success: 'Schedule updated for Admin approval.' }
       : { method: 'post', path: '/maintenance-schedules', success: 'Schedule added.' };
   }
 

@@ -73,6 +73,18 @@ class ConvertDueSchedulesToTickets extends Command
 
     private function convertOne(VehicleMaintenanceSchedule $schedule): bool
     {
+        return DB::transaction(function () use ($schedule) {
+            $schedule = VehicleMaintenanceSchedule::whereKey($schedule->schedule_id)->lockForUpdate()->firstOrFail();
+            if ($schedule->status !== 'Scheduled' || $schedule->resulting_ticket_id || $schedule->resulting_maintenance_id) {
+                return false;
+            }
+            $schedule->setRelation('vehicle', \App\Models\Vehicle::whereKey($schedule->vehicle_id)->lockForUpdate()->first());
+            return $this->createProposal($schedule);
+        });
+    }
+
+    private function createProposal(VehicleMaintenanceSchedule $schedule): bool
+    {
         $vehicle = $schedule->vehicle;
 
         if (!$vehicle || in_array($vehicle->status, ['Inactive', 'Decommissioned'], true)) {
@@ -85,7 +97,7 @@ class ConvertDueSchedulesToTickets extends Command
         // Custodian in the same barangay for an older schedule created
         // before that rule, rather than failing the whole run over it.
         $custodian = User::find($schedule->created_by);
-        if (!$custodian || !$custodian->hasRole('Custodian') || !$custodian->is_active) {
+        if (!$custodian || !$custodian->hasRole('Custodian') || !$custodian->is_active || $custodian->barangay_id !== $vehicle->barangay_id) {
             $custodian = User::where('barangay_id', $vehicle->barangay_id)
                 ->havingRole('Custodian')
                 ->where('is_active', true)
@@ -139,7 +151,7 @@ class ConvertDueSchedulesToTickets extends Command
             // suggested_mechanic_id — not a real dispatch. approveTicket()
             // is what actually assigns them, exactly like any other proposal.
             $suggestedMechanic = $schedule->assigned_to
-                ? User::find($schedule->assigned_to)
+                ? User::where('barangay_id', $vehicle->barangay_id)->where('is_active', true)->havingRole('Maintenance Personnel')->find($schedule->assigned_to)
                 : null;
 
             // Final senior system review (2026-10-05, §3) — a preventive

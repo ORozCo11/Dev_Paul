@@ -556,6 +556,8 @@ class AuthController extends Controller
             'password' => Hash::make($data['new_password']),
         ]);
 
+        $request->user()->tokens()->where('id', '!=', $request->user()->currentAccessToken()?->id)->delete();
+
         ActivityLog::create([
             'user_id' => $request->user()->id,
             'role' => $request->user()->role,

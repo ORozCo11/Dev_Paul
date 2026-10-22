@@ -60,6 +60,9 @@ class VehicleUsageController extends Controller
         $data['purpose'] = $data['purpose'] ?? 'Dispatch';
 
         $log = DB::transaction(function () use ($data, $vehicle, $request) {
+            $vehicle = Vehicle::whereKey($vehicle->vehicle_id)->lockForUpdate()->firstOrFail();
+            abort_unless($vehicle->status === 'Available', 422, 'This vehicle is no longer available for dispatch.');
+            abort_if(VehicleUsageLog::where('vehicle_id', $vehicle->vehicle_id)->whereNull('ended_at')->exists(), 422, 'This vehicle already has an open trip. End it first.');
             $log = VehicleUsageLog::create($data + ['vehicle_id' => $vehicle->vehicle_id, 'logged_by' => $request->user()->id, 'started_at' => $data['started_at'] ?? now()]);
             $this->record($request, $vehicle, 'Vehicle Taken Out', "{$vehicle->vehicle_name} went out: {$log->purpose}" . ($log->destination ? " → {$log->destination}" : '') . '.', $log);
 
@@ -81,6 +84,8 @@ class VehicleUsageController extends Controller
         ]);
 
         DB::transaction(function () use ($log, $data, $request) {
+            $log = VehicleUsageLog::whereKey($log->usage_id)->lockForUpdate()->firstOrFail();
+            abort_if($log->ended_at, 422, 'This trip has already been ended.');
             $log->update([
                 'ended_at' => $data['ended_at'] ?? now(),
                 'odometer_end' => $data['odometer_end'] ?? null,
