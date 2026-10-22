@@ -2202,11 +2202,9 @@ html[data-theme="light"] .sole-admin-flag { color: #d97706; }
 @media (max-width: 560px) {
   .dashboard-headline-grid { grid-template-columns: 1fr !important; }
 }
-/* Maintenance Schedule's 8-card row (Total + 4 urgency buckets + Completed
-   + Awaiting Verification + Cancelled) — same fixed-column fix as the
-   dashboard's headline grid, so it lands as two even rows of four instead
-   of auto-fit's ragged trailing row (7 wide columns, 1 card alone on row 2). */
-.schedule-stat-grid { grid-template-columns: repeat(4, 1fr) !important; }
+/* Maintenance Schedule is intentionally capped at five summary cards,
+   including Total, so the status overview stays scannable on one row. */
+.schedule-stat-grid { grid-template-columns: repeat(5, 1fr) !important; }
 @media (max-width: 900px) {
   .schedule-stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }

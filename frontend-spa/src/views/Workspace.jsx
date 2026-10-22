@@ -1831,9 +1831,16 @@ function Workspace() {
 
     if (activeModule === 'schedules' && filterStatus.includes('MyAssigned')) {
       result = result.filter((row) => row.status === 'Scheduled' && String(row.assigned_to) === String(user.id));
+    } else if (activeModule === 'schedules' && filterStatus.includes('NeedsAttention')) {
+      result = result.filter((row) => ['Pending Approval', 'Declined'].includes(row.status));
     } else if (activeModule === 'schedules' && filterStatus.includes('AwaitingVerification')) {
       result = result.filter((row) => (
         row.status === 'Completed' && row.resulting_maintenance && row.resulting_maintenance.progress_status !== 'Completed'
+      ));
+    } else if (activeModule === 'schedules' && filterStatus.includes('Closed')) {
+      result = result.filter((row) => (
+        row.status === 'Cancelled'
+        || (row.status === 'Completed' && (!row.resulting_maintenance || row.resulting_maintenance.progress_status === 'Completed'))
       ));
     } else if (activeModule === 'schedules' && filterStatus.some((s) => SCHEDULE_URGENCY_KEYS.includes(s))) {
       result = result.filter((row) => filterStatus.includes(scheduleUrgencyBucket(row)));
@@ -2132,14 +2139,23 @@ function Workspace() {
     const myAssigned = (records.schedules ?? []).filter(
       (r) => r.status === 'Scheduled' && String(r.assigned_to) === String(user.id)
     ).length;
-    // How soon each still-scheduled row is due — same buckets the top-row
-    // urgency cards show and filter by (see scheduleUrgencyBucket).
+    const needsAttention = base['Pending Approval'] + base.Declined;
+    const closed = base.Cancelled + base.Completed - awaitingVerification;
+    // How soon each still-scheduled row is due — retained for row ordering
+    // and future schedule views, while the summary stays intentionally compact.
     const urgency = { Overdue: 0, Due1to3: 0, Due4to7: 0, Due8plus: 0 };
     (records.schedules ?? []).forEach((r) => {
       const bucket = scheduleUrgencyBucket(r);
       if (bucket) urgency[bucket] += 1;
     });
-    return { ...base, ...urgency, AwaitingVerification: awaitingVerification, MyAssigned: myAssigned };
+    return {
+      ...base,
+      ...urgency,
+      NeedsAttention: needsAttention,
+      AwaitingVerification: awaitingVerification,
+      Closed: closed,
+      MyAssigned: myAssigned,
+    };
   }, [records.schedules, user.id]);
 
   // A vehicle with no check on file yet is its own bucket ("Not Checked"),
@@ -8263,21 +8279,14 @@ const CHIP_TEXT_COLOR = {
   '#0ea5e9': '#075985', '#16a34a': '#166534', '#64748b': '#334155',
 };
 
-// Simplified per product direction: the urgency breakdown (Overdue/1-3
-// Days/4-7 Days) was its own set of cards here — removed in favor of a
-// plain upcoming list elsewhere on the dashboard. Row-level "Overdue"
-// badges (isScheduleOverdue) still show urgency per-row; this stat row now
-// only tracks status.
+// The schedule summary stays within five cards including Total. Lower-volume
+// terminal statuses are grouped, but every individual schedule and its status
+// remain available in the list and through these filters.
 const SCHEDULE_STAT_CARDS = [
   { key: 'Scheduled', label: 'Scheduled', icon: 'calendar', bg: '#dbeafe', color: '#1d4ed8' },
-  { key: 'Pending Approval', label: 'Pending Approval', icon: 'alert', bg: '#fef3c7', color: '#d97706' },
-  { key: 'Declined', label: 'Declined', icon: 'close', bg: '#fee2e2', color: '#dc2626' },
-  { key: 'Completed', label: 'Completed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
-  // A schedule marked "Completed" only means the calendar task is done —
-  // its record might still be sitting unverified. Its own filter so those
-  // rows are findable instead of scrolling through fully-verified ones.
+  { key: 'NeedsAttention', label: 'Needs Attention', icon: 'alert', bg: '#fef3c7', color: '#d97706' },
   { key: 'AwaitingVerification', label: 'Awaiting Verification', icon: 'search', bg: '#fef9c3', color: '#854d0e' },
-  { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#f1f5f9', color: '#64748b' },
+  { key: 'Closed', label: 'Closed / Cancelled', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
 
 // Only shown to a Maintenance-Personnel-only viewer — "how many vehicles do
