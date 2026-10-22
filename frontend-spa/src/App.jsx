@@ -10,11 +10,9 @@ const Privacy = lazy(() => import('./views/Privacy'));
 const Terms = lazy(() => import('./views/Terms'));
 const About = lazy(() => import('./views/About'));
 const Developers = lazy(() => import('./views/Developers'));
-const Support = lazy(() => import('./views/Support'));
 const Workspace = lazy(() => import('./views/Workspace'));
 const SuperAdminWorkspace = lazy(() => import('./views/SuperAdminWorkspace'));
 import './App.css';
-import './DarkMode.css';
 import './WorkflowDetails.css';
 
 function FleetWorkspace() {
@@ -50,7 +48,6 @@ function App() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/about" element={<About />} />
           <Route path="/developers" element={<Developers />} />
-          <Route path="/support" element={<Support />} />
           <Route path="/unauthorized" element={<Unauthorized />} />
           <Route
             path="/admin/*"

@@ -38,13 +38,15 @@ class VehicleUsageController extends Controller
         abort_if(VehicleUsageLog::where('vehicle_id', $vehicle->vehicle_id)->whereNull('ended_at')->exists(), 422, 'This vehicle already has an open trip. End it first.');
 
         $data = $request->validate([
-            'purpose' => ['required', 'string', 'max:255'],
+            'purpose' => ['nullable', 'string', 'max:255'],
             'destination' => ['nullable', 'string', 'max:255'],
             'driver_name' => ['nullable', 'string', 'max:255'],
             'started_at' => ['nullable', 'date', 'before_or_equal:now'],
             'odometer_start' => ['nullable', 'integer', 'min:0'],
             'notes' => ['nullable', 'string'],
         ]);
+
+        $data['purpose'] = $data['purpose'] ?? 'Dispatch';
 
         $log = DB::transaction(function () use ($data, $vehicle, $request) {
             $log = VehicleUsageLog::create($data + ['vehicle_id' => $vehicle->vehicle_id, 'logged_by' => $request->user()->id, 'started_at' => $data['started_at'] ?? now()]);

@@ -2133,15 +2133,12 @@ html[data-theme="light"] .sole-admin-flag { color: #d97706; }
   border-bottom: 1px solid var(--border-subtle, #eef2f7);
   background: none;
   text-align: left;
-  cursor: pointer;
+  cursor: default;
   font: inherit;
   color: inherit;
 }
 .latest-issue-timeline-item:last-child {
   border-bottom: none;
-}
-.latest-issue-timeline-item:hover {
-  background: var(--surface-hover, #f8fafc);
 }
 .latest-issue-timeline-dot {
   position: absolute;

@@ -6,7 +6,6 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\CityController;
-use App\Http\Controllers\ConcernReportController;
 use App\Http\Controllers\FleetController;
 use App\Http\Controllers\CannibalizationController;
 use App\Http\Controllers\HubController;
@@ -56,7 +55,6 @@ Route::get('/barangays/{barangay}', [BarangayController::class, 'show']);
 
 // Support Center's "Report a Concern" form — no account required. Rate-limited
 // like /register to blunt scripted spam.
-Route::post('/concern-reports', [ConcernReportController::class, 'store'])->middleware('throttle:5,1');
 
 /*
 |--------------------------------------------------------------------------
@@ -79,10 +77,6 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
         return array_merge($user->toArray(), ['abilities' => $user->getAbilities()]);
     });
 
-    // DEV-ONLY impersonation (fast role-switching for testing). These handlers
-    // return 404 unless APP_ENV is local/testing, so they don't exist in prod.
-    Route::get('/impersonate/candidates', [AuthController::class, 'impersonationCandidates']);
-    Route::post('/impersonate/{user}', [AuthController::class, 'impersonate']);
 
     Route::get('/greeting', [AuthController::class, 'greeting']);
     // Verifies the current password, so rate-limit it against guessing too.
@@ -175,10 +169,6 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, RestrictSuperAdmin
     Route::post('/superadmin/barangays/{barangay}/boundary/candidate', [SuperAdminController::class, 'uploadBoundaryCandidate']);
     Route::delete('/superadmin/barangays/{barangay}/boundary/pending', [SuperAdminController::class, 'discardPendingBoundary']);
     Route::get('/superadmin/activity-log', [SuperAdminController::class, 'activityLog']);
-    Route::get('/superadmin/concern-reports', [SuperAdminController::class, 'concernReports']);
-    Route::put('/superadmin/concern-reports/{concernReport}/resolve', [SuperAdminController::class, 'resolveConcernReport']);
-    Route::put('/superadmin/concern-reports/{concernReport}/reopen', [SuperAdminController::class, 'reopenConcernReport']);
-    Route::delete('/superadmin/concern-reports/{concernReport}', [SuperAdminController::class, 'destroyConcernReport']);
 
     Route::get('/hubs', [HubController::class, 'index']);
     Route::post('/hubs', [HubController::class, 'store']);

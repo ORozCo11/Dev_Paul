@@ -929,9 +929,6 @@ function Workspace() {
   const [allHubs, setAllHubs] = useState([]);
   const [locationsTab, setLocationsTab] = useState('map');
   const [selectedMapVehicleId, setSelectedMapVehicleId] = useState(null);
-  const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('theme') || 'light'; } catch { return 'light'; }
-  });
   const notificationsRef = useRef(null);
   const profileMenuRef = useRef(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -1054,10 +1051,6 @@ function Workspace() {
     }
   }, [user]);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem('theme', theme); } catch { /* ignore */ }
-  }, [theme]);
 
   useLayoutEffect(() => {
     const header = document.querySelector('.topbar');
@@ -2884,24 +2877,6 @@ function Workspace() {
           )}
         </div>
 
-        <button
-          className="icon-btn theme-toggle-btn"
-          type="button"
-          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          aria-label="Toggle light and dark mode"
-          onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-        >
-          {theme === 'dark' ? (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="4" />
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-          )}
-        </button>
 
         <div className="profile-menu-container" ref={profileMenuRef}>
           <ProfileMenu
@@ -4063,7 +4038,7 @@ function Workspace() {
                   ]}
                 />
               </div>
-              <LatestIssueCard issues={records.issues ?? []} onRowClick={(row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`)} />
+              <LatestIssueCard issues={records.issues ?? []} />
               <section className="panel module-filter-panel issue-summary-filters">
                 <IssueFilterPanel
                   categories={lookups.categories}
@@ -8830,7 +8805,7 @@ function timeAgo(value) {
 // the newest reports (vehicle, issue, reporter), so "what's come in
 // recently" doesn't require scrolling the full table below. Sourced from the
 // unfiltered list, so a search/filter on the main table doesn't empty it out.
-function LatestIssueCard({ issues = [], onRowClick }) {
+function LatestIssueCard({ issues = [] }) {
   const sorted = useMemo(
     () => [...issues].sort((a, b) => (b.issue_report_id ?? 0) - (a.issue_report_id ?? 0)),
     [issues]
@@ -8847,11 +8822,9 @@ function LatestIssueCard({ issues = [], onRowClick }) {
           <p className="muted">No issues reported yet.</p>
         ) : (
           sorted.map((row) => (
-            <button
+            <div
               key={row.issue_report_id}
-              type="button"
               className="latest-issue-timeline-item"
-              onClick={() => onRowClick?.(row)}
             >
               <span className="latest-issue-timeline-dot" />
               <span className="latest-issue-timeline-icon"><Icon name="mail" size={16} /></span>
@@ -8862,7 +8835,7 @@ function LatestIssueCard({ issues = [], onRowClick }) {
                 </span>
               </span>
               <span className="latest-issue-timeline-time">{timeAgo(row.created_at)}</span>
-            </button>
+            </div>
           ))
         )}
       </div>
@@ -13836,7 +13809,7 @@ function TicketModule({
             the one thing worth keeping from it, moved here instead of
             dropped. */}
         {recentIssues && recentIssues.length > 0 && (
-          <LatestIssueCard issues={recentIssues} onRowClick={(row) => onViewIssue?.(row.issue_report_id)} />
+          <LatestIssueCard issues={recentIssues} />
         )}
       </div>
 
@@ -17445,32 +17418,37 @@ function CapabilityImpactCard({ items, onNavigate, basePath }) {
 // existing Usage Log endpoints (the server enforces who may do this).
 function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
   const [trips, setTrips] = useState([]);
-  const [form, setForm] = useState({ purpose: '', destination: '', driver_name: '' });
-  const [endForm, setEndForm] = useState({ notes: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    api.get(`/vehicles/${vehicle.vehicle_id}/usage`).then((res) => { if (!cancelled) setTrips(res.data); }).catch(() => {});
+    api.get(`/vehicles/${vehicle.vehicle_id}/usage`)
+      .then((res) => { if (!cancelled) setTrips(res.data); })
+      .catch(() => { if (!cancelled) { setLoadFailed(true); setError('Could not load dispatch status. Close and reopen to retry.'); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [vehicle.vehicle_id, reloadKey]);
+  }, [vehicle.vehicle_id]);
 
   const open = trips.find((t) => !t.ended_at);
   const retired = ['Inactive', 'Decommissioned'].includes(vehicle.status);
-  const canTakeOut = !open && vehicle.status === 'Available';
-  const clean = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => String(v).trim() !== ''));
+  const canTakeOut = !loading && !loadFailed && !open && vehicle.status === 'Available';
 
   const run = async (fn) => {
-    if (busy) return;
+    if (busy || loading) return;
     setBusy(true); setError('');
-    try { await fn(); setReloadKey((k) => k + 1); onChanged?.(); } catch (err) {
+    try {
+      const { data } = await fn();
+      setTrips((previous) => [data, ...previous.filter((trip) => trip.usage_id !== data.usage_id)]);
+      onChanged?.();
+    } catch (err) {
       setError(err.response?.data?.message || (err.response?.data?.errors && Object.values(err.response.data.errors)[0]?.[0]) || 'Could not save.');
     } finally { setBusy(false); }
   };
 
-  const state = open ? { label: 'Dispatched', tone: 'out' } : retired ? { label: vehicle.status, tone: 'off' }
+  const state = loading ? { label: 'Loading dispatch status...', tone: 'off' } : loadFailed ? { label: 'Dispatch status unavailable', tone: 'off' } : open ? { label: 'Dispatched', tone: 'out' } : retired ? { label: vehicle.status, tone: 'off' }
     : vehicle.status === 'Under Maintenance' ? { label: 'Under Maintenance — not available', tone: 'off' } : { label: 'In station — available', tone: 'in' };
 
   return (
@@ -17486,32 +17464,21 @@ function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
 
       {open && (
         <div className="dispatch-block">
-          <h4>Current trip</h4>
-          <dl>
-            <div><dt>Purpose</dt><dd>{open.purpose}</dd></div>
-            <div><dt>Destination</dt><dd>{open.destination || '—'}</dd></div>
-            <div><dt>Driver</dt><dd>{open.driver_name || '—'}</dd></div>
-          </dl>
-          <div className="dispatch-grid">
-            <label><span>Notes</span><input type="text" value={endForm.notes} onChange={(e) => setEndForm({ ...endForm, notes: e.target.value })} /></label>
-          </div>
-          <button type="button" className="primary-button" disabled={busy} onClick={() => run(() => api.put(`/usage-logs/${open.usage_id}/end`, clean(endForm)))}>Mark Returned</button>
+          <h4>Return this vehicle</h4>
+          <p className="muted">Mark the vehicle as returned to the station.</p>
+          <button type="button" className="primary-button" disabled={busy} onClick={() => run(() => api.put(`/usage-logs/${open.usage_id}/end`, {}))}>{busy ? 'Saving...' : 'Return'}</button>
         </div>
       )}
 
       {canTakeOut && (
         <div className="dispatch-block">
           <h4>Dispatch this vehicle</h4>
-          <div className="dispatch-grid">
-            <label className="dispatch-wide"><span>Purpose <b className="req">*</b></span><input type="text" value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} placeholder="e.g. Patient transport, fire response, drill" /></label>
-            <label><span>Destination</span><input type="text" value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} /></label>
-            <label><span>Driver</span><input type="text" value={form.driver_name} onChange={(e) => setForm({ ...form, driver_name: e.target.value })} /></label>
-          </div>
-          <button type="button" className="primary-button" disabled={busy || !form.purpose.trim()} onClick={() => run(() => api.post(`/vehicles/${vehicle.vehicle_id}/usage`, clean(form)))}>Dispatch</button>
+          <p className="muted">Mark the vehicle as dispatched from the station.</p>
+          <button type="button" className="primary-button" disabled={busy} onClick={() => run(() => api.post(`/vehicles/${vehicle.vehicle_id}/usage`, {}))}>{busy ? 'Saving...' : 'Dispatch'}</button>
         </div>
       )}
 
-      {!open && !canTakeOut && (
+      {!loading && !loadFailed && !open && !canTakeOut && (
         <p className="muted">{retired ? 'This vehicle is archived or decommissioned.' : 'A vehicle can only be dispatched while it is Available. Finish its repair first.'}</p>
       )}
 
@@ -17520,7 +17487,7 @@ function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
         {trips.length === 0 ? <p className="muted">No trips recorded yet.</p> : (
           <ul className="dispatch-trips">
             {trips.slice(0, 6).map((t) => (
-              <li key={t.usage_id}><strong>{t.purpose}</strong>{t.destination ? ` → ${t.destination}` : ''}{t.driver_name ? ` · ${t.driver_name}` : ''}<span>{formatDate(t.started_at)}{t.ended_at ? ` – ${formatDate(t.ended_at)}` : ' · out now'}</span></li>
+              <li key={t.usage_id}><strong>{t.ended_at ? 'Returned' : 'Dispatched'}</strong><span>{formatDate(t.started_at)}{t.ended_at ? ` – ${formatDate(t.ended_at)}` : ' · out now'}</span></li>
             ))}
           </ul>
         )}

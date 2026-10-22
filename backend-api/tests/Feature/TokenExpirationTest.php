@@ -74,34 +74,13 @@ class TokenExpirationTest extends TestCase
     }
 
     #[Test]
-    public function an_impersonation_token_expires_sooner_than_a_regular_login_token(): void
+    public function the_removed_impersonation_endpoint_cannot_issue_tokens(): void
     {
         $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
-
-        $loginToken = $admin->createToken('auth_token', $admin->allRoles());
-
+        $admin->createToken('auth_token', $admin->allRoles());
         \Laravel\Sanctum\Sanctum::actingAs($admin, ['*']);
-        $impersonateResponse = $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Testing token expiry'])->assertOk();
-
-        $impersonationTokenId = (int) explode('|', $impersonateResponse->json('access_token'))[0];
-        $impersonationToken = \Laravel\Sanctum\PersonalAccessToken::find($impersonationTokenId);
-
-        // VMS-IMPROVEMENT-PLAN.md Phase A5 — 30 minutes, not the 4 hours
-        // this used to be.
-        $this->assertNotNull($impersonationToken->expires_at, 'Impersonation tokens must carry an explicit expiry.');
-        $this->assertTrue(
-            $impersonationToken->expires_at->lte(now()->addMinutes(31)),
-            'Impersonation tokens should expire within about 30 minutes.'
-        );
-
-        // The regular login-style token created above has no explicit
-        // per-token expiry (relies on the global config instead), so it
-        // outlives the impersonation token's explicit 30-minute cutoff.
-        $this->assertNull($loginToken->accessToken->expires_at);
-        $this->assertTrue(
-            $impersonationToken->expires_at->lt(now()->addDays(7)),
-            'Impersonation token expiry must be shorter than the 7-day global login expiration.'
-        );
+        $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Removed feature'])->assertNotFound();
+        $this->assertDatabaseCount('personal_access_tokens', 1);
     }
 }

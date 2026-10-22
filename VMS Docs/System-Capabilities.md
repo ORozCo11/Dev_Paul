@@ -6,7 +6,7 @@ A complete, code-verified catalog of everything the system can do today, organiz
 
 ## 1. Roles
 
-| Role | Scope | One-line summary |
+| Role | Scope | One-line summary |   
 |---|---|---|
 | **Admin** | One Barangay | Manage → Approve → Assign → Monitor. Runs the fleet; does **not** create tickets directly, and does **not** verify or close them (the assigned Custodian's verification closes a ticket — §5.4). |
 | **Custodian** | One Barangay | Report → Create Ticket → Inspect → Verify. The only role that creates a Maintenance Ticket. |

@@ -4,6 +4,7 @@ import api from '../api/axios';
 import Icon from './Icon';
 import FileCabinet from './FileCabinet';
 import { geoJsonToPolygons } from '../utils/boundary';
+import { manageDialogFocus } from '../utils/dialogFocus';
 
 // Matches the API: every ring repeats its first point as its last.
 function hasClosedRings(geometry) {
@@ -30,6 +31,13 @@ export default function BoundaryReviewModal({ barangay, onClose, onConfirm, onDi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const readVersion = useRef(0);
+  const dialogRef = useRef(null);
+  const dialogState = useRef({ busy, onClose });
+  useEffect(() => { dialogState.current = { busy, onClose }; }, [busy, onClose]);
+  useEffect(() => manageDialogFocus(dialogRef.current, {
+    onClose: () => dialogState.current.onClose(),
+    isBusy: () => dialogState.current.busy,
+  }), []);
   useEffect(() => {
     if (barangay.pending_boundary) return;
     let current = true;
@@ -68,7 +76,7 @@ export default function BoundaryReviewModal({ barangay, onClose, onConfirm, onDi
   const candidateIsReference = hasCandidate && !savedSourceIsUpload(pendingSource) && !document;
   const run = async (action) => { setBusy(true); try { await action(); } finally { setBusy(false); } };
   return <div className="modal-overlay" onClick={busy ? undefined : onClose}>
-    <div className="modal-box boundary-review-dialog" role="dialog" aria-modal="true" aria-label="Review barangay boundary" onClick={(event) => event.stopPropagation()}>
+    <div ref={dialogRef} tabIndex={-1} className="modal-box boundary-review-dialog" role="dialog" aria-modal="true" aria-label="Review barangay boundary" onClick={(event) => event.stopPropagation()}>
       <div className="modal-header"><h3>Review Boundary — {barangay.name}</h3><button type="button" className="modal-close-btn" disabled={busy} onClick={onClose} aria-label="Close"><Icon name="close" size={18} /></button></div>
       <div className="modal-body">
         <p className="muted">{barangay.city_name} · PSGC {barangay.psgc_code ?? 'not assigned'}. Imported outlines are reference data. Confirm a boundary after checking an LGU-approved map or survey.</p>

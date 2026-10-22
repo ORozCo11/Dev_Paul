@@ -47,7 +47,7 @@ class PhilippineBarangaySeeder extends Seeder
                     }
                     $count++;
                 }
-            });
+            }, attempts: 5);
         }
         $this->command?->info("PSGC barangay references ready: {$count}.");
     }

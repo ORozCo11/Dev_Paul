@@ -90,6 +90,7 @@ html:root[data-theme] .superadmin-shell .sa-pagination select { width:70px; min-
 .superadmin-shell .sa-empty strong { font-size:16px; font-weight:600; }
 .superadmin-shell .sa-empty p { max-width:440px; margin:0; color:var(--sa-muted); font-size:13px; line-height:1.6; }
 .superadmin-shell .sa-overview .focus-columns { grid-template-columns:minmax(0,1.85fr) minmax(0,1fr); align-items:start; }
+.superadmin-shell .focus-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); }
 .superadmin-shell .focus-card, .superadmin-shell .focus-kpis > button { border-color:var(--sa-border); background:var(--sa-surface); box-shadow:none; }
 .superadmin-shell .sa-overview .focus-card > header p { color:var(--sa-muted); font-size:13px; line-height:1.5; margin:5px 0 0; }
 .superadmin-shell .sa-overview .focus-tasks li { padding:16px 0; }
@@ -221,3 +222,23 @@ html[data-theme="dark"] .superadmin-shell .workspace-footer { padding-left: 276p
 .superadmin-shell .boundary-registration-empty, .superadmin-shell .boundary-registration-note { margin:0; padding:16px; font-size:12px; line-height:1.55; }
 .superadmin-shell .boundary-registration-note { border-top:1px solid var(--sa-border); }
 @media(max-width:600px) { .superadmin-shell .boundary-registration-map { height:250px; } .superadmin-shell .boundary-registration-preview-head { flex-direction:column; } }
+
+/* Application reviews replace the list with a full-width page. */
+.superadmin-shell .sa-application-page { display:grid; gap:20px; width:100%; min-width:0; }
+.superadmin-shell .sa-review-back { display:inline-flex; align-items:center; gap:8px; justify-self:start; }
+.superadmin-shell .sa-application-header { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; padding:24px 28px; border-bottom:1px solid var(--sa-border); }
+.superadmin-shell .sa-application-header h2 { margin:0; font-size:24px; line-height:1.4; color:var(--sa-text); }
+.superadmin-shell .sa-application-header p { margin:6px 0 0; font-size:14px; color:var(--sa-muted); }
+.superadmin-shell .sa-application-body { padding:28px; }
+.superadmin-shell .sa-application-body .sa-identity { padding-bottom:28px; margin-bottom:28px; border-bottom:1px solid var(--sa-border); }
+.superadmin-shell .sa-application-body .sa-detail-list { grid-template-columns:180px minmax(0,1fr); gap:20px 28px; font-size:14px; margin:0; }
+.superadmin-shell .sa-application-body dd { overflow-wrap:anywhere; }
+.superadmin-shell .sa-application-actions { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:16px; padding:20px 28px; border-top:1px solid var(--sa-border); background:var(--sa-subtle); }
+.superadmin-shell .sa-application-actions p { margin:0; max-width:460px; color:var(--sa-muted); font-size:13px; line-height:1.6; }
+@media(max-width:640px) {
+  .superadmin-shell .sa-application-header, .superadmin-shell .sa-application-body, .superadmin-shell .sa-application-actions { padding:20px; }
+  .superadmin-shell .sa-application-body .sa-detail-list { grid-template-columns:minmax(0,1fr); gap:6px; }
+  .superadmin-shell .sa-application-body dd { margin:0 0 16px; }
+  .superadmin-shell .sa-application-actions .sa-row-actions { width:100%; flex-wrap:wrap; }
+  .superadmin-shell .sa-application-actions button { flex:1 1 auto; min-height:44px; }
+}

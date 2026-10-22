@@ -85,6 +85,23 @@ class SpecPhase5UsageAndCriticalityTest extends TestCase
     }
 
     #[Test]
+    public function dispatch_and_return_need_no_trip_details(): void
+    {
+        $vehicle = $this->vehicle($this->van, 'VAN 5050');
+        Sanctum::actingAs($this->custodian, ['*']);
+
+        $trip = $this->postJson("/api/vehicles/{$vehicle->vehicle_id}/usage", [])
+            ->assertCreated()->assertJsonPath('purpose', 'Dispatch')->json();
+        $this->assertNotNull($trip['started_at']);
+        $this->assertDatabaseHas('vehicle_usage_logs', ['usage_id' => $trip['usage_id'], 'ended_at' => null]);
+        $this->postJson("/api/vehicles/{$vehicle->vehicle_id}/usage", [])->assertUnprocessable();
+        $this->putJson("/api/usage-logs/{$trip['usage_id']}/end", [])
+            ->assertOk()->assertJsonPath('usage_id', $trip['usage_id']);
+        $this->assertDatabaseMissing('vehicle_usage_logs', ['usage_id' => $trip['usage_id'], 'ended_at' => null]);
+        $this->postJson("/api/vehicles/{$vehicle->vehicle_id}/usage", [])->assertCreated();
+    }
+
+    #[Test]
     public function a_trip_can_be_started_and_ended_and_leaves_history_and_an_activity_log(): void
     {
         $vehicle = $this->vehicle($this->van, 'VAN 5555');

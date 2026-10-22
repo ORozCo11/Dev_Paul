@@ -99,7 +99,7 @@ class SuperAdminControllerTest extends TestCase
     }
 
     #[Test]
-    public function only_super_admin_can_delete_a_concern_report(): void
+    public function removed_concern_reports_cannot_be_deleted_by_tenant_admins(): void
     {
         $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
         $report = ConcernReport::create([
@@ -109,12 +109,12 @@ class SuperAdminControllerTest extends TestCase
         ]);
 
         Sanctum::actingAs($admin, ['*']);
-        $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertStatus(403);
+        $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertNotFound();
         $this->assertDatabaseHas('concern_reports', ['id' => $report->id]);
     }
 
     #[Test]
-    public function super_admin_can_delete_a_concern_report_and_it_is_actually_removed(): void
+    public function concern_report_routes_are_removed_and_existing_records_are_preserved(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
         $report = ConcernReport::create([
@@ -124,9 +124,12 @@ class SuperAdminControllerTest extends TestCase
         ]);
 
         Sanctum::actingAs($superAdmin, ['*']);
-        $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertOk();
-
-        $this->assertDatabaseMissing('concern_reports', ['id' => $report->id]);
+        $this->getJson('/api/superadmin/concern-reports')->assertNotFound();
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/resolve")->assertNotFound();
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/reopen")->assertNotFound();
+        $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertNotFound();
+        $this->postJson('/api/concern-reports', ['concern_type' => 'Other', 'description' => 'Removed feature'])->assertNotFound();
+        $this->assertDatabaseHas('concern_reports', ['id' => $report->id, 'status' => 'Open']);
     }
 
     #[Test]

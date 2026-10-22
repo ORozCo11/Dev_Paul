@@ -12,25 +12,20 @@ import WorkspaceFooter from '../components/WorkspaceFooter';
 import { AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge } from '../components/SuperAdminUI';
 import { formatDate } from '../utils/adminDate';
 import { geoJsonToPolygons } from '../utils/boundary';
-import { ActivityLogTab, ConcernReportsTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
+import { ActivityLogTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
 
 
 // Kept separate from every other role's landing route — a Super Admin never
 // lands on the fleet-oriented Workspace.jsx shell, since RestrictSuperAdminScope
 // (backend) blocks that account from all fleet-data endpoints anyway.
-const roleRoutes = {
-  Admin: '/admin',
-  Custodian: '/custodian',
-  'Maintenance Personnel': '/maintenance',
-};
 
 
 
 // Flat platform navigation preserves the existing module keys.
 const TABS = [
   ['dashboard', 'Platform Overview'], ['barangays', 'Barangay Management'], ['pending', 'Pending Approvals'],
-  ['users', 'Users'], ['codes', 'Registration Codes'], ['concerns', 'Concern Reports'], ['activity', 'Activity Log'],
+  ['users', 'Users'], ['codes', 'Registration Codes'], ['activity', 'Activity Log'],
 ];
 
 const TAB_DESCRIPTIONS = {
@@ -39,7 +34,6 @@ const TAB_DESCRIPTIONS = {
   pending: 'Review account requests and keep every barangay properly staffed.',
   users: 'Manage platform users, roles, and account availability by location.',
   codes: 'View and regenerate staff registration codes for registered barangays.',
-  concerns: 'Track and resolve reports that need platform-level attention.',
   activity: 'A chronological record of platform and Super Admin activity.',
   settings: 'Manage your Super Admin account settings and security.',
 };
@@ -80,7 +74,6 @@ const TAB_ICONS = {
   pending: <Icon name="clipboard" size={18} className="nav-icon" />,
   users: <UsersIcon />,
   codes: <Icon name="key" size={18} className="nav-icon" />,
-  concerns: <Icon name="mail" size={18} className="nav-icon" />,
   activity: <Icon name="clipboard" size={18} className="nav-icon" />,
   settings: <Icon name="key" size={18} className="nav-icon" />,
 };
@@ -272,83 +265,6 @@ function AddBarangayForm({ onAdded, onCancel }) {
   );
 }
 
-function ImpersonateInline({ candidates, onImpersonate }) {
-  const [provinceKey, setProvinceKey] = useState('');
-  const [cityKey, setCityKey] = useState('');
-  const [barangayKey, setBarangayKey] = useState('');
-  const [userId, setUserId] = useState('');
-  // Phase A5 — a written reason is required before impersonating anyone
-  // (support/recovery only, never idle browsing), and appears in both the
-  // target barangay's Activity Log and the Super Admin's own account log.
-  const [reason, setReason] = useState('');
-
-  const eligible = candidates.filter((c) => c.role !== 'Super Admin');
-  const provinces = [...new Set(eligible.map((c) => c.province_name ?? 'Unassigned'))].sort();
-  const inProvince = eligible.filter((c) => (c.province_name ?? 'Unassigned') === provinceKey);
-  const cities = [...new Set(inProvince.map((c) => c.city_name ?? 'Unassigned'))].sort();
-  const inCity = inProvince.filter((c) => (c.city_name ?? 'Unassigned') === cityKey);
-  const barangayOptions = [...new Map(inCity.map((c) => [String(c.barangay_id ?? 'unassigned'), c.barangay_name ?? 'Unassigned'])).entries()];
-  const staffOptions = inCity.filter((c) => String(c.barangay_id ?? 'unassigned') === barangayKey);
-
-  return (
-    <>
-      <div className="map-boundary-selector" title="Select Province, City, Barangay, then Staff.">
-        <select
-          aria-label="Impersonate province"
-          value={provinceKey}
-          onChange={(e) => { setProvinceKey(e.target.value); setCityKey(''); setBarangayKey(''); setUserId(''); setReason(''); }}
-        >
-          <option value="">Province</option>
-          {provinces.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select aria-label="Impersonate city" value={cityKey} disabled={!provinceKey} onChange={(e) => { setCityKey(e.target.value); setBarangayKey(''); setUserId(''); setReason(''); }}>
-          <option value="">City / Municipality</option>
-          {cities.map((city) => <option key={city} value={city}>{city}</option>)}
-        </select>
-        <select
-          aria-label="Impersonate barangay"
-          value={barangayKey}
-          disabled={!cityKey}
-          onChange={(e) => { setBarangayKey(e.target.value); setUserId(''); }}
-        >
-          <option value="">Barangay</option>
-          {barangayOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-        </select>
-      </div>
-      <div className="dev-impersonate" title="Impersonate a staff account for support or account recovery. Read-only, expires in 30 minutes, and is logged.">
-        <select
-          aria-label="Impersonate staff"
-          value={userId}
-          disabled={!barangayKey}
-          onChange={(e) => { setUserId(e.target.value); setReason(''); }}
-        >
-          <option value="">Staff</option>
-          {staffOptions.map((u) => (
-            <option key={u.id} value={u.id} disabled={!u.is_active}>{u.name} · {u.role}{u.is_active ? '' : ' (inactive)'}</option>
-          ))}
-        </select>
-        {userId && (
-          <input
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason (required)"
-            aria-label="Reason for impersonating"
-            style={{ width: 180 }}
-          />
-        )}
-        <button
-          type="button"
-          disabled={!userId || !reason.trim()}
-          onClick={() => { onImpersonate(userId, reason.trim()); setReason(''); }}
-        >
-          Impersonate
-        </button>
-      </div>
-    </>
-  );
-}
-
 function SettingsTab({ setNotice }) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -421,7 +337,7 @@ export default function SuperAdminWorkspace() {
   const [barangayFilter, setBarangayFilter] = useState('all');
   const [codeBarangay, setCodeBarangay] = useState(null);
   const [showAddBarangay, setShowAddBarangay] = useState(false);
-  const navigateTab = (tab, filter) => { navigate(`/superadmin/${tab}`); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
+  const navigateTab = (tab, filter) => { navigate(`/superadmin/${tab}`); setMobileNavOpen(false); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
   // Always starts expanded — a collapsed sidebar should only ever be a
   // deliberate, in-session choice (the toggle button), never the default a
   // returning user lands on.
@@ -442,9 +358,6 @@ export default function SuperAdminWorkspace() {
     }
     setIsSidebarCollapsed((v) => !v);
   };
-  const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem('theme') || 'light'; } catch { return 'light'; }
-  });
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notice, setNotice] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -465,12 +378,10 @@ export default function SuperAdminWorkspace() {
   const [barangays, setBarangays] = useState([]);
   const [users, setUsers] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState([]);
-  const [candidates, setCandidates] = useState([]);
-  const [concernReports, setConcernReports] = useState([]);
-  const [resourceLoading, setResourceLoading] = useState({ barangays: true, users: true, pending: true, candidates: true, concerns: true });
+  const [resourceLoading, setResourceLoading] = useState({ barangays: true, users: true, pending: true });
   const [resourceErrors, setResourceErrors] = useState({});
   const loadVersion = useRef(0);
-  const requiredResources = { dashboard: ['barangays', 'pending', 'concerns'], barangays: ['barangays', 'users'], pending: ['pending', 'barangays'], users: ['users'], codes: ['barangays'], concerns: ['concerns'] };
+  const requiredResources = { dashboard: ['barangays', 'pending'], barangays: ['barangays', 'users'], pending: ['pending', 'barangays'], users: ['users'], codes: ['barangays'] };
   const loading = (requiredResources[activeTab] ?? []).some((key) => resourceLoading[key]);
   const loadError = (requiredResources[activeTab] ?? []).some((key) => resourceErrors[key]);
 
@@ -479,10 +390,6 @@ export default function SuperAdminWorkspace() {
   const notificationsRef = useRef(null);
   const profileMenuRef = useRef(null);
 
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    try { localStorage.setItem('theme', theme); } catch { /* ignore */ }
-  }, [theme]);
 
   useEffect(() => {
     if (!notice) return;
@@ -492,14 +399,12 @@ export default function SuperAdminWorkspace() {
 
   // Each page waits only for its own datasets. Refreshes preserve form state,
   // and an unrelated slow or failed endpoint cannot hide healthy controls.
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async ({ background = false } = {}) => {
     const version = ++loadVersion.current;
     const resources = [
       ['barangays', '/superadmin/barangays', setBarangays],
       ['users', '/superadmin/users', setUsers],
       ['pending', '/superadmin/pending-approvals', setPendingApprovals],
-      ['candidates', '/impersonate/candidates', setCandidates],
-      ['concerns', '/superadmin/concern-reports', setConcernReports],
     ];
     await Promise.allSettled(resources.map(async ([key, path, update]) => {
       try {
@@ -508,7 +413,7 @@ export default function SuperAdminWorkspace() {
         update(data);
         setResourceErrors((previous) => ({ ...previous, [key]: false }));
       } catch {
-        if (version === loadVersion.current) setResourceErrors((previous) => ({ ...previous, [key]: true }));
+        if (!background && version === loadVersion.current) setResourceErrors((previous) => ({ ...previous, [key]: true }));
       } finally {
         if (version === loadVersion.current) setResourceLoading((previous) => ({ ...previous, [key]: false }));
       }
@@ -518,6 +423,13 @@ export default function SuperAdminWorkspace() {
   useEffect(() => {
     // loadAll awaits the API batch before updating React state.
     loadAll();
+    const refresh = () => { if (document.visibilityState === 'visible') loadAll({ background: true }); };
+    const interval = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+    };
   }, [loadAll]);
 
   const loadNotifications = useCallback(async () => {
@@ -696,65 +608,6 @@ export default function SuperAdminWorkspace() {
     }
   };
 
-  const resolveConcern = async (report) => {
-    try {
-      await api.put(`/superadmin/concern-reports/${report.id}/resolve`);
-      setNotice({ type: 'success', text: 'Concern report marked resolved.' });
-      await loadAll();
-      return true;
-    } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that report.' });
-      return false;
-    }
-  };
-
-  const reopenConcern = async (report) => {
-    try {
-      await api.put(`/superadmin/concern-reports/${report.id}/reopen`);
-      setNotice({ type: 'success', text: 'Concern report reopened.' });
-      await loadAll();
-      return true;
-    } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that report.' });
-      return false;
-    }
-  };
-
-  const doImpersonate = async (userId, reason) => {
-    try {
-      const res = await api.post(`/impersonate/${userId}`, { reason });
-      // Stash the Super Admin's own token before it's overwritten below —
-      // otherwise there was no way back into it short of logging out and
-      // back in. Workspace.jsx's topbar reads these same keys to show a
-      // "Return to..." control on whichever dashboard the impersonated
-      // account lands on.
-      const ownToken = localStorage.getItem('token') || sessionStorage.getItem('token');
-      if (ownToken && !localStorage.getItem('impersonator_token')) {
-        localStorage.setItem('impersonator_storage', localStorage.getItem('token') ? 'local' : 'session');
-        localStorage.setItem('impersonator_token', ownToken);
-        localStorage.setItem('impersonator_name', user.name);
-        localStorage.setItem('impersonator_role', user.role);
-      }
-      localStorage.setItem('token', res.data.access_token);
-      sessionStorage.removeItem('token');
-      window.location.assign(roleRoutes[res.data.user?.role] ?? '/admin');
-    } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not impersonate that account.' });
-    }
-  };
-
-  const deleteConcern = async (report) => {
-    try {
-      await api.delete(`/superadmin/concern-reports/${report.id}`);
-      setNotice({ type: 'success', text: 'Concern report deleted.' });
-      await loadAll();
-      return true;
-    } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not delete that report.' });
-      return false;
-    }
-  };
-
   const handleLogout = () => {
     setShowProfileMenu(false);
     logout();
@@ -783,7 +636,6 @@ export default function SuperAdminWorkspace() {
             </button>
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
-            {resourceErrors.candidates ? <span role="alert">Support accounts unavailable. <button type="button" className="ghost-button" onClick={() => loadAll()}>Retry support accounts</button></span> : <ImpersonateInline candidates={candidates} onImpersonate={doImpersonate} />}
           </div>
         </div>
 
@@ -862,24 +714,6 @@ export default function SuperAdminWorkspace() {
             )}
           </div>
 
-          <button
-            className="icon-btn theme-toggle-btn"
-            type="button"
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            aria-label="Toggle light and dark mode"
-            onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-          >
-            {theme === 'dark' ? (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-              </svg>
-            ) : (
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-              </svg>
-            )}
-          </button>
           <div className="profile-menu-container" ref={profileMenuRef}>
             <ProfileMenu
               user={user}
@@ -894,7 +728,6 @@ export default function SuperAdminWorkspace() {
 
       <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="superadmin-sidebar">
-          <div className="sidebar-mobile-extras"><ImpersonateInline candidates={candidates} onImpersonate={doImpersonate} /></div>
           <nav className="module-nav" aria-label="Super Admin modules">
             {TABS.map(([key, label]) => <button key={key} type="button" aria-label={label} aria-current={key === activeTab ? 'page' : undefined} className={key === activeTab ? 'active' : ''} onClick={() => navigateTab(key)} title={label}>
               {TAB_ICONS[key]}<span>{label}</span>{key === 'pending' && pendingApprovals.length > 0 && <span className="module-nav-badge">{pendingApprovals.length}</span>}
@@ -933,7 +766,7 @@ export default function SuperAdminWorkspace() {
             ) : loadError ? (
               <div className="sa-management-card"><p className="sa-load-error" role="alert">Data for this page could not be loaded. <button type="button" className="ghost-button" onClick={() => loadAll()}>Retry</button></p></div>
             ) : activeTab === 'dashboard' ? (
-              <PlatformOverview barangays={barangays} approvals={pendingApprovals} concerns={concernReports} onNavigate={navigateTab} />
+              <PlatformOverview barangays={barangays} approvals={pendingApprovals} onNavigate={navigateTab} />
             ) : activeTab === 'barangays' ? (
               <BarangayManagementTab
                 onBoundarySaved={() => loadAll()}
@@ -963,8 +796,6 @@ export default function SuperAdminWorkspace() {
               <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onApprove={approvePending} onReject={rejectPending} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'codes' ? (
               <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} barangays={barangays} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
-            ) : activeTab === 'concerns' ? (
-              <ConcernReportsTab reports={concernReports} onResolve={resolveConcern} onReopen={reopenConcern} onDelete={deleteConcern} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
             ) : (
