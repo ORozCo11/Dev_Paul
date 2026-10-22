@@ -642,7 +642,7 @@ export default function SuperAdminWorkspace() {
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
-          <ImpersonationPicker user={user} />
+          {user.abilities?.includes('impersonation.start') && <ImpersonationPicker user={user} />}
         </div>
 
         <div className="topbar-right">

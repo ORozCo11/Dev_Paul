@@ -32,7 +32,7 @@ class ImpersonationTest extends TestCase
     public function super_admin_can_switch_accounts_in_production_with_an_audited_reason(): void
     {
         app()['env'] = 'production';
-        $actor = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
+        $actor = User::firstOrCreate(['email' => 'superadmin@barangay.gov'], ['name' => 'Super Admin', 'password' => bcrypt('secret123'), 'role' => 'Super Admin', 'roles' => ['Super Admin']]);
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
         Sanctum::actingAs($actor, $actor->allRoles());
         $this->getJson('/api/impersonate/candidates')->assertOk()->assertJsonFragment(['id' => $target->id]);
@@ -43,12 +43,64 @@ class ImpersonationTest extends TestCase
     }
 
     #[Test]
-    public function ordinary_admin_impersonation_remains_local_only(): void
+    public function only_the_two_designated_super_admin_accounts_can_impersonate_in_every_environment(): void
     {
-        app()['env'] = 'production';
-        $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
-        Sanctum::actingAs($admin, $admin->allRoles());
-        $this->getJson('/api/impersonate/candidates')->assertNotFound();
+        $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
+        $allowed = collect(['superadmin@test.com', 'superadmin@barangay.gov'])->map(fn ($email) =>
+            User::firstOrCreate(['email' => $email], ['name' => 'Super Admin', 'password' => bcrypt('secret123'), 'role' => 'Super Admin', 'roles' => ['Super Admin']]));
+        $blocked = collect([
+            ['email' => 'admin@barangay.gov', 'role' => 'Admin'],
+            ['email' => 'other-superadmin@example.com', 'role' => 'Super Admin'],
+            ['email' => 'superadmin@test.com.attacker.example', 'role' => 'Super Admin'],
+        ])->map(fn ($attributes) => User::factory()->create($attributes + ['roles' => [$attributes['role']]]));
+        foreach (['local', 'testing', 'production'] as $environment) {
+            app()['env'] = $environment;
+            foreach ($allowed as $actor) {
+                Sanctum::actingAs($actor, $actor->allRoles());
+                $this->getJson('/api/user')->assertOk()->assertJsonFragment(['impersonation.start']);
+                $this->getJson('/api/impersonate/candidates')->assertOk();
+                $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Check a reported issue'])->assertOk();
+            }
+            foreach ($blocked as $actor) {
+                Sanctum::actingAs($actor, $actor->allRoles());
+                $this->assertNotContains('impersonation.start', $actor->getAbilities());
+                $this->getJson('/api/impersonate/candidates')->assertForbidden();
+                $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Attempt account switch'])->assertForbidden();
+            }
+        }
+        // An allowed email is insufficient without the Super Admin role.
+        $actor = $allowed->first();
+        $actor->update(['role' => 'Admin', 'roles' => ['Admin']]);
+        Sanctum::actingAs($actor, $actor->allRoles());
+        $this->assertFalse($actor->canDo('impersonation.start'));
+        $this->getJson('/api/impersonate/candidates')->assertForbidden();
+        $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Attempt account switch'])->assertForbidden();
+    }
+
+    #[Test]
+    public function impersonated_accounts_cannot_chain_sessions_even_locally(): void
+    {
+        app()['env'] = 'local';
+        $actor = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
+        $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
+        $token = $this->impersonationToken($actor);
+        $this->withHeader('Authorization', "Bearer {$token}")->getJson('/api/impersonate/candidates')->assertForbidden();
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->postJson("/api/impersonate/{$target->id}", ['reason' => 'Attempt nested switch'])->assertForbidden();
+        $this->withHeader('Authorization', "Bearer {$token}")->postJson('/api/logout')->assertOk();
+    }
+
+    #[Test]
+    public function test_super_admin_seeder_sets_requested_login_without_removing_other_accounts(): void
+    {
+        $other = User::factory()->create(['role' => 'Admin']);
+        $before = User::count();
+        $this->seed(\Database\Seeders\TestSuperAdminSeeder::class);
+        $this->seed(\Database\Seeders\TestSuperAdminSeeder::class);
+        $this->assertDatabaseCount('users', $before + 1);
+        $this->assertDatabaseHas('users', ['id' => $other->id]);
+        $this->postJson('/api/login', ['email' => 'superadmin@test.com', 'password' => 'test123'])
+            ->assertOk()->assertJsonPath('user.role', 'Super Admin')->assertJsonFragment(['impersonation.start']);
     }
 
     private function impersonationToken(User $user): string
