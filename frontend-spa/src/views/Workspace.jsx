@@ -11739,6 +11739,12 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
       setValidationLine('Pick who will do this repair before approving.');
       return;
     }
+    // A blank value is dropped before it reaches the server, which then keeps
+    // the old text — so the edit would silently not happen.
+    if (!String(fields.ticket_description ?? '').trim() || subRows.some((r) => !String(r.title ?? '').trim())) {
+      setValidationLine('The description and every sub-issue title need text before approving.');
+      return;
+    }
     setValidationLine(null);
     setSubmitting(true);
     try {
