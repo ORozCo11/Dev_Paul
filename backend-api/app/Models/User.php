@@ -150,7 +150,7 @@ class User extends Authenticatable
     public function getAbilities(): array
     {
         return collect(config('permissions'))
-            ->filter(fn (array $roles, string $ability) => $this->canDo($ability))
+            ->filter(fn (array $roles) => $this->hasAnyRole($roles))
             ->keys()
             ->values()
             ->all();
@@ -170,13 +170,6 @@ class User extends Authenticatable
 
     public function canDo(string $ability): bool
     {
-        if ($ability === 'impersonation.start') {
-            return $this->is_active && $this->hasRole('Super Admin')
-                && in_array(strtolower(trim($this->email)), [
-                    'superadmin@test.com', 'superadmin@barangay.gov',
-                ], true);
-        }
-
         // Note: config('permissions.' . $ability) would be wrong here — Laravel's
         // config() helper splits every dot into a nested lookup, but
         // config/permissions.php stores each ability as a single flat key that

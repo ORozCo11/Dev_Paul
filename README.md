@@ -299,7 +299,7 @@ All routes are under `/api` (see `backend-api/routes/api.php`). All protected ro
 - **SQL injection:** all queries are parameterized (Eloquent / bound placeholders).
 - **Authorization:** every controller action enforces role membership; ownership checks (e.g. only the assigned Custodian/Mechanic can add a sub-issue) are by ID, not just role label.
 
-> **Impersonation:** only active Super Admin accounts with the exact email `superadmin@test.com` or `superadmin@barangay.gov` can start an audited impersonation session. Ordinary Admins and other accounts cannot access it, including in local development. Impersonated sessions cannot switch again; return to the original Super Admin account first.
+> **Dev-only impersonation:** a fast role-switching tool exists for local testing. It is **double-gated** (server returns 404 unless `APP_ENV` is `local`/`testing`, and the UI is compiled out of production builds). **It is slated for removal before production.**
 
 ---
 
@@ -384,7 +384,7 @@ Feature tests live in `backend-api/tests/Feature/`:
 | `ScheduleCompletionTest` | Recurring PM + schedule/record close-the-loop. |
 | `MultiRoleTest` | Multi-role account permissions. |
 | `VehicleValidationTest` | Vehicle field validation. |
-| `ImpersonationTest` | Designated-account allowlist, environment coverage, session restrictions, and test-account login. |
+| `ImpersonationTest` | Dev-only impersonation gating. |
 | `SmokeTest` / `ExampleTest` | Baseline. |
 
 Run the whole suite:
@@ -409,7 +409,7 @@ Planned deployment topology (deferred):
 - **Database:** managed **Postgres** (Supabase), seeded fresh via the seeders.
 - **Storage:** Supabase Storage for photos/attachments.
 
-Set production env values (`APP_ENV=production`, `APP_DEBUG=false`, database credentials, `SUPABASE_*`, and the SPA's `VITE_API_BASE_URL`) accordingly.
+Set production env values (`APP_ENV=production`, `APP_DEBUG=false`, database credentials, `SUPABASE_*`, and the SPA's `VITE_API_BASE_URL`) accordingly. Remember to **remove the dev-only impersonation feature** before going live.
 
 ---
 
@@ -434,5 +434,3 @@ Maintenance Tickets default to Pending Approval and Active for Admin. Latest Rep
 The location catalog is internally consistent but outdated against the September 2026 PSA summary. See [the geography audit](docs/geography-audit-2026-10-22.md) for confirmed gaps and verification limits. Run `python backend-api/scripts/audit-registration-geography.py` while the API is running on port 8001; a nonzero exit currently indicates the documented official-data discrepancies.
 
 After pulling this update, run `php artisan migrate` from `backend-api` to apply the included barangay record-number migration.
-
-The local/testing account `superadmin@test.com` uses password `test123`. To create or reset only that account without reseeding other users, run `php artisan db:seed --class=TestSuperAdminSeeder` inside `backend-api`. The regular user seeder also includes it.

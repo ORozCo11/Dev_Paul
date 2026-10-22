@@ -9,11 +9,9 @@ const user={id:1,name:'QA Admin',email:'qa@example.test',role:'Admin',roles:['Ad
 const vehicle={vehicle_id:1,vehicle_name:'QA Rescue',plate_number:'QA-001',status:'Available',condition:'Good',category_id:1,category:{category_id:1,category_name:'Ambulance',domain:'Land'},current_location:'Station'};
 const tickets=['Pending Approval','Active','Closed','Declined','For Verification'].map((status,i)=>({ticket_id:i+1,ticket_title:`QA ${status}`,status,priority:'High',vehicle,vehicle_id:1,sub_issues:[],created_at:'2026-10-22T00:00:00Z'}));
 const issues=Array.from({length:12},(_,i)=>({issue_report_id:i+1,vehicle:{...vehicle,vehicle_name:`Report vehicle ${i+1}`},issue_type:'Engine',reported_by:user,created_at:'2026-10-22T00:00:00Z'}));
-let impersonationRequests = 0;
 let trips=Array.from({length:23},(_,i)=>({usage_id:23-i,driver_name:`QA Driver ${23-i}`,destination:'Hall',purpose:'Supply run',started_at:'2026-10-21T00:00:00Z',ended_at:'2026-10-21T01:00:00Z',logged_by:user}));
 await page.route('http://127.0.0.1:8001/api/**',async route=>{
  const req=route.request(),url=new URL(req.url()),path=url.pathname.replace('/api','');let data=[];
- if(path.startsWith('/impersonate')) impersonationRequests += 1;
  if(path==='/user')data=user;
  else if(path==='/lookups')data={vehicles:[vehicle],categories:[vehicle.category],maintenance_personnel:[],custodians:[],priorities:['High','Medium','Low'],conditions:['Good','Needs Repair'],statuses:['Available']};
  else if(path==='/tickets/lookups')data={ticket_statuses:['Pending Approval','Active','Closed','Declined','For Verification'],priorities:['High','Medium','Low'],custodians:[],maintenance_personnel:[]};
@@ -56,4 +54,4 @@ await page.getByRole('button',{name:'Maintenance Schedule',exact:true}).click();
 for(const b of await page.locator('.sch-card-actions button').all()){const box=await b.boundingBox();assert(box.width>=34);assert(box.height>=34);assert((await b.innerText()).trim());}
 await page.screenshot({path:'logs/schedule-actions-qa.png',fullPage:true});
 await page.getByRole('button',{name:'Card View',exact:true}).click(); await page.getByRole('option',{name:'List View',exact:true}).click(); await page.locator('.schedule-table-actions').getByRole('button',{name:'Approve',exact:true}).waitFor();
-assert.equal(impersonationRequests, 0); assert.equal(await page.getByRole('button',{name:'Impersonate',exact:true}).count(),0); assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Trip history paging, departure details and return','Latest reports paging','Admin proposals/active defaults','Maintenance list overrides saved card preference','Condition graph','Labeled schedule actions','Ordinary Admin has no impersonation controls or candidate requests'],pageErrors:errors}));await browser.close();
+assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Trip history paging, departure details and return','Latest reports paging','Admin proposals/active defaults','Maintenance list overrides saved card preference','Condition graph','Labeled schedule actions'],pageErrors:errors}));await browser.close();

@@ -212,8 +212,7 @@ return [
     'registration_code.regenerate' => ['Admin'],
 
     // Impersonation
-    // User::canDo also restricts this to the two designated Super Admin emails.
-    'impersonation.start' => ['Super Admin'],
+    'impersonation.start' => ['Admin', 'Super Admin'],
 
     // Super Admin platform administration
     'barangay.view_all' => ['Super Admin'],

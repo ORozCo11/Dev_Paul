@@ -2399,6 +2399,64 @@ function Workspace() {
     setIsSidebarCollapsed((prev) => !prev);
   };
 
+  // DEV-ONLY impersonation — a fast way to switch accounts while testing,
+  // without logging out and back in. import.meta.env.DEV is compile-time, so
+  // this entire block (and its UI below) is stripped from a production build;
+  // the backend also 404s the endpoint outside local/testing.
+  //
+  // Deliberately reuses the map boundary selector's own Province/Barangay
+  // dropdowns below (mapProvinceId/mapBarangayId) instead of adding its own
+  // — one barangay picker driving two things is simpler than two pickers
+  // sitting side by side doing almost the same job.
+  const [impersonateCandidates, setImpersonateCandidates] = useState([]);
+  const [impersonateId, setImpersonateId] = useState(user?.id ?? '');
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    api.get('/impersonate/candidates').then((r) => setImpersonateCandidates(r.data)).catch(() => {});
+    // Re-fetch whenever the Users list itself refreshes (add/edit/delete a
+    // user) — otherwise a newly-created account never appears here until a
+    // full page reload, since this effect would otherwise only ever run once
+    // on mount.
+  }, [records.users]);
+  // {key, label, users[]} per barangay — key matches mapBarangayId's value
+  // so the same dropdown selection resolves which staff list to show here.
+  const impersonateGroups = useMemo(() => {
+    const groups = {};
+    impersonateCandidates.forEach((u) => {
+      const key = String(u.barangay_id ?? '');
+      const label = u.province_name && u.barangay_name ? `${u.province_name} — ${u.barangay_name}` : 'Unassigned';
+      (groups[key] ??= { label, users: [] }).users.push(u);
+    });
+    return Object.entries(groups).map(([key, g]) => ({ key, ...g }));
+  }, [impersonateCandidates]);
+  const doImpersonate = async () => {
+    if (!impersonateId) return;
+    try {
+      // Phase A5 — a reason is now required on every impersonation, even
+      // this dev-only shortcut; a fixed one keeps the "quick account
+      // switch while testing" flow frictionless instead of adding another
+      // field to a tool that's already stripped out of production.
+      const res = await api.post(`/impersonate/${impersonateId}`, { reason: 'Dev testing (local impersonate control)' });
+      // Stash the acting account's own token before it's overwritten below —
+      // otherwise there was no way back into it short of logging out and back
+      // in. Keyed off role so "Return to..." can route straight to the right
+      // dashboard without an extra round-trip to figure out who they were.
+      const ownToken = localStorage.getItem('token') || sessionStorage.getItem('token');
+      if (ownToken && !localStorage.getItem('impersonator_token')) {
+        localStorage.setItem('impersonator_storage', localStorage.getItem('token') ? 'local' : 'session');
+        localStorage.setItem('impersonator_token', ownToken);
+        localStorage.setItem('impersonator_name', user.name);
+        localStorage.setItem('impersonator_role', user.role);
+      }
+      localStorage.setItem('token', res.data.access_token);
+      sessionStorage.removeItem('token');
+      // Full reload → axios picks up the new token and AuthContext reloads the
+      // impersonated user cleanly (no stale state from the previous account).
+      window.location.assign(roleRoutes[res.data.user?.role] ?? '/admin');
+    } catch {
+      setNotice({ type: 'error', text: 'Could not impersonate that account.' });
+    }
+  };
   // Registered province/city/barangay cascade. Defaults to the current account's exact tenant.
   const [mapProvinces, setMapProvinces] = useState([]);
   const [mapProvinceId, setMapProvinceId] = useState('');
@@ -2417,14 +2475,62 @@ function Workspace() {
   // Preserve manual choices when the initial account lookup is still in flight.
   const userPickedBarangayRef = useRef(false);
 
-  const provinceOptions = useMemo(() => [...mapProvinces].sort((a, b) => a.name.localeCompare(b.name)), [mapProvinces]);
+  // DEV-only: the same two dropdowns also drive Impersonate below, so a
+  // barangay with registered staff but no boundary polygon (anything other
+  // than Paknaan today) still needs to show up here, not just barangays
+  // the map can actually draw. Merged in, never replacing the boundary-
+  // sourced list — production keeps working with zero impersonation data.
+  const provinceOptions = useMemo(() => {
+    const byId = new Map(mapProvinces.map((p) => [String(p.id), p]));
+    impersonateCandidates.forEach((u) => {
+      if (u.province_id && !byId.has(String(u.province_id))) {
+        byId.set(String(u.province_id), { id: u.province_id, name: u.province_name });
+      }
+    });
+    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [mapProvinces, impersonateCandidates]);
   const barangayOptions = useMemo(() => {
-    const byId = new Map(mapBarangays.map((barangay) => [String(barangay.id), barangay]));
-    if (mapBarangayId && mapBoundaryOverride?.label && !byId.has(String(mapBarangayId))) {
+    const byId = new Map(mapBarangays.map((b) => [String(b.id), b]));
+    impersonateCandidates.forEach((u) => {
+      if (u.barangay_id && String(u.province_id) === String(mapProvinceId) && String(u.city_id) === String(mapCityId) && !byId.has(String(u.barangay_id))) {
+        byId.set(String(u.barangay_id), { id: u.barangay_id, name: u.barangay_name });
+      }
+    });
+    // Guarantee the currently-selected barangay always has an entry — in
+    // production, impersonateCandidates above is always empty (that merge
+    // is dev-only), so a barangay outside Mandaue City (the only city with
+    // a real /barangays/registered list) would otherwise vanish from its
+    // own dropdown the moment it's selected, e.g. every non-Paknaan admin
+    // landing on their own barangay by default.
+    if (mapBarangayId && !byId.has(String(mapBarangayId)) && mapBoundaryOverride?.label) {
       byId.set(String(mapBarangayId), { id: mapBarangayId, name: mapBoundaryOverride.label });
     }
     return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [mapBarangays, mapBarangayId, mapBoundaryOverride]);
+  }, [mapBarangays, impersonateCandidates, mapProvinceId, mapCityId, mapBarangayId, mapBoundaryOverride]);
+  // Keeps the Impersonate staff dropdown valid for whichever barangay is
+  // currently selected above — re-runs whenever the barangay changes or the
+  // candidate list itself first loads.
+  const impersonateGroupUsers = impersonateGroups.find((g) => g.key === String(mapBarangayId))?.users ?? [];
+  const candidateGroupKey = JSON.stringify([mapBarangayId, impersonateCandidates]);
+  const [previousCandidateGroupKey, setPreviousCandidateGroupKey] = useState(candidateGroupKey);
+  if (previousCandidateGroupKey !== candidateGroupKey) {
+    setPreviousCandidateGroupKey(candidateGroupKey);
+    const stillValid = impersonateGroupUsers.some((u) => String(u.id) === String(impersonateId));
+    if (!stillValid) {
+      // The barangay/candidate chain resolves over several async calls, so
+      // this can fire once against a still-loading (wrong) group before
+      // landing on the real one. Falling back to "whoever's first" there
+      // would silently pick a coworker instead of yourself — prefer your
+      // own account if it's in this group at all, only falling further
+      // back to "first" when you genuinely aren't a candidate here.
+      const self = impersonateGroupUsers.find((u) => String(u.id) === String(user.id));
+      setImpersonateId(self?.id ?? impersonateGroupUsers[0]?.id ?? '');
+    }
+    // impersonateGroupUsers is a derived array (new reference every render);
+    // keying off mapBarangayId/impersonateCandidates instead avoids re-running
+    // this on every render.
+
+  }
 
   const selectBarangayBoundary = useCallback(async (barangayId) => {
     const requestId = ++mapBoundaryRequestRef.current;
@@ -2581,7 +2687,7 @@ function Workspace() {
     .filter(Boolean)
     .slice(0, 4);
 
-  // Map-boundary pickers. Rendered in
+  // Map-boundary pickers (+ the dev-only impersonate control). Rendered in
   // the top bar on wider screens and inside the drawer on phones.
   const topbarPickers = (
     <>
@@ -2614,6 +2720,18 @@ function Workspace() {
           )}
         </select>
       </div>
+      {import.meta.env.DEV && impersonateGroupUsers.length > 0 && (
+        <div className="dev-impersonate" title="Dev only — switch account without logging out. Not present in production. Staff list follows the barangay picked above.">
+          <select value={impersonateId} onChange={(e) => setImpersonateId(e.target.value)} aria-label="Impersonate account">
+            {impersonateGroupUsers.map((u) => (
+              <option key={u.id} value={u.id} disabled={!u.is_active}>
+                {u.name} · {u.role}{u.is_active ? '' : ' (inactive)'}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={doImpersonate}>Impersonate</button>
+        </div>
+      )}
     </>
   );
 
@@ -2666,6 +2784,18 @@ function Workspace() {
               )}
             </select>
           </div>
+          {import.meta.env.DEV && impersonateGroupUsers.length > 0 && (
+            <div className="dev-impersonate" title="Dev only — switch account without logging out. Not present in production. Staff list follows the barangay picked above.">
+              <select value={impersonateId} onChange={(e) => setImpersonateId(e.target.value)} aria-label="Impersonate account">
+                {impersonateGroupUsers.map((u) => (
+                  <option key={u.id} value={u.id} disabled={!u.is_active}>
+                    {u.name} · {u.role}{u.is_active ? '' : ' (inactive)'}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={doImpersonate}>Impersonate</button>
+            </div>
+          )}
         </div>
 
         <div className="topbar-right">
@@ -2761,7 +2891,8 @@ function Workspace() {
 
       <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="workspace-sidebar">
-          {/* Phone-only: map-boundary pickers move here from the top bar. */}
+          {/* Phone-only: the map-boundary pickers (and the dev impersonate
+              control) move here from the top bar, which has no room. */}
           <div className="sidebar-mobile-extras">{topbarPickers}</div>
           <nav className="module-nav" aria-label="Workspace modules">
             {moduleGroups.map(({ section, items }) => {
