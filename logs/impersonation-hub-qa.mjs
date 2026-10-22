@@ -13,6 +13,8 @@ const city=()=>page.getByRole('combobox',{name:'Impersonation city or municipali
 const barangay=()=>page.getByRole('combobox',{name:'Impersonation barangay',exact:true});
 const user=()=>page.getByRole('combobox',{name:'Impersonation user',exact:true});
 await user().waitFor();
+assert.equal(await user().locator('option[value=""]').count(),0);
+const selectAccount=async id=>{const before=page.url();await user().selectOption(String(id));assert.equal(page.url(),before);await page.getByRole('button',{name:'Impersonate',exact:true}).click();};
 const rootToken=await page.evaluate(()=>localStorage.getItem('impersonator_token'));
 const response=await page.request.get('http://127.0.0.1:8001/api/impersonate/candidates',{headers:{Authorization:`Bearer ${rootToken}`}});assert.equal(response.status(),200);
 const accounts=await response.json();
@@ -24,23 +26,23 @@ assert.equal(await page.getByRole('button',{name:'Switch account',exact:true}).c
 assert.equal(await page.getByRole('heading',{name:'Choose an account',exact:true}).count(),0);
 assert.equal(await province().inputValue(),String(admin.province_id));assert.equal(await city().inputValue(),String(admin.city_id));assert.equal(await barangay().inputValue(),String(admin.barangay_id));
 await page.screenshot({path:'logs/impersonation-dropdowns-desktop.png'});
-await user().selectOption(String(custodian.id));await page.waitForURL('**/custodian');
+await selectAccount(custodian.id);await page.waitForURL('**/custodian');
 await page.waitForFunction(id=>document.querySelector('select[aria-label="Impersonation user"]')?.value===String(id),custodian.id);
 assert.equal(await page.evaluate(()=>localStorage.getItem('impersonator_token')),rootToken);
 await province().selectOption('platform');assert.equal(await city().inputValue(),'');assert.equal(await barangay().isDisabled(),true);assert.equal(await user().isDisabled(),true);
-await city().selectOption('platform');await barangay().selectOption('platform');await user().selectOption(String(superAdmin.id));await page.waitForURL('**/superadmin');
+await city().selectOption('platform');await barangay().selectOption('platform');await selectAccount(superAdmin.id);await page.waitForURL('**/superadmin');
 await page.waitForFunction(id=>document.querySelector('select[aria-label="Impersonation user"]')?.value===String(id),superAdmin.id);
 assert.equal(await province().inputValue(),'platform');
-await province().selectOption(String(admin.province_id));await city().selectOption(String(admin.city_id));await barangay().selectOption(String(admin.barangay_id));await user().selectOption(String(admin.id));await page.waitForURL('**/admin');
+await province().selectOption(String(admin.province_id));await city().selectOption(String(admin.city_id));await barangay().selectOption(String(admin.barangay_id));await selectAccount(admin.id);await page.waitForURL('**/admin');
 await page.waitForFunction(id=>document.querySelector('select[aria-label="Impersonation user"]')?.value===String(id),admin.id);
 assert.equal(await page.evaluate(()=>localStorage.getItem('impersonator_token')),rootToken);
 await page.reload();await page.waitForFunction(id=>document.querySelector('select[aria-label="Impersonation user"]')?.value===String(id),admin.id);
 await page.setViewportSize({width:390,height:844});await user().waitFor();
 assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
-for(const select of [province(),city(),barangay(),user()]){const bounds=await select.boundingBox();assert(bounds&&bounds.x>=0&&bounds.x+bounds.width<=390);}
+for(const select of [province(),city(),barangay(),user(),page.getByRole('button',{name:'Impersonate',exact:true})]){const bounds=await select.boundingBox();assert(bounds&&bounds.x>=0&&bounds.x+bounds.width<=390);}
 const header = await page.locator('.topbar').boundingBox(); const main = await page.locator('.content-area').boundingBox(); assert(main.y >= header.y + header.height - 1);
 await page.screenshot({path:'logs/impersonation-dropdowns-mobile.png'});
 const activeToken=await page.evaluate(()=>localStorage.getItem('token'));
 await page.request.post('http://127.0.0.1:8001/api/logout',{headers:{Authorization:`Bearer ${activeToken}`}});
 await page.request.post('http://127.0.0.1:8001/api/logout',{headers:{Authorization:`Bearer ${rootToken}`}});
-assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Default Admin login','Exactly four cascading dropdowns, no Switch account or chooser','Selecting user automatically opens Custodian','Province changes reset dependent selectors','Platform/Super Admin switching','Return to barangay Admin without losing original login','Refresh and mobile layout'],pageErrors:errors}));await browser.close();
+assert.deepEqual(errors,[]);console.log(JSON.stringify({passed:true,checks:['Default Admin login','Account dropdown has no empty User option and retains all accounts','Select account then click Impersonate to open Custodian','Province changes reset dependent selectors','Platform/Super Admin switching','Return to barangay Admin without losing original login','Refresh and mobile layout'],pageErrors:errors}));await browser.close();

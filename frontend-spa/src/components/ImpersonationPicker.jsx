@@ -37,13 +37,16 @@ function AccountCascade({ user, rootToken }) {
   const provinceRows = accounts.filter((account) => keyOf(account.province_id) === selected.province);
   const cityRows = provinceRows.filter((account) => keyOf(account.city_id) === selected.city);
   const barangayRows = cityRows.filter((account) => keyOf(account.barangay_id) === selected.barangay);
+  const selectedUserId = barangayRows.some((account) => String(account.id) === selected.user)
+    ? selected.user
+    : String(barangayRows.find((account) => account.is_active && supportedRoles.includes(account.role))?.id ?? '');
   const switchUser = async (id) => {
     const account = barangayRows.find((row) => String(row.id) === id);
     if (!account || !account.is_active || !supportedRoles.includes(account.role) || switchingRef.current) return;
     if (id === String(user.id)) { setSelection({ ...selected, user: id }); return; }
     switchingRef.current = true; setBusy(true); setError('');
     try {
-      const { data } = await api.post(`/impersonate/${id}`, { reason: 'Account selected from the workspace dropdowns' }, { headers: { Authorization: `Bearer ${rootToken}` } });
+      const { data } = await api.post(`/impersonate/${id}`, { reason: 'Account selected using the Impersonate button' }, { headers: { Authorization: `Bearer ${rootToken}` } });
       if (user.role !== 'Impersonator') {
         try { await api.post('/logout'); } catch (err) {
           if (![401, 419].includes(err.response?.status)) {
@@ -54,7 +57,7 @@ function AccountCascade({ user, rootToken }) {
       }
       openImpersonatedWorkspace({ name: localStorage.getItem('impersonator_name') || user.name, role: 'Impersonator' }, data);
     } catch (err) {
-      setError(err.response?.data?.message || 'Could not open this account. Select the user to try again.');
+      setError(err.response?.data?.message || 'Could not open this account. Please try again.');
       switchingRef.current = false; setBusy(false);
     }
   };
@@ -68,9 +71,12 @@ function AccountCascade({ user, rootToken }) {
     <select aria-label="Impersonation barangay" value={selected.barangay} disabled={loading || busy || !selected.city} onChange={(event) => setSelection({ ...selected, barangay: event.target.value, user: '' })}>
       <option value="">Barangay</option>{options(cityRows, 'barangay_id', 'barangay_name', 'No barangay').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
     </select>
-    <select aria-label="Impersonation user" value={selected.user} disabled={loading || busy || !selected.barangay} onChange={(event) => switchUser(event.target.value)}>
-      <option value="">{busy ? 'Logging in...' : 'User'}</option>{barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name} - {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}
-    </select>
+    <div className="account-user-control">
+      <select aria-label="Impersonation user" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
+        {barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name} - {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}
+      </select>
+      <button className="account-impersonate-button" type="button" disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}>{busy ? 'Logging in...' : 'Impersonate'}</button>
+    </div>
     {busy && <span className="account-cascade-status" role="status">Logging in...</span>}
     {error && <span className="account-cascade-error" role="alert">{error} {!accounts.length && <button type="button" onClick={() => { setLoading(true); setError(''); setRetry((value) => value + 1); }}>Retry</button>}</span>}
   </div>;
