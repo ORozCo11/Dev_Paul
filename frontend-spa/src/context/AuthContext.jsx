@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../api/axios';
+import { clearImpersonationSession } from '../utils/impersonation';
 import { AuthContext } from './AuthContextObject';
 
 export const AuthProvider = ({ children }) => {
@@ -16,6 +17,7 @@ export const AuthProvider = ({ children }) => {
     // then invalidate the server-side token in the background.
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
+    clearImpersonationSession();
     setToken(null);
     setUser(null);
     if (logoutToken) {
@@ -28,6 +30,7 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         try {
           const response = await api.get('/user');
+          if (!response.data.is_impersonating) clearImpersonationSession();
           setUser(response.data);
         } catch {
           logout();
@@ -39,6 +42,7 @@ export const AuthProvider = ({ children }) => {
   }, [token]);
 
   const login = (userData, userToken, remember = true) => {
+    if (!userData.is_impersonating) clearImpersonationSession();
     // Only one storage ever holds the token at a time — clear the other so a
     // stale copy can't linger and outlive the choice the user just made.
     if (remember) {

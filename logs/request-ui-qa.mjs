@@ -5,13 +5,15 @@ const page = await browser.newPage({viewport:{width:1440,height:1000}});
 page.setDefaultTimeout(10000);
 page.on('console',m=>{if(m.type()==='error')console.log('CONSOLE',m.text());});
 const errors=[];page.on('pageerror',e=>{errors.push(e.message); console.log('PAGE ERROR',e.message);});
-const user={id:1,name:'QA Admin',email:'qa@example.test',role:'Admin',roles:['Admin'],is_active:true,approved_at:'2026-01-01',barangay_id:1,barangay:{name:'QA Barangay'},abilities:['usage.view','usage.log','vehicle.edit','schedule.approve','schedule.decline','schedule.edit','schedule.reassign','schedule.delete']};
+const user={id:1,name:'QA Admin',email:'admin@barangay.gov',is_impersonating:false,role:'Admin',roles:['Admin'],is_active:true,approved_at:'2026-01-01',barangay_id:1,barangay:{name:'QA Barangay'},abilities:['usage.view','usage.log','vehicle.edit','schedule.approve','schedule.decline','schedule.edit','schedule.reassign','schedule.delete']};
 const vehicle={vehicle_id:1,vehicle_name:'QA Rescue',plate_number:'QA-001',status:'Available',condition:'Good',category_id:1,category:{category_id:1,category_name:'Ambulance',domain:'Land'},current_location:'Station'};
 const tickets=['Pending Approval','Active','Closed','Declined','For Verification'].map((status,i)=>({ticket_id:i+1,ticket_title:`QA ${status}`,status,priority:'High',vehicle,vehicle_id:1,sub_issues:[],created_at:'2026-10-22T00:00:00Z'}));
 const issues=Array.from({length:12},(_,i)=>({issue_report_id:i+1,vehicle:{...vehicle,vehicle_name:`Report vehicle ${i+1}`},issue_type:'Engine',reported_by:user,created_at:'2026-10-22T00:00:00Z'}));
+let impersonationRequests=0;
 let trips=Array.from({length:23},(_,i)=>({usage_id:23-i,driver_name:`QA Driver ${23-i}`,destination:'Hall',purpose:'Supply run',started_at:'2026-10-21T00:00:00Z',ended_at:'2026-10-21T01:00:00Z',logged_by:user}));
 await page.route('http://127.0.0.1:8001/api/**',async route=>{
  const req=route.request(),url=new URL(req.url()),path=url.pathname.replace('/api','');let data=[];
+ if(path.startsWith('/impersonate'))impersonationRequests++;
  if(path==='/user')data=user;
  else if(path==='/lookups')data={vehicles:[vehicle],categories:[vehicle.category],maintenance_personnel:[],custodians:[],priorities:['High','Medium','Low'],conditions:['Good','Needs Repair'],statuses:['Available']};
  else if(path==='/tickets/lookups')data={ticket_statuses:['Pending Approval','Active','Closed','Declined','For Verification'],priorities:['High','Medium','Low'],custodians:[],maintenance_personnel:[]};
@@ -29,10 +31,14 @@ await page.route('http://127.0.0.1:8001/api/**',async route=>{
  }else if(path.startsWith('/usage-logs/')){trips[0].ended_at=new Date().toISOString();data=trips[0];}
  await route.fulfill({json:data});
 });
-await page.addInitScript(()=>{localStorage.setItem('token','qa-fixture');localStorage.setItem('vms_maintenance_view','card');});
+await page.addInitScript(()=>{localStorage.setItem('token','qa-fixture');localStorage.setItem('impersonator_token','stale-root');localStorage.setItem('impersonator_role','Impersonator');localStorage.setItem('vms_maintenance_view','card');});
 await page.goto('http://localhost:5173/admin/vehicles/1');
 await page.waitForLoadState('networkidle');
 assert.equal(await page.locator('.account-cascade').count(),0);
+assert.equal(await page.locator('.map-boundary-selector').count(),0);
+assert.equal(await page.getByRole('button',{name:'End Impersonation'}).count(),0);
+assert.equal(await page.evaluate(()=>localStorage.getItem('impersonator_token')),null);
+assert.equal(impersonationRequests,0);
 await page.getByRole('heading',{name:'Trip log',exact:true}).waitFor();
 await page.getByText('QA Driver 23',{exact:true}).waitFor();
 await page.getByRole('button',{name:'Next',exact:true}).click();

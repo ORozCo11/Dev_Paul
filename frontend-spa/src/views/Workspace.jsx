@@ -2400,110 +2400,24 @@ function Workspace() {
     setIsSidebarCollapsed((prev) => !prev);
   };
 
-  // Registered province/city/barangay cascade. Defaults to the current account's exact tenant.
-  const [mapProvinces, setMapProvinces] = useState([]);
-  const [mapProvinceId, setMapProvinceId] = useState('');
-  const [mapCityId, setMapCityId] = useState('');
-  const mapBoundaryRequestRef = useRef(0);
-  const mapBarangaysRequestRef = useRef(0);
-  const [mapBarangays, setMapBarangays] = useState([]);
-  const [mapBarangayId, setMapBarangayId] = useState('');
+  // Fleet maps always use the current account's own barangay boundary.
   const [mapBoundaryOverride, setMapBoundaryOverride] = useState({ geometry: null, label: 'Loading barangay boundary' });
-  // Location entry uses only the selected barangay geometry; absent boundaries stay absent.
-  const locationBoundaryPolygons = useMemo(() => {
-    const overrideRings = geoJsonToPolygons(mapBoundaryOverride?.geometry);
-    return overrideRings;
-  }, [mapBoundaryOverride]);
+  const locationBoundaryPolygons = useMemo(() => geoJsonToPolygons(mapBoundaryOverride?.geometry), [mapBoundaryOverride]);
   const locationBoundaryLabel = mapBoundaryOverride?.label ?? 'Barangay boundary';
-  // Preserve manual choices when the initial account lookup is still in flight.
-  const userPickedBarangayRef = useRef(false);
-
-  const provinceOptions = useMemo(() => [...mapProvinces].sort((a, b) => a.name.localeCompare(b.name)), [mapProvinces]);
-  const barangayOptions = useMemo(() => {
-    const byId = new Map(mapBarangays.map((barangay) => [String(barangay.id), barangay]));
-    if (mapBarangayId && mapBoundaryOverride?.label && !byId.has(String(mapBarangayId))) {
-      byId.set(String(mapBarangayId), { id: mapBarangayId, name: mapBoundaryOverride.label });
-    }
-    return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [mapBarangays, mapBarangayId, mapBoundaryOverride]);
-
-  const selectBarangayBoundary = useCallback(async (barangayId) => {
-    const requestId = ++mapBoundaryRequestRef.current;
-    if (!barangayId) { setMapBoundaryOverride({ geometry: null, label: 'No barangay selected' }); return; }
-    try {
-      const { data } = await api.get('/barangays/' + barangayId);
-      if (requestId !== mapBoundaryRequestRef.current) return;
-      const label = data.city_name ? data.name + ', ' + data.city_name : data.name;
-      setMapBoundaryOverride({ geometry: data.boundary ?? null, label, barangayName: data.name, cityName: data.city_name, source: data.boundary_source, psgcCode: data.psgc_code, verified: data.boundary_verified === true });
-    } catch {
-      if (requestId === mapBoundaryRequestRef.current) setMapBoundaryOverride({ geometry: null, label: 'Boundary unavailable' });
-    }
-  }, []);
-
-  const loadMapBarangays = useCallback(async (cityId) => {
-    const requestId = ++mapBarangaysRequestRef.current;
-    if (!cityId) { setMapBarangays([]); return; }
-    try {
-      const { data } = await api.get('/barangays/registered', { params: { city_id: cityId } });
-      if (requestId === mapBarangaysRequestRef.current) setMapBarangays(data);
-    } catch {
-      if (requestId === mapBarangaysRequestRef.current) setMapBarangays([]);
-    }
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      api.get('/provinces/with-barangays'),
-      user.barangay_id ? api.get('/barangays/' + user.barangay_id) : Promise.resolve(null),
-    ]).then(([provinces, own]) => {
-      if (cancelled) return;
-      setMapProvinces(provinces.data);
-      if (userPickedBarangayRef.current) return;
-      const province = provinces.data.find((p) => String(p.id) === String(own?.data.province_id)) ?? provinces.data[0];
-      const cityId = own?.data.city_id ?? province?.cities?.[0]?.id ?? '';
-      setMapProvinceId(String(province?.id ?? ''));
-      setMapCityId(String(cityId));
-      loadMapBarangays(cityId);
-      if (own) {
-        setMapBarangayId(String(own.data.id));
-        const label = own.data.city_name ? own.data.name + ', ' + own.data.city_name : own.data.name;
-        setMapBoundaryOverride({ geometry: own.data.boundary ?? null, label, barangayName: own.data.name, cityName: own.data.city_name, source: own.data.boundary_source, psgcCode: own.data.psgc_code, verified: own.data.boundary_verified === true });
-      } else {
-        setMapBoundaryOverride({ geometry: null, label: 'No barangay selected' });
-      }
-    }).catch(() => {
-      if (!cancelled) setMapBoundaryOverride({ geometry: null, label: 'Boundary unavailable' });
-    });
+    const boundaryRequest = user.barangay_id ? api.get('/barangays/' + user.barangay_id) : Promise.resolve(null);
+    boundaryRequest.then((response) => {
+        if (cancelled) return;
+        if (!response) { setMapBoundaryOverride({ geometry: null, label: 'No barangay selected' }); return; }
+        const { data } = response;
+        const label = data.city_name ? data.name + ', ' + data.city_name : data.name;
+        setMapBoundaryOverride({ geometry: data.boundary ?? null, label, barangayName: data.name, cityName: data.city_name, source: data.boundary_source, psgcCode: data.psgc_code, verified: data.boundary_verified === true });
+      }).catch(() => {
+        if (!cancelled) setMapBoundaryOverride({ geometry: null, label: 'Boundary unavailable' });
+      });
     return () => { cancelled = true; };
-  }, [loadMapBarangays, user.barangay_id]);
-
-  const handleMapProvinceChange = (event) => {
-    userPickedBarangayRef.current = true;
-    const provinceId = event.target.value;
-    const cityId = mapProvinces.find((p) => String(p.id) === String(provinceId))?.cities?.[0]?.id ?? '';
-    setMapProvinceId(provinceId);
-    setMapCityId(String(cityId));
-    setMapBarangayId('');
-    setMapBarangays([]);
-    selectBarangayBoundary(null);
-    loadMapBarangays(cityId);
-  };
-
-  const handleMapCityChange = (event) => {
-    userPickedBarangayRef.current = true;
-    setMapCityId(event.target.value);
-    setMapBarangayId('');
-    setMapBarangays([]);
-    selectBarangayBoundary(null);
-    loadMapBarangays(event.target.value);
-  };
-
-  const handleMapBarangayChange = (event) => {
-    userPickedBarangayRef.current = true;
-    setMapBarangayId(event.target.value);
-    selectBarangayBoundary(event.target.value);
-  };
+  }, [user.barangay_id]);
 
   // Sidebar badge for a given module key — 'myTasks' has no badge_counts
   // entry of its own (it's not a real module), so it's the sum of the two
@@ -2582,43 +2496,6 @@ function Workspace() {
     .filter(Boolean)
     .slice(0, 4);
 
-  // Map-boundary pickers. Rendered in
-  // the top bar on wider screens and inside the drawer on phones.
-  const hasImpersonationControls = localStorage.getItem('impersonator_role') === 'Impersonator' && !!localStorage.getItem('impersonator_token');
-  const topbarPickers = hasImpersonationControls ? null : (
-    <>
-      <div className="map-boundary-selector" title="Choose which registered barangay outline the Vehicle Location map draws.">
-        <select
-          aria-label="Map boundary province"
-          onChange={handleMapProvinceChange}
-          value={mapProvinceId}
-        >
-          {provinceOptions.map((province) => (
-            <option key={province.id} value={province.id}>{province.name}</option>
-          ))}
-        </select>
-        <select aria-label="Map boundary city" value={mapCityId} onChange={handleMapCityChange} disabled={!mapProvinceId}>
-          <option value="">Select city</option>
-          {(mapProvinces.find((province) => String(province.id) === String(mapProvinceId))?.cities ?? []).map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}
-        </select>
-        <select
-          aria-label="Map boundary barangay"
-          disabled={barangayOptions.length === 0}
-          onChange={handleMapBarangayChange}
-          value={mapBarangayId}
-        >
-          {barangayOptions.length > 0 ? (
-            barangayOptions.map((barangay) => (
-              <option key={barangay.id} value={barangay.id}>{barangay.name}</option>
-            ))
-          ) : (
-            <option value="">No registered barangay</option>
-          )}
-        </select>
-      </div>
-    </>
-  );
-
   return (
     <FormNoticeContext.Provider value={notice}>
     <RowActionsContext.Provider value={rowActions}>
@@ -2638,38 +2515,7 @@ function Workspace() {
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
-          {hasImpersonationControls ? <ImpersonationPicker user={user} /> : (
-          <div className="map-boundary-selector" title="Choose which registered barangay outline the Vehicle Location map draws.">
-            <select
-              aria-label="Map boundary province"
-              onChange={handleMapProvinceChange}
-              value={mapProvinceId}
-            >
-              {provinceOptions.map((province) => (
-                <option key={province.id} value={province.id}>{province.name}</option>
-              ))}
-            </select>
-            {/* Province > City > Barangay; each choice scopes the next list. */}
-            <select aria-label="Map boundary city" value={mapCityId} onChange={handleMapCityChange} disabled={!mapProvinceId}>
-              <option value="">Select city</option>
-              {(mapProvinces.find((province) => String(province.id) === String(mapProvinceId))?.cities ?? []).map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}
-            </select>
-            <select
-              aria-label="Map boundary barangay"
-              disabled={barangayOptions.length === 0}
-              onChange={handleMapBarangayChange}
-              value={mapBarangayId}
-            >
-              {barangayOptions.length > 0 ? (
-                barangayOptions.map((barangay) => (
-                  <option key={barangay.id} value={barangay.id}>{barangay.name}</option>
-                ))
-              ) : (
-                <option value="">No registered barangay</option>
-              )}
-            </select>
-          </div>
-          )}
+          <ImpersonationPicker user={user} />
         </div>
 
         <div className="topbar-right">
@@ -2767,7 +2613,7 @@ function Workspace() {
       <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="workspace-sidebar">
           {/* Phone-only: map-boundary pickers move here from the top bar. */}
-          <div className="sidebar-mobile-extras">{topbarPickers}</div>
+
           <nav className="module-nav" aria-label="Workspace modules">
             {moduleGroups.map(({ section, items }) => {
               const renderItem = ([key, label]) => {

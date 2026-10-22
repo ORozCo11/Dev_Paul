@@ -29,6 +29,22 @@ class ImpersonationTest extends TestCase
     }
 
     #[Test]
+    public function session_metadata_distinguishes_direct_logins_from_impersonation(): void
+    {
+        foreach (['Admin', 'Custodian', 'Maintenance Personnel', 'Super Admin'] as $role) {
+            $user = User::factory()->create(['role' => $role, 'roles' => [$role]]);
+            $token = $user->createToken('auth_token', ['*'])->plainTextToken;
+            $this->withHeader('Authorization', 'Bearer '.$token)->getJson('/api/user')
+                ->assertOk()->assertJsonPath('is_impersonating', false);
+            app('auth')->forgetGuards();
+            $token = $this->impersonationToken($user);
+            $this->withHeader('Authorization', 'Bearer '.$token)->getJson('/api/user')
+                ->assertOk()->assertJsonPath('is_impersonating', true);
+            app('auth')->forgetGuards();
+        }
+    }
+
+    #[Test]
     public function dedicated_switcher_can_open_staff_and_super_admin_accounts_with_an_audited_reason(): void
     {
         app()['env'] = 'production';

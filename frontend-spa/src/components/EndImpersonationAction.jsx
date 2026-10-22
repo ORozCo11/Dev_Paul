@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import api from '../api/axios';
 import Icon from './Icon';
+import { AuthContext } from '../context/AuthContextObject';
 
 export default function EndImpersonationAction({ compact = false }) {
+  const { user } = useContext(AuthContext);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const originalToken = localStorage.getItem('impersonator_token');
   const isSwitcher = localStorage.getItem('impersonator_role') === 'Impersonator';
-  if (!originalToken || isSwitcher) return null;
+  if (!user?.is_impersonating || !originalToken || isSwitcher) return null;
   const end = async () => {
     if (busy) return;
     setBusy(true);

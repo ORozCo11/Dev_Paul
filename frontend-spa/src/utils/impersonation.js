@@ -1,3 +1,15 @@
+export function clearImpersonationSession() {
+  ['impersonator_token', 'impersonator_name', 'impersonator_role', 'impersonator_storage'].forEach((key) => localStorage.removeItem(key));
+}
+
+export function impersonationRootToken(user) {
+  if (user?.role === 'Impersonator' && user.abilities?.includes('impersonation.start')) {
+    return localStorage.getItem('token') || sessionStorage.getItem('token');
+  }
+  return user?.is_impersonating === true && localStorage.getItem('impersonator_role') === 'Impersonator'
+    ? localStorage.getItem('impersonator_token') : null;
+}
+
 const routes = { Admin: '/admin', Custodian: '/custodian', 'Maintenance Personnel': '/maintenance', 'Super Admin': '/superadmin' };
 
 export function openImpersonatedWorkspace(user, data) {

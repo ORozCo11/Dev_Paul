@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../api/axios';
-import { openImpersonatedWorkspace } from '../utils/impersonation';
+import { openImpersonatedWorkspace, impersonationRootToken } from '../utils/impersonation';
 import './ImpersonationPicker.css';
 
 const supportedRoles = ['Admin', 'Custodian', 'Maintenance Personnel', 'Super Admin'];
@@ -8,9 +8,7 @@ const keyOf = (value) => value == null ? 'platform' : String(value);
 const options = (rows, id, label, fallback) => [...new Map(rows.map((row) => [keyOf(row[id]), row[label] || fallback])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
 export default function ImpersonationPicker({ user }) {
-  const rootToken = user.role === 'Impersonator'
-    ? localStorage.getItem('token') || sessionStorage.getItem('token')
-    : localStorage.getItem('impersonator_role') === 'Impersonator' ? localStorage.getItem('impersonator_token') : null;
+  const rootToken = impersonationRootToken(user);
   if (!rootToken) return null;
   return <AccountCascade key={user.id} user={user} rootToken={rootToken} />;
 }
