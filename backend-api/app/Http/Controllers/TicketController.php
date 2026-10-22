@@ -2855,6 +2855,16 @@ class TicketController extends Controller
 
         abort_unless($ticket->status === 'Cancelled', 422, 'Only cancelled tickets can be restored.');
 
+        // A new ticket for the same Main Issue may have been opened since this
+        // one was cancelled — same duplicate rule propose and reopen enforce.
+        $normalizedTitle = $this->normalizeTicketTitle($ticket->ticket_title);
+        $duplicate = MaintenanceTicket::where('vehicle_id', $ticket->vehicle_id)
+            ->where('ticket_id', '!=', $ticket->ticket_id)
+            ->whereNotIn('status', ['Closed', 'Cancelled'])
+            ->get(['ticket_id', 'ticket_title'])
+            ->first(fn ($t) => $this->normalizeTicketTitle($t->ticket_title) === $normalizedTitle);
+        abort_if($duplicate, 422, "This vehicle already has an open ticket for this Main Issue (Ticket #{$duplicate?->ticket_id}) — it cannot be restored as a duplicate.");
+
         $restoredStatus = $ticket->inspected_at ? 'Active' : 'Open';
 
         DB::transaction(function () use ($ticket, $restoredStatus, $request) {
