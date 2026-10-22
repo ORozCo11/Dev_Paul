@@ -9521,6 +9521,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
       render: (row) => (
         <div className="schedule-table-actions">
           <MaintenanceScheduleActions
+            iconOnly
             row={row} currentUser={currentUser} onEdit={onEdit} onComplete={onComplete}
             onViewRecord={onViewRecord} onReassign={onReassign} onViewTicket={onViewTicket}
             onApprove={onApprove} onDecline={onDecline}
@@ -9639,22 +9640,23 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
   );
 }
 
-function MaintenanceScheduleActions({ row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline }) {
+function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline }) {
+  const actionClass = (tone = '') => `sch-action ${tone}${iconOnly ? ' icon-btn' : ''}`;
   const isMine = currentUser?.id != null && String(row.assigned_to) === String(currentUser.id);
   const canComplete = row.status === 'Scheduled' && !row.resulting_ticket_id && onComplete && isMine;
   const becameTicket = row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket;
   return (
     <div className="sch-card-actions">
-      {canComplete && <button className="sch-action is-success" onClick={() => onComplete(row)} type="button" title="Mark as Done" aria-label="Mark as Done"><Icon name="checkCircle" size={14} /><span>Mark as Done</span></button>}
-      {becameTicket && <button className="sch-action is-info" onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" title={`This schedule became Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })} — open it`}><Icon name="ticket" size={14} /> Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</button>}
-      {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className="sch-action is-info" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record"><Icon name="wrench" size={14} /> Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</button>}
-      {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className="sch-action is-success" onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} /><span>Approve</span></button>}
-      {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className="sch-action is-danger" onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} /><span>Decline</span></button>}
-      {(!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.edit')) && <button className="sch-action" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /><span>Edit</span></button>}
-      {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className="sch-action is-info" onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} /><span>Reassign</span></button>}
+      {canComplete && <button className={actionClass('is-success')} onClick={() => onComplete(row)} type="button" title="Mark as Done" aria-label="Mark as Done"><Icon name="checkCircle" size={14} />{!iconOnly && <span>Mark as Done</span>}</button>}
+      {becameTicket && <button className={actionClass('is-info')} onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" aria-label={`View Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}`} title={`This schedule became Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })} — open it`}><Icon name="ticket" size={14} />{!iconOnly && <span>Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</span>}</button>}
+      {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className={actionClass('is-info')} onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label={`View Maintenance Record #${recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}`}><Icon name="wrench" size={14} />{!iconOnly && <span>Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</span>}</button>}
+      {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className={actionClass('is-success')} onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} />{!iconOnly && <span>Approve</span>}</button>}
+      {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className={actionClass('is-danger')} onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} />{!iconOnly && <span>Decline</span>}</button>}
+      {(!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.edit')) && <button className={actionClass('')} onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} />{!iconOnly && <span>Edit</span>}</button>}
+      {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className={actionClass('is-info')} onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} />{!iconOnly && <span>Reassign</span>}</button>}
       {row.status === 'Cancelled'
-        ? canDo(currentUser, 'schedule.restore') && onRestore && <button className="sch-action is-success" onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /><span>Restore</span></button>
-        : (!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.delete')) && <button className="sch-action is-danger" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /><span>Cancel Schedule</span></button>}
+        ? canDo(currentUser, 'schedule.restore') && onRestore && <button className={actionClass('is-success')} onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} />{!iconOnly && <span>Restore</span>}</button>
+        : (!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.delete')) && <button className={actionClass('is-danger')} onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} />{!iconOnly && <span>Cancel Schedule</span>}</button>}
     </div>
   );
 }

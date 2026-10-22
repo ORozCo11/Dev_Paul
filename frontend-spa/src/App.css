@@ -16423,3 +16423,8 @@ html :is(table, .table-shell, .row-actions, .row-actions-popover) button.icon-bt
   .row-actions.condition-record-actions { grid-template-columns:repeat(3,44px); min-width:144px; }
   .module-grid:has(> .issue-summary-grid) .row-actions-visible { grid-template-columns:repeat(4,44px); min-width:194px; }
 }
+
+.schedule-table-actions .sch-card-actions { justify-content:center; gap:6px; }
+@media(max-width:767px) {
+  .schedule-table-actions .sch-action.icon-btn { min-width:44px; min-height:44px; }
+}
