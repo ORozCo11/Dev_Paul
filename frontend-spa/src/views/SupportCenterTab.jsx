@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api/axios';
@@ -51,7 +52,7 @@ export default function SupportCenterTab({ onRequestConfirmation, setNotice }) {
 
   return <div className="superadmin-tab">
     <AdminManagementCard summary={<><strong>{reports.filter((report) => report.status === 'Open').length} open concerns</strong><span>Public submissions for platform review. <Link to="/support">Open public Support Center</Link></span></>}
-      toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search concern, barangay, or reporter..." /><AdminFilterField label="Status"><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option><option>Open</option><option>Resolved</option></select></AdminFilterField><button type="button" className="ghost-button" disabled={loading} onClick={() => { setLoading(true); setRetry((value) => value + 1); }}>Refresh</button></>}>
+      toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search concern, barangay, or reporter..." /><AdminFilterField label="Status"><SearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option><option>Open</option><option>Resolved</option></SearchableSelect></AdminFilterField><button type="button" className="ghost-button" disabled={loading} onClick={() => { setLoading(true); setRetry((value) => value + 1); }}>Refresh</button></>}>
       {loading ? <p role="status">Loading concern reports…</p> : error ? <p role="alert">Concern reports could not be loaded. Use Refresh to try again.</p> : <PaginatedTable rows={visible} emptyMessage="No matching concerns" emptyDescription="New reports will appear here when submitted through the Support Center." columns={[
         { label: 'Concern', render: (report) => <><strong>#{report.id} · {report.concern_type}</strong><div>{report.barangay_name || 'Barangay not provided'}</div></> },
         { label: 'Reporter', render: (report) => report.reporter_name || 'Anonymous' },

@@ -9,8 +9,8 @@ html:root[data-theme] .superadmin-shell .page-heading-row { display:flex; justif
 .superadmin-shell .page-heading-text h1 { margin:0; font-size:27px; font-weight:750; line-height:1.3; letter-spacing:-.5px; color:var(--sa-text); }
 html:root[data-theme] .superadmin-shell .page-heading-text p { margin:6px 0 0; font-size:14px; line-height:1.5; color:var(--sa-muted); max-width:none; }
 html:root[data-theme] .superadmin-shell .topbar { min-height:64px; padding:10px 20px; }
-html:root[data-theme] .superadmin-shell .topbar select { min-height:32px; max-width:180px; }
-html:root[data-theme] .superadmin-shell .topbar select:disabled {
+html:root[data-theme] .superadmin-shell .topbar :is(select,.searchable-select) { min-height:32px; max-width:180px; }
+html:root[data-theme] .superadmin-shell .topbar :is(select,.searchable-select):disabled {
   opacity:1;
   color:var(--sa-text);
   -webkit-text-fill-color:var(--sa-text);
@@ -193,7 +193,7 @@ html:root[data-theme] .superadmin-shell:has(.sidebar-collapsed) .workspace-foote
 .superadmin-shell .sa-load-error { padding: 24px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 
 /* Keep all support selectors visible without a tall mobile header. */
-html:root[data-theme] .superadmin-shell .topbar select { height: 34px; min-height: 34px; padding: 5px 28px 5px 10px; }
+html:root[data-theme] .superadmin-shell .topbar :is(select,.searchable-select) { height: 34px; min-height: 34px; padding: 5px 28px 5px 10px; }
 @media (max-width: 900px) {
  html:root[data-theme] .superadmin-shell .topbar { display: block; padding: 12px 16px; }
  html:root[data-theme] .superadmin-shell .topbar-left { display: block; width: 100%; }
@@ -201,7 +201,7 @@ html:root[data-theme] .superadmin-shell .topbar select { height: 34px; min-heigh
  html:root[data-theme] .superadmin-shell .topbar-right { position: absolute; right: 16px; top: 10px; gap: 8px; }
  html:root[data-theme] .superadmin-shell .map-boundary-selector { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
  html:root[data-theme] .superadmin-shell .dev-impersonate { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; width: 100%; }
- html:root[data-theme] .superadmin-shell .topbar select { width: 100%; max-width: none; font-size: 12px; }
+ html:root[data-theme] .superadmin-shell .topbar :is(select,.searchable-select) { width: 100%; max-width: none; font-size: 12px; }
  html:root[data-theme] .superadmin-shell .dev-impersonate > select { grid-column: 1; grid-row: 1; }
  html:root[data-theme] .superadmin-shell .dev-impersonate > input { grid-column: 1 / -1; grid-row: 2; width: 100% !important; }
  html:root[data-theme] .superadmin-shell .dev-impersonate > button { grid-column: 2; grid-row: 1; min-height: 34px; }
@@ -255,9 +255,9 @@ html[data-theme="dark"] .superadmin-shell .workspace-footer { padding-left: 276p
 html:root[data-theme] .superadmin-shell .topbar { flex-wrap:nowrap; }
 html:root[data-theme] .superadmin-shell .topbar-left { flex:1 1 auto; flex-wrap:nowrap; min-width:0; width:auto; }
 html:root[data-theme] .superadmin-shell .topbar .account-cascade { display:flex; flex:0 0 auto; flex-wrap:nowrap; width:auto; min-width:0; }
-html:root[data-theme] .superadmin-shell .topbar .account-cascade select { flex:0 0 auto; width:150px; min-width:120px; max-width:180px; min-height:34px; }
+html:root[data-theme] .superadmin-shell .topbar .account-cascade :is(select,.searchable-select) { flex:0 0 auto; width:150px; min-width:120px; max-width:180px; min-height:34px; }
 html:root[data-theme] .superadmin-shell .topbar .account-user-control { display:flex; flex:0 0 auto; grid-column:auto; min-width:0; max-width:350px; }
-html:root[data-theme] .superadmin-shell .topbar .account-user-control select { flex:1 1 220px; width:220px; max-width:240px; }
+html:root[data-theme] .superadmin-shell .topbar .account-user-control :is(select,.searchable-select) { flex:1 1 220px; width:220px; max-width:240px; }
 html:root[data-theme] .superadmin-shell .topbar .account-impersonate-button { flex:none; min-height:34px; }
 html:root[data-theme] .superadmin-shell .topbar .topbar-brand-cluster { flex:none; width:auto; display:flex; }
 
@@ -265,8 +265,15 @@ html:root[data-theme] .superadmin-shell .topbar .topbar-brand-cluster { flex:non
   html:root[data-theme] .superadmin-shell .topbar { flex-wrap:wrap; }
   html:root[data-theme] .superadmin-shell .topbar-left { flex-wrap:wrap; }
   html:root[data-theme] .superadmin-shell .topbar .account-cascade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); flex-basis:100%; width:100%; }
-  html:root[data-theme] .superadmin-shell .topbar .account-cascade select { width:100%; min-width:0; max-width:none; min-height:40px; }
+  html:root[data-theme] .superadmin-shell .topbar .account-cascade :is(select,.searchable-select) { width:100%; min-width:0; max-width:none; min-height:40px; }
   html:root[data-theme] .superadmin-shell .topbar .account-user-control { grid-column:1 / -1; max-width:none; }
-  html:root[data-theme] .superadmin-shell .topbar .account-user-control select { width:0; min-width:0; }
+  html:root[data-theme] .superadmin-shell .topbar .account-user-control :is(select,.searchable-select) { width:0; min-width:0; }
   html:root[data-theme] .superadmin-shell .topbar .account-impersonate-button { min-height:40px; }
+}
+
+html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-select { padding:0; border:0; background:transparent; height:34px; min-height:34px; }
+html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-select > input[role="combobox"] { height:34px; min-height:34px; padding:5px 26px 5px 8px; margin:0; }
+@media(max-width:800px) {
+  html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-select,
+  html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-select > input[role="combobox"] { height:40px; min-height:40px; }
 }

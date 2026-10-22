@@ -501,24 +501,28 @@ class TicketWorkflowTest extends TestCase
     }
 
     #[Test]
-    public function only_admin_and_the_assigned_custodian_can_append_sub_issues_to_an_active_ticket(): void
+    public function only_admin_can_change_sub_issues_on_an_active_ticket(): void
     {
         $ticket = $this->activeTicket($this->vehicle(), ['Low coolant level']);
 
         Sanctum::actingAs($this->mechanic, ['*']);
         $this->postJson("/api/tickets/{$ticket->ticket_id}/sub-issues", ['title' => 'Another problem'])->assertForbidden();
 
-        foreach ([$this->custodian, $this->admin] as $who) {
-            Sanctum::actingAs($who, ['*']);
-            $response = $this->postJson("/api/tickets/{$ticket->ticket_id}/sub-issues", ['title' => 'Another problem'])->assertCreated();
-            // The ticket already has one assigned mechanic by the time it's
-            // Active — a line item added afterwards is simply more work for
-            // that same mechanic (per-sub-issue dispatch no longer exists to
-            // pick it up), not a fresh unassigned 'Open' item.
-            $this->assertSame('Under Repair', $response->json('status'));
-            $this->assertSame($this->mechanic->id, $response->json('assigned_mechanic_id'));
-        }
-        $this->assertSame(3, $ticket->fresh()->subIssues()->count());
+        Sanctum::actingAs($this->custodian, ['*']);
+        $sub = $ticket->subIssues()->first();
+        $this->postJson("/api/tickets/{$ticket->ticket_id}/sub-issues", ['title' => 'Another problem'])->assertForbidden();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}", ['title' => 'Changed'])->assertForbidden();
+        $this->deleteJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}")->assertForbidden();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", [])->assertForbidden();
+        Sanctum::actingAs($this->admin, ['*']);
+        $response = $this->postJson("/api/tickets/{$ticket->ticket_id}/sub-issues", ['title' => 'Another problem'])->assertCreated();
+        // The ticket already has one assigned mechanic by the time it's
+        // Active — a line item added afterwards is simply more work for
+        // that same mechanic (per-sub-issue dispatch no longer exists to
+        // pick it up), not a fresh unassigned 'Open' item.
+        $this->assertSame('Under Repair', $response->json('status'));
+        $this->assertSame($this->mechanic->id, $response->json('assigned_mechanic_id'));
+        $this->assertSame(2, $ticket->fresh()->subIssues()->count());
     }
 
     #[Test]

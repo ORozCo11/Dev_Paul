@@ -227,7 +227,8 @@ class FleetController extends Controller
                 // Work orders are counted per ticket, the same way the page's
                 // Pending card is: tickets still Active in this mechanic's
                 // hands (a two-sub-issue ticket is one work order, not two).
-                'ticketWorkOrders' => MaintenanceTicket::where('assigned_mechanic_id', $request->user()->id)
+                'ticketWorkOrders' => MaintenanceTicket::where(fn ($query) => $query->where('assigned_mechanic_id', $request->user()->id)
+                        ->orWhereHas('subIssues', fn ($subs) => $subs->where('assigned_mechanic_id', $request->user()->id)))
                     ->where('status', 'Active')
                     ->count(),
                 // Admin's queue of Custodian-proposed tickets awaiting
@@ -2801,6 +2802,7 @@ class FleetController extends Controller
     {
         $this->requireAbility($request, 'schedule.edit');
         $this->abortUnlessOwnBarangaySchedule($schedule);
+        $this->assertSchedulePlanEditable($schedule);
 
         $data = $request->validate([
             'vehicle_id' => ['sometimes', 'exists:vehicles,vehicle_id'],
@@ -3056,12 +3058,19 @@ class FleetController extends Controller
         abort_unless($schedule->vehicle()->exists(), 404);
     }
 
+    private function assertSchedulePlanEditable(VehicleMaintenanceSchedule $schedule): void
+    {
+        abort_if($schedule->resultingTicket()->whereIn('status', ['Active', 'For Verification', 'Closed', 'Cancelled'])->exists(),
+            422, 'This schedule has an activated maintenance ticket. Manage the work through its ticket; the schedule can no longer be edited or cancelled.');
+    }
+
     public function deleteSchedule(Request $request, VehicleMaintenanceSchedule $schedule)
     {
         // Admin-only — cancelling a plan is a planning decision, same as
         // updateSchedule() above.
         $this->requireAbility($request, 'schedule.delete');
         $this->abortUnlessOwnBarangaySchedule($schedule);
+        $this->assertSchedulePlanEditable($schedule);
 
         $schedule->update(['status' => 'Cancelled']);
         $this->history($schedule->vehicle, 'Maintenance Schedule Cancelled', "Maintenance schedule #{$schedule->schedule_id} was cancelled.", 'vehicle_maintenance_schedules', $schedule->schedule_id, $request);

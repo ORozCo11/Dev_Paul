@@ -1,7 +1,7 @@
 .account-cascade { display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; }
-.account-cascade select { width:auto; min-width:105px; max-width:180px; height:34px; padding:5px 8px; border:1px solid #cbd9ed; border-radius:6px; background:#fff; color:#1e3a5f; font:inherit; font-size:12px; }
-.account-cascade select:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
-.account-cascade select:disabled { opacity:.6; }
+.account-cascade :is(select,.searchable-select) { width:auto; min-width:105px; max-width:180px; height:34px; padding:5px 8px; border:1px solid #cbd9ed; border-radius:6px; background:#fff; color:#1e3a5f; font:inherit; font-size:12px; }
+.account-cascade :is(select,.searchable-select):focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
+.account-cascade :is(select,.searchable-select):disabled { opacity:.6; }
 .account-cascade-status,.account-cascade-error { flex-basis:100%; font-size:12px; }
 .account-cascade-error { color:#b91c1c; }
 .topbar-left:has(.account-cascade) { flex-wrap:wrap; min-width:0; }
@@ -9,7 +9,7 @@
   .topbar:has(.account-cascade) { flex-wrap:wrap; }
   .topbar-left:has(.account-cascade) { flex:1 1 100%; width:100%; }
   .topbar .account-cascade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
-  .account-cascade select { width:100%; max-width:none; min-width:0; min-height:40px; }
+  .account-cascade :is(select,.searchable-select) { width:100%; max-width:none; min-width:0; min-height:40px; }
   .account-cascade-status,.account-cascade-error { grid-column:1 / -1; }
 }
 
@@ -22,12 +22,16 @@
 }
 
 .account-user-control { display:flex; align-items:center; gap:6px; min-width:0; max-width:350px; }
-.account-user-control select { width:220px; min-width:0; max-width:240px; text-overflow:ellipsis; }
+.account-user-control :is(select,.searchable-select) { width:220px; min-width:0; max-width:240px; text-overflow:ellipsis; }
 .account-impersonate-button { min-height:34px; padding:6px 12px; border:1px solid #2563eb; border-radius:6px; background:#2563eb; color:#fff; font:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
 .account-user-control .account-impersonate-button:disabled { opacity:1; cursor:default; }
 .account-impersonate-button:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
 @media(max-width:800px) {
   .account-user-control { grid-column:1 / -1; max-width:none; }
-  .account-user-control select { flex:1; width:0; }
+  .account-user-control :is(select,.searchable-select) { flex:1; width:0; }
   .account-impersonate-button { min-height:40px; }
 }
+
+.account-cascade .searchable-select { padding:0; border:0; background:transparent; }
+.account-cascade .searchable-select > input[role="combobox"] { height:34px; min-height:34px; border:1px solid #cbd9ed; border-radius:6px; background:#fff; color:#1e3a5f; font:inherit; font-size:12px; padding:5px 26px 5px 8px; }
+@media(max-width:800px) { .account-cascade .searchable-select > input[role="combobox"] { height:40px; min-height:40px; } }

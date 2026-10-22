@@ -1,3 +1,4 @@
+import SearchableSelect from './SearchableSelect';
 import { cloneElement, Fragment, useEffect, useId, useRef, useState } from 'react';
 import Icon from './Icon';
 import ConfirmDialog from './ConfirmDialog';
@@ -56,7 +57,7 @@ export function PaginatedTable({ columns, rows, emptyMessage = 'No matching reco
       <button type="button" disabled={page === 1} aria-label="Previous page" onClick={() => changePage(page - 1)}><Icon name="arrowLeft" size={16} /></button>
       {pages.map((n, index) => <Fragment key={n}>{index > 0 && n - pages[index - 1] > 1 && <span>…</span>}<button type="button" aria-label={`Page ${n}`} aria-current={page === n ? 'page' : undefined} onClick={() => changePage(n)}>{n}</button></Fragment>)}
       <button type="button" disabled={page === totalPages} aria-label="Next page" onClick={() => changePage(page + 1)}><Icon name="chevronRight" size={16} /></button>
-    </div><label>Rows per page<select value={size} onChange={(event) => pagination ? onPageSizeChange(Number(event.target.value)) : setPaging({ ...paging, size: Number(event.target.value), page: 1 })}>{pageSizeOptions.map((size) => <option key={size}>{size}</option>)}</select></label></div>
+    </div><label>Rows per page<SearchableSelect value={size} onChange={(event) => pagination ? onPageSizeChange(Number(event.target.value)) : setPaging({ ...paging, size: Number(event.target.value), page: 1 })}>{pageSizeOptions.map((size) => <option key={size}>{size}</option>)}</SearchableSelect></label></div>
   </>;
 }
 

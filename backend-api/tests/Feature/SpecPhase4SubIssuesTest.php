@@ -60,14 +60,16 @@ class SpecPhase4SubIssuesTest extends TestCase
     }
 
     #[Test]
-    public function admin_and_the_assigned_custodian_can_add_edit_and_delete_an_open_sub_issue(): void
+    public function only_admin_can_add_edit_and_delete_an_open_sub_issue_on_an_active_ticket(): void
     {
-        foreach ([$this->admin, $this->custodian] as $user) {
-            Sanctum::actingAs($user, ['*']);
-            $id = $this->postJson($this->url(), ['title' => 'Radiator leak'])->assertCreated()->json('sub_issue_id');
-            $this->putJson($this->url("/{$id}"), ['title' => 'Radiator hose leak'])->assertOk()->assertJsonPath('title', 'Radiator hose leak');
-            $this->deleteJson($this->url("/{$id}"))->assertOk();
-        }
+        Sanctum::actingAs($this->admin, ['*']);
+        $id = $this->postJson($this->url(), ['title' => 'Radiator leak'])->assertCreated()->json('sub_issue_id');
+        $this->putJson($this->url("/{$id}"), ['title' => 'Radiator hose leak'])->assertOk()->assertJsonPath('title', 'Radiator hose leak');
+        $this->deleteJson($this->url("/{$id}"))->assertOk();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson($this->url(), ['title' => 'No longer editable'])->assertForbidden();
+        $this->putJson($this->url("/{$this->sub->sub_issue_id}"), ['title' => 'No longer editable'])->assertForbidden();
+        $this->deleteJson($this->url("/{$this->sub->sub_issue_id}"))->assertForbidden();
         $this->assertDatabaseCount('ticket_sub_issues', 1);
     }
 

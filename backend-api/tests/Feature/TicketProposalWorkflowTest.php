@@ -550,4 +550,96 @@ class TicketProposalWorkflowTest extends TestCase
         ])->assertOk();
         $this->assertSame('Active', $ticket->fresh()->status);
     }
+    #[Test]
+    public function approval_assigns_each_sub_issue_and_both_mechanics_can_log_their_own_work(): void
+    {
+        $second = $this->user('Maintenance Personnel');
+        $ticket = $this->propose($this->vehicle(), ['entry_mode' => 'in_house', 'sub_issues' => [
+            ['title' => 'Engine repair'], ['title' => 'Brake repair'],
+        ]]);
+        $subs = $ticket->subIssues()->orderBy('sub_issue_id')->get();
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/approve", ['sub_issues' => [
+            ['sub_issue_id' => $subs[0]->sub_issue_id, 'assigned_mechanic_id' => $this->mechanic->id],
+            ['sub_issue_id' => $subs[1]->sub_issue_id, 'assigned_mechanic_id' => $second->id],
+        ]])->assertOk();
+        $this->assertNull($ticket->fresh()->assigned_mechanic_id);
+        $this->assertSame($this->mechanic->id, $subs[0]->fresh()->assigned_mechanic_id);
+        $this->assertSame($second->id, $subs[1]->fresh()->assigned_mechanic_id);
+        foreach ([$this->mechanic, $second] as $index => $mechanic) {
+            $this->assertDatabaseHas('notifications', ['user_id' => $mechanic->id, 'type' => 'ticket_assigned']);
+            Sanctum::actingAs($mechanic, ['*']);
+            $other = $subs[1 - $index];
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$other->sub_issue_id}/log-repairs", ['repair_logs' => 'Wrong work order'])->assertForbidden();
+            $sub = $subs[$index];
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['repair_logs' => 'Repaired and tested', 'repair_type' => 'in_house'])->assertOk();
+            $this->assertSame($index === 0 ? 'Active' : 'For Verification', $ticket->fresh()->status);
+        }
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Rejected', 'verification_notes' => 'Retest both repairs'])->assertOk();
+        foreach ([$this->mechanic, $second] as $index => $mechanic) {
+            $this->assertDatabaseHas('notifications', ['user_id' => $mechanic->id, 'type' => 'repairs_rejected']);
+            Sanctum::actingAs($mechanic, ['*']);
+            $this->getJson('/api/dashboard')->assertOk()->assertJsonPath('badge_counts.ticketWorkOrders', 1);
+            $sub = $subs[$index];
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['repair_logs' => 'Retested repair', 'repair_type' => 'in_house'])->assertOk();
+        }
+        // A dual-role repairer remains barred from verifying their own work
+        // even when there is no single ticket-level mechanic.
+        $second->update(['roles' => ['Maintenance Personnel', 'Custodian']]);
+        $ticket->update(['assigned_custodian_id' => $second->id]);
+        Sanctum::actingAs($second->fresh(), ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertForbidden();
+        $ticket->update(['assigned_custodian_id' => $this->custodian->id]);
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertOk();
+        foreach ([$this->mechanic, $second] as $mechanic) {
+            $this->assertDatabaseHas('notifications', ['user_id' => $mechanic->id, 'type' => 'ticket_verified']);
+        }
+    }
+
+    #[Test]
+    public function per_issue_assignments_require_complete_active_same_barangay_mechanics(): void
+    {
+        $ticket = $this->propose($this->vehicle(), ['sub_issues' => [['title' => 'Engine'], ['title' => 'Brakes']]]);
+        $subs = $ticket->subIssues()->get();
+        Sanctum::actingAs($this->admin, ['*']);
+        $payload = ['sub_issues' => [
+            ['sub_issue_id' => $subs[0]->sub_issue_id, 'assigned_mechanic_id' => $this->mechanic->id],
+        ]];
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/approve", $payload)->assertUnprocessable();
+        $payload['sub_issues'][] = ['sub_issue_id' => $subs[1]->sub_issue_id, 'assigned_mechanic_id' => $this->custodian->id];
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/approve", $payload)->assertUnprocessable();
+        $this->mechanic->update(['is_active' => false]);
+        $payload['sub_issues'][1]['assigned_mechanic_id'] = $this->mechanic->id;
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/approve", $payload)->assertUnprocessable();
+        $outsider = $this->user('Maintenance Personnel');
+        $outsider->update(['barangay_id' => Barangay::create(['name' => 'Other Barangay'])->id]);
+        $payload['sub_issues'][0]['assigned_mechanic_id'] = $outsider->id;
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/approve", $payload)->assertUnprocessable();
+        $this->assertSame('Pending Approval', $ticket->fresh()->status);
+        $this->assertSame(0, $ticket->subIssues()->whereNotNull('assigned_mechanic_id')->count());
+    }
+
+    #[Test]
+    public function activated_schedule_tickets_lock_schedule_edits_and_cancellation(): void
+    {
+        $vehicle = $this->vehicle();
+        $ticket = $this->propose($vehicle);
+        $schedule = \App\Models\VehicleMaintenanceSchedule::create([
+            'vehicle_id' => $vehicle->vehicle_id, 'maintenance_type' => 'Service',
+            'scheduled_date' => now()->toDateString(), 'status' => 'Scheduled',
+            'created_by' => $this->custodian->id, 'notes' => 'Original plan',
+            'resulting_ticket_id' => $ticket->ticket_id,
+        ]);
+        Sanctum::actingAs($this->custodian, ['*']);
+        foreach (['Active', 'For Verification', 'Closed', 'Cancelled'] as $status) {
+            $ticket->update(['status' => $status]);
+            $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}", ['notes' => 'Changed'])->assertUnprocessable();
+            $this->deleteJson("/api/maintenance-schedules/{$schedule->schedule_id}")->assertUnprocessable();
+            $this->assertSame('Scheduled', $schedule->fresh()->status);
+            $this->assertSame('Original plan', $schedule->fresh()->notes);
+        }
+    }
+
 }

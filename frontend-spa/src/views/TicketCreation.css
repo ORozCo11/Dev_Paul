@@ -103,3 +103,18 @@ html .ticket-create-form input[type="radio"] { width: auto; min-height: 0; }
   html .ticket-create-form .ticket-external-grid { grid-template-columns: minmax(0, 1fr); }
   html .ticket-create-form .ticket-external-grid label:last-child { max-width: none; }
 }
+
+/* Repair methods retain distinct colors before selection. */
+html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="false"],
+html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="false"]:hover { background:var(--entry-mode-color) !important; color:#fff !important; opacity:.82; }
+html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="false"] > svg { color:#fff; }
+html .ticket-create-form > .ticket-create-header p { max-width:none; white-space:nowrap; overflow-x:auto; }
+html .ticket-create-form .ticket-preview-card--lg { flex-direction:column; align-items:stretch; padding:0; overflow:hidden; }
+html .ticket-create-form .ticket-preview-photo--lg { display:block; width:100%; height:auto; aspect-ratio:4 / 3; flex-basis:auto; object-fit:contain; border-radius:0; background:var(--surface-2,#f8fafc); }
+html .ticket-create-form .ticket-preview-body--lg { padding:14px; width:100%; box-sizing:border-box; }
+html .ticket-create-form .ticket-external-grid label:last-child { grid-column:auto; max-width:none; }
+.proposal-assignment-row { align-items:start; padding:0; margin-top:10px; }
+.ticket-process-hero--simple { grid-template-columns:minmax(0,1fr); }
+
+html .ticket-create-form > .ticket-create-header { min-width:0; max-width:100%; }
+html .ticket-create-form > .ticket-create-header p { max-width:100%; }

@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import AuthHeader from '../components/AuthHeader';
@@ -131,10 +132,10 @@ export default function Support() {
             <label className="auth-field auth-field-full">
               <span>What's the concern?</span>
               <div className="auth-input-wrapper auth-input-plain">
-                <select name="concern_type" value={form.concern_type} onChange={handleChange} required>
+                <SearchableSelect name="concern_type" value={form.concern_type} onChange={handleChange} required>
                   <option value="" disabled>Select a concern type</option>
                   {CONCERN_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
+                </SearchableSelect>
               </div>
             </label>
 

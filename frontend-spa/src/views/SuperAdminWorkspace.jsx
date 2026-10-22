@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect';
 import ImpersonationPicker from '../components/ImpersonationPicker';
 import EndImpersonationAction from '../components/EndImpersonationAction';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
@@ -153,9 +154,9 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
     {showAddForm && <AddBarangayForm onAdded={(created) => { onAddedBarangay(created); onCloseAdd(); }} onCancel={onCloseAdd} />}
     {!managingId && <AdminManagementCard summary={<div className="sa-segments">{[['all', 'All Barangays', barangays.length], ['active', 'Active Admin', barangays.length - orphaned.length], ['orphaned', 'Orphaned', orphaned.length], ['boundary_review', 'Needs Boundary Review', pending.length]].map(([key, label, count]) => <button key={key} type="button" aria-pressed={activeFilter === key} onClick={() => setActiveFilter(key)}>{label}<span>{count}</span></button>)}</div>} toolbar={<>
       <LocalSearchInput value={search} onChange={setSearch} placeholder="Search barangay, city, or province..." />
-      <AdminFilterField label="Province"><select aria-label="Filter by province" value={provinceFilter} onChange={(event) => { setProvinceFilter(event.target.value); setCityFilter(''); }}><option value="">All Provinces</option>{provinceOptions.map((province) => <option key={province}>{province}</option>)}</select></AdminFilterField>
-      <AdminFilterField label="City"><select aria-label="Filter by city" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}><option value="">All Cities</option>{cities.map((city) => <option key={city}>{city}</option>)}</select></AdminFilterField>
-      <AdminFilterField label="Boundary status"><select aria-label="Boundary status" value={boundaryFilter} onChange={(event) => setBoundaryFilter(event.target.value)}><option value="">All Boundaries</option>{['Reviewed', 'Needs Review', 'Not Found'].map((status) => <option key={status}>{status}</option>)}</select></AdminFilterField>
+      <AdminFilterField label="Province"><SearchableSelect aria-label="Filter by province" value={provinceFilter} onChange={(event) => { setProvinceFilter(event.target.value); setCityFilter(''); }}><option value="">All Provinces</option>{provinceOptions.map((province) => <option key={province}>{province}</option>)}</SearchableSelect></AdminFilterField>
+      <AdminFilterField label="City"><SearchableSelect aria-label="Filter by city" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}><option value="">All Cities</option>{cities.map((city) => <option key={city}>{city}</option>)}</SearchableSelect></AdminFilterField>
+      <AdminFilterField label="Boundary status"><SearchableSelect aria-label="Boundary status" value={boundaryFilter} onChange={(event) => setBoundaryFilter(event.target.value)}><option value="">All Boundaries</option>{['Reviewed', 'Needs Review', 'Not Found'].map((status) => <option key={status}>{status}</option>)}</SearchableSelect></AdminFilterField>
     </>}><PaginatedTable rows={filtered} columns={columns} emptyIcon="pin" emptyMessage="No barangays found" emptyDescription="Try another search or adjust the location and status filters." /></AdminManagementCard>}
     {managingId && !managing && <p role="alert">Barangay not found. <button type="button" className="ghost-button" onClick={() => setManagingId(null)}>Back to Barangays</button></p>}
     {managing && <section className="sa-management-card sa-barangay-page">
@@ -164,7 +165,7 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
       <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd><dt>Boundary status</dt><dd><StatusBadge value={boundaryStatus(managing)} /></dd><dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
       <section className="sa-detail-section"><h3>Registration code</h3><p>View or regenerate this barangay's staff registration code.</p><button type="button" className="ghost-button" onClick={() => onRegistrationCode(managing)}><Icon name="key" size={15} />Manage Registration Code</button></section>
       <section className="sa-detail-section"><h3>Boundary configuration</h3><button type="button" className="ghost-button" onClick={() => { setReviewingBoundary(managing); }}>Review / Replace Boundary</button>{managing.boundary_status === 'needs_review' ? <><p>{managing.pending_boundary ? 'A candidate outline is waiting for review.' : 'The current outline is an unverified reference.'} Review it against an LGU-approved boundary map or survey.</p><button type="button" className="primary-button" onClick={() => { setReviewingBoundary(managing); }}>Review Boundary</button></> : managing.boundary_status === 'verified' ? <p>A boundary reviewed against an uploaded source document is on file. This is an administrator review, not a legal certification.</p> : <><p>No matching boundary is on file. Retry the supported lookup.</p><button type="button" className="ghost-button" disabled={retryingId === managing.id} onClick={() => retryBoundary(managing)}>{retryingId === managing.id ? 'Checking…' : 'Retry Boundary Lookup'}</button></>}</section>
-      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities. An inactive account will also be approved and activated.</p><AdminFilterField label="Staff member"><select value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</select></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
+      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities. An inactive account will also be approved and activated.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
       </div>
     </section>}
     {reviewingBoundary && <BoundaryReviewModal onSaved={onBoundarySaved} barangay={reviewingBoundary} onClose={() => setReviewingBoundary(null)} onConfirm={async () => { if (await onConfirmBoundary(reviewingBoundary)) setReviewingBoundary(null); }} onDiscard={async () => { if (await onDiscardBoundary(reviewingBoundary)) setReviewingBoundary(null); }} />}
@@ -242,18 +243,18 @@ function AddBarangayForm({ onAdded, onCancel }) {
       {error && <p className="muted" style={{ color: '#dc2626' }}>{error}</p>}
       {[provinceLookup, cityLookup, barangayLookup].filter((lookup) => lookup.error).map((lookup) => <p key={lookup.error} className="notice error" role="alert">{lookup.error} <button type="button" className="ghost-button" onClick={lookup.retry}>Retry lookup</button></p>)}
       <div className="superadmin-inline-row">
-        <select aria-label="New barangay province" value={provinceId} disabled={provinceLookup.loading || Boolean(provinceLookup.error)} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} required>
+        <SearchableSelect aria-label="New barangay province" value={provinceId} disabled={provinceLookup.loading || Boolean(provinceLookup.error)} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} required>
           <option value="">{provinceLookup.loading ? 'Loading provinces…' : 'Province'}</option>
           {provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
-        <select aria-label="New barangay city" value={cityId} onChange={(e) => { setCityId(e.target.value); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} disabled={!provinceId || cityLookup.loading || Boolean(cityLookup.error)} required>
+        </SearchableSelect>
+        <SearchableSelect aria-label="New barangay city" value={cityId} onChange={(e) => { setCityId(e.target.value); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} disabled={!provinceId || cityLookup.loading || Boolean(cityLookup.error)} required>
           <option value="">{cityLookup.loading ? 'Loading cities…' : 'City / Municipality'}</option>
           {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select aria-label="Official PSGC barangay" value={barangayId} onChange={(e) => { setBarangayId(e.target.value); setBoundaryPreview(null); setPreviewStatus('Loading the PSGC-matched boundary…'); }} disabled={!cityId || barangayLookup.loading || Boolean(barangayLookup.error)} required>
+        </SearchableSelect>
+        <SearchableSelect aria-label="Official PSGC barangay" value={barangayId} onChange={(e) => { setBarangayId(e.target.value); setBoundaryPreview(null); setPreviewStatus('Loading the PSGC-matched boundary…'); }} disabled={!cityId || barangayLookup.loading || Boolean(barangayLookup.error)} required>
           <option value="">{barangayLookup.loading ? 'Loading barangays…' : 'Barangay (PSGC)'}</option>
           {barangays.map((barangay) => <option key={barangay.id} value={barangay.id}>{barangay.name} · {barangay.psgc_code}</option>)}
-        </select>
+        </SearchableSelect>
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
         <button type="submit" className="primary-button" disabled={saving || !cityId || !barangayId}>
           {saving ? 'Adding…' : 'Add'}
@@ -622,7 +623,7 @@ export default function SuperAdminWorkspace() {
   if (!user) return null;
 
   return (
-    // Scopes the modern <select> styling below (superadmin-shell select) to
+    // Scopes the modern <SearchableSelect> styling below (superadmin-shell select) to
     // just this portal — the main Workspace.jsx shell uses the same
     // "workspace" class name on its own <main>, so a bare Fragment here
     // couldn't be targeted on its own without also restyling every select

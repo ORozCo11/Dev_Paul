@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect';
 import LoadingOverlay from '../components/LoadingOverlay';
 import './Register.css';
 import 'leaflet/dist/leaflet.css';
@@ -445,7 +446,7 @@ function Register() {
             <label className="auth-field">
               <span>Province</span>
               <div className="auth-input-wrapper auth-input-plain">
-                <select
+                <SearchableSelect
                   name="province_id"
                   {...fieldErrorProps('province_id')}
                   onChange={handleProvinceChange}
@@ -456,7 +457,7 @@ function Register() {
                   {provinces.map((province) => (
                     <option key={province.id} value={province.id}>{province.name}</option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
               <RegistrationFieldError name="province_id" errors={fieldErrors} />
             </label>
@@ -464,7 +465,7 @@ function Register() {
             <label className="auth-field">
               <span>City / Municipality</span>
               <div className="auth-input-wrapper auth-input-plain">
-                <select
+                <SearchableSelect
                   disabled={!form.province_id || citiesLoading}
                   name="city_id"
                   {...fieldErrorProps('city_id')}
@@ -478,7 +479,7 @@ function Register() {
                   {cities.map((city) => (
                     <option key={city.id} value={city.id}>{city.name}</option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
               <RegistrationFieldError name="city_id" errors={fieldErrors} />
             </label>
@@ -486,7 +487,7 @@ function Register() {
             <label className="auth-field auth-field-full">
               <span>Barangay</span>
               <div className="auth-input-wrapper auth-input-plain">
-                <select
+                <SearchableSelect
                   name="barangay_id"
                   {...fieldErrorProps('barangay_id')}
                   onChange={handleChange}
@@ -496,7 +497,7 @@ function Register() {
                 >
                   <option value="" disabled>{barangaysLoading ? 'Loading barangays?' : !form.city_id ? 'Select a city/municipality first' : barangays.length ? 'Select your barangay' : 'No barangays available'}</option>
                   {barangays.map((barangay) => <option key={barangay.id} value={barangay.id}>{barangay.name}</option>)}
-                </select>
+                </SearchableSelect>
               </div>
               <RegistrationFieldError name="barangay_id" errors={fieldErrors} />
             </label>
@@ -543,7 +544,7 @@ function Register() {
               <label className="auth-field">
                 <span>I am a...</span>
                 <div className="auth-input-wrapper auth-input-plain">
-                  <select
+                  <SearchableSelect
                     name="requested_role"
                     {...fieldErrorProps('requested_role')}
                     onChange={handleChange}
@@ -553,7 +554,7 @@ function Register() {
                     <option value="" disabled>Select your role</option>
                     <option value="Custodian">Custodian</option>
                     <option value="Maintenance Personnel">Maintenance Personnel</option>
-                  </select>
+                  </SearchableSelect>
                 </div>
                 <RegistrationFieldError name="requested_role" errors={fieldErrors} />
               </label>

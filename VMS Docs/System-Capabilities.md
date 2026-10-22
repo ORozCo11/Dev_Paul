@@ -124,17 +124,17 @@ Each sub-issue also carries a free-text maintenance-type (another growing catalo
 
 Can edit description, priority, assigned custodian, and per-sub-issue title/maintenance-type/suggested-mechanic before deciding.
 
-**On approve**: requires choosing the ticket's mechanic (`assigned_mechanic_id`) — one mechanic owns the whole ticket. Status becomes Active; the vehicle goes Needs Repair/Under Maintenance; every sub-issue goes Under Repair under that mechanic; the proposing Custodian and the mechanic are notified. The ticket's title was already finalized at proposal time (§5.1) and is never touched here; duplicate and recurrence matching compare the issue part of it only. At least one sub-issue must exist, and the vehicle must not have gone Inactive/Decommissioned since the proposal was filed.
+**On approve**: requires choosing the ticket's mechanic (`assigned_mechanic_id`) — one mechanic owns the whole ticket. Status becomes Active; the vehicle goes Needs Repair/Under Maintenance; every sub-issue goes Under Repair under its assigned mechanic; the proposing Custodian and the mechanic are notified. The ticket's title was already finalized at proposal time (§5.1) and is never touched here; duplicate and recurrence matching compare the issue part of it only. At least one sub-issue must exist, and the vehicle must not have gone Inactive/Decommissioned since the proposal was filed.
 
 **On decline**: requires a reason. The proposal is **not deleted** — it stays visible with a `Declined` status and the stored `decline_reason`, the proposing Custodian is notified, and any linked Issue Report resets back to Pending. A decline is reversible: Admin can **undecline** it (back to Pending Approval, Custodian notified) or approve it directly from Declined.
 
 ### 5.3 Assignment & repair
 
-**One mechanic per ticket.** The mechanic chosen at approval works every sub-issue. Admin can reassign the ticket's mechanic (`assign-mechanic`, a reason is required) while the ticket is Active or For Verification; the new and the previous mechanic are both notified. (The older per-sub-issue assign/reassign endpoints remain in code but no role holds `subissue.assign_mechanic` / `subissue.reassign_mechanic`.) Admin can also reassign the ticket's Custodian, which carries the pending verification along with it — the new Custodian becomes the only one who can verify (§5.4).
+**One assigned mechanic per in-house sub-issue.** Admin selects each mechanic beside the Repair Type field during proposal review. The same mechanic may take several sub-issues, or different mechanics may work on one ticket. Each sees and logs only their own work orders; all repairs must be logged before the assigned Custodian verifies the ticket. Workload badges and verification/rework notifications include every assigned mechanic. Admin can reassign the ticket's mechanic (`assign-mechanic`, a reason is required) while the ticket is Active or For Verification; the new and the previous mechanic are both notified. (The older per-sub-issue assign/reassign endpoints remain in code but no role holds `subissue.assign_mechanic` / `subissue.reassign_mechanic`.) Admin can also reassign the ticket's Custodian, which carries the pending verification along with it — the new Custodian becomes the only one who can verify (§5.4).
 
-While the ticket is Active, an Admin or the ticket's assigned Custodian can add, edit or delete sub-issues through the API (`subissue.manage`). Edit/delete only applies to a sub-issue that is still Open or Under Repair, and the last remaining sub-issue can never be deleted (cancel the ticket instead). An added sub-issue inherits the ticket's mechanic. Maintenance Personnel cannot. The ticket page itself no longer offers "Add sub-issue" on an Active ticket — new problems go in a new proposal.
+While the ticket is Active, only an Admin can add, edit or delete sub-issues through the API (`subissue.manage`). Custodians cannot edit or cancel an active ticket. Edit/delete only applies to a sub-issue that is still Open or Under Repair, and the last remaining sub-issue can never be deleted (cancel the ticket instead). An added sub-issue inherits the ticket's mechanic. Maintenance Personnel cannot. The ticket page itself no longer offers "Add sub-issue" on an Active ticket — new problems go in a new proposal.
 
-The assigned mechanic logs repair notes (append-only, never overwritten), parts used, cost, start/completion dates and an optional photo/file on the **Record Repair Work** page (sections: Work Order Overview, Repair Details).
+The assigned mechanic logs repair notes (append-only, never overwritten), parts used, cost and an optional photo/file on the **Record Repair Work** page (sections: Work Order Overview, Repair Details).
 
 **Cannibalized repair (no approval step).** The mechanic picks a donor vehicle (a different vehicle, same barangay, not retired) and then manages its parts as a list — add, edit, delete — each with part name, quantity (whole number ≥ 1), condition, installed date (not in the future), reason and notes. Parts and the donor are saved immediately, so they survive a reload, and can only be changed by the assigned mechanic while the work order is Under Repair; after the repair is logged they are locked history. A cannibalized repair needs at least one donor part to be submitted. Submitting goes straight to the Custodian (no Admin approval); at that moment — and only then — **one** Issue Report listing every part is filed on the donor vehicle and the donor is flagged Needs Inspection. Donor parts never add to the maintenance cost. Older single-part data was migrated into the new `ticket_sub_issue_donor_parts` table.
 
@@ -170,6 +170,8 @@ Cancel/Uncancel (Admin only) works at any stage before Closed or Cancelled, exce
 ---
 
 ## 6. Maintenance Schedules
+
+Once a linked ticket is Active, For Verification, Closed or Cancelled, its schedule can no longer be edited or cancelled; the work is managed through the ticket.
 
 Captures vehicle, maintenance type, scheduled date/time, service location, notes, an optional assignee, and an optional recurrence (any whole number of months, 1–60 — not a fixed weekly/monthly/yearly preset list).
 
@@ -324,8 +326,11 @@ Stated plainly, as found in the code — not implied to be bugs, just not (yet) 
 
 ## 14b. Interface Conventions
 
+- **Searchable dropdowns**: type to filter vehicles, users, locations and other existing choices across forms and workspaces. Selecting an option preserves its underlying ID; catalog fields retain their existing add-new workflow.
+- **Ticket proposal form**: green In-House Repair and purple Sent to External Shop methods; a full-width vehicle image above its details; external work uses one required Details field, optional Repair Type, and Priority beside Estimated Cost. Repair logs no longer ask for Start or Completion dates.
+
 - **Assigned-personnel avatars** (`TicketPersonnelAvatars`, one shared component): small overlapping circular profile pictures (existing `users.photo_url`; initials fallback when missing or broken), tooltip "Name · Role", zoom on hover/focus, accessible labels. Shown on ticket cards and the ticket list's "Assigned Personnel" column (Custodian first, then the mechanic read from the open work orders, so reassignment is reflected; Pending Approval tickets show no mechanic), on maintenance schedule cards/table (assigned mechanic) and maintenance record cards (verifier + mechanic).
-- **Ticket card progress ring**: circular percentage of sub-issues done, next to the avatars.
+- **Ticket progress**: ticket percentage graphics are removed; workflow stages and completed-sub-issue counts remain.
 - **Inline field validation**: required/invalid fields in the shared form component show a red border with the message directly under the field (e.g. "Vehicle Type Name is required."), focus the first problem, and clear as the user types — replacing the old popup list. Vehicle Type and User forms already used this style. Forms with hand-written checks (ticket proposal/create, Log Repairs, add-option dialogs) still use the summary style.
 - **Sidebar badges** come from one dashboard source and are cleared per user once the page has been viewed (stored in the browser), reappearing only for new items.
 - Row action menus collapse into "…" only when three or more actions exist; rows open their own record, and only the vehicle cell opens the vehicle.

@@ -1,0 +1,10 @@
+.searchable-select { display:inline-flex; position:relative; min-width:0; width:100%; vertical-align:middle; }
+.searchable-select > input[role="combobox"] { width:100%; min-width:0; box-sizing:border-box; padding-right:26px; text-overflow:ellipsis; }
+.searchable-select::after { content:''; position:absolute; right:12px; top:calc(50% - 4px); width:6px; height:6px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); pointer-events:none; opacity:.6; }
+.searchable-select-menu { position:fixed; z-index:200000; overflow-y:auto; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:7px; background:#fff; color:#172b4d; padding:4px; box-shadow:0 8px 24px #0f172a26; font-family:inherit; font-size:13px; line-height:1.5; }
+.searchable-select-menu > button { display:block; width:100%; text-align:left; padding:9px 10px; border:0; border-radius:4px; background:transparent; color:inherit; font:inherit; white-space:normal; cursor:pointer; }
+.searchable-select-menu > button:is(:hover,.is-highlighted,[aria-selected="true"]) { background:#eff6ff; color:#1d4ed8; }
+.searchable-select-menu > button:disabled { opacity:.5; cursor:default; }
+.searchable-select-empty { padding:10px; color:#64748b; }
+html[data-theme="dark"] .searchable-select-menu { background:#182536; color:#e2e8f0; border-color:#475569; }
+html[data-theme="dark"] .searchable-select-menu > button:is(:hover,.is-highlighted,[aria-selected="true"]) { background:#253c5d; color:#bfdbfe; }

@@ -169,8 +169,8 @@ return [
     'ticket.verify' => ['Custodian'],
 
     // Sub-issues
-    // Add / rename / remove a not-yet-dispatched sub-issue (Custodian: own ticket only).
-    'subissue.manage' => ['Admin', 'Custodian'],
+    // Only Admin may change an active ticket's sub-issues; Custodians propose and verify.
+    'subissue.manage' => ['Admin'],
     'subissue.assign_mechanic' => [],
     'subissue.reassign_mechanic' => [],
     'subissue.log_repair' => ['Maintenance Personnel'],

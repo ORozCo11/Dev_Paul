@@ -1,3 +1,4 @@
+import SearchableSelect from '../components/SearchableSelect';
 import ImpersonationPicker from '../components/ImpersonationPicker';
 import VehicleTripLog from '../components/VehicleTripLog';
 import { recordNumber, ticketNumber } from '../utils/recordNumber';
@@ -4372,7 +4373,7 @@ function Workspace() {
               {/* Quick relative filters — dropdown */}
               <div className="filter-date-group">
                 <span>Quick Filter</span>
-                <select
+                <SearchableSelect
                   className="filter-select"
                   value={archiveDraft.quick}
                   onChange={(e) => applyQuickFilter(e.target.value)}
@@ -4382,7 +4383,7 @@ function Workspace() {
                   <option value="last_year">Last Year</option>
                   <option value="over_1yr">Older than 1 Year</option>
                   <option value="over_3yr">Older than 3 Years</option>
-                </select>
+                </SearchableSelect>
               </div>
 
               <div style={{ width: 1, height: 22, background: 'var(--border, #334155)', flexShrink: 0 }} />
@@ -4390,7 +4391,7 @@ function Workspace() {
               {/* Year dropdown — only years that actually have archived tickets */}
               <div className="filter-date-group">
                 <span>Year</span>
-                <select
+                <SearchableSelect
                   className="filter-select"
                   value={selectedYear}
                   onChange={(e) => applyYearFilter(e.target.value)}
@@ -4401,7 +4402,7 @@ function Workspace() {
                       {yr} — {yearCounts[yr]} {yearCounts[yr] === 1 ? 'ticket' : 'tickets'}
                     </option>
                   ))}
-                </select>
+                </SearchableSelect>
               </div>
 
               {/* Custom date range */}
@@ -4424,7 +4425,7 @@ function Workspace() {
               {archiveFinalStatuses.length > 0 && (
                 <div className="filter-date-group">
                   <span>Status</span>
-                  <select
+                  <SearchableSelect
                     className="filter-select"
                     value={archiveDraft.status}
                     onChange={(e) => setArchiveDraft((d) => ({ ...d, status: e.target.value }))}
@@ -4433,7 +4434,7 @@ function Workspace() {
                     {archiveFinalStatuses.map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
-                  </select>
+                  </SearchableSelect>
                 </div>
               )}
 
@@ -5404,7 +5405,7 @@ function SelectOrOtherField({ field, value, onChange }) {
 
   return (
     <>
-      <select
+      <SearchableSelect
         required={field.required}
         value={otherMode ? SELECT_OR_OTHER_SENTINEL : (value ?? '')}
         onChange={(e) => {
@@ -5424,7 +5425,7 @@ function SelectOrOtherField({ field, value, onChange }) {
           </option>
         ))}
         <option value={SELECT_OR_OTHER_SENTINEL}>{field.otherLabel ?? 'Other (specify)'}</option>
-      </select>
+      </SearchableSelect>
       {otherMode && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
           <input
@@ -5461,7 +5462,7 @@ function CatalogOrOtherField({ value, onChange, note, onNoteChange, options = []
   const isOther = value === CATALOG_OTHER_VALUE;
   return (
     <>
-      <select
+      <SearchableSelect
         required={required}
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value)}
@@ -5473,7 +5474,7 @@ function CatalogOrOtherField({ value, onChange, note, onNoteChange, options = []
           </option>
         ))}
         <option value={CATALOG_OTHER_VALUE}>Other</option>
-      </select>
+      </SearchableSelect>
       {isOther && (
         <input
           type="text"
@@ -5727,7 +5728,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
                 type="number"
                 value={quantity.amount}
               />
-              <select
+              <SearchableSelect
                 onChange={(e) => setValues((current) => ({
                   ...current,
                   [field.name]: `${quantity.amount} ${e.target.value}`.trim(),
@@ -5735,7 +5736,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
                 value={quantity.unit}
               >
                 {field.units.map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
+              </SearchableSelect>
             </div>
           ) : null}
           {field.type === 'textarea' ? (
@@ -5749,7 +5750,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
             />
           ) : null}
           {field.type === 'select' ? (
-            <select
+            <SearchableSelect
               name={field.name}
               onChange={handleChange}
               required={field.required}
@@ -5768,7 +5769,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
                   {option?.label ?? option}
                 </option>
               ))}
-            </select>
+            </SearchableSelect>
           ) : null}
           {field.type === 'select-or-other' ? (
             <SelectOrOtherField
@@ -7017,17 +7018,17 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
               <input id="vt-name" type="text" maxLength={255} value={values.category_name} onChange={(e) => set('category_name', e.target.value)} placeholder="Ambulance, Fire Truck, Rescue Boat" />
             </FxField>
             <FxField id="vt-domain" label="Domain" required error={errors.domain} hint="Land or Water — decides which vehicle-specific fields a vehicle of this type asks for.">
-              <select id="vt-domain" value={values.domain} onChange={(e) => set('domain', e.target.value)}>
+              <SearchableSelect id="vt-domain" value={values.domain} onChange={(e) => set('domain', e.target.value)}>
                 <option value="">Select domain</option>
                 <option value="Land">Land</option>
                 <option value="Water">Water</option>
-              </select>
+              </SearchableSelect>
             </FxField>
             <FxField id="vt-crit" label="Default Criticality" hint="How much vehicles of this type matter operationally. Critical ones surface first on the readiness watch; Admin can override per vehicle.">
-              <select id="vt-crit" value={values.default_criticality} onChange={(e) => set('default_criticality', e.target.value)}>
+              <SearchableSelect id="vt-crit" value={values.default_criticality} onChange={(e) => set('default_criticality', e.target.value)}>
                 <option value="">Select criticality</option>
                 {CRITICALITY_LEVELS.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              </SearchableSelect>
             </FxField>
             <FxField id="vt-desc" label="Description" className="fx-span-2" hint="Optional — when to use this type.">
               <textarea id="vt-desc" rows={4} value={values.description} onChange={(e) => set('description', e.target.value)} placeholder="Notes about which vehicles belong under this type" />
@@ -9649,13 +9650,17 @@ function MaintenanceScheduleActions({ row, currentUser, onComplete, onEdit, onDe
       {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className="sch-action is-info" onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record"><Icon name="wrench" size={14} /> Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</button>}
       {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className="sch-action is-success" onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} /><span>Approve</span></button>}
       {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className="sch-action is-danger" onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} /><span>Decline</span></button>}
-      {canDo(currentUser, 'schedule.edit') && <button className="sch-action" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /><span>Edit</span></button>}
+      {(!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.edit')) && <button className="sch-action" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /><span>Edit</span></button>}
       {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className="sch-action is-info" onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} /><span>Reassign</span></button>}
       {row.status === 'Cancelled'
         ? canDo(currentUser, 'schedule.restore') && onRestore && <button className="sch-action is-success" onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} /><span>Restore</span></button>
-        : canDo(currentUser, 'schedule.delete') && <button className="sch-action is-danger" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /><span>Cancel Schedule</span></button>}
+        : (!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.delete')) && <button className="sch-action is-danger" onClick={() => onDelete(row)} type="button" title="Cancel Schedule" aria-label="Cancel Schedule"><Icon name="trash" size={14} /><span>Cancel Schedule</span></button>}
     </div>
   );
+}
+
+function scheduleTicketActivated(row) {
+  return !!row.resulting_ticket_id && ['Active', 'For Verification', 'Closed', 'Cancelled'].includes(row.resulting_ticket?.status);
 }
 
 function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onViewVehicle, onViewSchedule, onApprove, onDecline }) {
@@ -9774,8 +9779,8 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
         {canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && (
           <button className="sch-action is-warning" onClick={() => onReassign(row)} type="button"><Icon name="undo" size={14} /> Reassign</button>
         )}
-        {(canDo(currentUser, 'schedule.edit') || canDo(currentUser, row.status === 'Cancelled' ? 'schedule.restore' : 'schedule.delete')) && <div className="sch-card-edit-cancel">
-          {canDo(currentUser, 'schedule.edit') && (
+        {((!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.edit')) || canDo(currentUser, row.status === 'Cancelled' ? 'schedule.restore' : 'schedule.delete')) && <div className="sch-card-edit-cancel">
+          {(!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.edit')) && (
             <button className="sch-action is-info" onClick={() => onEdit(row)} type="button"><Icon name="edit" size={14} /> Edit</button>
           )}
           {/* Same swap as the table: a cancelled schedule offers Restore, not a
@@ -9784,7 +9789,7 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
             ? canDo(currentUser, 'schedule.restore') && onRestore && (
               <button className="sch-action is-success" onClick={() => onRestore(row)} type="button"><Icon name="undo" size={14} /> Restore</button>
             )
-            : canDo(currentUser, 'schedule.delete') && (
+            : (!scheduleTicketActivated(row) && canDo(currentUser, 'schedule.delete')) && (
               <button className="sch-action is-danger" onClick={() => onDelete(row)} type="button"><Icon name="trash" size={14} /> Cancel</button>
             )}
         </div>}
@@ -10127,66 +10132,6 @@ function reportExportColumns(rows) {
 function StatusBadge({ value }) {
   return <span className={`status-badge ${String(value).toLowerCase().replaceAll(' ', '-')}`}>{value ?? '-'}</span>;
 }
-
-// Clamps long free-text table cells to a fixed number of lines so they can't
-// stretch the row/table. A "Show more" chevron only appears when the text
-// actually overflows the clamp (measured via scrollHeight vs clientHeight),
-// so short text that already fits gets no dead-looking toggle affordance.
-function ExpandableText({ text, lines = 2, className = '' }) {
-  const [expanded, setExpanded] = useState(false);
-  const [isTruncated, setIsTruncated] = useState(false);
-  const textRef = useRef(null);
-
-  useLayoutEffect(() => {
-    if (expanded) return;
-    const el = textRef.current;
-    if (el) setIsTruncated(el.scrollHeight > el.clientHeight + 1);
-  }, [text, lines, expanded]);
-
-  if (!text) return '-';
-
-  const toggle = () => setExpanded((prev) => !prev);
-  const canToggle = isTruncated || expanded;
-
-  return (
-    <span className="expandable-text-wrap">
-      <span
-        ref={textRef}
-        className={`expandable-text ${canToggle ? 'is-clickable' : ''} ${expanded ? 'is-expanded' : ''} ${className}`.trim()}
-        style={{ WebkitLineClamp: expanded ? 'unset' : lines }}
-        onClick={canToggle ? (event) => { event.stopPropagation(); toggle(); } : undefined}
-        onKeyDown={canToggle ? (event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            event.stopPropagation();
-            toggle();
-          }
-        } : undefined}
-        role={canToggle ? 'button' : undefined}
-        tabIndex={canToggle ? 0 : undefined}
-        title={canToggle ? (expanded ? 'Click to collapse' : 'Click to view full text') : undefined}
-      >
-        {text}
-      </span>
-      {canToggle && (
-        <button
-          type="button"
-          className={`expandable-text-toggle${expanded ? ' is-expanded' : ''}`}
-          onClick={(event) => { event.stopPropagation(); toggle(); }}
-          title={expanded ? 'Collapse' : 'Show full text'}
-        >
-          {expanded ? 'Show less' : 'Show more'}
-          <Icon name="chevronDown" size={11} />
-        </button>
-      )}
-    </span>
-  );
-}
-
-// Stacks two or more long-text fields (e.g. Problem/Reason + Action Taken)
-// into one labeled multi-line block for a table's renderSubRow band,
-// skipping whichever fields aren't populated on a given row.
-
 
 // The backend stores absolute image URLs built from APP_URL, which often points
 // at a different host/port than where the API is actually served (e.g. stored as
@@ -11259,7 +11204,7 @@ function RepairContextDetails({ si }) {
         ['Actual Cost', si.external_actual_cost != null ? `₱${Number(si.external_actual_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : null],
         ['Shop Result', si.external_return_notes],
         ['Estimated Cost', si.external_estimated_cost != null ? `₱${Number(si.external_estimated_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : null],
-        ['Work to Be Done', si.external_work_scope],
+        ['Details', si.external_work_scope],
       ]
       : [];
   const shown = rows.filter(([, v]) => v);
@@ -11277,16 +11222,16 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
   const isDeclined = ticket.status === 'Declined';
   // Pre-fill from whatever the Custodian suggested when adding sub-issues
   // (if any) — Admin can still change it before approving.
-  const suggestedMechanicId = (ticket.sub_issues ?? []).map((si) => si.suggested_mechanic_id).find(Boolean) ?? '';
   const [fields, setFields] = useState({
     ticket_description: ticket.ticket_description ?? '',
     priority: ticket.priority ?? '',
-    assigned_mechanic_id: suggestedMechanicId ? String(suggestedMechanicId) : '',
   });
   const [subRows, setSubRows] = useState(() => (ticket.sub_issues ?? []).map((si) => ({
     sub_issue_id: si.sub_issue_id,
     title: si.title ?? '',
     maintenance_type: si.maintenance_type ?? '',
+    assigned_mechanic_id: String(si.assigned_mechanic_id ?? si.suggested_mechanic_id ?? ''),
+    repair_type: si.repair_type,
   })));
   const [declining, setDeclining] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -11301,8 +11246,8 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
   // One mechanic does the whole ticket now — approving is the single
   // moment the ticket gets both activated AND dispatched, in one step.
   const submitApprove = async () => {
-    if (!isExternalTicket && !fields.assigned_mechanic_id) {
-      setValidationLine('Pick who will do this repair before approving.');
+    if (subRows.some((row) => row.repair_type !== 'external' && !row.assigned_mechanic_id)) {
+      setValidationLine('Assign Maintenance Personnel to every sub-issue before approving.');
       return;
     }
     setValidationLine(null);
@@ -11311,11 +11256,11 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
       await onApprove({
         ticket_description: fields.ticket_description,
         priority: fields.priority,
-        ...(isExternalTicket ? {} : { assigned_mechanic_id: fields.assigned_mechanic_id }),
         sub_issues: subRows.map((r) => ({
           sub_issue_id: r.sub_issue_id,
           title: r.title,
           maintenance_type: r.maintenance_type || null,
+          assigned_mechanic_id: r.repair_type === 'external' ? null : r.assigned_mechanic_id,
         })),
       });
     } finally {
@@ -11353,9 +11298,9 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
             </label>
             <label>
               <span>Priority</span>
-              <select value={fields.priority} onChange={(e) => setField('priority', e.target.value)}>
+              <SearchableSelect value={fields.priority} onChange={(e) => setField('priority', e.target.value)}>
                 {(lookups.priorities ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+              </SearchableSelect>
             </label>
           </div>
           <label>
@@ -11371,15 +11316,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
                 <div><dt>Reason</dt><dd>{extSub?.external_reason || '—'}</dd></div>
               </dl>
             </div>
-          ) : (
-          <label>
-            <span>Assign Mechanic <span className="required-asterisk">*</span></span>
-            <select value={fields.assigned_mechanic_id} onChange={(e) => setField('assigned_mechanic_id', e.target.value)}>
-              <option value="">Select who will do this repair</option>
-              {(lookups.maintenance_personnel ?? []).map((m) => <option key={m.id} value={m.id}>{mechanicWorkloadLabel(m)}</option>)}
-            </select>
-          </label>
-          )}
+          ) : null}
         </div>
 
         <div className="proposal-review-group">
@@ -11397,16 +11334,24 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
             <input className="proposal-subissue-title" type="text" aria-label="Sub-issue title" value={row.title} onChange={(e) => updateSubRow(index, { title: e.target.value })} />
             {repairType && <span className={`proposal-subissue-type is-${repairType}`}>{repairTypeLabel[repairType] ?? repairType}</span>}
           </div>
-          <label>
-            <span>Maintenance Type</span>
+          <div className="ticket-form-grid-2 proposal-assignment-row"><label>
+            <span>Repair Type</span>
             <CreatableSelect
               value={row.maintenance_type}
               onChange={(v) => updateSubRow(index, { maintenance_type: v })}
               options={lookups.maintenance_types ?? []}
-              newItemLabel="maintenance type"
+              newItemLabel="repair type"
               catalogEndpoint="/maintenance-types"
             />
           </label>
+          {repairType !== 'external' && <label>
+            <span>Maintenance Personnel <span className="required-asterisk">*</span></span>
+            <SearchableSelect aria-label={`Maintenance Personnel for sub-issue ${index + 1}`} value={row.assigned_mechanic_id} onChange={(e) => updateSubRow(index, { assigned_mechanic_id: e.target.value })}>
+              <option value="">Assign Maintenance Personnel</option>
+              {(lookups.maintenance_personnel ?? []).map((mechanic) => <option key={mechanic.id} value={mechanic.id}>{mechanicWorkloadLabel(mechanic)}</option>)}
+            </SearchableSelect>
+          </label>}
+          </div>
           <RepairContextDetails si={original} />
         </div>
         );
@@ -11520,26 +11465,26 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
           />
         </label>
         <label style={{ marginTop: 10 }}>
-          <span>Maintenance Type</span>
+          <span>Repair Type</span>
           <CreatableSelect
             value={draft.maintenance_type}
             onChange={(v) => setDraft((d) => ({ ...d, maintenance_type: v }))}
             options={maintenanceTypeOptions ?? []}
             placeholder="Select a category or type to add new"
-            newItemLabel="maintenance type"
+            newItemLabel="repair type"
             catalogEndpoint="/maintenance-types"
           />
         </label>
         {mechanicOptions && (
           <label style={{ marginTop: 10 }}>
             <span>Maintenance Personnel</span>
-            <select
+            <SearchableSelect
               value={draft.suggested_mechanic_id}
               onChange={(e) => setDraft((d) => ({ ...d, suggested_mechanic_id: e.target.value }))}
             >
               <option value="">Unassigned — Admin will decide</option>
               {mechanicOptions.map((m) => <option key={m.id} value={m.id}>{mechanicWorkloadLabel(m)}</option>)}
-            </select>
+            </SearchableSelect>
           </label>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
@@ -11614,9 +11559,8 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
     const ids = prev ?? defaultExpandedSubs;
     return ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
   });
-  const isAssignedMechanic = ticket.assigned_mechanic_id != null && String(ticket.assigned_mechanic_id) === String(userId);
+  const isAssignedMechanic = String(ticket.assigned_mechanic_id) === String(userId) || subIssues.some((sub) => String(sub.assigned_mechanic_id) === String(userId));
   const isAssignedCustodian = ticket.assigned_custodian_id != null && String(ticket.assigned_custodian_id) === String(userId);
-  const resolvedCount = progress.done + progress.deferred;
   // Every sub-issue has to have its repair logged (For Inspection) before
   // the mechanic can hand the whole ticket to the Custodian — a cannibalized
   // line item still sitting at Pending Approval naturally blocks this,
@@ -11637,9 +11581,6 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
     return { label: 'Returned — record service report', hint: 'Vehicle returned; service report next', detail: 'The vehicle is back. Record the service report so the Custodian can verify it.' };
   })();
   const canHandleExternal = isExternalTicket && ticket.status === 'Active' && canDo(user, 'external.handle');
-  const resolvedPercent = ticket.status === 'Closed'
-    ? 100
-    : subIssues.length > 0 ? Math.round((resolvedCount / subIssues.length) * 100) : 0;
   // "How long has this been sitting?" — the aging signal. Flagged past 30 days.
   const daysOpen = ticket.days_open;
   const isAging = ticket.status !== 'Closed' && ticket.status !== 'Cancelled' && typeof daysOpen === 'number' && daysOpen >= 30;
@@ -11667,16 +11608,6 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
   const panel = (
       <div className={`ticket-detail-panel${asPage ? ' is-page' : ''}`} onClick={asPage ? undefined : (e) => e.stopPropagation()}>
         <section className="ticket-process-hero ticket-process-hero--simple">
-          <div className="ticket-process-meter" style={{ '--ticket-progress': `${resolvedPercent}%` }}>
-            <div className="ticket-process-meter-core">
-              <span>Resolved</span>
-              {/* A zero-sub-issue ticket (inspection found nothing to repair) has
-                  nothing to measure progress against — "0%" would read as
-                  "nothing done" right next to a "ready to close" banner. */}
-              <strong>{progress.total > 0 ? `${resolvedPercent}%` : '—'}</strong>
-              <small>{progress.total > 0 ? `${resolvedCount}/${progress.total} items` : 'No sub-issues'}</small>
-            </div>
-          </div>
           <div className="ticket-process-hero-main">
             <div className="ticket-process-kicker">
               <span>Ticket #{ticketNumber(ticket)}</span>
@@ -11770,10 +11701,6 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                   </div>
                 </div>
               </div>
-              <div className="ticket-detail-description-box">
-                <span className="ticket-detail-label">Description</span>
-                <ExpandableText text={ticket.ticket_description} className="muted" lines={3} />
-              </div>
             </section>
 
             {ticket.assigned_custodian_id && (
@@ -11819,14 +11746,14 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
               </FormModal>
             )}
 
-            {ticket.assigned_mechanic_id && (
+            {(ticket.assigned_mechanic_id || subIssues.some((sub) => sub.assigned_mechanic_id)) && (
               <section className="ticket-section">
                 <h4><Icon name="wrench" size={14} /> Assigned Mechanic</h4>
                 <div className="ticket-kv-row">
                   <div>
                     <span>Doing the repair</span>
                     <div className="ticket-person-row">
-                      <UserAvatarName user={ticket.assigned_mechanic} />
+                      {[...new Map([ticket.assigned_mechanic, ...subIssues.map((sub) => sub.assigned_mechanic)].filter(Boolean).map((mechanic) => [mechanic.id, mechanic])).values()].map((mechanic) => <UserAvatarName key={mechanic.id} user={mechanic} />)}
                       <span className="ticket-role-tag">Maintenance Personnel</span>
                     </div>
                   </div>
@@ -11907,7 +11834,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                 {progress.total > 0 && <span className="ticket-count-pill">{progress.total}</span>}
                 <span
                   className="ticket-section-info-icon"
-                  title="Keep sub-issues and the mechanic's Maintenance Type scoped to this Main Issue — an unrelated repair belongs on its own ticket instead."
+                  title="Keep sub-issues and the mechanic's Repair Type scoped to this Main Issue — an unrelated repair belongs on its own ticket instead."
                 >
                   <Icon name="info" size={13} />
                 </span>
@@ -12620,14 +12547,14 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
             {isCannibalized && (
               <label style={{ marginTop: 12, maxWidth: 320 }}>
                 <span>Source Vehicle (donor) <span className="required-asterisk">*</span></span>
-                <select
+                <SearchableSelect
                   required
                   value={liveValues.source_vehicle_id ?? ''}
                   onChange={(e) => setField('source_vehicle_id', e.target.value)}
                 >
                   <option value="">{' '}</option>
                   {sourceVehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
-                </select>
+                </SearchableSelect>
               </label>
             )}
             {/* Neither field is required here — the vendor may not be
@@ -12662,20 +12589,20 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
           <div className="ticket-form-grid-2 ticket-vehicle-grid">
             <label>
               <span>Vehicle <span className="required-asterisk">*</span></span>
-              <select required value={liveValues.vehicle_id ?? ''} onChange={(e) => setField('vehicle_id', e.target.value)}>
+              <SearchableSelect required value={liveValues.vehicle_id ?? ''} onChange={(e) => setField('vehicle_id', e.target.value)}>
                 <option value="">{' '}</option>
                 {vehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
-              </select>
+              </SearchableSelect>
             </label>
             <label>
               <span>
                 Assign to Custodian ({isExternal ? 'checks the vehicle when it returns' : 'verifies the repair later'})
                 {' '}<span className="required-asterisk">*</span>
               </span>
-              <select required value={liveValues.assigned_custodian_id ?? ''} onChange={(e) => setField('assigned_custodian_id', e.target.value)}>
+              <SearchableSelect required value={liveValues.assigned_custodian_id ?? ''} onChange={(e) => setField('assigned_custodian_id', e.target.value)}>
                 <option value="">{' '}</option>
                 {custodianOptions.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </SearchableSelect>
             </label>
           </div>
           {(selectedVehicle || selectedCustodian) && (
@@ -12721,10 +12648,10 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
             </label>
             <label className="ticket-priority-field">
               <span>Priority <span className="required-asterisk">*</span></span>
-              <select required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
+              <SearchableSelect required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
                 <option value="">{' '}</option>
                 {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+              </SearchableSelect>
             </label>
           </div>
         </section>
@@ -12751,7 +12678,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
                   onChange={setSubIssueCategory}
                   options={ticketLookups?.maintenance_types ?? []}
                   placeholder="Select a category or type to add new"
-                  newItemLabel="maintenance type"
+                  newItemLabel="repair type"
                   catalogEndpoint="/maintenance-types"
                 />
               </label>
@@ -12882,7 +12809,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
     e.preventDefault();
     const errors = [];
     if (!liveValues.vehicle_id) errors.push('Vehicle is required.');
-    if (!(liveValues.ticket_description ?? '').trim()) errors.push('Details is required.');
+    if (!isExternal && !(liveValues.ticket_description ?? '').trim()) errors.push('Details is required.');
     if (!liveValues.priority) errors.push('Priority is required.');
     if (!entryMode) errors.push('Pick how this is being reported, above.');
     const cleanedRows = subIssueRows.filter((row) => (row.title ?? '').trim());
@@ -12899,7 +12826,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
     }
     if (isExternal) {
       if (!liveValues.external_reason) errors.push('Reason for Sending Out is required.');
-      if (!(liveValues.external_work_scope ?? '').trim()) errors.push('Work to Be Done at the Shop is required.');
+      if (!(liveValues.external_work_scope ?? '').trim()) errors.push('Details is required.');
     }
     if (errors.length) {
       setValidationLines(errors);
@@ -12911,7 +12838,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
       // No title is sent: the server builds "MT-0010 — Vehicle — Issue".
       const out = {
         vehicle_id: liveValues.vehicle_id,
-        ticket_description: liveValues.ticket_description,
+        ticket_description: isExternal ? liveValues.external_work_scope : liveValues.ticket_description,
         priority: liveValues.priority,
         entry_mode: entryMode,
         issue_report_id: linkedIssueId || liveValues.link_issue_id || undefined,
@@ -13057,10 +12984,10 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           <div className="ticket-form-grid-2 ticket-vehicle-grid">
             <label>
               <span>Vehicle <span className="required-asterisk">*</span></span>
-              <select required value={liveValues.vehicle_id ?? ''} onChange={(e) => setField('vehicle_id', e.target.value)}>
+              <SearchableSelect required value={liveValues.vehicle_id ?? ''} onChange={(e) => setField('vehicle_id', e.target.value)}>
                 <option value="">Select a vehicle</option>
                 {vehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
-              </select>
+              </SearchableSelect>
             </label>
             <div className={`ticket-preview-card ticket-preview-card--lg${selectedVehicle ? '' : ' is-empty'}`}>
               {selectedVehicle ? <>
@@ -13118,6 +13045,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
         </section>
 
         <div className="ticket-work-column">
+        {!isExternal && (
         <section className="veh-card veh-card-form ticket-issue-section">
           <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
           <div className="ticket-issue-fields">
@@ -13129,13 +13057,14 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
             </label>
             <label className="ticket-priority-field">
               <span>Priority <span className="required-asterisk">*</span></span>
-              <select required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
+              <SearchableSelect required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
                 <option value="">Select an option</option>
                 {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+              </SearchableSelect>
             </label>
           </div>
         </section>
+        )}
 
 
         {isExternal && (
@@ -13148,19 +13077,19 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
             <div className="ticket-form-grid-2 ticket-external-grid">
               <label>
                 <span>Reason for Sending Out <span className="required-asterisk">*</span></span>
-                <select required value={liveValues.external_reason ?? ''} onChange={(e) => setField('external_reason', e.target.value)}>
+                <SearchableSelect required value={liveValues.external_reason ?? ''} onChange={(e) => setField('external_reason', e.target.value)}>
                   <option value="">{' '}</option>
                   {(ticketLookups.external_reasons ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
+                </SearchableSelect>
               </label>
               <label>
-                <span>Maintenance Type</span>
+                <span>Repair Type <small>(optional)</small></span>
                 <CreatableSelect
                   value={liveValues.external_maintenance_type ?? ''}
                   onChange={(v) => setField('external_maintenance_type', v)}
                   options={ticketLookups?.maintenance_types ?? []}
                   placeholder="Select a category or type to add new"
-                  newItemLabel="maintenance type"
+                  newItemLabel="repair type"
                   catalogEndpoint="/maintenance-types"
                 />
               </label>
@@ -13190,9 +13119,16 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
                 <span>Estimated Cost (PHP)</span>
                 <input type="number" min="0" placeholder="e.g. 5000" value={liveValues.external_estimated_cost ?? ''} onChange={(e) => setField('external_estimated_cost', e.target.value)} />
               </label>
+              <label className="ticket-external-priority">
+                <span>Priority <span className="required-asterisk">*</span></span>
+                <SearchableSelect required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
+                  <option value="">Select priority</option>
+                  {priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
+                </SearchableSelect>
+              </label>
             </div>
             <label className="ticket-external-scope">
-              <span>Work to Be Done at the Shop <span className="required-asterisk">*</span></span>
+              <span>Details <span className="required-asterisk">*</span></span>
               <textarea rows={3} placeholder="e.g. Diagnose and recharge A/C system, replace compressor if needed" value={liveValues.external_work_scope ?? ''} onChange={(e) => setField('external_work_scope', e.target.value)} />
             </label>
           </div>
@@ -13204,7 +13140,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
           <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>Sub-Issues</h4></div>
           <div className="ticket-subissue-body">
             <p className="muted ticket-section-help">
-              List each specific problem you found, with its own maintenance type — different problems on the same ticket can need different kinds of repair. The Admin assigns one mechanic to the whole ticket when approving it.
+              List each specific problem you found, with its own repair type — different problems on the same ticket can need different kinds of repair. The Admin assigns Maintenance Personnel to each sub-issue when approving it.
             </p>
 
             <TwoColumnSubIssueEditor
@@ -14366,23 +14302,6 @@ function TicketPersonnelAvatars({ ticket, people: given }) {
   );
 }
 
-// Circular percentage ring (sub-issues done / total).
-function ProgressRing({ done, total, size = 38 }) {
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const r = 15;
-  const c = 2 * Math.PI * r;
-  const color = pct === 100 ? '#16a34a' : '#d97706';
-  return (
-    <span className="pring" role="img" aria-label={`${pct}% complete, ${done} of ${total} sub-issues done`} title={`${done}/${total} sub-issues done`} style={{ width: size, height: size }}>
-      <svg viewBox="0 0 38 38" width={size} height={size} aria-hidden="true">
-        <circle cx="19" cy="19" r={r} fill="none" stroke="#e2e8f0" strokeWidth="4" />
-        <circle cx="19" cy="19" r={r} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - pct / 100)} transform="rotate(-90 19 19)" />
-      </svg>
-      <span className="pring-text">{pct}%</span>
-    </span>
-  );
-}
-
 function TicketCard({ ticket, unreadCount = 0, onClick }) {
   const progress = ticket.progress;
   const stage = ticketWorkflowStage(ticket);
@@ -14418,14 +14337,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
       <div style={{ margin: '8px 0 2px', minHeight: 22 }}>
         {progress?.total > 0 && (
           <>
-            <div style={{ height: 6, borderRadius: 999, background: '#e2e8f0', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%',
-                width: `${(progress.done / progress.total) * 100}%`,
-                background: progress.done === progress.total ? '#16a34a' : '#d97706',
-                borderRadius: 999,
-              }} />
-            </div>
+
             <span className="muted" style={{ fontSize: '0.72rem' }}>{progress.done}/{progress.total} sub-issues done</span>
           </>
         )}
@@ -14441,7 +14353,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
         <DateBadge value={ticket.created_at} />
       </div>
       <div className="tpa-row">
-        {progress?.total > 0 ? <ProgressRing done={progress.done} total={progress.total} /> : <span />}
+        <span />
         <TicketPersonnelAvatars ticket={ticket} />
       </div>
     </div>
@@ -14649,10 +14561,6 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
             </div>
           </div>
         </div>
-        <div className="ticket-detail-description-box">
-          <span className="ticket-detail-label">Description</span>
-          <ExpandableText text={ticket.ticket_description} className="muted" lines={3} />
-        </div>
       </section>
 
       {/* One continuous form — Cancel/Submit sit at the very end, after every
@@ -14662,11 +14570,11 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
         <div className="inspect-form-left">
         <label>
           <span>Inspection Result</span>
-          <select required value={resultValue} onChange={(e) => { setResultValue(e.target.value); onDirty?.(); }}>
+          <SearchableSelect required value={resultValue} onChange={(e) => { setResultValue(e.target.value); onDirty?.(); }}>
             <option value="">{' '}</option>
             <option value="Needs Maintenance">Needs Maintenance</option>
             <option value="No Issues">No Issues</option>
-          </select>
+          </SearchableSelect>
         </label>
         <label>
           <span>Inspection Notes</span>
@@ -15007,7 +14915,7 @@ function MechanicWorkOrderModule({
               filterPriority={filterPriority}
               setFilterPriority={setFilterPriority}
               priorityOptions={maintTypeOptions}
-              priorityLabel="Maintenance Type"
+              priorityLabel="Repair Type"
             />
           </section>
           <section className="panel operations-board work-order-board work-order-queue-board">
@@ -15142,9 +15050,9 @@ function DonorPartModal({ mode, part, base, onClose, onSaved, notify }) {
         {field('part_name', 'Part name', <input type="text" value={v.part_name} disabled={readOnly} onChange={(e) => set('part_name', e.target.value)} />, true)}
         {field('quantity', 'Quantity', <input type="number" min="1" step="1" value={v.quantity} disabled={readOnly} onChange={(e) => set('quantity', e.target.value)} />, true)}
         {field('part_condition', 'Part condition',
-          <select value={v.part_condition} disabled={readOnly} onChange={(e) => set('part_condition', e.target.value)}>
+          <SearchableSelect value={v.part_condition} disabled={readOnly} onChange={(e) => set('part_condition', e.target.value)}>
             <option value="">Not stated</option>{DONOR_PART_CONDITIONS.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>)}
+          </SearchableSelect>)}
         {field('installed_at', 'Date installed', <input type="date" max={calendarDate()} value={v.installed_at} disabled={readOnly} onChange={(e) => set('installed_at', e.target.value)} />)}
         <div className="dp-wide">{field('reason', 'Why a donor part instead of buying one', <textarea rows={2} value={v.reason} disabled={readOnly} onChange={(e) => set('reason', e.target.value)} />)}</div>
         <div className="dp-wide">{field('notes', 'Remarks', <textarea rows={2} value={v.notes} disabled={readOnly} onChange={(e) => set('notes', e.target.value)} />)}</div>
@@ -15282,10 +15190,10 @@ function DonorVehiclePicker({ ticket, vehicleOptions, onChanged, notify }) {
   return (
     <div className="cm-picker">
       <label className="lr-label" htmlFor="cm-donor">Donor vehicle</label>
-      <select id="cm-donor" value={donorId} onChange={(e) => setDonorId(e.target.value)}>
+      <SearchableSelect id="cm-donor" value={donorId} onChange={(e) => setDonorId(e.target.value)}>
         <option value="">Select donor vehicle</option>
         {options.map((x) => <option key={x.vehicle_id} value={x.vehicle_id}>{x.vehicle_name} ({x.plate_number})</option>)}
-      </select>
+      </SearchableSelect>
       <button type="button" className="btn-sm primary-button" disabled={!donorId || busy} onClick={save}>{busy ? 'Saving…' : 'Use this donor'}</button>
       <button type="button" className="btn-sm ghost-button" onClick={() => setOpen(false)}>Cancel</button>
     </div>
@@ -15296,8 +15204,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   const [repairLogs, setRepairLogs] = useState('');
   const [parts, setParts] = useState([]);
   const [attachments, setAttachments] = useState([]);
-  const [repairStartedAt, setRepairStartedAt] = useState('');
-  const [repairCompletedAt, setRepairCompletedAt] = useState('');
   // Pre-filled from whatever was chosen at ticket creation (if this was a
   // pre-diagnosed sub-issue) — still editable here, since the actual repair
   // sometimes ends up differing from the original plan. Sub-issues created
@@ -15347,8 +15253,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
       parts_used: namedParts.map((p) => p.name.trim()).join(', ') || undefined,
       photos: attachments.length ? attachments : undefined,
       maintenance_cost: parts.some((part) => part.cost !== '') ? totalCost : undefined,
-      repair_started_at: repairStartedAt || undefined,
-      repair_completed_at: repairCompletedAt || undefined,
       repair_type: repairType || undefined,
       source_vehicle_id: repairType === 'cannibalized' ? ticket.source_vehicle_id : undefined,
       external_vendor: repairType === 'external' ? (externalVendor || undefined) : undefined,
@@ -15596,19 +15500,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             </div>
           </section>
 
-          <section className="lr-side-group" style={dimWhileAtShop} aria-labelledby={`${idBase}-dates`}>
-            <h4 className="lr-section-label" id={`${idBase}-dates`}>Repair Date</h4>
-            <div className="lr-dates">
-              <div className="lr-field">
-                <label className="lr-label" htmlFor={`${idBase}-start`}>Start</label>
-                <DateFilterInput id={`${idBase}-start`} value={repairStartedAt} onChange={(v) => { setRepairStartedAt(v); onDirty?.(); }} />
-              </div>
-              <div className="lr-field">
-                <label className="lr-label" htmlFor={`${idBase}-done`}>Completion</label>
-                <DateFilterInput id={`${idBase}-done`} value={repairCompletedAt} onChange={(v) => { setRepairCompletedAt(v); onDirty?.(); }} />
-              </div>
-            </div>
-          </section>
 
           <div className="lr-side-actions">
             <p className="lr-hint">
@@ -15869,7 +15760,7 @@ function DateFilterInput({ value, onChange, placeholder = 'mm/dd/yyyy', id, aria
 }
 
 // Checkbox multi-select dropdown — lets a filter row pick zero, one, or many
-// values instead of forcing a single native <select> choice.
+// values instead of forcing a single native <SearchableSelect> choice.
 function MultiSelectDropdown({ placeholder = 'All', options = [], selected = [], onChange }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -16296,14 +16187,14 @@ function CreatableSelect({
                   onChange={(e) => setAddModalExtra((cur) => ({ ...cur, [f.name]: e.target.value }))}
                 />
               ) : (
-                <select
+                <SearchableSelect
                   required={f.required}
                   value={addModalExtra[f.name] ?? ''}
                   onChange={(e) => setAddModalExtra((cur) => ({ ...cur, [f.name]: e.target.value }))}
                 >
                   <option value="" disabled>{' '}</option>
                   {f.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
+                </SearchableSelect>
               )}
             </label>
           ))}
@@ -16841,9 +16732,9 @@ function CategoryFieldsManager({ categoryId, onChanged }) {
             <input type="text" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="e.g. Tank Capacity" />
           </label>
           <label>Type
-            <select value={draft.field_type} disabled={!!editingId} onChange={(e) => setDraft({ ...draft, field_type: e.target.value })}>
+            <SearchableSelect value={draft.field_type} disabled={!!editingId} onChange={(e) => setDraft({ ...draft, field_type: e.target.value })}>
               {CUSTOM_FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
+            </SearchableSelect>
           </label>
           {(draft.field_type === 'number' || draft.field_type === 'text') && (
             <label style={{ width: 90 }}>Unit
