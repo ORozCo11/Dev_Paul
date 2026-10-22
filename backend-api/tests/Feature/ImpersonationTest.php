@@ -115,6 +115,41 @@ class ImpersonationTest extends TestCase
         $this->withHeader('Authorization', "Bearer {$token}")->postJson('/api/logout')->assertOk();
     }
 
+    #[Test]
+    public function default_workspace_prefers_the_demo_admin_and_falls_back_to_an_active_barangay_admin(): void
+    {
+        $barangay = \App\Models\Barangay::create(['name' => 'Paknaan']);
+        $fallback = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $barangay->id]);
+        $preferred = User::factory()->create(['email' => 'admin@barangay.gov', 'role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $barangay->id]);
+        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        Sanctum::actingAs($actor, $actor->allRoles());
+        $this->postJson('/api/impersonate/default')->assertOk()->assertJsonPath('user.id', $preferred->id);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Impersonate', 'user_id' => $actor->id, 'barangay_id' => $barangay->id]);
+        $preferred->update(['is_active' => false]);
+        $this->postJson('/api/impersonate/default')->assertOk()->assertJsonPath('user.id', $fallback->id);
+    }
+
+    #[Test]
+    public function default_workspace_never_uses_an_unassigned_or_inactive_admin_or_a_super_admin(): void
+    {
+        $barangay = \App\Models\Barangay::create(['name' => 'Test Barangay']);
+        User::factory()->create(['role' => 'Admin', 'barangay_id' => null]);
+        User::factory()->create(['role' => 'Admin', 'barangay_id' => $barangay->id, 'is_active' => false]);
+        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        Sanctum::actingAs($actor, $actor->allRoles());
+        $this->postJson('/api/impersonate/default')->assertUnprocessable();
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    #[Test]
+    public function default_workspace_requires_the_dedicated_login(): void
+    {
+        $this->postJson('/api/impersonate/default')->assertUnauthorized();
+        $admin = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]);
+        Sanctum::actingAs($admin, $admin->allRoles());
+        $this->postJson('/api/impersonate/default')->assertForbidden();
+    }
+
     private function impersonationToken(User $user): string
     {
         return $user->createToken('impersonation_token', [...$user->allRoles(), 'impersonated'], now()->addMinutes(30))->plainTextToken;

@@ -82,6 +82,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
 
     Route::get('/greeting', [AuthController::class, 'greeting']);
     Route::get('/impersonate/candidates', [AuthController::class, 'impersonationCandidates']);
+    Route::post('/impersonate/default', [AuthController::class, 'impersonateDefault'])->middleware('throttle:10,1');
     Route::post('/impersonate/{user}', [AuthController::class, 'impersonate'])->middleware('throttle:10,1');
     // Verifies the current password, so rate-limit it against guessing too.
     Route::put('/profile/password', [AuthController::class, 'updatePassword'])->middleware('throttle:10,1');

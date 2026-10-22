@@ -299,7 +299,7 @@ All routes are under `/api` (see `backend-api/routes/api.php`). All protected ro
 - **SQL injection:** all queries are parameterized (Eloquent / bound placeholders).
 - **Authorization:** every controller action enforces role membership; ownership checks (e.g. only the assigned Custodian/Mechanic can add a sub-issue) are by ID, not just role label.
 
-> **Dedicated account switcher:** `impersonation@test.com` signs into `/impersonation`, an independent account-selection page. This utility account can open active staff and Super Admin workspaces across every barangay. It has no direct fleet or Super Admin administration access. Ordinary users and Super Admins cannot start impersonation. Clicking Impersonate immediately opens the selected workspace and automatically records the switch in the audit log; End Impersonation returns to the switcher. Production sessions retain the existing 30-minute expiry and read-only behavior.
+> **Dedicated account switcher:** `impersonation@test.com` automatically enters the active `admin@barangay.gov` workspace (Paknaan in the demo data). If unavailable, the system uses the first active barangay Admin by barangay ID and user ID. This utility account can open active staff and Super Admin workspaces across every barangay. It has no direct fleet or Super Admin administration access. Ordinary users and Super Admins cannot start impersonation. Clicking Impersonate immediately opens the selected workspace and automatically records the switch in the audit log; Switch account opens the account chooser on demand. Production sessions retain the existing 30-minute expiry and read-only behavior.
 
 ---
 

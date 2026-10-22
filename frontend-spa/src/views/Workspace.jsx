@@ -2669,6 +2669,7 @@ function Workspace() {
         </div>
 
         <div className="topbar-right">
+          <EndImpersonationAction compact />
           {/* The Return control now lives in the persistent banner below the
               topbar (Phase A5) — a single, more visible home for it instead
               of duplicating the button here too. */}

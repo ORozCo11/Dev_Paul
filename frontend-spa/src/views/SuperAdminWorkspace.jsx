@@ -644,7 +644,7 @@ export default function SuperAdminWorkspace() {
           </div>
         </div>
 
-        <div className="topbar-right"><EndImpersonationAction />
+        <div className="topbar-right"><EndImpersonationAction compact />
           <div className="notifications-dropdown-container" ref={notificationsRef}>
             <button
               className="icon-btn notification-btn"

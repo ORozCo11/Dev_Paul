@@ -298,6 +298,20 @@ class AuthController extends Controller
             ]);
     }
 
+    /** Open a stable default barangay Admin without requiring an account picker. */
+    public function impersonateDefault(Request $request)
+    {
+        abort_unless($this->canImpersonate($request), 403, 'Sign in to the dedicated account switcher to impersonate an account.');
+        $target = User::where('role', 'Admin')->where('is_active', true)
+            ->whereNotNull('barangay_id')->whereHas('barangay')
+            ->orderByRaw('CASE WHEN email = ? THEN 0 ELSE 1 END', ['admin@barangay.gov'])
+            ->orderBy('barangay_id')->orderBy('id')->first();
+        abort_unless($target, 422, 'No active barangay Admin is available. Choose another account.');
+        $request->merge(['reason' => 'Automatic login to the default barangay Admin workspace']);
+
+        return $this->impersonate($request, $target);
+    }
+
     /** Enter a selected account's workspace and keep an audit trail. */
     public function impersonate(Request $request, User $user)
     {

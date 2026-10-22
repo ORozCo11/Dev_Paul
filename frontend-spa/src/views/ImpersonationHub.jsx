@@ -1,9 +1,11 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContextObject';
 import api from '../api/axios';
 import VMSLogo from '../components/VMSLogo';
 import Icon from '../components/Icon';
+import LoadingOverlay from '../components/LoadingOverlay';
+import { openImpersonatedWorkspace } from '../utils/impersonation';
 import './ImpersonationHub.css';
 
 const routes = { Admin: '/admin', Custodian: '/custodian', 'Maintenance Personnel': '/maintenance', 'Super Admin': '/superadmin' };
@@ -11,6 +13,35 @@ const matches = (value, selected) => !selected || (selected === 'none' ? !value 
 const options = (rows, id, name) => [...new Map(rows.filter((row) => row[id]).map((row) => [String(row[id]), row[name]])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
 export default function ImpersonationHub() {
+  const location = useLocation();
+  return new URLSearchParams(location.search).get('choose') === '1'
+    ? <AccountChooser /> : <DefaultWorkspace />;
+}
+
+function DefaultWorkspace() {
+  const { user } = useContext(AuthContext);
+  const requestRef = useRef(null);
+  const openedRef = useRef(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let current = true;
+    // Reuse the request during Strict Mode's effect replay so only one session starts.
+    requestRef.current ??= api.post('/impersonate/default');
+    requestRef.current.then(({ data }) => {
+      if (current && !openedRef.current) {
+        openedRef.current = true;
+        openImpersonatedWorkspace(user, data);
+      }
+    }).catch((err) => {
+      if (current) setError(err.response?.data?.message || 'The default workspace could not be opened.');
+    });
+    return () => { current = false; };
+  }, [user]);
+  if (!error) return <LoadingOverlay label="Opening your Admin workspace..." />;
+  return <main className="auth-page"><section className="auth-card"><h1>Unable to open the default workspace</h1><p role="alert">{error}</p><button type="button" className="primary-button" onClick={() => window.location.reload()}>Retry</button><Link className="ghost-button" to="/impersonation?choose=1">Choose another account</Link></section></main>;
+}
+
+function AccountChooser() {
   const { user, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
@@ -45,13 +76,7 @@ export default function ImpersonationHub() {
     setOpeningId(account.id); setError('');
     try {
       const { data } = await api.post(`/impersonate/${account.id}`, { reason: 'Account selected from the dedicated account switcher' });
-      const original = localStorage.getItem('token') || sessionStorage.getItem('token');
-      localStorage.setItem('impersonator_storage', localStorage.getItem('token') ? 'local' : 'session');
-      localStorage.setItem('impersonator_token', original);
-      localStorage.setItem('impersonator_name', user.name);
-      localStorage.setItem('impersonator_role', user.role);
-      localStorage.setItem('token', data.access_token); sessionStorage.removeItem('token');
-      window.location.assign(routes[data.user.role] ?? '/unauthorized');
+      openImpersonatedWorkspace(user, data);
     } catch (err) {
       setError(err.response?.data?.message || 'Could not open this account.');
       setOpeningId(null); switchingRef.current = false;
@@ -60,7 +85,7 @@ export default function ImpersonationHub() {
   return <div className="impersonation-hub">
     <header className="switcher-header"><a href="/impersonation" className="switcher-brand"><VMSLogo variant="blue" size={34} /><span>vms <small>Account switcher</small></span></a><div><span>{user.email}</span><button type="button" className="ghost-button" disabled={openingId !== null} onClick={async () => { await logout(); navigate('/login', { replace: true }); }}>Sign out</button></div></header>
     <main>
-      <div className="switcher-heading"><span className="switcher-eyebrow">ACCOUNT ACCESS</span><h1>Choose an account</h1><p>Find a user in any barangay and open their workspace. Use End Impersonation in their profile menu to return here.</p></div>
+      <div className="switcher-heading"><span className="switcher-eyebrow">ACCOUNT ACCESS</span><h1>Choose an account</h1><p>Find a user in any barangay and open their workspace. Use Switch account to choose a different workspace.</p></div>
       <section className="switcher-panel" aria-label="Account switcher">
         <div className="switcher-panel-heading"><h2>All accounts <span>{accounts.length}</span></h2><span>{barangayCount} barangay{barangayCount === 1 ? '' : 's'}</span></div>
         <div className="switcher-filters">
