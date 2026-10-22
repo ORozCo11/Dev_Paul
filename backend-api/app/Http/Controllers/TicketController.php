@@ -2854,6 +2854,11 @@ class TicketController extends Controller
         $this->requireAbility($request, 'ticket.uncancel');
 
         abort_unless($ticket->status === 'Cancelled', 422, 'Only cancelled tickets can be restored.');
+        abort_if(
+            in_array($ticket->vehicle->status, ['Inactive', 'Decommissioned'], true),
+            422,
+            'This vehicle has been archived or decommissioned since the ticket was cancelled — it cannot be restored.'
+        );
 
         $restoredStatus = $ticket->inspected_at ? 'Active' : 'Open';
 
