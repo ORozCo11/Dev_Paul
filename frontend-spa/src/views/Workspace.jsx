@@ -9273,7 +9273,7 @@ function RowActionsMenu({ children, alwaysVisible = false }) {
 
 function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, onView, deleteRecord, user, onViewTicket, onDismiss) {
   const columns = [
-    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => row.issue_report_id },
+    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => row.display_issue_report_id ?? row.issue_report_id },
     {
       key: 'issue',
       label: 'Issue',
@@ -9327,7 +9327,7 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
             className="issue-reporter-link"
             onClick={(e) => { e.stopPropagation(); onViewTicket({ ticket_id: row.maintenance_ticket.ticket_id }); }}
           >
-            Ticket #{row.maintenance_ticket.ticket_id}
+            Ticket #{row.maintenance_ticket.display_ticket_id ?? row.maintenance_ticket.ticket_id}
           </button>
         )
         : <span className="muted" title="No ticket has been started for this report yet">—</span>),

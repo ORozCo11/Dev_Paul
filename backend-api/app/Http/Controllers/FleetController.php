@@ -29,6 +29,7 @@ use App\Models\VehicleTypeField;
 use App\Rules\NumberOnly;
 use App\Rules\TextOnly;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
@@ -1525,11 +1526,11 @@ class FleetController extends Controller
         // queue of everyone else's reports — that stays a Custodian/Admin
         // concern, so this scopes to reports THEY filed.
         if ($user->hasRole('Maintenance Personnel') && !$user->hasAnyRole(['Admin', 'Custodian'])) {
-            return VehicleIssueReport::with(['vehicle.category', 'reportedBy', 'maintenanceTicket', 'attachments'])
+            return $this->withBarangayDisplayNumbers(VehicleIssueReport::with(['vehicle.category', 'reportedBy', 'maintenanceTicket', 'attachments'])
                 ->where('reported_by', $user->id)
                 ->whereHas('vehicle', fn ($q) => $q->whereNotIn('status', ['Inactive', 'Decommissioned']))
                 ->latest('issue_report_id')
-                ->get();
+                ->get());
         }
 
         // Issues on retired (Inactive/Decommissioned) vehicles are excluded —
@@ -1568,7 +1569,62 @@ class FleetController extends Controller
             });
         }
 
-        return $query->latest('issue_report_id')->get();
+        return $this->withBarangayDisplayNumbers($query->latest('issue_report_id')->get());
+    }
+
+    /**
+     * Public-facing report and ticket numbers restart in every barangay.
+     * Their database primary keys intentionally remain global: routes,
+     * foreign keys, notifications, and audit logs depend on those stable IDs.
+     */
+    private function withBarangayDisplayNumbers(Collection $issues): Collection
+    {
+        $barangayIds = $issues->pluck('vehicle.barangay_id')->filter()->unique()->values();
+        if ($barangayIds->isEmpty()) {
+            return $issues;
+        }
+
+        $issueNumbers = $this->barangaySequenceNumbers(
+            VehicleIssueReport::withoutGlobalScopes()
+                ->with('vehicle:vehicle_id,barangay_id')
+                ->whereHas('vehicle', fn ($query) => $query->whereIn('barangay_id', $barangayIds))
+                ->orderBy('issue_report_id')
+                ->get(),
+            'issue_report_id'
+        );
+        $ticketNumbers = $this->barangaySequenceNumbers(
+            MaintenanceTicket::withoutGlobalScopes()
+                ->with('vehicle:vehicle_id,barangay_id')
+                ->whereHas('vehicle', fn ($query) => $query->whereIn('barangay_id', $barangayIds))
+                ->orderBy('ticket_id')
+                ->get(),
+            'ticket_id'
+        );
+
+        $issues->each(function (VehicleIssueReport $issue) use ($issueNumbers, $ticketNumbers): void {
+            $issue->setAttribute('display_issue_report_id', $issueNumbers[$issue->issue_report_id] ?? $issue->issue_report_id);
+
+            if ($issue->maintenanceTicket) {
+                $ticket = $issue->maintenanceTicket;
+                $ticket->setAttribute('display_ticket_id', $ticketNumbers[$ticket->ticket_id] ?? $ticket->ticket_id);
+            }
+        });
+
+        return $issues;
+    }
+
+    private function barangaySequenceNumbers(Collection $records, string $key): array
+    {
+        $numbers = [];
+
+        $records->groupBy(fn ($record) => $record->vehicle?->barangay_id)
+            ->each(function (Collection $barangayRecords) use (&$numbers, $key): void {
+                $barangayRecords->values()->each(function ($record, int $index) use (&$numbers, $key): void {
+                    $numbers[$record->getAttribute($key)] = $index + 1;
+                });
+            });
+
+        return $numbers;
     }
 
     public function storeIssue(Request $request)
