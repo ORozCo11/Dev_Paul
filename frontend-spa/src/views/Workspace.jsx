@@ -12436,6 +12436,10 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                       {si.verification_verdict && <TicketStatusBadge value={si.verification_verdict} />}
                     </div>
                   )}
+                  {/* Why the Custodian sent it back — otherwise only the mechanic's Log Repairs page shows it. */}
+                  {si.verification_verdict === 'Rejected' && si.verification_notes && (
+                    <p className="subissue-field"><span className="subissue-field-label">Returned for repair</span> {si.verification_notes}</p>
+                  )}
                   {open && <RepairContextDetails si={si} />}
 
                   {onLogRepairs && canHandleExternal && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && (
