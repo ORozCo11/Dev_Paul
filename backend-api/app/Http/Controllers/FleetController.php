@@ -77,8 +77,6 @@ class FleetController extends Controller
             'issue_types' => FaultCategory::orderBy('name')->pluck('name'),
             'maintenance_types' => MaintenanceType::orderBy('name')->pluck('name'),
             'severity_levels' => ['Low', 'Medium', 'High'],
-            // 'In Use' exists in the DB enum but is intentionally not offered —
-            // this system tracks availability only; nothing ever sets In Use.
             'vehicle_statuses' => ['Available', 'Under Maintenance', 'Inactive', 'Decommissioned'],
             // "Needs Inspection" removed per product direction — a Custodian
             // filing a condition check now records either Good or Needs
@@ -976,15 +974,7 @@ class FleetController extends Controller
             ->get()
             ->groupBy('vehicle_id');
 
-        // Which vehicles are out on a trip right now (dispatched) — one query.
-        $openTrips = \App\Models\VehicleUsageLog::whereNull('ended_at')->get()->keyBy('vehicle_id');
-
-        $vehicles->each(function (Vehicle $vehicle) use ($latestChecks, $openTicketsByVehicle, $openTrips) {
-            $trip = $openTrips->get($vehicle->vehicle_id);
-            $vehicle->open_trip = $trip ? [
-                'usage_id' => $trip->usage_id, 'purpose' => $trip->purpose, 'destination' => $trip->destination,
-                'driver_name' => $trip->driver_name, 'started_at' => $trip->started_at, 'odometer_start' => $trip->odometer_start,
-            ] : null;
+        $vehicles->each(function (Vehicle $vehicle) use ($latestChecks, $openTicketsByVehicle) {
             $latest = $latestChecks->get($vehicle->vehicle_id);
             $vehicle->readiness_state = $this->responseReadinessState($vehicle, $latest);
             $vehicle->readiness_last_checked = $latest?->checked_at;
@@ -1270,7 +1260,7 @@ class FleetController extends Controller
         $vehicle->update(['status' => 'Available']);
 
         $historyNote = $wasOverridingRepairFlag
-            ? "{$vehicle->vehicle_name} was marked Available after a passing readiness check, despite its condition still being Needs Repair — dispatched for operational need with the repair still outstanding."
+            ? "{$vehicle->vehicle_name} was marked Available after a passing readiness check, despite its condition still being Needs Repair — the repair remains outstanding."
             : "{$vehicle->vehicle_name} was marked Available after a passing readiness check.";
         $this->history($vehicle, 'Vehicle Marked Available', $historyNote, 'vehicles', $vehicle->vehicle_id, $request);
         $this->log($request, 'Edit', 'Vehicle Management', $vehicle->vehicle_id, "Marked {$vehicle->vehicle_name} Available");

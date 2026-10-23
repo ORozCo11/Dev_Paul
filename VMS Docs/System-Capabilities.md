@@ -48,11 +48,11 @@ New vehicles start at status **Available**, condition **Good**. Registration has
 
 **Archiving** ("Deactivate" in the UI) sets a vehicle Inactive; **Decommissioning** is a documented end-of-life retirement requiring a written reason, setting it Decommissioned/Needs Repair. Both are blocked while the vehicle has any open (non-Closed/Cancelled) ticket. **Restoring** (from either Inactive or Decommissioned) brings a vehicle back to Available/Good and clears the archive/decommission fields; the same action is relabeled "Recommission" when shown for a Decommissioned vehicle.
 
-**Statuses**: Available, Under Maintenance, Inactive, Decommissioned. (A fifth status, "In Use," exists in the database but is deliberately never set anywhere — the system tracks *availability*, not live dispatch.) Status is mostly system-driven: a failed condition check, an active issue report, or an active ticket automatically flips a vehicle between Available and Under Maintenance. Admin/Custodian can also force a vehicle back to Available via a readiness-check shortcut even with a lingering repair flag — deliberate, since physical readiness and an outstanding paperwork flag are tracked independently.
+**Statuses**: Available, Under Maintenance, Inactive, Decommissioned. Status is mostly system-driven: a failed condition check, an active issue report, or an active ticket automatically flips a vehicle between Available and Under Maintenance. Admin/Custodian can also force a vehicle back to Available via a readiness-check shortcut even with a lingering repair flag — deliberate, since physical readiness and an outstanding paperwork flag are tracked independently.
 
 **Conditions**: Good, Needs Inspection, Needs Repair — driven by issue reports, condition checks, or a ticket moving into maintenance. A retired vehicle (Inactive/Decommissioned) is explicitly protected from having any of this un-retire it.
 
-**Vehicle Profile page** is a single dashboard-style layout (not tabs): a vehicle identity header with role-gated actions; Vehicle Information; an at-a-glance Operational Status section (availability, condition, readiness, criticality, active ticket, current location and key dates); a single-pin location map; and a Files card alongside the overview (documents, §3.4). Usage Log and Reliability cards are not shown on the profile. Dispatch remains available from Vehicle Management for authorized users, recording purpose, destination, driver and return notes without odometer fields; it writes history and Activity Log entries but never changes the vehicle's status. Authorized users can record a Parts Transfer from the profile action bar; the transfer-history card is not shown on the profile. The profile has no embedded Reports card; report generation remains available through the separate Reports module and its existing functionality. Header actions remain role-gated: Edit — Admin; Readiness Check — Custodian; **Request Custodian Inspection** — Admin, which notifies the Custodians to inspect without opening an issue or ticket on their behalf; Decommission/Recommission — Admin.
+**Vehicle Profile page** is a single dashboard-style layout (not tabs): a vehicle identity header with role-gated actions; Vehicle Information; an at-a-glance Operational Status section (availability, condition, readiness, criticality, active ticket, current location and key dates); a single-pin location map; and a Files card alongside the overview (documents, §3.4). The Reliability card is not shown on the profile. Authorized users can record a Parts Transfer from the profile action bar; the transfer-history card is not shown on the profile. The profile has no embedded Reports card; report generation remains available through the separate Reports module and its existing functionality. Header actions remain role-gated: Edit — Admin; Readiness Check — Custodian; **Request Custodian Inspection** — Admin, which notifies the Custodians to inspect without opening an issue or ticket on their behalf; Decommission/Recommission — Admin.
 
 ### 3.2 Vehicle Types
 
@@ -71,7 +71,7 @@ A per-vehicle file cabinet, separate from the vehicle's cover photo — Title (r
 
 ### 3.5 Vehicle History
 
-A fully automatic, derived activity timeline — there is no manual "add a history entry." The backend writes an entry on nearly every vehicle-affecting action: added, info updated, location changed, archived, restored, decommissioned, readiness checked (pass/fail), marked available, condition checked/updated/deleted, issue reported/updated, document added, vehicle taken out / returned (usage log), spreadsheet import, and — closed as a gap in the final senior system review (2026-10-10), since these are arguably the biggest status/condition drivers in the system — a ticket being approved, inspected, closed, cancelled, or restored. Viewable with activity-type and date-range filters, free-text search, a card/table toggle, CSV export, and print — available to Admin and Custodian.
+A fully automatic, derived activity timeline — there is no manual "add a history entry." The backend writes an entry on nearly every vehicle-affecting action: added, info updated, location changed, archived, restored, decommissioned, readiness checked (pass/fail), marked available, condition checked/updated/deleted, issue reported/updated, document added, spreadsheet import, and — closed as a gap in the final senior system review (2026-10-10), since these are arguably the biggest status/condition drivers in the system — a ticket being approved, inspected, closed, cancelled, or restored. Viewable with activity-type and date-range filters, free-text search, a card/table toggle, CSV export, and print — available to Admin and Custodian.
 
 ### 3.6 Condition Monitoring
 
@@ -169,18 +169,6 @@ Cancel/Uncancel (Admin only) works at any stage before Closed or Cancelled, exce
 
 ---
 
-### 5.7 Temporary dispatch while repairs remain open
-
-A **Custodian**, without waiting for Admin approval, may authorize a **single temporary trip** when a needed vehicle is safe for its intended use and repairs can wait. Admin has no release override unless that account also holds the Custodian role. This is not ticket closure or a permanent return to service: every ticket and work order retains its existing status, including linked schedule tickets.
-
-- Before release, each assigned mechanic records a **temporary dispatch assessment** on Ticket Details: safe for intended use, fully assembled, no safety-critical fault, and assessment notes/operating restrictions. A negative assessment blocks release. Assessments expire after 24 hours and become invalid if the ticket, work orders, donor parts, assignments or vehicle status/condition change. Each in-house work order on an approved repair must have an assigned mechanic; an unapproved proposal with no repair assigned does not require a mechanic assessment.
-- The Dispatch page shows all ongoing tickets, the recorded mechanic assessments and any release blockers. The Custodian explicitly selects temporary dispatch and records the driver, destination, purpose, reason repairs can wait, and expected return time (Philippine time).
-- For each release, the Custodian must attest that they personally checked, operated and tested the vehicle now, that it is safe for this trip, fully assembled, and has no unresolved safety-critical fault preventing operation. The server records a passing readiness check alongside the release. A latest failed readiness check must first be replaced by an explicit passing check; an Inactive/Decommissioned vehicle or a vehicle still at an external shop cannot be released.
-- The server rechecks the complete ticket list and all assessments under locks at departure. Changed assessment notes must be reviewed again before departure. Temporary trips cannot be backdated, and a second trip cannot start while one is open. The trip stores the authorizer, reason, expected return, readiness check, ticket IDs and copies of the assessments. Vehicle History and Activity Log record the authorization, and all active barangay Admins are notified immediately.
-- While the vehicle is out on temporary release, repair logging, donor-part changes, external-shop actions and ticket verification are blocked. Ticket Details shows the temporary-dispatch notice. Recording the return restores those actions and notifies the assigned Custodian and mechanics to resume outstanding repairs. Another trip requires another explicit release and readiness attestation; normal verification is still required to close the ticket.
-
----
-
 ## 6. Maintenance Schedules
 
 Once a linked ticket is Active, For Verification, Closed or Cancelled, its schedule can no longer be edited or cancelled; the work is managed through the ticket.
@@ -233,9 +221,6 @@ Has its own two-step verify/confirm flow, separate from tickets (Custodian verif
 | A cannibalized repair is submitted / approved / rejected | Barangay Admins, then the mechanic |
 | Custodian approves the repair → ticket closed | The mechanic ("Repair Verified & Closed") |
 | Custodian returns the repair | The mechanic ("Repair Returned for Rework", with the failed checks and notes) |
-| Mechanic records a temporary-dispatch assessment | The assigned Custodian |
-| Custodian authorizes temporary dispatch with open tickets | Active barangay Admins + assigned mechanics (repairs paused) |
-| Vehicle returns from temporary dispatch | Assigned Custodian + assigned mechanics (resume outstanding repairs) |
 | An archived ticket is reopened | The newly-assigned Custodian |
 | An issue report is filed | Barangay Admins (+ Custodians too, if filed by a pure Maintenance Personnel account) |
 | An issue report is dismissed | The original reporter |
@@ -332,11 +317,9 @@ Capabilities: list every barangay (with staff counts, whether it has an active A
 Stated plainly, as found in the code — not implied to be bugs, just not (yet) user-facing or fully wired:
 
 - **No self-service password reset.** Entirely by Admin edit; the reset action is logged, but nothing forces the user to change it on next login — a deliberate scope decision for now, not an oversight.
-- **"In Use" vehicle status** exists in the database but is never set by any code path. Dispatch is shown instead from the Usage Log: an open trip displays as **Dispatched** in the Vehicle Management list (Dispatch column and action opening a dedicated full page), without changing the stored status.
 - **Managed file delivery:** new managed uploads use private storage and five-minute signed delivery URLs. Renewal requires an authenticated user with access to the underlying record; deleting the managed-file row revokes delivery. A signed URL can be used by its holder until expiry. Historical legacy URLs require migration separately if old records still reference public storage.
 - The **last-Admin protection** stops specific actions (deactivate, remove Admin role, platform role change) but doesn't prevent every conceivable way a barangay could end up without an active Admin — the Super Admin recovery tool exists specifically to fix that case after the fact, not to make it impossible in advance.
 - **Import / custom-field limits:** an import takes at most 500 rows / 2 MB per file; custom fields are per Vehicle Type (a template column per distinct label), and the import template does not yet include a per-row hull/engine hint beyond the Instructions sheet.
-- **Dispatch eligibility:** normal departure requires an Available vehicle with no ongoing ticket (Pending Approval included; Closed/Cancelled/Declined excluded). A Custodian can authorize a documented, one-trip temporary release under the rules in section 5.7, without waiting for Admin approval. Trip records never change the stored maintenance status; returning a dispatched vehicle remains allowed.
 - **Barangay boundary lookup** depends on a public third-party geocoder with no guaranteed coverage — a legitimate "no boundary found" result is expected for some barangays, not a bug.
 
 ---
@@ -365,7 +348,7 @@ This document was compiled by direct code review, not from memory or prior docum
 - `backend-api/config/{permissions,cors,sanctum,scheduling}.php`
 - `backend-api/app/Console/Commands/{ConvertDueSchedulesToTickets,PruneOldNotifications}.php`
 - `backend-api/database/migrations/2026_10_05_*.php` (vehicle-registration delegation, notification record links)
-- `backend-api/app/Http/Controllers/{VehicleImportController,VehicleTypeFieldController,VehicleUsageController}.php` and `backend-api/database/migrations/2026_10_0[6-9]_*.php` (notification vehicle link, vehicle imports, type custom fields, repair-method details, criticality & usage logs)
+- `backend-api/app/Http/Controllers/{VehicleImportController,VehicleTypeFieldController}.php` and `backend-api/database/migrations/2026_10_0[6-9]_*.php` (notification vehicle link, vehicle imports, type custom fields, repair-method details, criticality)
 - `backend-api/database/migrations/2026_10_10_000001_add_prior_mechanics_to_ticket_sub_issues.php` (the mid-repair-reassignment self-verification fix) and `backend-api/app/Models/TicketSubIssue.php`
 - `backend-api/database/migrations/2026_10_11_000001_add_boundary_status_to_barangays_table.php` and `backend-api/app/Models/Barangay.php` (the boundary review workflow)
 - `backend-api/database/migrations/2026_10_1{2,4,5}_*.php` (streamlined one-mechanic ticket workflow, reversible ticket decline, schedule approval workflow)
@@ -389,5 +372,3 @@ Audit follow-up: see [System Audit ? 2026-10-23](System-Audit-2026-10-23.md) for
 ## Work-list status defaults
 
 Operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders select Pending + Submitted; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records select unfinished progress states; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection, plus Ongoing only and All statuses shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.
-
-Dispatch opens a dedicated `/vehicles/{id}/dispatch` workspace page from Vehicle Management. It includes vehicle identity, the departure/return form, paginated trip history, Philippine-time dates, and a Back to Vehicle Management action. The URL supports direct navigation and reload. Existing Admin/Custodian usage permissions still apply; dispatch recording does not change the stored vehicle availability status.

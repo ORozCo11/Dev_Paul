@@ -25,7 +25,7 @@ const FAQ = [
   },
   {
     q: 'What do the different vehicle statuses mean?',
-    a: 'Available: in service and dispatchable. Under Maintenance: currently being repaired. Inactive: temporarily out of service. Decommissioned: permanently retired.',
+    a: 'Available: available for service. Under Maintenance: currently being repaired. Inactive: temporarily out of service. Decommissioned: permanently retired.',
   },
   {
     q: "I forgot my password or can't log in — what do I do?",

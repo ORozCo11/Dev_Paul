@@ -124,5 +124,4 @@ Four navigation decisions are deliberate and final — not oversights to "fix" i
 - Cannibalized repairs have **no Admin approval**: the mechanic records one donor vehicle and a CRUD list of donor parts on the Record Repair Work page; submitting goes straight to the Custodian and files one donor Issue Report. Standalone Cannibalization records live on the vehicle profile (no sidebar item).
 - External-shop repairs are handled by the Admin (dispatch and return details); the handler can't verify.
 - The Custodian closes tickets: verification is a popup (Approve / Disapprove with reason); "Tickets Ready to Close" is on the Custodian page; closing notifies the Admin. Verification is never done by Admin or by the repairer.
-- Vehicle Management shows Dispatched (open Usage Log trip) with a Dispatch action and popup.
 - Assigned-personnel avatars on tickets, schedules and records; progress ring on ticket cards; inline per-field validation messages in the shared form.

@@ -427,7 +427,6 @@ Additional generated documentation lives in `docs/`:
 
 ## October 22, 2026 review
 
-Vehicle profiles and the fleet dispatch action now provide a paginated trip log with driver, destination, purpose, departure/return times (Philippine time), notes, and recorder. Admin and Custodian permissions apply. This is a usage record; dispatch planning and routing remain outside scope.
 
 Maintenance Tickets default to Pending Approval and Active for Admin. Latest Reports is paginated. Maintenance Records always uses a list. Condition Monitoring summarizes the latest inspection for each active vehicle. Schedule actions use labeled buttons.
 
@@ -439,3 +438,7 @@ After pulling this update, run `php artisan migrate` from `backend-api` to apply
 ### Account switcher setup
 
 For local/testing use, sign in with `impersonation@test.com` and password `test123`. Run `php artisan db:seed --class=ImpersonationAccountSeeder` from `backend-api` to create or reset only this utility account. The regular user seeder also includes it. Its role is `Impersonator`, separate from Super Admin, and no schema migration is needed on an up-to-date database. Fixed demo credentials are not seeded in production.
+
+### Scope limitation
+
+Vehicle dispatch and Usage Log tracking are outside this readiness and maintenance system. The removal migration keeps a database-only rollback archive of retired records; it has no application routes or UI. Run `php artisan migrate` from `backend-api` after pulling. Migration rollback restores archived records while their referenced vehicles and accounts still exist.

@@ -6,7 +6,7 @@ Scope: the Laravel API, React workspace, role permissions, tenant scoping, and o
 
 - Registration ? pending approval ? activation; role editing, last-Admin/open-work guards, password changes and session revocation.
 - Direct login versus dedicated impersonation; default Admin selection, cascading location/user selection, switching and refresh.
-- Vehicle registration/import, custom fields, status and condition, readiness, retirement/restoration, dispatch and returns.
+- Vehicle registration/import, custom fields, status and condition, readiness, retirement/restoration.
 - Issue report ? Custodian proposal ? Admin review and per-sub-issue mechanic assignment ? repair logging ? independent Custodian verification ? ledger/archive/notifications.
 - External-shop dispatch/return and cannibalized repairs; assignment changes and self-verification guards.
 - Maintenance schedule proposal/approval, edits, cancellation/restoration, completion, recurrence and due-date conversion.
@@ -37,7 +37,6 @@ All items below are addressed in this change. Related symptoms are grouped so th
 | A16 | High | Record verification/closure and old scheduled jobs could restore retired vehicles implicitly. | Preserve Inactive/Decommissioned states in record handling; refuse completion of retired vehicles' schedules. Regression cases cover verification, decision closure and schedule completion. |
 | A17 | High | Sending a different repair method while logging an external job could bypass the recorded shop-return requirement. | A dispatched, unreturned job cannot be submitted regardless of the requested repair method. Regression attempts the bypass. |
 | A18 | High | Platform role editing could convert the tenantless dedicated impersonation account into barangay staff. | Refuse conversion of the dedicated account through staff-role editing. A regression verifies the role stays Impersonator. |
-| A19 | High | Trip operations trusted stale route-bound state, allowing a late return to overwrite an earlier return or dispatch to use a newly retired vehicle. | Lock and re-read vehicle/trip rows inside their transactions. Deterministic stale-model tests verify both refusals. |
 | A20 | High | Due-schedule conversion checked eligibility and duplicates outside its transaction; the creator could belong to a different barangay. | Lock the schedule and vehicle before current-state/duplicate checks; select an active local Custodian and validate mechanic suggestions. Repeat-run and other-barangay creator tests pass. Schedule transitions also lock/re-read current rows, preventing stale completion after ticket conversion. |
 | A21 | High | Vehicle inserts could commit before the import status and audit log; a later failure left an incomplete import summary despite saved vehicles. | Import validation, vehicle/history creation, completion and audit logging commit together under an import-row lock. The upload is deleted only after commit. A simulated completion failure verifies rollback and upload retention. |
 | A22 | High | A late session check or profile refresh could log out or overwrite a newly switched account. | Bind requests to their captured token and ignore stale results; transient session-check failures do not delete credentials. Browser regression deliberately delays old responses across account changes. |
@@ -58,7 +57,7 @@ All items below are addressed in this change. Related symptoms are grouped so th
 - `backend-api/tests/Feature/TicketWorkflowTest.php`: adds dashboard refresh to the proposal/availability regression.
 - `logs/auth-session-audit-qa.mjs`: delayed-response account-switching checks against the actual AuthProvider.
 - `logs/ticket-revisions-qa.mjs`: proposal layouts, per-line mechanic approval, locked schedules and schedule edit payload.
-- `logs/request-ui-qa.mjs`: trip/report pagination, filters, maintenance list, condition graph and schedule actions.
+- `logs/request-ui-qa.mjs`: report pagination, filters, maintenance list, condition graph and schedule actions.
 - `logs/impersonation-hub-qa.mjs`: real local login/switching, default workspace, location cascade, platform switching, refresh and mobile layout. Its created session tokens are revoked by the script.
 
 ## Final verification
@@ -66,7 +65,7 @@ All items below are addressed in this change. Related symptoms are grouped so th
 - Full backend suite: **474 passed, 2,118 assertions** (446 baseline tests plus 28 added regressions).
 - New audit class: **27 passed**; import rollback adds the remaining new case.
 - Frontend ESLint and production build: passed.
-- Browser checks: request/report/trip/schedule checks passed; real local impersonation checks passed; delayed-response authentication checks passed. The expanded ticket/schedule form checks passed, including approved-versus-pending assignment behavior.
+- Browser checks: request/report/schedule checks passed; real local impersonation checks passed; delayed-response authentication checks passed. The expanded ticket/schedule form checks passed, including approved-versus-pending assignment behavior.
 - `git diff --check`: passed. Generated QA screenshots and build artifacts are excluded from the source commit.
 
 ## Verification limits

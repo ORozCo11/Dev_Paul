@@ -28,7 +28,6 @@ Every section of `System-Capabilities.md` covered by the six research passes mat
 | Self-verification after a mid-repair mechanic reassignment | **BROKEN → FIXED** (see §5) |
 | `VehicleTypeFieldController::index()` authorization | **MISSING → FIXED** (see §5) |
 | Super Admin isolation (new routes), barangay isolation (new controllers/models) | WORKING, fail-closed by design |
-| Usage Log role gating and non-mutation of vehicle status | WORKING |
 | Dead cross-vehicle Documents page | **confirmed dead, reachable → REMOVED** (see §4) |
 
 ## 3. Bugs found and fixed
@@ -71,12 +70,12 @@ Frontend `vite build`: clean, both before and after the live-verification fix. L
 ## 8. Remaining known limitations
 
 - **Two test files (`VehicleImportTest.php`, one test in `VehicleTypeFieldsTest.php`) cannot run on this machine** — `phpoffice/phpspreadsheet` (added to `composer.json`/`composer.lock` by the import feature, pulled in from another session) requires the PHP `gd` extension, which isn't enabled in this environment's `php.ini`. Confirmed via `composer install` refusing with an explicit platform-requirement error, not a code defect — these same tests almost certainly pass wherever `ext-gd` is enabled. Not fixed here: enabling a PHP extension is a local machine-configuration change outside this session's scope, not a code change.
-- Everything listed as a known limitation in the two earlier audit passes today (no self-service password reset, unused "In Use" status, public-bucket file storage, geocoder coverage limits) remains unchanged and still consistent with the current specification.
+- Everything listed as a known limitation in the two earlier audit passes today (no self-service password reset, public-bucket file storage, geocoder coverage limits) remains unchanged and still consistent with the current specification.
 - `VehicleImportController`'s per-method `authorizeImport()` ownership check (rather than a global model scope) is a minor structural process risk flagged by the audit — correctly applied in all four current methods, so not a live bug, but worth a scope/trait if the controller grows more methods later. Not changed this pass, since doing so would mean restructuring working code for a non-issue.
 
 ## 9. Deliberately out-of-scope features
 
-Unchanged and confirmed still absent, per the brief's explicit scope freeze: live GPS tracking, dispatch management, emergency call dispatch, route/driver tracking as an operational system, odometer-based maintenance logic, procurement/purchasing, spare-parts warehouse inventory, insurance/permit compliance management, AI/ML prediction, external fleet telematics, a mobile app, and unrelated accounting features. The Vehicle Usage Log remains recording-only (confirmed again this pass: zero `vehicle.status` writes anywhere in `VehicleUsageController`). The "In Use" vehicle status remains unused by any code path. No self-service password reset was added.
+Unchanged and confirmed still absent, per the brief's explicit scope freeze: live GPS tracking, dispatch management, emergency call dispatch, route/driver tracking as an operational system, odometer-based maintenance logic, procurement/purchasing, spare-parts warehouse inventory, insurance/permit compliance management, AI/ML prediction, external fleet telematics, a mobile app, and unrelated accounting features. No self-service password reset was added.
 
 ## 10. Final scope freeze
 

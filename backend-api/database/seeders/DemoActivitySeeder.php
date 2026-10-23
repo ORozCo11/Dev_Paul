@@ -15,7 +15,6 @@ use App\Models\VehicleIssueReport;
 use App\Models\VehicleMaintenanceRecord;
 use App\Models\VehicleMaintenanceSchedule;
 use App\Models\VehicleReadinessCheck;
-use App\Models\VehicleUsageLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -23,7 +22,7 @@ use Illuminate\Support\Carbon;
 /**
  * Demo data across every module, on top of MockDataSeeder's 15 vehicles:
  * issue reports, tickets in every stage, schedules, maintenance records,
- * usage trips, condition checks, readiness checks, vehicle history and the
+ * condition checks, readiness checks, vehicle history and the
  * activity log. Each vehicle's status/condition is set to match its story.
  *
  * Safe to re-run (php artisan db:seed --class=DemoActivitySeeder): rows are
@@ -71,7 +70,6 @@ class DemoActivitySeeder extends Seeder
         $this->seedStandaloneIssues($v);
         $this->seedSchedules($v);
         $this->seedMaintenanceHistory($v);
-        $this->seedUsageLogs($v);
 
         // Last, so they read the vehicle conditions set above.
         $operational = Vehicle::withoutGlobalScopes()->with('category')
@@ -84,7 +82,7 @@ class DemoActivitySeeder extends Seeder
             $this->seedReadinessCheck($vehicle, $i);
         }
 
-        $this->command?->info('Demo data seeded: tickets, issues, schedules, records, trips, condition and readiness checks.');
+        $this->command?->info('Demo data seeded: tickets, issues, schedules, records, condition and readiness checks.');
     }
 
     // ---------------------------------------------------------------------
@@ -249,7 +247,7 @@ class DemoActivitySeeder extends Seeder
     }
 
     // ---------------------------------------------------------------------
-    // Schedules, maintenance records, usage trips
+    // Schedules, maintenance records
     // ---------------------------------------------------------------------
 
     private function seedSchedules($v): void
@@ -290,40 +288,6 @@ class DemoActivitySeeder extends Seeder
         $this->record($v['Metro EMS Ambulance'], 'General Inspection', 'Quarterly inspection.', 'Full inspection — no defects found.', null, 1500, 'Completed', $now->copy()->subDays(30), $now->copy()->subDays(30), $done + ['verified_at' => $now->copy()->subDays(29)]);
     }
 
-    private function seedUsageLogs($v): void
-    {
-        $now = now();
-        $trips = [
-            ['Metro EMS Ambulance', 'Patient transport', 'Mandaue City Hospital', 'Juan Dela Cruz', 2, 3, 41250, 41268],
-            ['Metro EMS Ambulance', 'Medical standby', 'Paknaan Elementary School sports fest', 'Juan Dela Cruz', 5, 8, 41200, 41212],
-            ['INEM Portuguese Ambulance', 'Patient transport', 'Vicente Sotto Memorial Medical Center', 'Mark Santos', 1, 2, 28870, 28901],
-            ['Rescue Response Ambulance', 'Emergency response', 'Brgy. Paknaan Purok 3', 'Mark Santos', 3, 4, 15340, 15349],
-            ['Barangay Fire Responder', 'Fire response', 'Purok 5 residential fire', 'Rey Villanueva', 4, 6, 9810, 9822],
-            ['Noida Express Ambulance', 'Patient transport', 'Chong Hua Hospital Mandaue', 'Juan Dela Cruz', 6, 7, 52010, 52036],
-        ];
-        foreach ($trips as [$name, $purpose, $dest, $driver, $daysAgo, $hours, $odoStart, $odoEnd]) {
-            $start = $now->copy()->subDays($daysAgo)->setTime(1 + $hours, 0);
-            VehicleUsageLog::updateOrCreate(
-                ['vehicle_id' => $v[$name]->vehicle_id, 'started_at' => $start],
-                ['logged_by' => $this->custodian->id, 'purpose' => $purpose, 'destination' => $dest, 'driver_name' => $driver,
-                 'ended_at' => $start->copy()->addHours(2), 'odometer_start' => $odoStart, 'odometer_end' => $odoEnd],
-            );
-        }
-
-        // One vehicle out right now.
-        $veh = $v['Metro EMS Ambulance'];
-        $start = $now->copy()->subMinutes(40)->startOfMinute();
-        VehicleUsageLog::where('vehicle_id', $veh->vehicle_id)->whereNull('ended_at')->where('notes', 'Demo data')->delete();
-        VehicleUsageLog::create(['vehicle_id' => $veh->vehicle_id, 'logged_by' => $this->custodian->id, 'purpose' => 'Patient transport',
-            'destination' => 'Mandaue City Hospital', 'driver_name' => 'Juan Dela Cruz', 'started_at' => $start, 'odometer_start' => 41268, 'notes' => 'Demo data']);
-    }
-
-    // ---------------------------------------------------------------------
-    // Condition monitoring and readiness
-    // ---------------------------------------------------------------------
-
-    // An older routine check (always Good) plus a latest check that agrees
-    // with the vehicle's current condition.
     private function seedConditionChecks(Vehicle $vehicle, int $i): void
     {
         $type = strtolower($vehicle->category?->category_name ?? '');
