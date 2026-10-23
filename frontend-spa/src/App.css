@@ -16504,6 +16504,23 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
   .vehicle-type-overview { grid-template-columns: 1fr; gap: 20px; padding: 18px; }
   .vehicle-type-overview-chart { border-left: 0; padding-left: 0; border-top: 1px solid var(--border, #e2e8f0); padding-top: 20px; }
 }
+
+/* Keep badges and capsule labels square throughout the application. */
+html :is(
+  .status-badge, .status-pill, .ticket-status-pill, .ticket-stage-badge,
+  .ticket-next-step-badge, .ticket-preview-badge, .ticket-role-tag,
+  .ticket-count-pill, .count-badge, .schedule-count-badge, .sch-status-badge,
+  .sch-overdue-pill, .sch-you-tag, .vehicle-readiness-badge,
+  .cm-badge, .search-badge, .module-nav-badge, .issue-id-badge,
+  .issue-filter-status-chip, .subissue-meta-chip, .subissue-test-chip,
+  .proposal-review-pill, .superadmin-code-chip, .part-tag, .log-category-tag,
+  .location-snapshot-tag, .risk-watch-tag, .emergency-readiness-row-tag,
+  .dashboard-list-modal-tag, .area-chart-tag, .fx-chip, .fx-primary-tag,
+  .wizard-step-pill, .date-badge-pill,
+  .dashboard-command-pills > *, .dashboard-live-chips > *
+) {
+  border-radius: 0 !important;
+}
 .ticket-page :is(.status-badge, .ticket-stage-badge, .count-badge, .ticket-list-identity strong, .area-chart-tag, .ticket-preview-badge) {
   border-radius: 0 !important;
 }

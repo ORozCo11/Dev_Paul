@@ -8219,7 +8219,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
         if (!badge) return <span className="muted">—</span>;
         return (
           <span
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.74rem', fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, whiteSpace: 'nowrap' }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: '0.74rem', fontWeight: 700, padding: '3px 9px', borderRadius: 0, background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, whiteSpace: 'nowrap' }}
             title={row.readiness_last_checked ? `Last checked ${formatDate(row.readiness_last_checked)}` : undefined}
           >
             <Icon name={badge.icon} size={11} /> {badge.label}
@@ -9232,17 +9232,17 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
           <span className="muted">{record.maintenance_type}</span>
           <StatusBadge value={record.source} />
           {onHold && (
-            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>ON HOLD — AWAITING PARTS</span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>ON HOLD — AWAITING PARTS</span>
           )}
           {record.is_external && (
-            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd' }}>External{record.external_vendor ? ` — ${record.external_vendor}` : ''}</span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd' }}>External{record.external_vendor ? ` — ${record.external_vendor}` : ''}</span>
           )}
           {record.source_vehicle && (
-            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }}>⚙ Part from {record.source_vehicle.vehicle_name}</span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }}>⚙ Part from {record.source_vehicle.vehicle_name}</span>
           )}
           {closedUnverified && (
             <span
-              style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}
+              style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}
               title="Admin closed this without waiting for Custodian verification — nobody independently checked the work."
             >
               <Icon name="alert" size={11} /> CLOSED WITHOUT VERIFICATION
@@ -9476,7 +9476,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <TicketPersonnelAvatars people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} />
             {name}
-            {isMe && <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>YOU</span>}
+            {isMe && <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>YOU</span>}
           </span>
         );
       },
@@ -9506,7 +9506,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
           {/* #11 — a scheduled PM whose date has passed is overdue: flag it
               loudly instead of leaving it to sit silently on the calendar. */}
           {isScheduleOverdue(row) && (
-            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>OVERDUE</span>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>OVERDUE</span>
           )}
           {/* Traceability — the schedule row only ever showed "Completed" as
               a label with nothing to verify it against. This shows what the
@@ -9517,14 +9517,14 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
           {row.status === 'Completed' && row.resulting_maintenance && (
             row.resulting_maintenance.progress_status === 'Completed' ? (
               <span
-                style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}
+                style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}
                 title={`Verification: ${row.resulting_maintenance.verification_result ?? 'Pending'}`}
               >
                 Done {formatDate(row.resulting_maintenance.date_completed)}
               </span>
             ) : (
               <span
-                style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }}
+                style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }}
                 title="The calendar task is done, but the record it created still needs Custodian verification before it's fully closed."
               >
                 Record: {row.resulting_maintenance.progress_status}
@@ -9533,7 +9533,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
           )}
           {row.status === 'Declined' && row.decline_reason && (
             <span
-              style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', cursor: 'help' }}
+              style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', cursor: 'help' }}
               title={`Reason: ${row.decline_reason}`}
             >
               Why? <Icon name="info" size={11} />
@@ -14269,7 +14269,7 @@ function TicketStageBadge({ ticket, variant = 'flag' }) {
     return (
       <span className="ticket-stage-badge" style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.74rem', fontWeight: 700,
-        padding: '5px 12px', borderRadius: 999, background: style.bg,
+        padding: '5px 12px', borderRadius: 0, background: style.bg,
         border: `1px solid ${style.color}55`, color: style.color,
       }}>
         <Icon name={style.icon} size={12} /> {stage.label}
@@ -14279,7 +14279,7 @@ function TicketStageBadge({ ticket, variant = 'flag' }) {
   return (
     <div className="ticket-stage-badge" style={{
       display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.74rem', fontWeight: 700,
-      padding: '6px 10px', borderRadius: '0 6px 6px 0', background: style.bg,
+      padding: '6px 10px', borderRadius: 0, background: style.bg,
       borderLeft: `3px solid ${style.color}`, color: style.color,
     }}>
       <Icon name={style.icon} size={12} /> {stage.label}
@@ -14341,7 +14341,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
           title={`${unreadCount} unread update${unreadCount > 1 ? 's' : ''} on this ticket`}
           style={{
             position: 'absolute', top: -8, right: -8, minWidth: 20, height: 20, padding: '0 5px',
-            borderRadius: 999, background: '#dc2626', color: '#fff', fontSize: '0.7rem', fontWeight: 700,
+            borderRadius: 0, background: '#dc2626', color: '#fff', fontSize: '0.7rem', fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.25)', zIndex: 1,
           }}
         >
@@ -15632,7 +15632,7 @@ function ticketTableColumns(unreadByTicket = {}, onViewTicket) {
                 title={`${unread} unread update${unread > 1 ? 's' : ''} on this ticket`}
                 style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  minWidth: 18, height: 18, padding: '0 4px', borderRadius: 999,
+                  minWidth: 18, height: 18, padding: '0 4px', borderRadius: 0,
                   background: '#dc2626', color: '#fff', fontSize: '0.65rem', fontWeight: 700,
                 }}
               >
@@ -16759,7 +16759,7 @@ function CapabilityImpactCard({ items, onNavigate, basePath }) {
               </span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, alignItems: 'center' }}>
                 {row.affected_vehicles.slice(0, 4).map((v) => (
-                  <span key={v.vehicle_id} style={{ display: 'inline-flex', borderRadius: 999, overflow: 'hidden', border: '1px solid #cbd5e1' }}>
+                  <span key={v.vehicle_id} style={{ display: 'inline-flex', borderRadius: 0, overflow: 'hidden', border: '1px solid #cbd5e1' }}>
                     <button
                       type="button"
                       className="btn-view-action"
