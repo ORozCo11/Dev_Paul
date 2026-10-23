@@ -1,6 +1,6 @@
 # Ticket process review — 24 October 2026
 
-Reviewed application revision: `9314091`. This is a workflow and source review with isolated API probes, not a claim of production acceptance. No application behavior was changed. The recommendations below describe a proposed improved process, not features already implemented.
+Reviewed application revision: `9314091`. The original findings below describe that revision. The implementation follow-up at the end records the subsequent fixes and verification; this is not a claim of production acceptance.
 
 ## Overall assessment
 
@@ -138,3 +138,40 @@ Frontend source: proposal `Workspace.jsx:12781-13210`; Admin review `:11270-1139
 6. Ask representative Admin, Custodian and Maintenance Personnel users to perform: proposal from issue, two-mechanic repair, one-item rework, external warranty rework, absent mechanic handover and scheduled service. Measure completion rate, time, duplicate entry, wrong turns and assistance needed. Record the baseline first; no speed or effectiveness improvement has been measured in this review.
 
 The existing [system audit](System-Audit-2026-10-24.md) still applies, especially the file-signing and issue-detail authorization gaps, donor-readiness invalidation, catalog historical integrity, CSV safety and future schedule dates. This ticket-focused review does not close those findings or replace target-host acceptance.
+
+## Implementation follow-up — 24 October 2026
+
+The eight findings above have been addressed in code and permanent acceptance tests:
+
+| Finding | Implemented behavior |
+|---|---|
+| TPR-01 | Every verified external item creates a unique linked maintenance record with the external provider. Known invoice costs accumulate across visits; unknown remains null and zero remains zero. Closure retries cannot create duplicate ledger records. Reliability spending excludes Done items already represented in the ledger. |
+| TPR-02 | External work requires recorded sending and return before repair submission. The form blocks premature submission and explains the next action. |
+| TPR-03 | API calls cannot change to or from external repair in a repair log. Such a change requires a new Admin-reviewed proposal. A repair log cannot overwrite the shop, warranty or invoice total recorded through shop actions. |
+| TPR-04 | The responsible external Admin receives rework notifications. A rejected repair can start a new shop visit, preserving its previous cycle and work events. Previous external handlers remain excluded from verification. |
+| TPR-05 | Repair submission automatically records its completion date and an actor/time event. Unknown actual start dates remain unknown. Future or reversed historical dates are rejected. Verification and closure retain distinct timestamps. |
+| TPR-06 | The interface selects one unfinished work item for reassignment. Submitted repairs cannot be reassigned until returned for rework. Other mechanics' assignments and submitted evidence stay unchanged. The existing bulk API moves only unfinished in-house items. |
+| TPR-07 | The dialog selects failed items and supplies a reason; other submitted items stay submitted. After failed work is resubmitted, the ticket automatically returns to the assigned Custodian for the final vehicle-level decision. Legacy rejection payloads without item IDs still return all submitted work. |
+| TPR-08 | The API requires an explicit verdict and a true personal-test attestation for approval. The dialog captures that confirmation and never invents checklist results. |
+
+Usability changes: reviewed external details prefill the shop form; duplicated shop/warranty inputs were removed; in-house labor/service cost can be recorded separately from parts in the form's total; proposal success opens the created ticket; failed issue lookups show a recoverable warning; duplicate-ticket errors direct the Custodian to ask Admin for scope review. Reassignment warnings include prior repairers and handlers, and the approval form catches selecting the verifying Custodian as mechanic. Work/verification events and earlier shop visits are visible in expanded ticket items. Duplicate form submissions are disabled while saving.
+
+Schedule conversion checks every minute against the Philippine calendar and selected service time, with overlap protection. The host must still invoke Laravel's scheduler each minute; this change does not provision or certify a production scheduler.
+
+### Migration and rollout
+
+- New migration: `backend-api/database/migrations/2026_10_24_000001_preserve_ticket_work_evidence.php`.
+- Adds `external_cycles` and `work_history` JSON fields to ticket work items, plus a unique nullable `ticket_sub_issue_id` link on maintenance records. Existing statuses, roles and vehicle records are retained.
+- Team/deployment rollout: run `php artisan migrate` from `backend-api`, install locked dependencies as usual and rebuild the frontend. No reseed or database reset is required.
+- Applied to the local SQLite database after a consistent backup in ignored `tmp/ticket-review/before-ticket-process.sqlite`; vehicle count remained **5 before / 5 after**. There were **0 historical closed external items** locally needing ledger recovery.
+- The migration does not fabricate historical work events or backfill already-closed repairs in other databases. Such records need an evidence-based reconciliation. Rolling back removes the newly added evidence/link columns; retain a database backup if rollback is needed.
+
+### Final verification
+
+- **502 backend tests / 2,461 assertions passed**, including 13 permanent ticket-integrity tests in `backend-api/tests/Feature/TicketProcessIntegrityTest.php`.
+- Migration upgrade/rollback was exercised with existing vehicle and maintenance records in isolated SQLite. Fresh test databases run the new migration as part of the suite.
+- Frontend lint and production build passed. PHP syntax checks passed for all 17 changed/new PHP files.
+- Eight route-mocked browser scenarios passed without runtime errors: approval attestation, selected-item rework, individual reassignment, mobile repair/service-cost layout, prefilled shop details, blocked premature completion, external mobile layout, and repeat external rework. Screenshots were inspected. These checks isolate UI behavior; live API transitions are covered by the backend tests.
+- A full-suite run exposed a pre-existing random plate collision in `ScheduleConflictWarningTest`; its fixture now uses deterministic unique values. The complete suite passed after that correction.
+
+No changes to dispatch, impersonation, registration, hubs or unrelated role grants were made. The six broader system-audit findings remain open. Representative-user timing studies and target-host acceptance remain necessary before claiming measured speed improvements or production readiness.

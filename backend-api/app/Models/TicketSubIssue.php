@@ -24,6 +24,8 @@ class TicketSubIssue extends Model
     }
 
     protected $fillable = [
+        'external_cycles',
+        'work_history',
         'ticket_id',
         'issue_report_id',
         'created_by',
@@ -107,6 +109,8 @@ class TicketSubIssue extends Model
     ];
 
     protected $casts = [
+        'external_cycles' => 'array',
+        'work_history' => 'array',
         'attachment_files' => 'array',
         'mechanic_assigned_at' => 'datetime',
         'verified_at'          => 'datetime',

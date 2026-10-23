@@ -100,7 +100,7 @@ class ExternalShopTicketTest extends TestCase
         // Only the assigned Custodian verifies; Admin never does.
         $this->putJson("/api/tickets/{$id}/verify", [])->assertForbidden();
         Sanctum::actingAs($this->custodian, ['*']);
-        $this->putJson("/api/tickets/{$id}/verify", [])->assertOk();
+        $this->putJson("/api/tickets/{$id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
         $this->assertSame('Closed', MaintenanceTicket::find($id)->status);
     }
 

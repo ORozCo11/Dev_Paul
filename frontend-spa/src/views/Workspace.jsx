@@ -1282,10 +1282,10 @@ function Workspace() {
   const proposeTicket = async (payload) => {
     setNotice(null);
     try {
-      await api.post('/tickets/propose', cleanPayload(payload));
+      const response = await api.post('/tickets/propose', cleanPayload(payload));
       setNotice({ type: 'success', text: 'Ticket proposal submitted — an Admin will review it.' });
       await refreshCurrent();
-      return true;
+      return response.data;
     } catch (error) {
       showError(error, setNotice);
       return false;
@@ -2848,6 +2848,7 @@ function Workspace() {
                 ticketLookups={ticketLookups}
                 prefilledTicketData={prefilledTicketData}
                 onProposeTicket={proposeTicket}
+                onCreated={(created) => { setPrefilledTicketData(null); setHasUnsavedChanges(false); setKeepNotice(true); navigate(`${roleRoutes[user.role]}/tickets/${created.ticket_id}`); }}
                 onDirty={() => setHasUnsavedChanges(true)}
               />
             ) : canDo(user, 'ticket.create') ? (
@@ -11071,8 +11072,10 @@ function verifyOutcomeMessage(payload) {
 // ticket) or Return for Repair (any failed check; ticket goes back to the
 // mechanic). POSTs to /tickets/{id}/verify, which re-checks all of it and
 // enforces who may verify (TicketController::verifyTicket).
-function TicketVerificationForm({ onCancel, onSubmit }) {
+function TicketVerificationForm({ ticket, onCancel, onSubmit }) {
   const [decision, setDecision] = useState('');
+  const [attested, setAttested] = useState(false);
+  const [failedIds, setFailedIds] = useState([]);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -11081,12 +11084,14 @@ function TicketVerificationForm({ onCancel, onSubmit }) {
     e.preventDefault();
     if (submitting) return;
     if (!decision) { setError('Choose Approve or Disapprove.'); return; }
+    if (decision === 'Approved' && !attested) { setError('Confirm that you personally tested the vehicle.'); return; }
+    if (decision === 'Rejected' && !failedIds.length) { setError('Select the work items that need rework.'); return; }
     if (decision === 'Rejected' && !reason.trim()) { setError('A reason is required so the mechanic knows what to fix.'); return; }
     setSubmitting(true);
     try {
       await onSubmit(decision === 'Rejected'
-        ? { verification_verdict: 'Rejected', verification_notes: reason.trim() }
-        : { verification_verdict: 'Approved', ...(reason.trim() ? { verification_notes: reason.trim() } : {}) });
+        ? { verification_verdict: 'Rejected', verification_notes: reason.trim(), failed_sub_issue_ids: failedIds }
+        : { verification_verdict: 'Approved', test_attested: attested, ...(reason.trim() ? { verification_notes: reason.trim() } : {}) });
     } finally {
       setSubmitting(false);
     }
@@ -11099,7 +11104,7 @@ function TicketVerificationForm({ onCancel, onSubmit }) {
         <button type="button" role="radio" aria-checked={decision === 'Approved'} className={`verify-choice is-approve${decision === 'Approved' ? ' is-selected' : ''}`} onClick={() => { setDecision('Approved'); setError(''); }}>
           <Icon name="checkCircle" size={22} />
           <strong>Approve</strong>
-          <small>Closes the ticket and returns the vehicle to service.</small>
+          <small>Closes this ticket after your test passes.</small>
         </button>
         <button type="button" role="radio" aria-checked={decision === 'Rejected'} className={`verify-choice is-reject${decision === 'Rejected' ? ' is-selected' : ''}`} onClick={() => { setDecision('Rejected'); setError(''); }}>
           <Icon name="close" size={22} />
@@ -11107,6 +11112,19 @@ function TicketVerificationForm({ onCancel, onSubmit }) {
           <small>Sends it back to the mechanic to fix.</small>
         </button>
       </div>
+      {decision === 'Approved' && <label className="verify-decision-reason"><span><input type="checkbox" checked={attested} onChange={(e) => setAttested(e.target.checked)} /> I personally tested this vehicle and confirm the repairs passed.</span></label>}
+      {decision === 'Rejected' && (
+        <fieldset className="verify-rework-items">
+          <legend>Which work items need rework?</legend>
+          <p>Other submitted work stays submitted. The ticket stays open until every repair passes.</p>
+          {(ticket?.sub_issues ?? []).filter((item) => item.status === 'For Inspection').map((item) => (
+            <label key={item.sub_issue_id}>
+              <input type="checkbox" checked={failedIds.includes(item.sub_issue_id)} onChange={(e) => setFailedIds((ids) => e.target.checked ? [...ids, item.sub_issue_id] : ids.filter((id) => id !== item.sub_issue_id))} />
+              <span>{item.title}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       {decision && (
         <label className="verify-decision-reason">
           <span>{decision === 'Rejected' ? 'Reason' : 'Note (optional)'}{decision === 'Rejected' && <abbr className="required-asterisk" title="required"> *</abbr>}</span>
@@ -11289,6 +11307,10 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
   const submitApprove = async () => {
     if (subRows.some((row) => row.repair_type !== 'external' && !row.assigned_mechanic_id)) {
       setValidationLine('Assign Maintenance Personnel to every sub-issue before approving.');
+      return;
+    }
+    if (subRows.some((row) => row.repair_type !== 'external' && String(row.assigned_mechanic_id) === String(ticket.assigned_custodian_id))) {
+      setValidationLine('The verifying Custodian cannot repair this ticket. Choose a different mechanic or reassign the Custodian before approval.');
       return;
     }
     setValidationLine(null);
@@ -11800,7 +11822,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                   </div>
                 </div>
                 {canDo(user, 'ticket.assign_mechanic') && onAssignTicketMechanic && !['Closed', 'Cancelled'].includes(ticket.status) && (
-                  <button className="ghost-button btn-reassign-action" style={{ marginTop: 10 }} type="button" onClick={() => setReassigningMechanic(true)}>
+                  <button className="ghost-button btn-reassign-action" style={{ marginTop: 10 }} type="button" disabled={ticket.status !== 'Active' || !subIssues.some((item) => item.status === 'Under Repair' && item.repair_type !== 'external')} onClick={() => setReassigningMechanic(true)}>
                     <Icon name="undo" size={12} /> Reassign Mechanic
                   </button>
                 )}
@@ -11810,16 +11832,17 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
             {canDo(user, 'ticket.assign_mechanic') && onAssignTicketMechanic && (
               <FormModal open={reassigningMechanic} title="Reassign Mechanic" onClose={() => setReassigningMechanic(false)}>
                 <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>
-                  Hand the whole ticket to a different mechanic (e.g. the current one is out sick). If it was already submitted for verification, this sends it back to Active — the new mechanic's work is what needs verifying.
+                  Choose one unfinished work item to hand over. Submitted repairs and other mechanics' work stay unchanged. Return a submitted repair for rework before reassigning it.
                 </p>
                 <SmartForm
                   fields={[
+                    { label: 'Work item', name: 'sub_issue_id', required: true, type: 'select', options: subIssues.filter((item) => item.status === 'Under Repair' && item.repair_type !== 'external').map((item) => ({ value: item.sub_issue_id, label: item.title })) },
                     { label: 'Reassign to Mechanic', name: 'assigned_mechanic_id', options: (lookups.maintenance_personnel ?? []).filter((m) => m.id !== ticket.assigned_mechanic_id).map((m) => ({ value: m.id, label: mechanicWorkloadLabel(m) })), required: true, type: 'select' },
                     { label: 'Reason for reassigning', name: 'reassign_reason', required: true, type: 'textarea', rows: 2 },
                   ]}
                   key={`reassign-mechanic-${ticket.ticket_id}`}
                   onCancel={() => setReassigningMechanic(false)}
-                  onSubmit={(payload) => onAssignTicketMechanic(ticket, payload).then((ok) => { if (ok !== false) setReassigningMechanic(false); })}
+                  onSubmit={(payload) => onAssignTicketMechanic(ticket, { assigned_mechanic_id: payload.assigned_mechanic_id, reassign_reason: payload.reassign_reason, sub_issue_ids: [Number(payload.sub_issue_id)] }).then((ok) => { if (ok !== false) setReassigningMechanic(false); })}
                   submitLabel="Reassign Mechanic"
                   title=""
                 />
@@ -11967,7 +11990,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                   {onLogRepairs && canHandleExternal && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && (
                     <div className="subissue-head-right">
                       <button className="primary-button" type="button" onClick={() => onLogRepairs(ticket, si)}>
-                        <Icon name="vehicle" size={14} /> {!si.external_sent_at ? 'Record dispatch' : !si.external_returned_at ? 'Record return' : 'Record service report'}
+                        <Icon name="vehicle" size={14} /> {si.verification_verdict === 'Rejected' ? 'Record shop rework' : !si.external_sent_at ? 'Send to shop' : !si.external_returned_at ? 'Record return' : 'Record service report'}
                       </button>
                     </div>
                   )}
@@ -11991,6 +12014,8 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                   {open && (
                   <div className="subissue-details" id={detailsId}>
                   {si.repair_logs && <RepairLogEntries text={si.repair_logs} compact />}
+                  {!!si.external_cycles?.length && <details><summary>Earlier shop visits ({si.external_cycles.length})</summary>{si.external_cycles.map((cycle, index) => <p key={index}>Visit {index + 1}: {cycle.external_vendor} | sent {formatDate(cycle.external_sent_at)} | returned {formatDate(cycle.external_returned_at)} | {cycle.external_actual_cost == null ? 'Cost not recorded' : `PHP ${Number(cycle.external_actual_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}`} | {cycle.verification_notes}</p>)}</details>}
+                  {!!si.work_history?.length && <details><summary>Work and verification history</summary><ul>{si.work_history.map((event, index) => <li key={index}>{event.event} | {event.name} | {formatDate(event.at)}{event.details?.notes ? ` | ${event.details.notes}` : ''}{event.details?.reason ? ` | ${event.details.reason}` : ''}</li>)}</ul></details>}
                   {si.parts_used && (
                     <div className="subissue-field">
                       <span className="subissue-field-label">Parts Used</span>
@@ -12019,7 +12044,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                   )}
 
                   {si.confirmation_verdict && si.status !== 'Deferred' && (
-                    <p className="muted">Admin verdict: <TicketStatusBadge value={si.confirmation_verdict} /> {si.confirmation_notes}</p>
+                    <p className="muted">Final verification: <TicketStatusBadge value={si.confirmation_verdict} /> {si.confirmation_notes}</p>
                   )}
                   </div>
                   )}
@@ -12161,6 +12186,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
               </button>
               <FormModal open={verifying} title={`Verify Repair — Ticket #${ticketNumber(ticket)}`} onClose={() => setVerifying(false)}>
                 <TicketVerificationForm
+                  ticket={ticket}
                   onCancel={() => setVerifying(false)}
                   onSubmit={(payload) => onVerifyTicket(ticket, payload).then((ok) => { if (ok !== false) setVerifying(false); })}
                 />
@@ -12778,7 +12804,7 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
 // sub-issue carries its own maintenance type + an optional suggested
 // mechanic instead. Keeping it fully separate means Admin's existing form is
 // untouched by this addition.
-function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, prefilledTicketData }) {
+function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, onDirty, prefilledTicketData }) {
   // Opened from a flagged Issue Report / Condition Check the form arrives
   // pre-filled and linked; from the chooser's "full repair details" card it
   // starts blank. Separate draft keys so the two never overwrite each other.
@@ -12922,7 +12948,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
         }];
       }
       const created = await onProposeTicket(out);
-      if (created) { clearProposeDraft(); onBack(); }
+      if (created) { clearProposeDraft(); if (onCreated) onCreated(created); else onBack(); }
     } finally {
       setSubmitting(false);
     }
@@ -12936,6 +12962,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
   // vehicle has open reports, offer them so the ticket can be linked to the one
   // it's for (that's what makes the report's Ticket column and eye icon work).
   const [openReports, setOpenReports] = useState([]);
+  const [reportLookupFailed, setReportLookupFailed] = useState(false);
   const reportVehicleResetKey = JSON.stringify([fromFlag, liveValues.vehicle_id]);
   const [previousReportVehicleResetKey, setPreviousReportVehicleResetKey] = useState(reportVehicleResetKey);
   if (previousReportVehicleResetKey !== reportVehicleResetKey) { setPreviousReportVehicleResetKey(reportVehicleResetKey); setOpenReports([]); }
@@ -12945,11 +12972,12 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
     api.get(`/vehicles/${liveValues.vehicle_id}/open-issues`)
       .then((response) => {
         if (cancelled) return;
+        setReportLookupFailed(false);
         const open = (response.data ?? []).filter((r) => ['Pending', 'Under Review'].includes(r.status));
         setOpenReports(open);
         setLiveValues((v) => (v.link_issue_id && !open.some((r) => String(r.issue_report_id) === String(v.link_issue_id)) ? { ...v, link_issue_id: '' } : v));
       })
-      .catch(() => { if (!cancelled) setOpenReports([]); });
+      .catch(() => { if (!cancelled) { setOpenReports([]); setReportLookupFailed(true); } });
     return () => { cancelled = true; };
   }, [liveValues.vehicle_id, fromFlag, setLiveValues]);
   const sourceVehicleOptions = vehicleOptions.filter((v) => String(v.vehicle_id) !== String(liveValues.vehicle_id));
@@ -13086,6 +13114,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onDirty, pr
         </section>
 
         <div className="ticket-work-column">
+        {reportLookupFailed && <p role="alert" className="notice warning">Existing issue reports could not be checked. Your draft is kept; reselect the vehicle to retry before submitting.</p>}
         {!isExternal && (
         <section className="veh-card veh-card-form ticket-issue-section">
           <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
@@ -14789,6 +14818,7 @@ function CustodianVerificationModule({
           "Verify Repair" section uses. */}
       <FormModal open={!!editTarget} title={`Verify Repair — ${editTarget?.ticket_title ?? `Ticket #${ticketNumber(editTarget)}`}`} onClose={onCancelEdit}>
         <TicketVerificationForm
+          ticket={editTarget}
           key={editTarget?.ticket_id}
           onCancel={onCancelEdit}
           onSubmit={(payload) => onVerify(editTarget, payload)}
@@ -15230,7 +15260,10 @@ function DonorVehiclePicker({ ticket, vehicleOptions, onChanged, notify }) {
 
 function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty, onExternalSend, onExternalReturn, onDonorChanged, notify }) {
   const [repairLogs, setRepairLogs] = useState('');
+  const [submittingRepair, setSubmittingRepair] = useState(false);
+  const [shopBusy, setShopBusy] = useState(false);
   const [parts, setParts] = useState([]);
+  const [serviceCost, setServiceCost] = useState('');
   const [attachments, setAttachments] = useState([]);
   // Pre-filled from whatever was chosen at ticket creation (if this was a
   // pre-diagnosed sub-issue) — still editable here, since the actual repair
@@ -15240,12 +15273,8 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   // The repair method is the saved one (ticket.repair_type) — never local state
   // and never inferred from whether donor fields happen to hold values.
   const repairType = ticket?.repair_type ?? '';
-  const [externalVendor, setExternalVendor] = useState(ticket?.external_vendor ?? '');
-  // date casts serialize with a time component (ISO datetime) — <input
-  // type="date"> needs exactly YYYY-MM-DD or it silently fails to populate.
-  const [warrantyUntil, setWarrantyUntil] = useState((ticket?.warranty_until ?? '').slice(0, 10));
   // External shop stages: send out, then mark returned, then submit.
-  const [sendForm, setSendForm] = useState({ external_vendor: ticket?.external_vendor ?? '', external_reason: '', external_work_scope: '', external_shop_contact: '', external_shop_address: '', external_expected_return: '', external_estimated_cost: '' });
+  const [sendForm, setSendForm] = useState({ external_vendor: ticket?.external_vendor ?? '', external_reason: ticket?.external_reason ?? '', external_work_scope: ticket?.external_work_scope ?? '', external_shop_contact: ticket?.external_shop_contact ?? '', external_shop_address: ticket?.external_shop_address ?? '', external_expected_return: '', external_estimated_cost: ticket?.external_estimated_cost ?? '' });
   const [returnForm, setReturnForm] = useState({ external_return_notes: '', external_actual_cost: '', warranty_until: '' });
 
   if (!ticket) {
@@ -15262,30 +15291,31 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   // Live-running total instead of a manual "Generate" click — a click-based
   // total would go stale the moment another row is added or edited after
   // pressing it. This always reflects exactly what's in the rows right now.
-  const totalCost = parts.reduce((sum, p) => sum + (parseFloat(p.cost) || 0), 0);
+  const totalCost = parts.reduce((sum, p) => sum + (parseFloat(p.cost) || 0), 0) + (parseFloat(serviceCost) || 0);
   // Confirmed via code audit: while a repair is sent out and waiting on the
   // shop, Parts/Attachment/Schedule don't apply yet — the mechanic has
   // nothing to log here until it comes back. De-emphasized, not removed or
   // disabled, since a mechanic may still want to note something early.
+  const needsShopCycle = repairType === 'external' && (!ticket.external_sent_at || !ticket.external_returned_at || ticket.verification_verdict === 'Rejected');
   const awaitingShopReturn = repairType === 'external' && !!ticket.external_sent_at && !ticket.external_returned_at;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRepair || needsShopCycle) return;
     if (repairType === 'cannibalized' && !(ticket.donor_parts ?? []).length) {
       notify?.({ type: 'error', text: 'Add at least one donor part before submitting a cannibalized repair.' });
       return;
     }
     const namedParts = parts.filter((p) => p.name.trim());
-    onSubmit(ticket, {
+    setSubmittingRepair(true);
+    try { await onSubmit(ticket, {
       repair_logs: repairLogs,
       parts_used: namedParts.map((p) => p.name.trim()).join(', ') || undefined,
       photos: attachments.length ? attachments : undefined,
-      maintenance_cost: parts.some((part) => part.cost !== '') ? totalCost : undefined,
+      maintenance_cost: parts.some((part) => part.cost !== '') || serviceCost !== '' ? totalCost : undefined,
       repair_type: repairType || undefined,
       source_vehicle_id: repairType === 'cannibalized' ? ticket.source_vehicle_id : undefined,
-      external_vendor: repairType === 'external' ? (externalVendor || undefined) : undefined,
-      warranty_until: repairType === 'external' ? (warrantyUntil || undefined) : undefined,
-    });
+    }); } finally { setSubmittingRepair(false); }
   };
 
   // Display-only helpers for the workspace below — none of them feed into
@@ -15355,7 +15385,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
           <section className="lr-group lr-primary" aria-labelledby={`${idBase}-rw`}>
             <h4 className="lr-section-label" id={`${idBase}-rw`}>Repair Details</h4>
             <div className="lr-field">
-              <span className="lr-label" id={`${idBase}-type`}>Repair Type</span>
+              <span className="lr-label" id={`${idBase}-type`}>Repair Method</span>
               {/* Read-only on purpose: decided when the ticket was proposed
                   and never changed here — shown as a value, not a disabled
                   dropdown that looks clickable. */}
@@ -15366,25 +15396,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             </div>
             {repairType !== 'external' && repairType !== 'cannibalized' && ticket.status === 'Under Repair' && ticket.ticket_status === 'Active' && (
               <DonorVehiclePicker ticket={ticket} vehicleOptions={vehicleOptions} onChanged={onDonorChanged} notify={notify} />
-            )}
-
-            {repairType === 'external' && (
-              <div className="lr-two-col">
-                <div className="lr-field">
-                  <label className="lr-label" htmlFor={`${idBase}-vendor`}>External Shop Name</label>
-                  <input
-                    id={`${idBase}-vendor`}
-                    type="text"
-                    placeholder="e.g. Dela Cruz Auto Repair"
-                    value={externalVendor}
-                    onChange={(e) => { setExternalVendor(e.target.value); onDirty?.(); }}
-                  />
-                </div>
-                <div className="lr-field">
-                  <label className="lr-label" htmlFor={`${idBase}-warranty`}>Warranty Until</label>
-                  <DateFilterInput id={`${idBase}-warranty`} value={warrantyUntil} onChange={(v) => { setWarrantyUntil(v); onDirty?.(); }} />
-                </div>
-              </div>
             )}
 
             <div className="lr-field">
@@ -15408,7 +15419,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
           {repairType === 'external' && onExternalSend && (
             <section className="lr-group" aria-labelledby={`${idBase}-shop`}>
               <h4 className="lr-section-label" id={`${idBase}-shop`}>External Shop</h4>
-              {!ticket.external_sent_at ? (
+              {(!ticket.external_sent_at || ticket.verification_verdict === 'Rejected') ? (
                 <>
                   <div className="lr-two-col">
                     <div className="lr-field">
@@ -15437,15 +15448,15 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                     </div>
                   </div>
                   <div className="lr-field">
-                    <label className="lr-label" htmlFor={`${idBase}-sw`}>Work to Be Done <abbr className="required-asterisk" title="required">*</abbr></label>
+                    <label className="lr-label" htmlFor={`${idBase}-sw`}>Details <abbr className="required-asterisk" title="required">*</abbr></label>
                     <textarea id={`${idBase}-sw`} className="lr-textarea" rows={2} value={sendForm.external_work_scope} onChange={(e) => setSendForm({ ...sendForm, external_work_scope: e.target.value })} />
                   </div>
                   <button
                     type="button"
                     className="primary-button"
                     style={{ alignSelf: 'flex-start' }}
-                    disabled={!sendForm.external_vendor.trim() || !sendForm.external_reason.trim() || !sendForm.external_work_scope.trim()}
-                    onClick={() => onExternalSend(ticket, Object.fromEntries(Object.entries(sendForm).filter(([, v]) => String(v).trim() !== '')))}
+                    disabled={shopBusy || !sendForm.external_vendor.trim() || !sendForm.external_reason.trim() || !sendForm.external_work_scope.trim()}
+                    onClick={async () => { if (shopBusy) return; setShopBusy(true); try { const ok = await onExternalSend(ticket, Object.fromEntries(Object.entries(sendForm).filter(([, v]) => String(v).trim() !== ''))); if (ok !== false) setReturnForm({ external_return_notes: '', external_actual_cost: '', warranty_until: '' }); } finally { setShopBusy(false); } }}
                   >
                     Mark as Sent to Shop
                   </button>
@@ -15471,8 +15482,8 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                     type="button"
                     className="primary-button"
                     style={{ alignSelf: 'flex-start' }}
-                    disabled={!returnForm.external_return_notes.trim()}
-                    onClick={() => onExternalReturn(ticket, Object.fromEntries(Object.entries(returnForm).filter(([, v]) => String(v).trim() !== '')))}
+                    disabled={shopBusy || !returnForm.external_return_notes.trim()}
+                    onClick={async () => { if (shopBusy) return; setShopBusy(true); try { await onExternalReturn(ticket, Object.fromEntries(Object.entries(returnForm).filter(([, v]) => String(v).trim() !== ''))); } finally { setShopBusy(false); } }}
                   >
                     Mark as Returned
                   </button>
@@ -15496,7 +15507,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
               more fields pinned to opposite edges of the page. Same
               Part Name + Cost model the backend stores (a joined string +
               one total), so no quantity/unit-cost fields are invented. */}
-          <section className="lr-side-group" style={dimWhileAtShop} aria-labelledby={`${idBase}-parts`}>
+           {repairType !== 'external' ? <section className="lr-side-group" style={dimWhileAtShop} aria-labelledby={`${idBase}-parts`}>
             <h4 className="lr-section-label" id={`${idBase}-parts`}>Parts &amp; Materials <span className="lr-hint">(optional)</span></h4>
             {!parts.length && <p className="lr-hint">No parts or costs to record? Leave this section empty.</p>}
             {!!parts.length && <div className="lr-parts" role="table" aria-labelledby={`${idBase}-parts`}>
@@ -15522,18 +15533,20 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
               ))}
             </div>}
             <button type="button" className="lr-link-btn" onClick={addPart}><Icon name="plus" size={13} /> Add Part</button>
+            <div className="lr-field"><label className="lr-label" htmlFor={`${idBase}-service`}>Labor / Service Cost (optional)</label><input id={`${idBase}-service`} type="number" min="0" step="0.01" value={serviceCost} onChange={(e) => { setServiceCost(e.target.value); onDirty?.(); }} /></div>
             <div className="lr-total">
               <span>Total Repair Cost</span>
               <strong>₱{totalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
             </div>
-          </section>
+          </section> : <section className="lr-side-group"><h4>Shop cost across visits</h4><p>{ticket.maintenance_cost == null ? 'Cost not yet recorded for every shop visit' : `₱${Number(ticket.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}`}</p><p>Record each visit's invoice amount when marking it returned.</p></section>}
 
 
           <div className="lr-side-actions">
             <p className="lr-hint">
               Recorded under Ticket #{ticketNumber(ticket)} · {namedPartCount} part{namedPartCount === 1 ? '' : 's'} · {attachments.length ? `${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : 'no evidence attached'}
             </p>
-            <button className="primary-button lr-submit" type="submit">Submit Repair Log</button>
+            {needsShopCycle && <p className="lr-note">{ticket.verification_verdict === 'Rejected' ? 'Record a new shop visit and return for this rejected repair.' : 'Send to the shop and mark returned before submitting.'}</p>}
+            <button className="primary-button lr-submit" type="submit" disabled={needsShopCycle || submittingRepair || shopBusy}>{submittingRepair ? 'Submitting...' : 'Submit Repair Log'}</button>
             <button className="ghost-button lr-cancel" onClick={onBack} type="button">Cancel</button>
           </div>
           </div>
@@ -15676,7 +15689,7 @@ const ticketArchiveColumns = [
   { key: 'title', label: 'Title', render: (r) => r.ticket_title },
   { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle ?? { vehicle_name: r.vehicle_name, plate_number: r.plate_number }} /> },
   { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => (r.vehicle?.plate_number ?? r.plate_number) ?? '-' },
-  { key: 'expenses', label: 'Expenses', className: 'cell-center', render: (r) => r.maintenance_cost ? `₱${Number(r.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : '₱0.00' },
+  { key: 'expenses', label: 'Expenses', className: 'cell-center', render: (r) => r.maintenance_cost != null ? `₱${Number(r.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : 'Not recorded' },
   { key: 'final_status', label: 'Final Status', className: 'cell-center', render: (r) => <TicketStatusPill status={r.final_status} /> },
   { key: 'archived_by', label: 'Archived By', className: 'cell-center', render: (r) => <UserAvatarName user={r.archived_by} fallback="—" /> },
   { key: 'archived_at', label: 'Archived At', className: 'cell-center', render: (r) => <DateBadge value={r.archived_at} /> },

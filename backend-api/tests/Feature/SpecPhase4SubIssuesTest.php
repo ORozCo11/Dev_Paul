@@ -145,7 +145,8 @@ class SpecPhase4SubIssuesTest extends TestCase
         $this->dispatchTo($this->sub);
         $url = $this->url("/{$this->sub->sub_issue_id}");
 
-        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->sub->update(['repair_type' => 'external', 'assigned_mechanic_id' => null]);
+        Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("{$url}/external-returned", ['external_return_notes' => 'x'])->assertUnprocessable(); // never sent
         $this->putJson("{$url}/external-sent", ['external_vendor' => 'Joe Auto'])->assertUnprocessable();    // missing reason/scope
 
@@ -162,7 +163,7 @@ class SpecPhase4SubIssuesTest extends TestCase
     }
 
     #[Test]
-    public function only_the_assigned_mechanic_can_send_or_return(): void
+    public function a_mechanic_cannot_record_external_shop_logistics(): void
     {
         $this->dispatchTo($this->sub);
         $other = User::factory()->create(['role' => 'Maintenance Personnel']);

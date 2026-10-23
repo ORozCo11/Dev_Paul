@@ -14,4 +14,4 @@ Schedule::command('notifications:prune')->daily();
 
 // Turns a due Maintenance Schedule entry into a real ticket automatically —
 // see App\Console\Commands\ConvertDueSchedulesToTickets.
-Schedule::command('schedules:convert-due-to-tickets')->daily();
+Schedule::command('schedules:convert-due-to-tickets')->everyMinute()->timezone('Asia/Manila')->withoutOverlapping();

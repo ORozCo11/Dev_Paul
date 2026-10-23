@@ -166,7 +166,7 @@ class SystemWorkflowAuditTest extends TestCase
         Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("/api/tickets/{$ticket->ticket_id}/assign-mechanic", ['assigned_mechanic_id' => $this->person('Maintenance Personnel')->id, 'reassign_reason' => 'Shift change'])->assertOk();
         foreach ([$this->mechanic, $second] as $outgoing) {
-            $this->assertDatabaseHas('notifications', ['user_id' => $outgoing->id, 'type' => 'ticket_reassigned']);
+            $this->assertDatabaseHas('notifications', ['user_id' => $outgoing->id, 'type' => 'work_order_reassigned']);
         }
     }
 
@@ -207,18 +207,19 @@ class SystemWorkflowAuditTest extends TestCase
         $this->assertSame('Decommissioned', $this->vehicle->fresh()->status);
     }
 
-    public function test_reassignment_requires_active_personnel_and_relogs_submitted_repairs(): void
+    public function test_reassignment_preserves_submitted_repairs_until_returned_for_rework(): void
     {
         $ticket = $this->ticket(['status' => 'For Verification', 'assigned_mechanic_id' => $this->mechanic->id]);
         $line = $this->line($ticket, $this->mechanic, ['status' => 'For Inspection', 'repair_logs' => 'Original work', 'repair_completed_at' => now()]);
         Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("/api/tickets/{$ticket->ticket_id}/assign-mechanic", ['assigned_mechanic_id' => $this->person('Maintenance Personnel', ['is_active' => false])->id, 'reassign_reason' => 'Change shift'])->assertUnprocessable();
         $new = $this->person('Maintenance Personnel');
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/assign-mechanic", ['assigned_mechanic_id' => $new->id, 'reassign_reason' => 'Change shift'])->assertOk();
-        $this->assertSame('Under Repair', $line->fresh()->status);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/assign-mechanic", ['assigned_mechanic_id' => $new->id, 'reassign_reason' => 'Change shift'])->assertUnprocessable();
+        $this->assertSame('For Inspection', $line->fresh()->status);
+        $this->assertSame($this->mechanic->id, $line->fresh()->assigned_mechanic_id);
         $this->assertSame('Original work', $line->fresh()->repair_logs);
         Sanctum::actingAs($new, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification")->assertUnprocessable();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification")->assertForbidden();
     }
 
     public function test_changing_repair_method_cannot_skip_a_shop_return(): void

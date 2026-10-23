@@ -153,7 +153,7 @@ class TicketWorkflowTest extends TestCase
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
 
         Sanctum::actingAs($custodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
     }
 
     /** Full happy path: log repairs on every sub-issue, submit, verify -> Closed. */
@@ -349,7 +349,7 @@ class TicketWorkflowTest extends TestCase
         Sanctum::actingAs($this->custodian, ['*']);
 
         // Approve is a single click — no checklist or attestation gate any more.
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
         $this->assertSame('Closed', $ticket->fresh()->status);
     }
 
@@ -625,7 +625,7 @@ class TicketWorkflowTest extends TestCase
     }
 
     #[Test]
-    public function reassigning_the_mechanic_bumps_a_for_verification_ticket_back_to_active(): void
+    public function submitted_repairs_cannot_be_reset_by_mechanic_reassignment(): void
     {
         $ticket = $this->activeTicket($this->vehicle(), ['Low coolant level']);
         $this->logRepairsForEverySubIssue($ticket);
@@ -634,14 +634,14 @@ class TicketWorkflowTest extends TestCase
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
         $this->assertSame('For Verification', $ticket->fresh()->status);
 
-        // The new mechanic's work needs re-verifying — not the old one's.
+        // Return a failed item for rework before transferring responsibility.
         Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("/api/tickets/{$ticket->ticket_id}/assign-mechanic", [
             'assigned_mechanic_id' => $this->mechanic2->id,
             'reassign_reason' => 'Swapping mechanics after submission.',
-        ])->assertOk();
+        ])->assertUnprocessable();
 
-        $this->assertSame('Active', $ticket->fresh()->status);
+        $this->assertSame('For Verification', $ticket->fresh()->status);
     }
 
     #[Test]
@@ -935,7 +935,7 @@ class TicketWorkflowTest extends TestCase
         ])->assertUnprocessable();
 
         Sanctum::actingAs($this->custodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertUnprocessable();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertUnprocessable();
     }
 
     // =======================================================================
@@ -958,7 +958,7 @@ class TicketWorkflowTest extends TestCase
         Sanctum::actingAs($this->custodian, ['*']);
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
 
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])
             ->assertForbidden()
             ->assertJsonFragment(['message' => 'You performed repair work on this ticket — it must be verified by a different Custodian. Reassign this ticket to another Custodian.']);
 
@@ -1001,7 +1001,7 @@ class TicketWorkflowTest extends TestCase
         // still cannot verify it, even though assigned_mechanic_id now
         // names someone else entirely.
         Sanctum::actingAs($this->custodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])
             ->assertForbidden()
             ->assertJsonFragment(['message' => 'You performed repair work on this ticket — it must be verified by a different Custodian. Reassign this ticket to another Custodian.']);
     }
@@ -1022,7 +1022,7 @@ class TicketWorkflowTest extends TestCase
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
 
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertForbidden();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertForbidden();
 
         // The actual, correct fix: reassign the ticket to a different
         // Custodian, who can then verify it normally.
@@ -1033,7 +1033,7 @@ class TicketWorkflowTest extends TestCase
         ])->assertOk();
 
         Sanctum::actingAs($standInCustodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
 
         $this->assertSame('Closed', $ticket->fresh()->status);
         $this->assertSame($standInCustodian->id, $ticket->fresh()->closed_by);
@@ -1048,7 +1048,7 @@ class TicketWorkflowTest extends TestCase
 
         Sanctum::actingAs($this->mechanic, ['*']);
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertForbidden();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertForbidden();
     }
 
     #[Test]
@@ -1070,7 +1070,7 @@ class TicketWorkflowTest extends TestCase
 
         $response->assertJsonPath(
             'warning',
-            "{$this->mechanic->name} is also the assigned mechanic on: {$subIssue->title}. They won't be able to verify their own repair there — reassign those sub-issues to a different mechanic, or this ticket to a different Custodian."
+            "{$this->mechanic->name} has performed or handled repair work on: {$subIssue->title}. They won't be able to verify their own repair there — reassign those sub-issues to a different mechanic, or this ticket to a different Custodian."
         );
         $this->assertSame($this->mechanic->id, $ticket->fresh()->assigned_custodian_id, 'The conflict is a warning, not a block.');
     }
@@ -1290,7 +1290,7 @@ class TicketWorkflowTest extends TestCase
 
         // …and the Custodian can verify and close it.
         Sanctum::actingAs($this->custodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
         $this->assertSame('Closed', $ticket->fresh()->status);
     }
 

@@ -49,12 +49,14 @@ The workflow end to end:
 1. **Report** — a Custodian or Maintenance Personnel files an Issue Report (a Maintenance Personnel account is notified-forward to the Custodian, since they still can't create the ticket themselves — see §3).
 2. **Propose** — the Custodian proposes a ticket (optionally linked to that report), entering **Pending Approval**.
 3. **Approve** — the Admin reviews, can edit ticket/sub-issue fields, and approves (the ticket becomes **Active**, assigning the mechanics for its in-house sub-issues) or declines (the proposal remains traceable as **Declined**).
-4. **Repair** — the assigned Maintenance Personnel logs work on the ticket's sub-issues. Admin handles external-shop dispatch and return details; the handler cannot verify that work.
+4. **Repair** — the assigned Maintenance Personnel logs work on the ticket's sub-issues. Admin handles external-shop sending, return and repeat rework cycles; previous handlers cannot verify that work. External costs and provider details are included in the unified ledger at closure.
 5. **Verify** — the assigned Custodian runs a functional test. A user must not verify their own repair — enforced server-side even for a dual-role (Custodian + Maintenance Personnel) account on the same sub-issue. Verification is Custodian-only, with no Admin fallback; if the assigned Custodian is unavailable, the ticket is reassigned to a different Custodian instead.
-6. **Decide** — the assigned Custodian uses the verification popup to Approve or Disapprove. Disapproval requires a reason and returns the ticket for repair. The former Admin confirmation and decision-close flow is not the current closure path.
+6. **Decide** — the assigned Custodian uses the verification popup to Approve or Disapprove. Approval requires explicit personal-test attestation. Disapproval requires a reason and selects the failed items for rework; other submitted repairs stay submitted. The former Admin confirmation and decision-close flow is not the current closure path.
 7. **Close** — successful Custodian verification closes the ticket and notifies the Admin. The server checks assignment, repair readiness, and self-verification restrictions before accepting the decision.
 
 Extra signals layered on top: **recurrence detection** (the same fault reported again soon after a "fix" flags as a likely rework) and **aging** (a ticket open more than 30 days is flagged).
+
+Selected unfinished work can be reassigned without resetting submitted repairs. The schedule-conversion job checks each minute against Philippine date and service time; the deployment must run Laravel's scheduler. See [the ticket process review](Ticket-Process-Review-2026-10-24.md) for the fixes, migration and verification evidence.
 
 ## 6. Other modules
 

@@ -18,4 +18,4 @@ Start with the overview, then open the detailed reference or the document needed
 
 Older audits, UI reports, geography-review evidence, planning documents and superseded exports live in [the historical archive](../docs/archive/vms/README.md). Their dates and claims describe earlier revisions. They do not supersede the current audit or establish production acceptance.
 
-The latest recorded regression result is 489 backend tests / 2,339 assertions at revision `72d754c`; see Sample-Data.md. Six audit findings remain open. The document cleanup does not fix application behavior or certify that every diagram or older generated document matches the current implementation.
+The latest recorded regression result is 502 backend tests / 2,461 assertions after the ticket-process fixes; see [the implementation follow-up](Ticket-Process-Review-2026-10-24.md#implementation-follow-up--24-october-2026). Six broader system-audit findings remain open. Diagrams and older generated artifacts are not a substitute for the current code and audit evidence.

@@ -126,7 +126,7 @@ class MultiRoleTest extends TestCase
         // Juan (back in his Custodian hat) CANNOT attest to his own repair —
         // "don't grade your own homework" holds per person, not per role,
         // even though he's this ticket's assigned Custodian.
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])
             ->assertForbidden()
             ->assertJsonFragment(['message' => 'You performed repair work on this ticket — it must be verified by a different Custodian. Reassign this ticket to another Custodian.']);
 
@@ -141,7 +141,7 @@ class MultiRoleTest extends TestCase
         ])->assertOk();
 
         Sanctum::actingAs($standInCustodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
 
         $this->assertSame('Closed', $ticket->fresh()->status);
         $this->assertSame('Available', $vehicle->fresh()->status);
@@ -195,10 +195,10 @@ class MultiRoleTest extends TestCase
 
         // Juan (as Admin) cannot verify at all — ticket.verify is
         // Custodian-only, full stop.
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertForbidden();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertForbidden();
 
         Sanctum::actingAs($custodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
 
         $this->assertSame('Closed', $ticket->fresh()->status);
     }

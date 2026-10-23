@@ -15,6 +15,7 @@ class VehicleMaintenanceRecord extends Model
     protected $primaryKey = 'maintenance_id';
 
     protected $fillable = [
+        'ticket_sub_issue_id',
         'vehicle_id',
         'source_vehicle_id',
         'part_name',
@@ -78,7 +79,7 @@ class VehicleMaintenanceRecord extends Model
         if ($this->originatingSchedule) {
             return 'Scheduled Maintenance';
         }
-        if ($this->issue_report_id && $this->is_external) {
+        if ($this->is_external) {
             return 'External Shop';
         }
         if ($this->issue_report_id) {

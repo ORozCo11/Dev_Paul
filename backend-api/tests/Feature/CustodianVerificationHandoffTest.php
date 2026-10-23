@@ -155,7 +155,7 @@ class CustodianVerificationHandoffTest extends TestCase
         $this->assertSame('For Verification', $ticket->fresh()->status);
 
         // The Approve button on its own (no checklist, no attestation) closes it.
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved'])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
 
         $fresh = $ticket->fresh(['subIssues']);
         $this->assertSame('Closed', $fresh->status);
@@ -206,7 +206,7 @@ class CustodianVerificationHandoffTest extends TestCase
         $this->logRepair($ticket, $ticket->subIssues->first()->sub_issue_id);
         $otherCustodian = User::factory()->create(['role' => 'Custodian']);
         $reject = ['verification_verdict' => 'Rejected', 'verification_notes' => 'Not fixed.'];
-        $approve = ['functional_test' => $this->passingChecklist(), 'test_attested' => true];
+        $approve = ['verification_verdict' => 'Approved', 'functional_test' => $this->passingChecklist(), 'test_attested' => true];
 
         foreach ([$otherCustodian, $this->admin, $this->mechanic] as $user) {
             Sanctum::actingAs($user, ['*']);

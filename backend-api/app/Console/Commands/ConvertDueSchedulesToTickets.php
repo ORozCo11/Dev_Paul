@@ -49,9 +49,16 @@ class ConvertDueSchedulesToTickets extends Command
 
     public function handle(): int
     {
+        $localNow = now('Asia/Manila');
         $due = VehicleMaintenanceSchedule::where('status', 'Scheduled')
             ->whereNull('resulting_ticket_id')
-            ->whereDate('scheduled_date', '<=', now()->toDateString())
+            ->where(function ($query) use ($localNow) {
+                $query->whereDate('scheduled_date', '<', $localNow->toDateString())
+                    ->orWhere(function ($today) use ($localNow) {
+                        $today->whereDate('scheduled_date', $localNow->toDateString())
+                            ->where(fn ($time) => $time->whereNull('scheduled_time')->orWhere('scheduled_time', '<=', $localNow->format('H:i:s')));
+                    });
+            })
             ->with('vehicle')
             ->get();
 

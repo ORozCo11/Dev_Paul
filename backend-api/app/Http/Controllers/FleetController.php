@@ -817,11 +817,10 @@ class FleetController extends Controller
             : null;
 
         // #10 — lifetime maintenance cost is the full picture: standalone
-        // maintenance records PLUS every ticket sub-issue's repair cost
-        // (open or closed; cancelled tickets excluded). Previously only the
-        // records were counted, so ticket-driven repairs were invisible.
+        // records plus unfinished ticket items. Done items already have a
+        // ledger entry; adding them again would double-count closed repairs.
         $recordSpend = (float) VehicleMaintenanceRecord::where('vehicle_id', $vehicle->vehicle_id)->sum('maintenance_cost');
-        $ticketSpend = (float) TicketSubIssue::whereHas('ticket', fn ($q) =>
+        $ticketSpend = (float) TicketSubIssue::where('status', '!=', 'Done')->whereHas('ticket', fn ($q) =>
             $q->where('vehicle_id', $vehicle->vehicle_id)->where('status', '!=', 'Cancelled')
         )->sum('maintenance_cost');
         $totalSpend = round($recordSpend + $ticketSpend, 2);

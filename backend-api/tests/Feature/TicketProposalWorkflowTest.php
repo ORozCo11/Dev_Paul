@@ -592,7 +592,7 @@ class TicketProposalWorkflowTest extends TestCase
         $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertForbidden();
         $ticket->update(['assigned_custodian_id' => $this->custodian->id]);
         Sanctum::actingAs($this->custodian, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", [])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
         foreach ([$this->mechanic, $second] as $mechanic) {
             $this->assertDatabaseHas('notifications', ['user_id' => $mechanic->id, 'type' => 'ticket_verified']);
         }
