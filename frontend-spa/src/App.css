@@ -16484,6 +16484,22 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
 .workflow-status-controls .ghost-button { min-height:34px; padding:6px 10px; font-size:.75rem; }
 
 /* Ticket cards follow the photo-led layout used in the ticket reference. */
+/* Keep badges and capsule labels square throughout the application. */
+html :is(
+  .status-badge, .status-pill, .ticket-status-pill, .ticket-stage-badge,
+  .ticket-next-step-badge, .ticket-preview-badge, .ticket-role-tag,
+  .ticket-count-pill, .count-badge, .schedule-count-badge, .sch-status-badge,
+  .sch-overdue-pill, .sch-you-tag, .vehicle-readiness-badge, .dispatch-chip,
+  .cm-badge, .search-badge, .module-nav-badge, .issue-id-badge,
+  .issue-filter-status-chip, .subissue-meta-chip, .subissue-test-chip,
+  .proposal-review-pill, .superadmin-code-chip, .part-tag, .log-category-tag,
+  .location-snapshot-tag, .risk-watch-tag, .emergency-readiness-row-tag,
+  .dashboard-list-modal-tag, .area-chart-tag, .fx-chip, .fx-primary-tag,
+  .wizard-step-pill, .date-badge-pill,
+  .dashboard-command-pills > *, .dashboard-live-chips > *
+) {
+  border-radius: 0 !important;
+}
 .ticket-page :is(.status-badge, .ticket-stage-badge, .count-badge, .ticket-list-identity strong, .area-chart-tag, .ticket-preview-badge) {
   border-radius: 0 !important;
 }
