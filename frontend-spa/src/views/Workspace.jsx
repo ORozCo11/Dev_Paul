@@ -3361,9 +3361,43 @@ function Workspace() {
     }
 
     if (activeModule === 'categories') {
+      const typeSummary = visibleRows.map((type) => ({
+        label: type.category_name,
+        value: Number(type.vehicles_count) || 0,
+        color: type.domain === 'Water' ? '#06b6d4' : '#2563eb',
+      }));
+      const vehicleTotal = typeSummary.reduce((total, type) => total + type.value, 0);
+      const largestTypeCount = Math.max(1, ...typeSummary.map((type) => type.value));
+      const populatedTypes = typeSummary.filter((type) => type.value > 0).sort((a, b) => b.value - a.value);
+      const unusedTypes = typeSummary.filter((type) => type.value === 0);
       return (
         <ModulePanel
           description="Maintain standard vehicle type choices used across dropdowns."
+          statCards={
+            <section className="panel vehicle-type-overview">
+              <div className="vehicle-type-overview-summary">
+                <span className="vehicle-type-eyebrow">Fleet composition</span>
+                <h3>Vehicle Type Overview</h3>
+                <p>A quick look at your fleet by vehicle type.</p>
+                <dl>
+                  <div><dt>Vehicle types</dt><dd>{visibleRows.length}</dd></div>
+                  <div><dt>Total vehicles</dt><dd>{vehicleTotal}</dd></div>
+                  <div><dt>Unused types</dt><dd>{typeSummary.filter((type) => type.value === 0).length}</dd></div>
+                </dl>
+              </div>
+              <div className="vehicle-type-overview-chart">
+                <div className="vehicle-type-chart-heading"><h4>Vehicles by type</h4><span>Current selection</span></div>
+                {populatedTypes.length > 0 ? <div className="vehicle-type-bars">
+                  {populatedTypes.map((type) => <div className="vehicle-type-bar-row" key={type.label}>
+                    <span>{type.label}</span>
+                    <div className="vehicle-type-bar-track" aria-hidden="true"><div style={{ width: `${type.value / largestTypeCount * 100}%`, background: type.color }} /></div>
+                    <strong>{type.value} <span>{type.value === 1 ? 'vehicle' : 'vehicles'}</span></strong>
+                  </div>)}
+                </div> : <p className="empty-state">No vehicles assigned to the selected types.</p>}
+                {unusedTypes.length > 0 && <p className="vehicle-type-unused"><strong>No vehicles yet:</strong> {unusedTypes.map((type) => type.label).join(', ')}</p>}
+              </div>
+            </section>
+          }
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
