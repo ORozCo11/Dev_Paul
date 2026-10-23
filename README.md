@@ -439,3 +439,10 @@ After pulling this update, run `php artisan migrate` from `backend-api` to apply
 ### Account switcher setup
 
 For local/testing use, sign in with `impersonation@test.com` and password `test123`. Run `php artisan db:seed --class=ImpersonationAccountSeeder` from `backend-api` to create or reset only this utility account. The regular user seeder also includes it. Its role is `Impersonator`, separate from Super Admin, and no schema migration is needed on an up-to-date database. Fixed demo credentials are not seeded in production.
+
+
+## October 23, 2026 UI documentation update
+
+See [UI updates and branch status](VMS%20Docs/UI-UPDATES-2026-10-23.md) for ticket list/card behavior, square badges, the removal of the Custom Fields editor, vehicle type analytics, automatic satellite labels, location summary cards, report readability fixes, and the province account selector update. Changes were delivered on separate `v2` branches; the note distinguishes pushed work from the selector/documentation branch and does not claim deployment.
+
+The Markdown references in `VMS Docs/` are updated. Generated documentation in PDF, Word and HTML formats has not been regenerated.

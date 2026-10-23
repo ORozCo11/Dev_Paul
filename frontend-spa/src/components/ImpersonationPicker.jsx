@@ -30,12 +30,13 @@ function AccountCascade({ user, rootToken }) {
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
   }, [rootToken, retry]);
-  const currentAccount = accounts.find((account) => String(account.id) === String(user.id));
+  const provinceAccounts = accounts.filter((account) => account.province_id != null && account.province_name);
+  const currentAccount = provinceAccounts.find((account) => String(account.id) === String(user.id));
   const selected = selection ?? (currentAccount ? {
     province: keyOf(currentAccount.province_id), city: keyOf(currentAccount.city_id),
     barangay: keyOf(currentAccount.barangay_id), user: String(currentAccount.id),
   } : { province: '', city: '', barangay: '', user: '' });
-  const provinceRows = accounts.filter((account) => keyOf(account.province_id) === selected.province);
+  const provinceRows = provinceAccounts.filter((account) => keyOf(account.province_id) === selected.province);
   const cityRows = provinceRows.filter((account) => keyOf(account.city_id) === selected.city);
   const barangayRows = cityRows.filter((account) => keyOf(account.barangay_id) === selected.barangay);
   const selectedUserId = barangayRows.some((account) => String(account.id) === selected.user)
@@ -64,7 +65,7 @@ function AccountCascade({ user, rootToken }) {
   };
   return <div className="account-cascade" aria-label="Impersonation account controls">
     <SearchableSelect aria-label="Impersonation province" value={selected.province} disabled={loading || busy} onChange={(event) => setSelection({ province: event.target.value, city: '', barangay: '', user: '' })}>
-      <option value="">{loading ? 'Loading provinces...' : 'Province'}</option>{options(accounts, 'province_id', 'province_name', 'Platform accounts').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+      <option value="">{loading ? 'Loading provinces...' : 'Province'}</option>{options(provinceAccounts, 'province_id', 'province_name', '').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
     </SearchableSelect>
     <SearchableSelect aria-label="Impersonation city or municipality" value={selected.city} disabled={loading || busy || !selected.province} onChange={(event) => setSelection({ ...selected, city: event.target.value, barangay: '', user: '' })}>
       <option value="">City / Municipality</option>{options(provinceRows, 'city_id', 'city_name', 'No city / municipality').map(([id, name]) => <option key={id} value={id}>{name}</option>)}

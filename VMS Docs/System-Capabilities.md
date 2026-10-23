@@ -1,5 +1,7 @@
 # Barangay VMS — Full System Capabilities Reference
 
+UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
+
 A complete, code-verified catalog of everything the system can do today, organized by module. Every capability listed here was confirmed directly against the current codebase (not assumed) — where something is partially built, unused, or a known gap, it's flagged explicitly rather than glossed over. See `Documentation.md` in this folder for the shorter architectural overview; this document goes deep on every feature.
 
 ---
@@ -56,7 +58,7 @@ New vehicles start at status **Available**, condition **Good**. Registration has
 
 ### 3.2 Vehicle Types
 
-A Vehicle Type captures a unique name, a Domain (Land/Water, required), a **default operational criticality** (Critical/High/Normal), and an optional description. It can also carry Admin-defined **custom fields** — field name, type (Text, Number, Dropdown, Date, Yes/No), required or not, an optional unit, dropdown options and display order — managed from the Edit Vehicle Type page. Fields are **archived, never deleted**: an archived field stops being asked for, but vehicles keep the values they hold (and the profile still shows them); a field's type is fixed once created so stored values stay valid. Values are stored per vehicle and validated server-side on add, edit and import. Fully Admin-only CRUD; deletion is blocked while any vehicle (in any barangay) still references the type. Domain is what makes a vehicle "Water" for every Hull Material/Engine Type requirement elsewhere in the system, and it also relabels fields (Plate Number → "Registration/Hull No.") and changes the capacity-unit choices offered.
+A Vehicle Type captures a unique name, a Domain (Land/Water, required), a **default operational criticality** (Critical/High/Normal), and an optional description. It can also carry Admin-defined **custom fields** — field name, type (Text, Number, Dropdown, Date, Yes/No), required or not, an optional unit, dropdown options and display order — supported by the existing data model and API. The Custom Fields management section is removed from Edit Vehicle Type on `ui/custom-fields-layout`; stored values and vehicle/import handling remain. Fields are **archived, never deleted**: an archived field stops being asked for, but vehicles keep the values they hold (and the profile still shows them); a field's type is fixed once created so stored values stay valid. Values are stored per vehicle and validated server-side on add, edit and import. Fully Admin-only CRUD; deletion is blocked while any vehicle (in any barangay) still references the type. Domain is what makes a vehicle "Water" for every Hull Material/Engine Type requirement elsewhere in the system, and it also relabels fields (Plate Number → "Registration/Hull No.") and changes the capacity-unit choices offered.
 
 ### 3.3 Vehicle Location
 
@@ -296,7 +298,7 @@ A deactivated account's existing token stops working on its very next request, n
 
 ### 11.3 Impersonation
 
-Impersonation can be started only from a dedicated Impersonator account or a directly logged-in Super Admin. Ordinary Admin, Custodian and Maintenance Personnel accounts cannot start it. The dedicated login automatically opens a default active barangay Admin; the header then offers **Province ? City/Municipality ? Barangay ? User ? Impersonate**, with direct switching and an automatically recorded reason. The dedicated account can target platform accounts; a Super Admin cannot impersonate another Super Admin. An impersonated account cannot start nested sessions. Outside local/testing environments, impersonated sessions are read-only and expire after 30 minutes. The dedicated account cannot be converted into a tenantless staff account through platform role editing.
+Impersonation can be started only from a dedicated Impersonator account or a directly logged-in Super Admin. Ordinary Admin, Custodian and Maintenance Personnel accounts cannot start it. The dedicated login automatically opens a default active barangay Admin; the header then offers **Province ? City/Municipality ? Barangay ? User ? Impersonate**, with direct switching and an automatically recorded reason. The backend dedicated account can target platform accounts, but the updated header province dropdown excludes the ?Platform accounts? option and lists only named provinces; a Super Admin cannot impersonate another Super Admin. An impersonated account cannot start nested sessions. Outside local/testing environments, impersonated sessions are read-only and expire after 30 minutes. The dedicated account cannot be converted into a tenantless staff account through platform role editing.
 
 ### 11.4 Activity Log
 
