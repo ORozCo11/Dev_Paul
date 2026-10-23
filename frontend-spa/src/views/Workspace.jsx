@@ -947,6 +947,7 @@ function Workspace() {
 
   }
   const [allHubs, setAllHubs] = useState([]);
+  const [locationMapSummary, setLocationMapSummary] = useState({ hubs: null, unassigned: null });
   const [locationsTab, setLocationsTab] = useState('map');
   const [selectedMapVehicleId, setSelectedMapVehicleId] = useState(null);
   const notificationsRef = useRef(null);
@@ -3509,7 +3510,15 @@ function Workspace() {
     if (activeModule === 'locations') {
       return (
         <>
-          <ModulePanel description="Record current vehicle stationing and keep a location history.">
+          <ModulePanel description="Record current vehicle stationing and keep a location history."
+            statCards={locationsTab === 'map' ? (
+              <dl className="location-map-summary" aria-label="Vehicle location summary">
+                <div><dt>Total vehicles</dt><dd>{(lookups.vehicles ?? []).length}</dd><span>In the selected area</span></div>
+                <div><dt>Total hubs</dt><dd>{locationMapSummary.hubs ?? '—'}</dd><span>Visible locations on the map</span></div>
+                <div className="location-map-summary-unassigned"><dt>Vehicles without a hub</dt><dd>{locationMapSummary.unassigned ?? '—'}</dd><span>No matching hub assigned</span></div>
+              </dl>
+            ) : null}
+          >
             <div className="locations-tab-bar">
               <button
                 className={`locations-tab-button ${locationsTab === 'map' ? 'active' : ''}`}
@@ -3545,6 +3554,7 @@ function Workspace() {
                     vehicles={lookups.vehicles ?? []}
                     onClearSelectedVehicle={() => setSelectedMapVehicleId(null)}
                     onHubsChange={setAllHubs}
+                    onSummaryChange={setLocationMapSummary}
                     canManageHubs={hasRole(user, 'Admin')}
                     boundaryOverride={mapBoundaryOverride}
                     onAddHub={() => navigate(`${roleRoutes[user.role]}/locations/new`)}

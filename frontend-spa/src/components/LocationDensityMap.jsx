@@ -307,6 +307,7 @@ function LocationDensityMap({
   selectedVehicleId = null,
   onClearSelectedVehicle = null,
   onHubsChange = null,
+  onSummaryChange = null,
   canManageHubs = false,
   // Navigates to the dedicated "Add Location" form page — Add Hub used to
   // start a click-the-map-to-pin mode right here, but that page already
@@ -319,6 +320,7 @@ function LocationDensityMap({
   boundaryOverride = null,
 }) {
   const [hubRecords, setHubRecords] = useState([]);
+  const [hubsLoaded, setHubsLoaded] = useState(false);
   const [pendingLatLng, setPendingLatLng] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
   const [hubNameDraft, setHubNameDraft] = useState('');
@@ -350,6 +352,7 @@ function LocationDensityMap({
       const response = await api.get('/hubs');
       const normalized = response.data.map(normalizeHub);
       setHubRecords(normalized);
+      setHubsLoaded(true);
       if (onHubsChange) {
         onHubsChange(normalized.filter((hub) => !hub.isHidden));
       }
@@ -518,6 +521,13 @@ function LocationDensityMap({
     [hubRecords],
   );
 
+  useEffect(() => {
+    onSummaryChange?.({
+      hubs: hubsLoaded ? hubs.length : null,
+      unassigned: hubsLoaded ? vehicles.filter((vehicle) => !findHubForVehicle(vehicle, hubs)).length : null,
+    });
+  }, [hubs, hubsLoaded, vehicles, onSummaryChange]);
+
   const hubIcons = useMemo(
     () => Object.fromEntries(hubs.map((hub) => [hub.id, createHubIcon(hub.label, hub.isCustom)])),
     [hubs],
@@ -554,6 +564,7 @@ function LocationDensityMap({
 
   return (
     <div className={`location-density-map-shell${isMaximized ? ' is-maximized' : ''}`} ref={mapShellRef}>
+
       <div className="location-density-toolbar">
         <span className="location-density-hint">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

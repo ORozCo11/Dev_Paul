@@ -16484,6 +16484,17 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
 .workflow-status-controls .ghost-button { min-height:34px; padding:6px 10px; font-size:.75rem; }
 
 /* Ticket cards follow the photo-led layout used in the ticket reference. */
+.location-map-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 0 0 16px; }
+.location-map-summary > div { padding: 16px 18px; border: 1px solid var(--border, #dbe5f3); border-left: 3px solid #2563eb; background: var(--surface, #fff); }
+.location-map-summary dt { color: var(--text, #0f2741); font-size: .8rem; font-weight: 600; }
+.location-map-summary dd { margin: 6px 0; color: #2563eb; font-size: 1.7rem; line-height: 1.2; font-weight: 800; }
+.location-map-summary span { color: var(--text-muted, #64748b); font-size: .7rem; }
+.location-map-summary > .location-map-summary-unassigned { border-left-color: #d97706; }
+.location-map-summary-unassigned dd { color: #b45309; }
+@media (max-width: 640px) {
+  .location-map-summary { grid-template-columns: 1fr; gap: 8px; }
+  .location-map-summary > div { padding: 12px 14px; }
+}
 .ticket-page :is(.status-badge, .ticket-stage-badge, .count-badge, .ticket-list-identity strong, .area-chart-tag, .ticket-preview-badge) {
   border-radius: 0 !important;
 }
