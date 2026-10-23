@@ -4,7 +4,7 @@ import './VehicleTripLog.css';
 
 const dateTime = (value) => value ? new Date(value).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' }) : '—';
 
-export default function VehicleTripLog({ vehicle, canLog = false, onChanged }) {
+export default function VehicleTripLog({ vehicle, canLog = false, onChanged, onViewTicket }) {
   const [page, setPage] = useState(1);
   const [result, setResult] = useState(null);
   const [revision, setRevision] = useState(0);
@@ -38,16 +38,23 @@ export default function VehicleTripLog({ vehicle, canLog = false, onChanged }) {
       form.reset(); setPage(1); reload();
       onChanged?.();
     } catch (err) {
+      if (err.response?.data?.blocking_tickets) setResult((current) => ({ ...current, blocking_tickets: err.response.data.blocking_tickets }));
       setError(Object.values(err.response?.data?.errors ?? {}).flat().join(' ') || err.response?.data?.message || 'Could not save trip.');
     } finally { setBusy(false); }
   };
   const open = result?.open_trip;
+  const blockingTickets = result?.blocking_tickets ?? [];
+  const dispatchBlocked = blockingTickets.length > 0;
   return <section className="veh-card vehicle-trip-log">
     <div className="veh-card-head"><h4>Trip log</h4><span>{result?.total ?? 0} trips · Philippine time</span></div>
     {error && <div className="notice error" role="alert">{error} {loadFailed && <button type="button" className="ghost-button" onClick={reload}>Retry</button>}</div>}
     {loading && <p role="status">Loading trips…</p>}
     {!loading && !loadFailed && <p>{vehicle.vehicle_name} · {open ? `Dispatched since ${dateTime(open.started_at)}` : vehicle.status === 'Available' ? 'In station' : vehicle.status}</p>}
-    {!loading && !loadFailed && canLog && (open || vehicle.status === 'Available') && <form className="trip-log-form" onSubmit={(event) => save(event, !!open)}>
+    {!loading && !loadFailed && !open && dispatchBlocked && <div className="notice warning" role="status">
+      <p>Dispatch is blocked by an ongoing maintenance ticket. Resolve the ticket before recording a departure.</p>
+      <ul>{blockingTickets.map((ticket) => <li key={ticket.ticket_id}>{onViewTicket ? <button type="button" className="cell-link" onClick={() => onViewTicket(ticket)}>View Ticket #{ticket.barangay_number ?? ticket.ticket_id}</button> : ticket.ticket_title} <span>({ticket.status})</span></li>)}</ul>
+    </div>}
+    {!loading && !loadFailed && canLog && (open || (vehicle.status === 'Available' && !dispatchBlocked)) && <form className="trip-log-form" onSubmit={(event) => save(event, !!open)}>
       <h4>{open ? `Return vehicle — ${open.purpose}` : 'Record departure'}</h4>
       {!open && <>
         <label>Driver<input name="driver_name" required maxLength={255} /></label>

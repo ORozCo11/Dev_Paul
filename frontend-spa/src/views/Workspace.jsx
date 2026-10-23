@@ -2862,6 +2862,7 @@ function Workspace() {
           ) : dispatchVehicleId ? (
             <VehicleDispatchPage
               key={dispatchVehicleId}
+              onViewTicket={openTicketProfile}
               vehicle={(records.vehicles ?? []).find((v) => String(v.vehicle_id) === String(dispatchVehicleId))}
               loading={loading}
               user={user}
@@ -16903,7 +16904,7 @@ function CapabilityImpactCard({ items, onNavigate, basePath }) {
 // Vehicle Usage Log — open a trip when the vehicle goes out, close it when it
 // is back. Recording only; it never changes the vehicle's status.
 // Full-page dispatch and trip history, reached from Vehicle Management.
-function VehicleDispatchPage({ vehicle, loading, user, onBack, onChanged }) {
+function VehicleDispatchPage({ vehicle, loading, user, onBack, onChanged, onViewTicket }) {
   if (!canDo(user, 'usage.view')) return <ModulePanel><p role="alert">You do not have access to vehicle dispatch.</p><button type="button" className="ghost-button" onClick={onBack}>Back to Vehicle Management</button></ModulePanel>;
   if (!vehicle && loading) return <ModuleLoader label="Loading vehicle dispatch" />;
   if (!vehicle) return <ModulePanel><p role="alert">This vehicle was not found or is not available to your account.</p><button type="button" className="ghost-button" onClick={onBack}>Back to Vehicle Management</button></ModulePanel>;
@@ -16913,7 +16914,7 @@ function VehicleDispatchPage({ vehicle, loading, user, onBack, onChanged }) {
         <div><h2>{vehicle.vehicle_name}</h2><p className="muted">{vehicle.plate_number}{vehicle.category?.category_name ? ` - ${vehicle.category.category_name}` : ''}</p></div>
         <button type="button" className="ghost-button" onClick={onBack}><Icon name="arrowLeft" size={16} /> Back to Vehicle Management</button>
       </div>
-      <VehicleTripLog vehicle={vehicle} canLog={canDo(user, 'usage.log')} onChanged={onChanged} />
+      <VehicleTripLog vehicle={vehicle} canLog={canDo(user, 'usage.log')} onChanged={onChanged} onViewTicket={onViewTicket} />
     </div>
   </ModulePanel>;
 }

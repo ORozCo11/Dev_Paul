@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\AuthorizesAbilities;
 use App\Models\ActivityLog;
+use App\Models\MaintenanceTicket;
 use App\Models\Vehicle;
 use App\Models\VehicleHistory;
 use App\Models\VehicleUsageLog;
@@ -33,6 +34,7 @@ class VehicleUsageController extends Controller
         if ($request->has('page') || $request->has('per_page')) {
             $result = $query->paginate($data['per_page'] ?? 10);
             return response()->json(array_merge($result->toArray(), [
+                'blocking_tickets' => $this->blockingTickets($vehicle),
                 'open_trip' => $vehicle->hasMany(VehicleUsageLog::class, 'vehicle_id', 'vehicle_id')
                     ->whereNull('ended_at')->first(),
             ]));
@@ -44,10 +46,6 @@ class VehicleUsageController extends Controller
     public function start(Request $request, Vehicle $vehicle)
     {
         $this->requireAbility($request, 'usage.log');
-        abort_if(in_array($vehicle->status, ['Inactive', 'Decommissioned'], true), 422, 'This vehicle is archived or decommissioned.');
-        abort_unless($vehicle->status === 'Available', 422, "This vehicle is {$vehicle->status} and cannot be taken out right now.");
-        abort_if(VehicleUsageLog::where('vehicle_id', $vehicle->vehicle_id)->whereNull('ended_at')->exists(), 422, 'This vehicle already has an open trip. End it first.');
-
         $data = $request->validate([
             'purpose' => ['nullable', 'string', 'max:255'],
             'destination' => ['nullable', 'string', 'max:255'],
@@ -61,6 +59,11 @@ class VehicleUsageController extends Controller
 
         $log = DB::transaction(function () use ($data, $vehicle, $request) {
             $vehicle = Vehicle::whereKey($vehicle->vehicle_id)->lockForUpdate()->firstOrFail();
+            $blocking = $this->blockingTickets($vehicle);
+            abort_if($blocking->isNotEmpty(), response()->json([
+                'message' => 'Dispatch is blocked while this vehicle has an ongoing maintenance ticket. Open the ticket and resolve it before recording a departure.',
+                'blocking_tickets' => $blocking,
+            ], 422));
             abort_unless($vehicle->status === 'Available', 422, 'This vehicle is no longer available for dispatch.');
             abort_if(VehicleUsageLog::where('vehicle_id', $vehicle->vehicle_id)->whereNull('ended_at')->exists(), 422, 'This vehicle already has an open trip. End it first.');
             $log = VehicleUsageLog::create($data + ['vehicle_id' => $vehicle->vehicle_id, 'logged_by' => $request->user()->id, 'started_at' => $data['started_at'] ?? now()]);
@@ -95,6 +98,14 @@ class VehicleUsageController extends Controller
         });
 
         return $log->fresh()->load('loggedBy:id,name');
+    }
+
+    private function blockingTickets(Vehicle $vehicle)
+    {
+        return MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)
+            ->whereNotIn('status', ['Closed', 'Cancelled', 'Declined'])
+            ->orderBy('ticket_id')
+            ->get(['ticket_id', 'barangay_number', 'ticket_title', 'status']);
     }
 
     private function record(Request $request, Vehicle $vehicle, string $type, string $description, VehicleUsageLog $log): void

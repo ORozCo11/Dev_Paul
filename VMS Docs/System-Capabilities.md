@@ -321,7 +321,7 @@ Stated plainly, as found in the code — not implied to be bugs, just not (yet) 
 - **Managed file delivery:** new managed uploads use private storage and five-minute signed delivery URLs. Renewal requires an authenticated user with access to the underlying record; deleting the managed-file row revokes delivery. A signed URL can be used by its holder until expiry. Historical legacy URLs require migration separately if old records still reference public storage.
 - The **last-Admin protection** stops specific actions (deactivate, remove Admin role, platform role change) but doesn't prevent every conceivable way a barangay could end up without an active Admin — the Super Admin recovery tool exists specifically to fix that case after the fact, not to make it impossible in advance.
 - **Import / custom-field limits:** an import takes at most 500 rows / 2 MB per file; custom fields are per Vehicle Type (a template column per distinct label), and the import template does not yet include a per-row hull/engine hint beyond the Instructions sheet.
-- **Usage Log is recording only** — it does not gate or change vehicle status.
+- **Dispatch eligibility:** departure requires an Available vehicle with no ongoing maintenance ticket (including Pending Approval). Closed, Cancelled and Declined tickets do not block departure. This is enforced server-side for Admins and Custodians. Returning an already-dispatched vehicle remains allowed if a ticket opens during its trip. Trip records never change vehicle status; no deferral bypass currently exists.
 - **Barangay boundary lookup** depends on a public third-party geocoder with no guaranteed coverage — a legitimate "no boundary found" result is expected for some barangays, not a bug.
 
 ---

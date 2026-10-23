@@ -435,4 +435,35 @@ class SystemWorkflowAuditTest extends TestCase
         $next = $source->seedNextRecurrence(now()->toDateString(), $this->custodian->id);
         $this->assertSame($base->copy()->addDays(60)->toDateString(), $next->scheduled_date);
     }
+    public function test_ongoing_tickets_block_dispatch_even_when_vehicle_is_available(): void
+    {
+        foreach (['Pending Approval', 'Open', 'Active', 'For Verification'] as $status) {
+            $ticket = $this->ticket(['status' => $status]);
+            foreach ([$this->custodian, $this->admin] as $actor) {
+                Sanctum::actingAs($actor, ['*']);
+                $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", ['purpose' => 'Emergency response'])
+                    ->assertUnprocessable()->assertJsonPath('blocking_tickets.0.ticket_id', $ticket->ticket_id);
+            }
+            $ticket->delete();
+        }
+        $this->assertDatabaseCount('vehicle_usage_logs', 0);
+    }
+
+    public function test_terminal_tickets_do_not_block_dispatch_and_returns_remain_allowed(): void
+    {
+        Sanctum::actingAs($this->custodian, ['*']);
+        foreach (['Closed', 'Cancelled', 'Declined'] as $status) {
+            $this->ticket(['status' => $status]);
+        }
+        $trip = $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", ['purpose' => 'Supply run'])
+            ->assertCreated()->json();
+        $ticket = $this->ticket(['status' => 'Active']);
+        $this->getJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage?page=1&per_page=10")
+            ->assertOk()->assertJsonCount(1, 'blocking_tickets')
+            ->assertJsonPath('blocking_tickets.0.ticket_id', $ticket->ticket_id)
+            ->assertJsonPath('open_trip.usage_id', $trip['usage_id']);
+        $this->putJson("/api/usage-logs/{$trip['usage_id']}/end")->assertOk();
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage")->assertUnprocessable();
+    }
+
 }
