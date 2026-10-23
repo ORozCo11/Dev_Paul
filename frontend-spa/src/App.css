@@ -16476,6 +16476,34 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
   .location-map-summary { grid-template-columns: 1fr; gap: 8px; }
   .location-map-summary > div { padding: 12px 14px; }
 }
+
+.vehicle-type-overview { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(0, 2fr); gap: 32px; padding: 24px; border-top: 3px solid #2563eb; }
+.vehicle-type-eyebrow { display: block; margin-bottom: 8px; color: #2563eb; font-size: .65rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.vehicle-type-overview-summary h3 { margin: 0 0 8px; font-size: 1.1rem; color: var(--text, #0f2741); }
+.vehicle-type-overview-summary > p { margin: 0; color: var(--text-muted, #64748b); font-size: .8rem; }
+.vehicle-type-overview-summary dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 24px 0 0; }
+.vehicle-type-overview-summary dl > div { padding: 12px; background: var(--surface-2, #f8fafc); border-left: 2px solid #bfdbfe; }
+.vehicle-type-overview-summary dt { color: var(--text-muted, #64748b); font-size: .75rem; }
+.vehicle-type-overview-summary dd { margin: 6px 0 0; color: #2563eb; font-size: 1.7rem; font-weight: 800; }
+.vehicle-type-overview-chart { min-width: 0; border-left: 1px solid var(--border, #e2e8f0); padding-left: 32px; }
+.vehicle-type-chart-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 22px; }
+.vehicle-type-chart-heading > span { font-size: .7rem; color: var(--text-muted, #64748b); }
+.vehicle-type-overview-chart h4 { margin: 0; font-size: .9rem; }
+.vehicle-type-bars { display: grid; gap: 18px; }
+.vehicle-type-bar-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 90px; align-items: center; gap: 12px; font-size: .78rem; }
+.vehicle-type-bar-track { height: 10px; background: var(--surface-2, #eef2f7); }
+.vehicle-type-bar-track > div { height: 100%; }
+.vehicle-type-bar-row > strong { text-align: right; }
+.vehicle-type-bar-row > strong > span { font-weight: 400; }
+.vehicle-type-unused { margin: 22px 0 0; padding-top: 14px; border-top: 1px solid var(--border, #e2e8f0); color: var(--text-muted, #64748b); font-size: .72rem; line-height: 1.7; }
+.vehicle-type-unused strong { color: var(--text, #334155); font-weight: 600; }
+@media (max-width: 480px) {
+  .vehicle-type-bar-row { grid-template-columns: 85px minmax(0, 1fr) 72px; gap: 8px; font-size: .7rem; }
+}
+@media (max-width: 800px) {
+  .vehicle-type-overview { grid-template-columns: 1fr; gap: 20px; padding: 18px; }
+  .vehicle-type-overview-chart { border-left: 0; padding-left: 0; border-top: 1px solid var(--border, #e2e8f0); padding-top: 20px; }
+}
 .ticket-page :is(.status-badge, .ticket-stage-badge, .count-badge, .ticket-list-identity strong, .area-chart-tag, .ticket-preview-badge) {
   border-radius: 0 !important;
 }

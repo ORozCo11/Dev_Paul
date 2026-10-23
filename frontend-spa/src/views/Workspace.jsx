@@ -2913,9 +2913,6 @@ function Workspace() {
               categoryVehicleCount={editCategoryId ? (records.categories ?? []).find((c) => String(c.category_id) === String(editCategoryId))?.vehicles_count : null}
               onDirty={() => setHasUnsavedChanges(true)}
             />
-            {editCategoryId && canDo(user, 'vehicle_type.edit') && (
-              <CategoryFieldsManager categoryId={editCategoryId} onChanged={loadLookups} />
-            )}
             </>
           ) : (isNewSchedulePage || editScheduleId) ? (
             <FormPage
@@ -3348,9 +3345,43 @@ function Workspace() {
     }
 
     if (activeModule === 'categories') {
+      const typeSummary = visibleRows.map((type) => ({
+        label: type.category_name,
+        value: Number(type.vehicles_count) || 0,
+        color: type.domain === 'Water' ? '#06b6d4' : '#2563eb',
+      }));
+      const vehicleTotal = typeSummary.reduce((total, type) => total + type.value, 0);
+      const largestTypeCount = Math.max(1, ...typeSummary.map((type) => type.value));
+      const populatedTypes = typeSummary.filter((type) => type.value > 0).sort((a, b) => b.value - a.value);
+      const unusedTypes = typeSummary.filter((type) => type.value === 0);
       return (
         <ModulePanel
           description="Maintain standard vehicle type choices used across dropdowns."
+          statCards={
+            <section className="panel vehicle-type-overview">
+              <div className="vehicle-type-overview-summary">
+                <span className="vehicle-type-eyebrow">Fleet composition</span>
+                <h3>Vehicle Type Overview</h3>
+                <p>A quick look at your fleet by vehicle type.</p>
+                <dl>
+                  <div><dt>Vehicle types</dt><dd>{visibleRows.length}</dd></div>
+                  <div><dt>Total vehicles</dt><dd>{vehicleTotal}</dd></div>
+                  <div><dt>Unused types</dt><dd>{typeSummary.filter((type) => type.value === 0).length}</dd></div>
+                </dl>
+              </div>
+              <div className="vehicle-type-overview-chart">
+                <div className="vehicle-type-chart-heading"><h4>Vehicles by type</h4><span>Current selection</span></div>
+                {populatedTypes.length > 0 ? <div className="vehicle-type-bars">
+                  {populatedTypes.map((type) => <div className="vehicle-type-bar-row" key={type.label}>
+                    <span>{type.label}</span>
+                    <div className="vehicle-type-bar-track" aria-hidden="true"><div style={{ width: `${type.value / largestTypeCount * 100}%`, background: type.color }} /></div>
+                    <strong>{type.value} <span>{type.value === 1 ? 'vehicle' : 'vehicles'}</span></strong>
+                  </div>)}
+                </div> : <p className="empty-state">No vehicles assigned to the selected types.</p>}
+                {unusedTypes.length > 0 && <p className="vehicle-type-unused"><strong>No vehicles yet:</strong> {unusedTypes.map((type) => type.label).join(', ')}</p>}
+              </div>
+            </section>
+          }
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
@@ -16651,116 +16682,6 @@ function VehicleImportModal({ open, onClose, onImported }) {
     </FormModal>
   );
 }
-// Admin-defined custom fields for one Vehicle Type. Fields are archived, not
-// deleted, so vehicles keep the values they already hold.
-const CUSTOM_FIELD_TYPES = [
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
-  { value: 'dropdown', label: 'Dropdown' },
-  { value: 'date', label: 'Date' },
-  { value: 'yes_no', label: 'Yes / No' },
-];
-const BLANK_FIELD_DRAFT = { label: '', field_type: 'text', is_required: false, unit: '', options: '' };
-
-function CategoryFieldsManager({ categoryId, onChanged }) {
-  const [fields, setFields] = useState([]);
-  const [draft, setDraft] = useState(BLANK_FIELD_DRAFT);
-  const [editingId, setEditingId] = useState(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    const res = await api.get(`/categories/${categoryId}/fields`);
-    setFields(res.data);
-  }, [categoryId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.get(`/categories/${categoryId}/fields`).then((res) => { if (!cancelled) setFields(res.data); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [categoryId]);
-
-  const run = async (fn) => {
-    setBusy(true); setError('');
-    try { await fn(); await load(); await onChanged?.(); } catch (err) {
-      setError(err.response?.data?.message || 'Could not save the field.');
-    } finally { setBusy(false); }
-  };
-
-  const toPayload = (d) => ({
-    label: d.label.trim(),
-    field_type: d.field_type,
-    is_required: d.is_required,
-    unit: d.unit?.trim() || null,
-    options: d.field_type === 'dropdown' ? String(d.options).split(',').map((o) => o.trim()).filter(Boolean) : null,
-  });
-
-  const save = () => run(async () => {
-    if (editingId) await api.put(`/category-fields/${editingId}`, toPayload(draft));
-    else await api.post(`/categories/${categoryId}/fields`, toPayload(draft));
-    setDraft(BLANK_FIELD_DRAFT); setEditingId(null);
-  });
-
-  const move = (index, delta) => run(async () => {
-    const a = fields[index]; const b = fields[index + delta];
-    if (!b) return;
-    // Renumber both neighbours so equal sort_orders can't leave them stuck.
-    await api.put(`/category-fields/${a.field_id}`, { label: a.label, sort_order: index + delta });
-    await api.put(`/category-fields/${b.field_id}`, { label: b.label, sort_order: index });
-  });
-
-  const startEdit = (f) => {
-    setEditingId(f.field_id);
-    setDraft({ label: f.label, field_type: f.field_type, is_required: f.is_required, unit: f.unit ?? '', options: (f.options ?? []).join(', ') });
-  };
-
-  return (
-    <section className="veh-card" style={{ marginTop: 16 }}>
-      <div className="veh-card-head"><Icon name="list" size={16} /><h4>Custom Fields</h4></div>
-      <div style={{ padding: '0 20px 20px', display: 'grid', gap: 12 }}>
-        <p style={{ margin: 0, fontSize: 13 }}>Extra details asked for whenever a vehicle of this type is added or edited. Archived fields stop being asked, but existing values are kept.</p>
-        {error && <div className="notice error">{error}</div>}
-        {fields.length === 0 && <p style={{ margin: 0, opacity: 0.7 }}>No custom fields yet.</p>}
-        {fields.map((f, i) => (
-          <div key={f.field_id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', opacity: f.is_active ? 1 : 0.55 }}>
-            <strong style={{ flex: '1 1 200px' }}>{f.label}{f.is_required ? ' *' : ''}</strong>
-            <span style={{ fontSize: 13 }}>{CUSTOM_FIELD_TYPES.find((t) => t.value === f.field_type)?.label}{f.unit ? ` · ${f.unit}` : ''}{f.options?.length ? ` · ${f.options.join(', ')}` : ''}{f.is_active ? '' : ' · archived'}</span>
-            <button type="button" className="ghost-button" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label="Move up">▲</button>
-            <button type="button" className="ghost-button" disabled={busy || i === fields.length - 1} onClick={() => move(i, 1)} aria-label="Move down">▼</button>
-            <button type="button" className="ghost-button" disabled={busy} onClick={() => startEdit(f)}>Edit</button>
-            <button type="button" className="ghost-button" disabled={busy} onClick={() => run(() => api.put(`/category-fields/${f.field_id}`, { label: f.label, is_active: !f.is_active }))}>{f.is_active ? 'Archive' : 'Restore'}</button>
-          </div>
-        ))}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', borderTop: '1px solid var(--border, #d0d7e2)', paddingTop: 12 }}>
-          <label style={{ flex: '1 1 180px' }}>Field name
-            <input type="text" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="e.g. Tank Capacity" />
-          </label>
-          <label>Type
-            <SearchableSelect value={draft.field_type} disabled={!!editingId} onChange={(e) => setDraft({ ...draft, field_type: e.target.value })}>
-              {CUSTOM_FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </SearchableSelect>
-          </label>
-          {(draft.field_type === 'number' || draft.field_type === 'text') && (
-            <label style={{ width: 90 }}>Unit
-              <input type="text" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="L, kg…" />
-            </label>
-          )}
-          {draft.field_type === 'dropdown' && (
-            <label style={{ flex: '1 1 220px' }}>Options (comma-separated)
-              <input type="text" value={draft.options} onChange={(e) => setDraft({ ...draft, options: e.target.value })} placeholder="Front, Rear" />
-            </label>
-          )}
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <input type="checkbox" checked={draft.is_required} onChange={(e) => setDraft({ ...draft, is_required: e.target.checked })} /> Required
-          </label>
-          <button type="button" className="primary-button" disabled={busy || !draft.label.trim()} onClick={save}>{editingId ? 'Update Field' : 'Add Field'}</button>
-          {editingId && <button type="button" className="ghost-button" onClick={() => { setEditingId(null); setDraft(BLANK_FIELD_DRAFT); }}>Cancel</button>}
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // Fleet Readiness & Criticality Watch — every operational vehicle that isn't
 // verified ready, Critical first. Shown on the lean (Custodian/Maintenance)
 // dashboard; Admin sees the same list inside Risk & Readiness Watch.
