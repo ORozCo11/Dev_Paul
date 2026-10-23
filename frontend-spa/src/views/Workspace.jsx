@@ -942,6 +942,7 @@ function Workspace() {
 
   }
   const [allHubs, setAllHubs] = useState([]);
+  const [locationMapSummary, setLocationMapSummary] = useState({ hubs: null, unassigned: null });
   const [locationsTab, setLocationsTab] = useState('map');
   const [selectedMapVehicleId, setSelectedMapVehicleId] = useState(null);
   const notificationsRef = useRef(null);
@@ -3492,7 +3493,15 @@ function Workspace() {
     if (activeModule === 'locations') {
       return (
         <>
-          <ModulePanel description="Record current vehicle stationing and keep a location history.">
+          <ModulePanel description="Record current vehicle stationing and keep a location history."
+            statCards={locationsTab === 'map' ? (
+              <dl className="location-map-summary" aria-label="Vehicle location summary">
+                <div><dt>Total vehicles</dt><dd>{(lookups.vehicles ?? []).length}</dd><span>In the selected area</span></div>
+                <div><dt>Total hubs</dt><dd>{locationMapSummary.hubs ?? '—'}</dd><span>Visible locations on the map</span></div>
+                <div className="location-map-summary-unassigned"><dt>Vehicles without a hub</dt><dd>{locationMapSummary.unassigned ?? '—'}</dd><span>No matching hub assigned</span></div>
+              </dl>
+            ) : null}
+          >
             <div className="locations-tab-bar">
               <button
                 className={`locations-tab-button ${locationsTab === 'map' ? 'active' : ''}`}
@@ -3528,6 +3537,7 @@ function Workspace() {
                     vehicles={lookups.vehicles ?? []}
                     onClearSelectedVehicle={() => setSelectedMapVehicleId(null)}
                     onHubsChange={setAllHubs}
+                    onSummaryChange={setLocationMapSummary}
                     canManageHubs={hasRole(user, 'Admin')}
                     boundaryOverride={mapBoundaryOverride}
                     onAddHub={() => navigate(`${roleRoutes[user.role]}/locations/new`)}
@@ -10075,7 +10085,7 @@ function resolveRelationLabel(value) {
 }
 
 function prettifyKey(key) {
-  return key.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return key.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bId\b/g, 'ID');
 }
 
 function formatReportValue(key, value) {
@@ -13196,13 +13206,10 @@ function TicketModule({
   setFilterDateEnd,
   recentIssues,
 }) {
-  const [ticketViewMode, setTicketViewMode] = useState(
-    () => localStorage.getItem('vms_ticket_view') || 'card'
-  );
+  const [ticketViewMode, setTicketViewMode] = useState('table');
 
   const changeTicketViewMode = (mode) => {
     setTicketViewMode(mode);
-    localStorage.setItem('vms_ticket_view', mode);
   };
 
   // Count alerts — sourced from the unfiltered list so applying a status
@@ -13244,11 +13251,11 @@ function TicketModule({
     return counts;
   }, [statSourceTickets]);
 
-  const ticketColumnDefs =useMemo(() => ticketTableColumns(unreadByTicket), [unreadByTicket]);
-  const ticketColumnChooser = useColumnChooser('vms_ticket_columns', ticketColumnDefs);
+  const ticketColumnDefs = useMemo(() => ticketTableColumns(unreadByTicket, onViewTicket), [unreadByTicket, onViewTicket]);
+  const ticketColumnChooser = useColumnChooser('vms_ticket_list_columns_v3', ticketColumnDefs);
 
   return (
-    <div className="module-grid">
+    <div className="module-grid ticket-page">
       <DismissibleHint description="Central Ticket Ledger — review Custodian proposals, approve and assign a mechanic, then let the mechanic's submission and the Custodian's verification carry the ticket through to Closed." />
       <ModuleStatCards
         totalLabel="Total Tickets"
@@ -13308,7 +13315,7 @@ function TicketModule({
         )}
       </div>
 
-      <section className="panel" style={{ width: '100%' }}>
+      <section className="panel ticket-ledger-panel" style={{ width: '100%' }}>
         {/* Alert banners */}
         {pendingCannibalizationCount > 0 && (
           <div className="ticket-alert-banner formaint">
@@ -13329,15 +13336,13 @@ function TicketModule({
             <LocalSearchInput
               value={searchQuery}
               onChange={setSearchQuery}
-              placeholder="Search tickets..."
+              placeholder="Search tickets, vehicle, or assignee..."
               onAdd={onCreateNew}
               addLabel="Create Ticket"
               columnChooser={ticketViewMode === 'table' ? ticketColumnChooser : undefined}
             />
           </div>
         </div>
-
-        <div style={{ height: '12px' }} />
 
         {tickets.length === 0
           ? <p className="empty-state">No tickets yet. Create one to begin the workflow.</p>
@@ -14231,7 +14236,7 @@ function TicketStageBadge({ ticket, variant = 'flag' }) {
   // "pill" matches the rounded status/priority badges beside it there.
   if (variant === 'pill') {
     return (
-      <span style={{
+      <span className="ticket-stage-badge" style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.74rem', fontWeight: 700,
         padding: '5px 12px', borderRadius: 999, background: style.bg,
         border: `1px solid ${style.color}55`, color: style.color,
@@ -14241,7 +14246,7 @@ function TicketStageBadge({ ticket, variant = 'flag' }) {
     );
   }
   return (
-    <div style={{
+    <div className="ticket-stage-badge" style={{
       display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.74rem', fontWeight: 700,
       padding: '6px 10px', borderRadius: '0 6px 6px 0', background: style.bg,
       borderLeft: `3px solid ${style.color}`, color: style.color,
@@ -14299,7 +14304,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
   const stage = ticketWorkflowStage(ticket);
 
   return (
-    <div className={`ticket-card tc-${String(ticket.status ?? "").toLowerCase().replace(/[^a-z]+/g, "-")}`} style={{ position: 'relative' }} onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
+    <div className={`ticket-card ticket-reference-card ${ticketStatusClass(ticket.status)}`} style={{ position: 'relative' }} onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}>
       {unreadCount > 0 && (
         <span
           title={`${unreadCount} unread update${unreadCount > 1 ? 's' : ''} on this ticket`}
@@ -14312,40 +14317,31 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
           {unreadCount > 9 ? '9+' : unreadCount}
         </span>
       )}
-      <div className="ticket-card-content-wrapper">
-        <div className="ticket-card-info">
-          <div className="ticket-card-top">
-            <span className="ticket-card-id">Ticket #{ticketNumber(ticket)}</span>
-          </div>
-          <p className="ticket-card-title">{ticket.ticket_title}</p>
-          <p className="ticket-card-vehicle">{ticket.vehicle?.vehicle_name} · {ticket.vehicle?.plate_number}</p>
+      <div className="ticket-reference-id">Ticket #{ticketNumber(ticket)}</div>
+      <div className="ticket-reference-main">
+        <div className="ticket-reference-photo">
+          {ticket.vehicle?.photo_url
+            ? <img src={resolvePhotoUrl(ticket.vehicle.photo_url)} alt={ticket.vehicle.vehicle_name ?? 'Vehicle'} loading="lazy" />
+            : <Icon name="truck" size={40} />}
         </div>
-        {ticket.vehicle?.photo_url && (
-          <div className="ticket-card-photo">
-            <img src={resolvePhotoUrl(ticket.vehicle.photo_url)} alt={ticket.vehicle.vehicle_name} />
-          </div>
-        )}
+        <div className="ticket-reference-info">
+          <h4 title={ticket.ticket_title}>{ticket.ticket_title}</h4>
+          <p>{ticket.vehicle?.vehicle_name ?? 'No vehicle'}</p>
+          <p>{ticket.vehicle?.plate_number ?? '—'}</p>
+        </div>
       </div>
-      <div style={{ margin: '8px 0 2px', minHeight: 22 }}>
-        {progress?.total > 0 && (
-          <>
-
-            <span className="muted" style={{ fontSize: '0.72rem' }}>{progress.done}/{progress.total} sub-issues done</span>
-          </>
-        )}
+      <div className="ticket-reference-progress">
+        {progress?.done ?? 0}/{progress?.total ?? ticket.sub_issues?.length ?? 0} sub-issues done
       </div>
-      <div style={{ margin: '6px 0 2px', minHeight: 26 }}>
+      <div className="ticket-reference-stage">
         {stage && <TicketStageBadge ticket={ticket} />}
       </div>
-      <div className="ticket-card-bottom">
+      <div className="ticket-reference-bottom">
         <div className="ticket-card-badges">
           <TicketStatusBadge value={ticket.status} />
           <TicketStatusBadge value={ticket.priority} />
         </div>
         <DateBadge value={ticket.created_at} />
-      </div>
-      <div className="tpa-row">
-        <span />
         <TicketPersonnelAvatars ticket={ticket} />
       </div>
     </div>
@@ -15584,12 +15580,18 @@ function TicketsReadyToClosePanel({ tickets, onViewTicket, onCloseTicket }) {
   );
 }
 
-function ticketTableColumns(unreadByTicket = {}) {
-  return [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => ticketNumber(r) },
+function ticketTableColumns(unreadByTicket = {}, onViewTicket) {
+  const columns = [
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => <div className={`ticket-list-identity ${ticketStatusClass(r.status)}`}><strong>{ticketNumber(r)}</strong><small className="muted">{(r.updated_at ?? r.created_at) ? new Date(r.updated_at ?? r.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '-'}</small></div> },
+    { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
+    { key: 'next_step', label: 'Next Step', className: 'cell-center', render: (r) => {
+      const stage = ticketWorkflowStage(r);
+      return stage ? <span className="ticket-next-step-badge" style={{ color: TICKET_STAGE_STYLE[stage.tone].color, background: TICKET_STAGE_STYLE[stage.tone].bg }}>{stage.label}</span> : '—';
+    } },
+    { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     {
       key: 'title',
-      label: 'Title',
+      label: 'Ticket Title / Vehicle',
       render: (r) => {
         const unread = unreadByTicket[r.ticket_id] ?? 0;
         return (
@@ -15606,19 +15608,24 @@ function ticketTableColumns(unreadByTicket = {}) {
                 {unread > 9 ? '9+' : unread}
               </span>
             )}
-            <span className="row-title-text">{r.ticket_title}</span>
+            <span className="ticket-list-title"><strong className="row-title-text">{r.ticket_title}</strong><small className="muted">{[r.vehicle?.vehicle_name, r.vehicle?.plate_number].filter(Boolean).join(' — ') || 'No vehicle'}</small></span>
           </span>
         );
       },
     },
-    { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (r) => r.vehicle?.plate_number ?? '-' },
+    { key: 'vehicle_image', label: 'Vehicle Image', className: 'cell-center', render: (r) => <PhotoCell alt={r.vehicle?.vehicle_name ?? 'Vehicle'} url={r.vehicle?.photo_url} /> },
+    { key: 'progress', label: 'Sub-Issues', render: (r) => {
+      const total = r.progress?.total ?? r.sub_issues?.length ?? 0;
+      const done = r.progress?.done ?? (r.sub_issues ?? []).filter((s) => s.status === 'Done').length;
+      const percent = total > 0 ? Math.min(100, Math.max(0, Math.round(done / total * 100))) : 0;
+      return <div className="ticket-list-progress"><small className="muted">{done}/{total} sub-issues done</small><div><progress value={percent} max="100" aria-label="Sub-issues completed" /><small className="muted">{percent}%</small></div></div>;
+    } },
     { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <TicketStatusPill status={r.status} /> },
-    { key: 'next_step', label: 'Next Step', className: 'cell-center', render: (r) => <TicketStageBadge ticket={r} /> },
-    { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
-    { key: 'personnel', label: 'Assigned Personnel', render: (r) => <TicketPersonnelAvatars ticket={r} /> },
-    { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
-    { key: 'time', label: 'Time', className: 'cell-center', render: (r) => formatTime(r.created_at) },
+    { key: 'personnel', label: 'Assigned To', render: (r) => <TicketPersonnelAvatars ticket={r} /> },
+    { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <button type="button" className="cell-link" aria-label={`View ticket ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name="ticket" size={18} /></button> },
   ];
+  const order = ['ticket_id', 'created', 'vehicle_image', 'title', 'priority', 'status', 'personnel', 'progress', 'next_step', 'actions'];
+  return order.map((key) => columns.find((column) => column.key === key));
 }
 
 // =========================================================================

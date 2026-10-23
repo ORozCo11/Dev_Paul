@@ -442,3 +442,10 @@ For local/testing use, sign in with `impersonation@test.com` and password `test1
 ### Scope limitation
 
 Vehicle dispatch and Usage Log tracking are outside this readiness and maintenance system. The removal migration keeps a database-only rollback archive of retired records; it has no application routes or UI. Run `php artisan migrate` from `backend-api` after pulling. Migration rollback restores archived records while their referenced vehicles and accounts still exist.
+
+
+## October 23, 2026 UI documentation update
+
+See [UI updates and branch status](VMS%20Docs/UI-UPDATES-2026-10-23.md) for ticket list/card behavior, square badges, the removal of the Custom Fields editor, vehicle type analytics, automatic satellite labels, location summary cards, report readability fixes, and the province account selector update. Changes were delivered on separate `v2` branches; the note distinguishes pushed work from the selector/documentation branch and does not claim deployment.
+
+The Markdown references in `VMS Docs/` are updated. Generated documentation in PDF, Word and HTML formats has not been regenerated.
