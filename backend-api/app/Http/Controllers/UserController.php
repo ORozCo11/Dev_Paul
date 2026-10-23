@@ -270,6 +270,7 @@ class UserController extends Controller
         $this->requireAbility($request, 'registration_code.regenerate', 'Only Admins can manage users.');
 
         $setting = RegistrationSetting::regenerateFor($request->user()->barangay_id);
+        $this->log($request, 'Edit', null, 'Regenerated the staff registration code for '.($request->user()->barangay?->name ?? 'this barangay').'.');
 
         return response()->json(['staff_code' => $setting->staff_code]);
     }

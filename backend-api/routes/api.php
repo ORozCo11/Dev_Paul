@@ -154,7 +154,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::put('/users/{user}/activate', [UserController::class, 'activate']);
 
     Route::get('/registration-settings', [UserController::class, 'registrationSettings']);
-    Route::post('/registration-settings/regenerate', [UserController::class, 'regenerateRegistrationCode']);
+    Route::post('/registration-settings/regenerate', [UserController::class, 'regenerateRegistrationCode'])->middleware('throttle:10,1');
 
     /*
     |--------------------------------------------------------------------------
@@ -172,7 +172,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::delete('/superadmin/users/{user}/reject', [SuperAdminController::class, 'rejectUser']);
     Route::put('/superadmin/users/{user}/role', [SuperAdminController::class, 'updateUserRole']);
     Route::get('/superadmin/barangays/{barangay}/registration-code', [SuperAdminController::class, 'registrationCode']);
-    Route::post('/superadmin/barangays/{barangay}/registration-code/regenerate', [SuperAdminController::class, 'regenerateRegistrationCode']);
+    Route::post('/superadmin/barangays/{barangay}/registration-code/regenerate', [SuperAdminController::class, 'regenerateRegistrationCode'])->middleware('throttle:10,1');
     Route::post('/superadmin/barangays/{barangay}/boundary/refresh', [SuperAdminController::class, 'refreshBarangayBoundary']);
     Route::post('/superadmin/barangays/{barangay}/boundary/confirm', [SuperAdminController::class, 'confirmBarangayBoundary']);
     Route::post('/superadmin/barangays/{barangay}/boundary/candidate', [SuperAdminController::class, 'uploadBoundaryCandidate']);

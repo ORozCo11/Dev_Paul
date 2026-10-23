@@ -12,6 +12,7 @@ use App\Models\RegistrationSetting;
 use App\Models\User;
 use App\Services\BarangayGeography;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
@@ -669,8 +670,11 @@ class SuperAdminController extends Controller
             'A live boundary outline is required before issuing a registration code. Confirm or discard any pending replacement first. An imported reference outline does not have to be marked reviewed.');
 
         $setting = RegistrationSetting::for($barangay->id);
+        if ($setting->wasRecentlyCreated) {
+            $this->log($request, 'Create', "Issued the staff registration code for {$barangay->name}.");
+        }
 
-        return response()->json(['staff_code' => $setting->staff_code, 'updated_at' => $setting->updated_at]);
+        return response()->json(['staff_code' => $setting->staff_code, 'created_at' => $setting->created_at, 'updated_at' => $setting->updated_at]);
     }
 
     public function regenerateRegistrationCode(Request $request, Barangay $barangay)
@@ -679,10 +683,15 @@ class SuperAdminController extends Controller
         abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
             'A live boundary outline is required before issuing a registration code. Confirm or discard any pending replacement first. An imported reference outline does not have to be marked reviewed.');
 
-        $setting = RegistrationSetting::regenerateFor($barangay->id);
+        // Optional so existing callers keep working; the portal sends the
+        // version it is showing so a code someone else just changed is
+        // never silently replaced.
+        $data = $request->validate(['expected_updated_at' => ['nullable', 'date']]);
+        $setting = RegistrationSetting::regenerateFor($barangay->id, isset($data['expected_updated_at']) ? Carbon::parse($data['expected_updated_at']) : null);
+        abort_if($setting === null, 409, 'This registration code was changed by someone else a moment ago. Reload it to see the current code before regenerating.');
         $this->log($request, 'Edit', "Regenerated the staff registration code for {$barangay->name}.");
 
-        return response()->json(['staff_code' => $setting->staff_code, 'updated_at' => $setting->updated_at]);
+        return response()->json(['staff_code' => $setting->staff_code, 'created_at' => $setting->created_at, 'updated_at' => $setting->updated_at]);
     }
 
     /**

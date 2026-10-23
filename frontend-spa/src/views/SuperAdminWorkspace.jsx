@@ -428,6 +428,8 @@ export default function SuperAdminWorkspace() {
     }));
   }, []);
 
+  const refreshInBackground = useCallback(() => loadAll({ background: true }), [loadAll]);
+
   useEffect(() => {
     // loadAll awaits the API batch before updating React state.
     loadAll();
@@ -804,7 +806,7 @@ export default function SuperAdminWorkspace() {
             ) : activeTab === 'users' ? (
               <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onApprove={approvePending} onReject={rejectPending} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'codes' ? (
-              <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} barangays={barangays} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
+              <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} barangays={barangays} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} onChanged={refreshInBackground} />
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
             ) : activeTab === 'support' ? (
