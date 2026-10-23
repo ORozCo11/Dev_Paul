@@ -370,3 +370,7 @@ Audit follow-up: see [System Audit ? 2026-10-23](System-Audit-2026-10-23.md) for
 - Restoring a vehicle considers unfinished maintenance before making it available. Recurrence searches beyond 60 occupied dates without creating a duplicate booking.
 - Light/dark mode is available from the workspace header for barangay roles and Super Admin; the preference survives navigation and reload.
 - Schedule detail pages render completion, reassignment and decline dialogs. Only the assigned mechanic can mark an approved, unconverted schedule done. This creates a record awaiting Custodian verification; it does not approve the repair. A schedule already converted to a ticket is completed through the ticket workflow instead.
+
+## Work-list status defaults
+
+Operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders select Pending + Submitted; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records select unfinished progress states; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection, plus Ongoing only and All statuses shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.

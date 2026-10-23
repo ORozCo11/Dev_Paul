@@ -290,6 +290,27 @@ function resolveModuleGroups(user) {
 // groups in the component via `moduleGroups.flatMap(g => g.items)` — grouping
 // the sidebar therefore didn't change any of those call sites.
 
+function defaultWorkflowStatuses(module, user) {
+  if (module === 'tickets' && hasRole(user, 'Admin')) return ['Pending Approval', 'Active'];
+  if (module === 'ticketWorkOrders') return ['Pending', 'Submitted'];
+  if (module === 'ticketVerifications') return ['Active', 'Pending'];
+  if (module === 'schedules') return ['Pending Approval', 'Scheduled'];
+  if (['maintenance', 'maintenanceStatus'].includes(module)) return ['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification'];
+  if (module === 'issues') return ['Pending', 'Under Review', 'In Maintenance'];
+  return [];
+}
+
+function WorkflowStatusControls({ options, selected, onChange, defaults }) {
+  const allowed = options.map((option) => typeof option === 'object' ? option.value : option);
+  const statuses = selected.filter((value) => allowed.includes(value));
+  return <div className="workflow-status-controls" role="group" aria-label="Work status filters">
+    <span>Status</span>
+    <MultiSelectDropdown placeholder="All statuses" options={options} selected={statuses} onChange={onChange} />
+    <button type="button" className="ghost-button" onClick={() => onChange([...defaults])}>Ongoing only</button>
+    <button type="button" className="ghost-button" onClick={() => onChange([])}>All statuses</button>
+  </div>;
+}
+
 const moduleEndpoints = {
   vehicles: '/vehicles',
   categories: '/categories',
@@ -870,7 +891,7 @@ function Workspace() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState([]);
   const [filterCapacity, setFilterCapacity] = useState([]);
-  const [filterStatus, setFilterStatus] = useState(() => activeModule === 'tickets' && hasRole(user, 'Admin') ? ['Pending Approval', 'Active'] : []);
+  const [filterStatus, setFilterStatus] = useState(() => defaultWorkflowStatuses(activeModule, user));
   const [filterPriority, setFilterPriority] = useState([]);
   // Location/Domain filters — Vehicle Management only (FilterBar shows
   // these whenever it's given the setters, so only this module's own call
@@ -1126,7 +1147,7 @@ function Workspace() {
      setSearchQuery('');
      setFilterCategory([]);
      setFilterCapacity([]);
-     setFilterStatus(activeModule === 'tickets' && hasRole(user, 'Admin') ? ['Pending Approval', 'Active'] : []);
+     setFilterStatus(defaultWorkflowStatuses(activeModule, user));
      setFilterPriority([]);
      setFilterLocation([]);
      setFilterDomain([]);
@@ -1844,20 +1865,11 @@ function Workspace() {
         filterStatus.includes('Inspected') ? row.status !== 'Open' : row.status === 'Open'
       ));
     } else if (activeModule === 'ticketWorkOrders') {
-      // Total (no card picked) shows every ticket; a card narrows to its bucket.
-      const picked = Object.keys(WORK_ORDER_BUCKET_STATUS).find((k) => filterStatus.includes(k));
-      if (picked) result = result.filter((row) => row.ticket_status === WORK_ORDER_BUCKET_STATUS[picked]);
+      const statuses = filterStatus.map((key) => WORK_ORDER_BUCKET_STATUS[key]).filter(Boolean);
+      if (statuses.length) result = result.filter((row) => statuses.includes(row.ticket_status));
     } else if (activeModule === 'ticketVerifications') {
-      // Rows are now tickets, not sub-issues — Active means still being
-      // repaired, Pending means waiting at For Verification, Verified means
-      // already Closed. No filter selected (Total) shows every one.
-      if (filterStatus.includes('Active')) {
-        result = result.filter((row) => row.status === 'Active');
-      } else if (filterStatus.includes('Verified')) {
-        result = result.filter((row) => row.status === 'Closed');
-      } else if (filterStatus.includes('Pending')) {
-        result = result.filter((row) => row.status === 'For Verification');
-      }
+      const statuses = filterStatus.map((key) => VERIFICATION_BUCKET_STATUS[key]).filter(Boolean);
+      if (statuses.length) result = result.filter((row) => statuses.includes(row.status));
     } else if (activeModule === 'vehicles' && (filterStatus.includes('ReadyToRespond') || filterStatus.includes('NotReady'))) {
       // Retired vehicles are excluded from both buckets up in vehicleStats —
       // match that here too, or "Not Ready" would list units the card's own
@@ -3998,9 +4010,7 @@ function Workspace() {
       // shows everyone's schedules for context, but their own work isn't
       // buried in it. Computed once so the table and card views can't drift
       // into showing different orderings.
-      // "Total Schedules" now means every schedule, so the default list shows
-      // them all — live work (Pending Approval, Scheduled) first by date, then
-      // Declined / Completed / Cancelled — instead of silently hiding some.
+      // Ongoing plans are shown first; status controls provide access to history.
       const STATUS_RANK = { 'Pending Approval': 0, Scheduled: 1, Declined: 2, Completed: 3, Cancelled: 4 };
       const mineFirst = (!hasRole(user, 'Admin') && hasRole(user, 'Maintenance Personnel'));
       const scheduleRows = [...visibleRows].sort((a, b) => {
@@ -4028,7 +4038,8 @@ function Workspace() {
               gridClassName="schedule-stat-grid"
             />
           }
-          filterBar={
+          filterBar={<>
+            <WorkflowStatusControls options={['Pending Approval','Scheduled','Declined','Completed','Cancelled']} selected={filterStatus} onChange={setFilterStatus} defaults={defaultWorkflowStatuses('schedules', user)} />
             <FilterBar
               categories={lookups.categories}
               vehicles={lookups.vehicles}
@@ -4048,7 +4059,7 @@ function Workspace() {
                 setSelected: setFilterLocation,
               }]}
             />
-          }
+          </>}
         >
           <div className="panel-header-bar schedule-panel-header">
             <div className="schedule-panel-heading">
@@ -4077,7 +4088,7 @@ function Workspace() {
             <PaginatedCardGrid
               items={scheduleRows}
               keyOf={(row) => row.schedule_id}
-              emptyMessage="No maintenance scheduled — click the + button to plan one."
+              emptyMessage="No schedules match the selected filters. Choose All statuses to include history."
               renderItem={(row) => (
                 <MaintenanceScheduleCard
                   row={row}
@@ -4100,7 +4111,7 @@ function Workspace() {
             <PaginatedTable
               columns={scheduleColumnChooser.visibleColumns}
               onReorderColumn={scheduleColumnChooser.reorderColumn}
-              emptyMessage="No maintenance scheduled — click the + button to plan one."
+              emptyMessage="No schedules match the selected filters. Choose All statuses to include history."
               rows={scheduleRows}
             />
           )}
@@ -4539,7 +4550,7 @@ function Workspace() {
             tabBar={myTasksTabBar}
             user={user}
             tickets={visibleRows}
-            readyToCloseTickets={(records.ticketVerifications ?? []).filter((t) => t.status === 'For Verification' && String(t.assigned_custodian_id) === String(user.id))}
+            readyToCloseTickets={visibleRows.filter((t) => t.status === 'For Verification')}
             editTarget={editTarget}
             setEditTarget={setEditTarget}
             onVerify={(ticket, payload) => ticketAction(`/tickets/${ticket.ticket_id}/verify`, payload, verifyOutcomeMessage(payload))}
@@ -8026,6 +8037,7 @@ const TICKET_INSPECTION_STAT_CARDS = [
 // Submitted = repair logged, waiting on the Custodian (For Verification),
 // Completed = verified and closed. Total is every ticket assigned to them.
 const WORK_ORDER_BUCKET_STATUS = { Pending: 'Active', Submitted: 'For Verification', Completed: 'Closed' };
+const VERIFICATION_BUCKET_STATUS = { Active: 'Active', Pending: 'For Verification', Verified: 'Closed' };
 const TICKET_WORK_ORDER_STAT_CARDS = [
   { key: 'Pending', label: 'Pending', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
   { key: 'Submitted', label: 'Submitted', icon: 'search', bg: '#ede9fe', color: '#7c3aed' },
@@ -14701,14 +14713,14 @@ function CustodianVerificationModule({
   onFilterChange,
   tabBar
 }) {
-  const panelTitle = activeFilter.includes('Active')
+  const panelTitle = activeFilter.length !== 1 ? 'My Tickets' : activeFilter.includes('Active')
     ? 'Active Tickets'
     : activeFilter.includes('Verified')
       ? 'Verified Repairs'
       : activeFilter.includes('Pending')
         ? 'Pending Verifications'
         : 'My Tickets';
-  const emptyStateText = activeFilter.includes('Active')
+  const emptyStateText = activeFilter.length !== 1 ? 'No tickets match the selected statuses.' : activeFilter.includes('Active')
     ? 'No tickets currently active.'
     : activeFilter.includes('Verified')
       ? 'No repairs verified yet.'
@@ -14733,6 +14745,7 @@ function CustodianVerificationModule({
       />
       {tabBar}
       <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
+      <WorkflowStatusControls options={TICKET_VERIFICATION_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Active','Pending']} />
       <section className="panel module-filter-panel">
         <FilterBar
           categories={categories}
@@ -14816,12 +14829,12 @@ function MechanicWorkOrderModule({
   onFilterChange,
   currentUser,
 }) {
-  const view = ['Pending', 'Submitted', 'Completed'].find((k) => [].concat(activeFilter ?? []).includes(k)) ?? 'All';
+  const view = activeFilter?.length === 1 ? activeFilter[0] : 'All';
   const viewCopy = {
     Pending: { title: 'Pending Work Orders', note: 'Open a work order and record the repair — it goes to the Custodian once every repair is logged.', empty: 'No active work orders assigned to you.', icon: 'wrench' },
     Submitted: { title: 'Submitted Work Orders', note: 'Repairs you logged, waiting on the Custodian to verify them.', empty: 'Nothing is waiting on a Custodian right now.', icon: 'search' },
     Completed: { title: 'Completed Work Orders', note: 'Repairs the Custodian verified — these tickets are closed.', empty: 'No verified repairs yet.', icon: 'checkCircle' },
-    All: { title: 'All Work Orders', note: 'Every ticket assigned to you, from repair through verification.', empty: 'No work orders assigned to you yet.', icon: 'wrench' },
+    All: { title: 'Work Orders', note: 'Choose which statuses to include using the status filter.', empty: 'No work orders match the selected statuses.', icon: 'wrench' },
   }[view];
   // Merge 2 — "Work Tracker" is no longer its own sidebar entry; it's this
   // Archive toggle over the same page, mirroring Admin's Maintenance Tickets
@@ -14917,6 +14930,7 @@ function MechanicWorkOrderModule({
             activeFilter={activeFilter}
             onFilterChange={onFilterChange}
           />
+          <WorkflowStatusControls options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Pending','Submitted']} />
           <section className="panel module-filter-panel">
             <FilterBar
               categories={categories}
