@@ -2544,9 +2544,20 @@ function Workspace() {
           {/* The Return control now lives in the persistent banner below the
               topbar (Phase A5) — a single, more visible home for it instead
               of duplicating the button here too. */}
-          {/* No bell in the top bar — the list opens from the profile
-              menu's "Notifications" item. */}
           <div className="notifications-dropdown-container" ref={notificationsRef}>
+            <button
+              className="icon-btn notification-btn"
+              title="Notifications"
+              aria-label="Notifications"
+              aria-expanded={showNotifications}
+              type="button"
+              onClick={() => setShowNotifications((v) => !v)}
+            >
+              <Icon name="bell" size={20} />
+              {unreadCount > 0 && (
+                <span className="notification-indicator">{unreadCount}</span>
+              )}
+            </button>
             {showNotifications && (
               <div className="notifications-dropdown">
                 <div className="notifications-header">
@@ -2624,7 +2635,6 @@ function Workspace() {
             open={showProfileMenu}
             setOpen={setShowProfileMenu}
             onLogout={handleLogout}
-            onOpenNotifications={() => setShowNotifications(true)}
             onOpenSettings={() => navigate(`${roleRoutes[user.role]}/profile`)}
           />
         </div>
@@ -5114,7 +5124,7 @@ function IssueViewPage({ issueId, allHubs = [], user, onCreateTicketFromIssue, o
   );
 }
 
-function ProfileMenu({ user, open, setOpen, onLogout, onOpenNotifications, onOpenSettings }) {
+function ProfileMenu({ user, open, setOpen, onLogout, onOpenSettings }) {
   const initials = user.name
     ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
     : 'U';
@@ -5143,9 +5153,6 @@ function ProfileMenu({ user, open, setOpen, onLogout, onOpenNotifications, onOpe
 
           <button className="profile-menu-item" type="button" onClick={() => { onOpenSettings(); setOpen(false); }}>
             <Icon name="key" size={15} /> My Settings
-          </button>
-          <button className="profile-menu-item" type="button" onClick={() => { onOpenNotifications(); setOpen(false); }}>
-            <Icon name="bell" size={15} /> Notifications
           </button>
 
           <EndImpersonationAction />
