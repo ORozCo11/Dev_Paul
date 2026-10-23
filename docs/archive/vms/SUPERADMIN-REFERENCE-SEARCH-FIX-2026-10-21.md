@@ -6,10 +6,10 @@ Concern Reports now searches the displayed `CR-{id}` reference alongside the num
 
 ## Verification
 
-- **104 API/browser scenarios passed**, including the previously failing concern-reference search. [Summary](../logs/superadmin-reference-fix-summary.json), [reference-search assertions](../logs/superadmin-reference-fix-extra.json), [screenshot](../logs/superadmin-reference-fix-concern-reference.png).
-- **433 backend tests passed, 1,825 assertions.** [Output](../logs/superadmin-reference-fix-backend.txt), [JUnit](../logs/superadmin-reference-fix-junit.xml).
-- **7 frontend tests passed.** [Output](../logs/superadmin-reference-fix-frontend-tests.txt).
-- **Lint: zero errors and warnings; production build passed.** [Lint](../logs/superadmin-reference-fix-eslint.json), [build](../logs/superadmin-reference-fix-build.txt).
+- **104 API/browser scenarios passed**, including the previously failing concern-reference search. [Summary](../../../logs/superadmin-reference-fix-summary.json), [reference-search assertions](../../../logs/superadmin-reference-fix-extra.json), [screenshot](../../../logs/superadmin-reference-fix-concern-reference.png).
+- **433 backend tests passed, 1,825 assertions.** [Output](../../../logs/superadmin-reference-fix-backend.txt), [JUnit](../../../logs/superadmin-reference-fix-junit.xml).
+- **7 frontend tests passed.** [Output](../../../logs/superadmin-reference-fix-frontend-tests.txt).
+- **Lint: zero errors and warnings; production build passed.** [Lint](../../../logs/superadmin-reference-fix-eslint.json), [build](../../../logs/superadmin-reference-fix-build.txt).
 - No browser runtime exceptions. Desktop/mobile and light/dark checks passed across all eight pages.
 
 The rerun covered provisioning, registration/approval, roles and assigned-work safeguards, account recovery, boundaries and codes, concern lifecycle, activity search/pagination, notifications, impersonation/return, settings/logout, navigation, confirmation cancellation, and request-failure/stall recovery.

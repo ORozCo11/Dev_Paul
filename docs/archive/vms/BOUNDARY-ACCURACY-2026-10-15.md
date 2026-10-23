@@ -19,15 +19,15 @@ Online checks found Mantalongon Barangay Hall, Mantalongon Elementary School, Ma
 
 ## Local repair and verification
 
-Before repair, a SQLite backup was created at the user's temporary directory as `vms-before-reference-review-20261015.sqlite`. `php artisan geography:refresh-boundaries` marked the two automatic assignments (Suba and Mantalongon) for review. All live polygon coordinates remained unchanged, as did all 9 users, 15 vehicles, 18 tickets, and 30 registration settings. Existing legacy or administrator-confirmed geometry was preserved. [Integrity evidence](../logs/boundary-review-data-integrity.json).
+Before repair, a SQLite backup was created at the user's temporary directory as `vms-before-reference-review-20261015.sqlite`. `php artisan geography:refresh-boundaries` marked the two automatic assignments (Suba and Mantalongon) for review. All live polygon coordinates remained unchanged, as did all 9 users, 15 vehicles, 18 tickets, and 30 registration settings. Existing legacy or administrator-confirmed geometry was preserved. [Integrity evidence](../../../logs/boundary-review-data-integrity.json).
 
 **409 backend tests passed, 1,676 assertions.** Build and focused lint passed. Six frontend geometry tests cover holes, islands, label placement, invalid coordinates, and reference-versus-reviewed location behavior. Browser verification exercised replacement-file preview, required source input, staging before confirmation, and the Mantalongon map's unverified notice, with no runtime errors. Upload requests in the browser harness were mocked; API permissions, validation, confirmation, and future-registration preservation were exercised by backend tests.
 
-- [Backend suite JUnit](../logs/boundary-review-junit.xml)
-- [Focused review tests](../logs/boundary-review-focused-junit.xml)
-- [Mantalongon map](../logs/mantalongon-reference-review.png)
-- [Replacement review screen](../logs/boundary-replacement-review.png)
-- [Browser evidence](../logs/boundary-replacement-browser.json)
+- [Backend suite JUnit](../../../logs/boundary-review-junit.xml)
+- [Focused review tests](../../../logs/boundary-review-focused-junit.xml)
+- [Mantalongon map](../../../logs/mantalongon-reference-review.png)
+- [Replacement review screen](../../../logs/boundary-replacement-review.png)
+- [Browser evidence](../../../logs/boundary-replacement-browser.json)
 
 To replace the geographic outline accurately, the remaining input is a current LGU-approved polygon or a boundary map that can be georeferenced and checked. The application is ready to review and apply that geometry without recreating accounts, changing registration codes, or relying on place-label positions.
 

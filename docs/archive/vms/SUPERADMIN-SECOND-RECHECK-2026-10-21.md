@@ -14,7 +14,7 @@
 | Browser runtime exceptions | 0 |
 | Working database | SHA-256 unchanged before/after |
 
-[Machine-readable summary](../logs/superadmin-second-recheck-summary.json), [backend output](../logs/superadmin-second-recheck-backend.txt), [JUnit](../logs/superadmin-second-recheck-junit.xml), [frontend tests](../logs/superadmin-second-recheck-frontend-tests.txt), [lint](../logs/superadmin-second-recheck-eslint.json), [build](../logs/superadmin-second-recheck-build.txt).
+[Machine-readable summary](../../../logs/superadmin-second-recheck-summary.json), [backend output](../../../logs/superadmin-second-recheck-backend.txt), [JUnit](../../../logs/superadmin-second-recheck-junit.xml), [frontend tests](../../../logs/superadmin-second-recheck-frontend-tests.txt), [lint](../../../logs/superadmin-second-recheck-eslint.json), [build](../../../logs/superadmin-second-recheck-build.txt).
 
 ## Coverage
 
@@ -30,7 +30,7 @@ Seven additional checks passed:
 - Malformed boundary files show a validation error and cannot be saved.
 - No runtime exceptions during these additional controls.
 
-Evidence: [API](../logs/superadmin-second-recheck-api.json), [main browser](../logs/superadmin-second-recheck-browser.json), [additional workflows](../logs/superadmin-second-recheck-corners.json), [latency](../logs/superadmin-second-recheck-latency.json), [reference/navigation probes](../logs/superadmin-second-recheck-extra.json), [new control checks](../logs/superadmin-second-recheck-controls.json).
+Evidence: [API](../../../logs/superadmin-second-recheck-api.json), [main browser](../../../logs/superadmin-second-recheck-browser.json), [additional workflows](../../../logs/superadmin-second-recheck-corners.json), [latency](../../../logs/superadmin-second-recheck-latency.json), [reference/navigation probes](../../../logs/superadmin-second-recheck-extra.json), [new control checks](../../../logs/superadmin-second-recheck-controls.json).
 
 ## Isolation and limits
 

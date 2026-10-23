@@ -453,6 +453,6 @@ Vehicle dispatch and Usage Log tracking are outside this readiness and maintenan
 
 ## October 23, 2026 UI documentation update
 
-See [UI updates and branch status](VMS%20Docs/UI-UPDATES-2026-10-23.md) for ticket list/card behavior, square badges, the removal of the Custom Fields editor, vehicle type analytics, automatic satellite labels, location summary cards, report readability fixes, and the province account selector update. Changes were delivered on separate `v2` branches; the note distinguishes pushed work from the selector/documentation branch and does not claim deployment.
+See [UI updates and branch status](docs/archive/vms/UI-UPDATES-2026-10-23.md) for ticket list/card behavior, square badges, the removal of the Custom Fields editor, vehicle type analytics, automatic satellite labels, location summary cards, report readability fixes, and the province account selector update. Changes were delivered on separate `v2` branches; the note distinguishes pushed work from the selector/documentation branch and does not claim deployment.
 
-The Markdown references in `VMS Docs/` are updated. Generated documentation in PDF, Word and HTML formats has not been regenerated.
+Use [the current VMS document index](VMS%20Docs/README.md) for maintained references, the requirements PDF and the latest presentation with examples. Older reports and superseded exports are in [the historical archive](docs/archive/vms/README.md). Earlier generated manuals elsewhere in the repository remain historical material.

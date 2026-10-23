@@ -6,7 +6,7 @@
 
 **Registration follow-up, 15 October 2026:** REG-05 is now fixed locally and browser-verified. Both city and barangay requests ignore stale responses, registration uses preloaded coded barangays, and the API validates parent relationships. The expanded suite passed **403 tests / 1,622 assertions**. See [registration geography](REGISTRATION-GEOGRAPHY.md) and its evidence for coverage, reference dates, and remaining boundary gaps. Together with the layout fixes below, **15 findings remain open**.
 
-**Layout follow-up, 15 October 2026:** REG-11, REG-12, and REG-16 are fixed locally for the supported ticket proposal UI. Vehicle History renders last; issue details and repair fields share a right-hand column with an 18px gap; external-shop guidance describes the correct handoff. Both repair methods passed browser layout checks at 1920, 1440, 1024, and 390px, dark-theme rendering, and successful proposal submissions (201). See [verification results](../logs/ticket-layout-fix-verification.json). The original audit results below remain a record of the tested baseline.
+**Layout follow-up, 15 October 2026:** REG-11, REG-12, and REG-16 are fixed locally for the supported ticket proposal UI. Vehicle History renders last; issue details and repair fields share a right-hand column with an 18px gap; external-shop guidance describes the correct handoff. Both repair methods passed browser layout checks at 1920, 1440, 1024, and 390px, dark-theme rendering, and successful proposal submissions (201). See [verification results](../../../logs/ticket-layout-fix-verification.json). The original audit results below remain a record of the tested baseline.
 
 **397 backend tests passed with 1,585 assertions. The frontend production build passed. This does not constitute a clean regression sign-off:** browser/API checks reproduced the findings below. Frontend lint failed with **56 errors and 19 warnings**.
 
@@ -23,20 +23,20 @@ The finding register contains **19 items: 4 High, 8 Medium, 7 Low**. It includes
 - Browser checks included desktop 1440px and mobile 390px widths. A frozen clock with `Asia/Manila` tested the date rollover.
 - **147 recorded browser/API observations**, including negative cases and exploratory requests. These are not 147 independent passing acceptance tests. Some exploratory requests used old contracts or missing fields; the triage section below identifies them.
 
-Evidence files are in [../logs](../logs). Principal outputs:
+Evidence files are in [../logs](../../../logs). Principal outputs:
 
 | Evidence | File |
 |---|---|
-| Backend test result | [Backend summary](../logs/regression-2026-10-15-backend.txt), [JUnit XML](../logs/regression-2026-10-15-junit.xml) |
-| Build output | [Build log](../logs/regression-2026-10-15-build.txt) |
-| Every lint diagnostic | [ESLint JSON](../logs/regression-2026-10-15-eslint.json), [readable ledger](../logs/regression-2026-10-15-lint-ledger.md) |
-| Public pages and four role workspaces | [Browser smoke results](../logs/regression-2026-10-15-browser.json) |
-| Session revocation | [Logout reproduction](../logs/regression-2026-10-15-logout.json) |
-| Registration and geography race | [Registration](../logs/regression-2026-10-15-focused-browser.json), [race and deep links](../logs/regression-2026-10-15-race-and-links.json) |
-| Upload form state | [Cabinet reproduction](../logs/regression-2026-10-15-cabinet.json), [date/file/CSS checks](../logs/regression-2026-10-15-ui-details.json) |
-| Permissions and workflows | [API probes](../logs/regression-2026-10-15-api.json), [follow-up](../logs/regression-2026-10-15-api-followup.json), [extended API](../logs/regression-2026-10-15-extended-api.json), [contract checks](../logs/regression-2026-10-15-contract-checks.json), [external final steps](../logs/regression-2026-10-15-external-final.json) |
-| Ticket submission and responsive checks | [External proposal UI](../logs/regression-2026-10-15-external-ui.json) |
-| Policy-page console and markup | [Policy results and React warnings](../logs/regression-2026-10-15-policy-console.json) |
+| Backend test result | [Backend summary](../../../logs/regression-2026-10-15-backend.txt), [JUnit XML](../../../logs/regression-2026-10-15-junit.xml) |
+| Build output | [Build log](../../../logs/regression-2026-10-15-build.txt) |
+| Every lint diagnostic | [ESLint JSON](../../../logs/regression-2026-10-15-eslint.json), [readable ledger](../../../logs/regression-2026-10-15-lint-ledger.md) |
+| Public pages and four role workspaces | [Browser smoke results](../../../logs/regression-2026-10-15-browser.json) |
+| Session revocation | [Logout reproduction](../../../logs/regression-2026-10-15-logout.json) |
+| Registration and geography race | [Registration](../../../logs/regression-2026-10-15-focused-browser.json), [race and deep links](../../../logs/regression-2026-10-15-race-and-links.json) |
+| Upload form state | [Cabinet reproduction](../../../logs/regression-2026-10-15-cabinet.json), [date/file/CSS checks](../../../logs/regression-2026-10-15-ui-details.json) |
+| Permissions and workflows | [API probes](../../../logs/regression-2026-10-15-api.json), [follow-up](../../../logs/regression-2026-10-15-api-followup.json), [extended API](../../../logs/regression-2026-10-15-extended-api.json), [contract checks](../../../logs/regression-2026-10-15-contract-checks.json), [external final steps](../../../logs/regression-2026-10-15-external-final.json) |
+| Ticket submission and responsive checks | [External proposal UI](../../../logs/regression-2026-10-15-external-ui.json) |
+| Policy-page console and markup | [Policy results and React warnings](../../../logs/regression-2026-10-15-policy-console.json) |
 
 ## Finding register
 
@@ -80,7 +80,7 @@ Expected: all values remain and external-shop fields appear. Actual: **cost and 
 
 Cause: `Workspace.jsx:3384` constructs a new `initialValues` object on parent renders; changing external mode rerenders the parent. `SmartForm` resets values whenever that object's identity changes (`Workspace.jsx:5905`).
 
-Evidence: [state result](../logs/regression-2026-10-15-cabinet.json), [screenshot](../logs/regression-completion-reset.png).
+Evidence: [state result](../../../logs/regression-2026-10-15-cabinet.json), [screenshot](../../../logs/regression-completion-reset.png).
 
 Fix direction: stabilize initial values or reset only when the record/form identity changes. Test switching modes after entering values and selecting a file.
 
@@ -109,7 +109,7 @@ Expected: only Agusan Del Norte cities remain. Actual: the Province field shows 
 
 Source: `Register.jsx:121–131` applies city/barangay responses without cancellation or checking whether they belong to the current selection. The analogous barangay race is a source-level risk; only the province/city race was dynamically reproduced.
 
-Evidence: [race data](../logs/regression-2026-10-15-race-and-links.json), [screenshot](../logs/regression-registration-race.png).
+Evidence: [race data](../../../logs/regression-2026-10-15-race-and-links.json), [screenshot](../../../logs/regression-registration-race.png).
 
 Fix direction: cancel stale requests or use request identities; preserve consistency between the selected province, city, and barangay. Add delayed-response browser tests.
 
@@ -218,7 +218,7 @@ Fix direction: configure unauthenticated API handling before Laravel attempts to
 
 Diagnostics include duplicate `search` keys in the icon map, 26 state-update-in-effect findings, 24 unused-variable findings, 17 hook dependency warnings, and render purity/ref findings. These are lint findings, not 56 independently reproduced runtime failures. The new FileCabinet component has no lint diagnostics.
 
-Every diagnostic is logged with file, line, rule, and severity in the [lint ledger](../logs/regression-2026-10-15-lint-ledger.md); full messages are retained in the JSON output.
+Every diagnostic is logged with file, line, rule, and severity in the [lint ledger](../../../logs/regression-2026-10-15-lint-ledger.md); full messages are retained in the JSON output.
 
 Fix direction: resolve diagnostics by affected workflow, starting with state resets and hook dependencies; do not blanket-disable the checks.
 

@@ -19,7 +19,7 @@ Revision: `515bc69`, with the two unrelated untracked files present before testi
 - Browser/API mutations used a separate SQLite snapshot in `%TEMP%/vms-regression-20261021`, created with SQLite's read-only backup API. New QA barangays, accounts, vehicles, reports, tickets, schedules, and files were the mutation targets. The working application's database was not a mutation target.
 - Isolated API: `http://127.0.0.1:8021`; isolated frontend: `http://127.0.0.1:5191`. Mail used the array driver; queues ran synchronously; uploads used a separate local disk. No real email or cloud upload was attempted.
 - Browser widths: 390, 1024, 1440, and 1920 px, depending on the check. The calendar rollover check used `Asia/Manila` and a fixed browser clock. Mobile failures were rechecked after 1.2 seconds to exclude transient animation overflow.
-- Current workflow reference: [Must-Haves.md](Must-Haves.md), current permissions, and the supported whole-ticket workflow. The README contains older workflow descriptions; see REG-27.
+- Current workflow reference: [Must-Haves.md](../../../VMS%20Docs/Must-Haves.md), current permissions, and the supported whole-ticket workflow. The README contains older workflow descriptions; see REG-27.
 
 ## Finding index
 
@@ -62,7 +62,7 @@ Expected: logout revokes the token and replay returns 401. Actual: logout itself
 
 `AuthContext.jsx` removes both stored tokens before calling Axios; the interceptor reads those stores when constructing the logout request. The rejected request is swallowed. Send the captured token or revoke before clearing it, retaining reliable local cleanup on failure.
 
-Evidence: [logout replay](../logs/regression-2026-10-21-logout.json), [four-role samples](../logs/regression-2026-10-21-corners.json). Both browser storage modes should be covered when fixing this; this audit did not separately repeat the sessionStorage-only path.
+Evidence: [logout replay](../../../logs/regression-2026-10-21-logout.json), [four-role samples](../../../logs/regression-2026-10-21-corners.json). Both browser storage modes should be covered when fixing this; this audit did not separately repeat the sessionStorage-only path.
 
 ### REG-02 — Operational submission bypasses catalog creation restrictions
 
@@ -72,7 +72,7 @@ Evidence: [logout replay](../logs/regression-2026-10-21-logout.json), [four-role
 
 Expected: the same creation authorization applies to direct and indirect catalog writes. Actual: schedule submission inserts the catalog entry despite the direct denial. `MaintenanceType::resolve()` creates unknown names. Resolve existing values separately from authorized creation; test every other resolver call before assuming this is confined to schedules.
 
-Evidence: [API checks](../logs/regression-2026-10-21-api.json), including `catalogCreated: true`.
+Evidence: [API checks](../../../logs/regression-2026-10-21-api.json), including `catalogCreated: true`.
 
 ### REG-03 — External completion toggle destroys entered work
 
@@ -82,37 +82,37 @@ Evidence: [API checks](../logs/regression-2026-10-21-api.json), including `catal
 
 Expected: values remain while extra fields appear. Actual: cost and notes become empty, the receipt disappears, and the external selection itself becomes blank. The parent supplies a new `initialValues` object during rerender and SmartForm resets its values. Stabilize the form identity and preserve edits/files when conditional fields change.
 
-Evidence: [state values](../logs/regression-2026-10-21-cabinet.json), [screenshot](../logs/regression-2026-10-21-completion-reset.png).
+Evidence: [state values](../../../logs/regression-2026-10-21-cabinet.json), [screenshot](../../../logs/regression-2026-10-21-completion-reset.png).
 
 ### REG-04 — Schedule bookmarks and refresh show the dashboard
 
 Sign in as Maintenance Personnel and directly open `/maintenance/schedules/{schedule_id}`. Expected: schedule details. Actual: the page title says **Maintenance Schedule Details**, while the body says **Maintenance Dashboard** and no `.maintenance-schedule-detail` exists. A direct vehicle profile control check works.
 
-Preserve the URL-selected module during workspace initialization and role/module reconciliation. Evidence: [deep links](../logs/regression-2026-10-21-race-and-links.json).
+Preserve the URL-selected module during workspace initialization and role/module reconciliation. Evidence: [deep links](../../../logs/regression-2026-10-21-race-and-links.json).
 
 ### REG-06 — Wrong completion date in the Philippine morning
 
 At fixed browser time **22 October 2026, 01:30 Asia/Manila**, open Mark as Done. Expected: `2026-10-22`. Actual: `2026-10-21`. The default uses `new Date().toISOString().slice(0, 10)`, so it takes the UTC date. Format local calendar dates explicitly and check other date defaults/maxima.
 
-Evidence: [calendar and receipt checks](../logs/regression-2026-10-21-ui-details.json).
+Evidence: [calendar and receipt checks](../../../logs/regression-2026-10-21-ui-details.json).
 
 ### REG-07 — File selection accepts a receipt submission will reject
 
 Select a valid GIF in Mark as Done. The cabinet accepts and lists it, but submission returns **422**: receipt must be jpg, jpeg, png, or pdf. The picker advertises `image/*,.pdf`. Align picker types, explanatory text, and backend validation.
 
-Evidence: [receipt response](../logs/regression-2026-10-21-ui-details.json). PNG selection and pending-file removal passed.
+Evidence: [receipt response](../../../logs/regression-2026-10-21-ui-details.json). PNG selection and pending-file removal passed.
 
 ### REG-08 — Forbidden catalog action is visible to Custodian
 
 As Custodian, open a new external-shop proposal and its Maintenance Type selector. **Add New Maintenance Type** is visible, although the creation endpoint returns **403** for this role. Gate the Add action by `catalog.create` and provide the supported alternative.
 
-Evidence: [rendered control](../logs/regression-2026-10-21-ui-details.json), [endpoint denial](../logs/regression-2026-10-21-api.json).
+Evidence: [rendered control](../../../logs/regression-2026-10-21-ui-details.json), [endpoint denial](../../../logs/regression-2026-10-21-api.json).
 
 ### REG-09 — Document deletion leaves the uploaded object
 
 Upload a QA PNG vehicle document as Custodian; delete it as Admin; request its previous URL. Expected: deletion applies the intended file-retention/access policy. Actual: document deletion returns **200**, but its original URL still returns **200** and the bytes. The controller removes the database row without deleting the stored object. Define retention and implement object cleanup/revocation accordingly.
 
-Evidence: [document lifecycle](../logs/regression-2026-10-21-extended-api.json). This was isolated local storage, not a production-bucket retention test.
+Evidence: [document lifecycle](../../../logs/regression-2026-10-21-extended-api.json). This was isolated local storage, not a production-bucket retention test.
 
 ### REG-10 — Known file URLs bypass API authorization
 
@@ -120,37 +120,37 @@ Upload a document, then fetch its URL without a bearer token. Actual: **200**, w
 
 Determine which asset classes must be private and enforce authorized downloads or expiring links. This is an implementation/requirement discrepancy demonstrated with the application's local storage equivalent; the deployed Supabase bucket policy was not inspected.
 
-Evidence: [anonymous retrieval](../logs/regression-2026-10-21-extended-api.json), `backend-api/app/Http/Controllers/Concerns/UploadsImages.php`.
+Evidence: [anonymous retrieval](../../../logs/regression-2026-10-21-extended-api.json), `backend-api/app/Http/Controllers/Concerns/UploadsImages.php`.
 
 ### REG-13 — Plain anonymous API requests return an internal error
 
 Call `GET /api/vehicles` anonymously with `Accept: text/html` or without JSON Accept. Actual: **500**, `Route [login] not defined`. With JSON Accept the response is correctly **401**. Configure API authentication failure handling before Laravel tries to generate the nonexistent login route.
 
-Evidence: [non-JSON request](../logs/regression-2026-10-21-lifecycle.json), [JSON control](../logs/regression-2026-10-21-extended-api.json).
+Evidence: [non-JSON request](../../../logs/regression-2026-10-21-lifecycle.json), [JSON control](../../../logs/regression-2026-10-21-extended-api.json).
 
 ### REG-14 — Frontend lint fails
 
 Run `npm.cmd run lint -- --format json --output-file ../logs/regression-2026-10-21-eslint.json` from `frontend-spa`. Result: **59 errors / 18 warnings across seven files**. Workspace.jsx accounts for 50 errors and all 18 warnings; remaining diagnostics affect Icon, LocationDensityMap, TextType, geocode, Register, and SuperAdminWorkspace. These diagnostics require individual triage; not every diagnostic is a reproduced runtime bug.
 
-Evidence: [every diagnostic](../logs/regression-2026-10-21-eslint.json), [readable ledger](../logs/regression-2026-10-21-lint-ledger.md).
+Evidence: [every diagnostic](../../../logs/regression-2026-10-21-eslint.json), [readable ledger](../../../logs/regression-2026-10-21-lint-ledger.md).
 
 ### REG-15 — Large eager bundle
 
 The production build emits a main JS asset of **1,504.11 kB minified / 416.09 kB gzip** and a chunk-size warning. App.jsx eagerly imports fleet and Super Admin workspaces alongside public pages. Consider route-level lazy loading, then measure representative devices/networks. No measured page-speed threshold violation is claimed.
 
-Evidence: [build output](../logs/regression-2026-10-21-build.txt).
+Evidence: [build output](../../../logs/regression-2026-10-21-build.txt).
 
 ### REG-17 — Invalid list nesting on policy pages
 
 Visit Privacy and Terms and inspect DOM/console. Privacy has **2** `p ul` descendants; Terms has **4**. React reports that a list cannot descend from a paragraph. Their section helpers wrap mixed content in `<p>`. Use a block container and explicit paragraphs. Pages remained readable; no hydration crash was observed.
 
-Evidence: [markup and console](../logs/regression-2026-10-21-corners.json).
+Evidence: [markup and console](../../../logs/regression-2026-10-21-corners.json).
 
 ### REG-18 — Policy-card branding is inconsistent
 
 Privacy and Terms card headers still use `Icon name="gear"`, while their shared site headers use the current VMSLogo. Replace the older policy-card glyph with the shared brand component. This concerns the card mark, not the favicon.
 
-Evidence: [rendered policy-card markers](../logs/regression-2026-10-21-corners.json), `Privacy.jsx` and `Terms.jsx`.
+Evidence: [rendered policy-card markers](../../../logs/regression-2026-10-21-corners.json), `Privacy.jsx` and `Terms.jsx`.
 
 ### REG-19 — Privacy storage statement is inaccurate
 
@@ -165,31 +165,31 @@ Evidence: `frontend-spa/src/views/Privacy.jsx:52`, `backend-api/config/filesyste
 
 Expected: a visible loading failure and retry/recovery action. Actual: Province contains only **Select your province**, City/Barangay cannot proceed, there is no error, and no retry button exists. Register.jsx catches the failure by setting an empty array. Show the failure and support retry, as for downstream geography requests.
 
-Evidence: [injected network failure](../logs/regression-2026-10-21-corners.json), observation `registration province API failure`.
+Evidence: [injected network failure](../../../logs/regression-2026-10-21-corners.json), observation `registration province API failure`.
 
 ### REG-22 — Mobile Vehicle Location controls overflow
 
 Admin → Vehicle Location at **390 px**, wait for settling. Document width is **476 px**. The location-tab button and map action row extend beyond the viewport; action-row descendants extend as far as 660 px. Wrap/stack the tabs and actions and keep map controls within their container.
 
-Evidence: [settled dimensions](../logs/regression-2026-10-21-mobile.json), [screenshot](../logs/regression-2026-10-21-mobile-admin-Vehicle-Location.png).
+Evidence: [settled dimensions](../../../logs/regression-2026-10-21-mobile.json), [screenshot](../../../logs/regression-2026-10-21-mobile-admin-Vehicle-Location.png).
 
 ### REG-23 — Mobile Users registration-code panel overflows
 
 Admin → Users at **390 px**. Document width is **448 px**; the registration-code/Regenerate row extends outside the card. This is separate from the intentionally scrollable user table. Stack the code and regeneration action at narrow widths.
 
-Evidence: [settled dimensions](../logs/regression-2026-10-21-mobile.json), [screenshot](../logs/regression-2026-10-21-mobile-admin-Users.png).
+Evidence: [settled dimensions](../../../logs/regression-2026-10-21-mobile.json), [screenshot](../../../logs/regression-2026-10-21-mobile-admin-Users.png).
 
 ### REG-24 — Mobile Custodian schedules overflow
 
 Custodian → Maintenance Schedule at **390 px**, with QA schedules present. Document width is **501 px**. Contain the table's horizontal scrolling and reflow surrounding controls so the page itself remains viewport-width. The mechanic's schedule page did not retain overflow in its settled control check.
 
-Evidence: [settled dimensions](../logs/regression-2026-10-21-mobile.json), [screenshot](../logs/regression-2026-10-21-mobile-custodian-Maintenance-Schedule.png).
+Evidence: [settled dimensions](../../../logs/regression-2026-10-21-mobile.json), [screenshot](../../../logs/regression-2026-10-21-mobile-custodian-Maintenance-Schedule.png).
 
 ### REG-25 — Mobile Vehicle History toolbar overflows
 
 Custodian → Vehicle History at **390 px**. Document width is **497 px**; the search/export and adjacent toolbar controls exceed the viewport. Wrap or stack the toolbar and preserve access to its actions.
 
-Evidence: [settled dimensions](../logs/regression-2026-10-21-mobile.json), [screenshot](../logs/regression-2026-10-21-mobile-custodian-Vehicle-History.png).
+Evidence: [settled dimensions](../../../logs/regression-2026-10-21-mobile.json), [screenshot](../../../logs/regression-2026-10-21-mobile-custodian-Vehicle-History.png).
 
 ### REG-26 — Admin registration checkbox has no effect
 
@@ -201,7 +201,7 @@ Expected from the control's label/help: disabling it prevents registration. Actu
 
 This is an ineffective/misleading administrative control. The current code calls registration a standard Custodian duty, so this audit does not assume that policy itself is unauthorized. Remove/reword the obsolete control and update the requirement, or restore enforcement if delegation remains the requirement. Must-Haves and controller/permission comments still describe delegation.
 
-Evidence: [false flag plus successful creation](../logs/regression-2026-10-21-permission.json), [rendered unchecked control](../logs/regression-2026-10-21-registration-permission.png), [save and UI observations](../logs/regression-2026-10-21-followthrough.json).
+Evidence: [false flag plus successful creation](../../../logs/regression-2026-10-21-permission.json), [rendered unchecked control](../../../logs/regression-2026-10-21-registration-permission.png), [save and UI observations](../../../logs/regression-2026-10-21-followthrough.json).
 
 ### REG-27 — Public workflow help and README are obsolete
 
@@ -209,7 +209,7 @@ Open Support → **How do I report a vehicle issue?** The answer says an Admin c
 
 Update the FAQ and README against the current workflow to prevent staff following unavailable actions. This does not imply that the separate maintenance-record confirmation endpoint is obsolete; it was exercised independently.
 
-Evidence: [rendered FAQ](../logs/regression-2026-10-21-mobile.json), `frontend-spa/src/views/Support.jsx`, README sections “Roles & Access” and “The Maintenance Ticket Workflow,” [successful current lifecycle](../logs/regression-2026-10-21-lifecycle.json).
+Evidence: [rendered FAQ](../../../logs/regression-2026-10-21-mobile.json), `frontend-spa/src/views/Support.jsx`, README sections “Roles & Access” and “The Maintenance Ticket Workflow,” [successful current lifecycle](../../../logs/regression-2026-10-21-lifecycle.json).
 
 ## Workflow and page coverage
 
@@ -246,9 +246,9 @@ Evidence: [rendered FAQ](../logs/regression-2026-10-21-mobile.json), `frontend-s
 
 ## Evidence and repeatability
 
-- [Backend result](../logs/regression-2026-10-21-backend.txt), [JUnit XML](../logs/regression-2026-10-21-junit.xml), [production build](../logs/regression-2026-10-21-build.txt).
-- [Main API run](../logs/regression-2026-10-21-api.json), [follow-up](../logs/regression-2026-10-21-api-followup.json), [extended API](../logs/regression-2026-10-21-extended-api.json), [lifecycle](../logs/regression-2026-10-21-lifecycle.json), [record/concern follow-through](../logs/regression-2026-10-21-followthrough.json), [overlapping-work safety](../logs/regression-2026-10-21-safety.json).
-- [Browser smoke](../logs/regression-2026-10-21-browser.json), [public/mobile corner checks](../logs/regression-2026-10-21-corners.json), [settled mobile results](../logs/regression-2026-10-21-mobile.json), [ticket layouts](../logs/regression-2026-10-21-layout-verification.json), [report UI/export](../logs/regression-2026-10-21-final-probes.json), [inventory CSV](../logs/regression-2026-10-21-inventory.csv).
+- [Backend result](../../../logs/regression-2026-10-21-backend.txt), [JUnit XML](../../../logs/regression-2026-10-21-junit.xml), [production build](../../../logs/regression-2026-10-21-build.txt).
+- [Main API run](../../../logs/regression-2026-10-21-api.json), [follow-up](../../../logs/regression-2026-10-21-api-followup.json), [extended API](../../../logs/regression-2026-10-21-extended-api.json), [lifecycle](../../../logs/regression-2026-10-21-lifecycle.json), [record/concern follow-through](../../../logs/regression-2026-10-21-followthrough.json), [overlapping-work safety](../../../logs/regression-2026-10-21-safety.json).
+- [Browser smoke](../../../logs/regression-2026-10-21-browser.json), [public/mobile corner checks](../../../logs/regression-2026-10-21-corners.json), [settled mobile results](../../../logs/regression-2026-10-21-mobile.json), [ticket layouts](../../../logs/regression-2026-10-21-layout-verification.json), [report UI/export](../../../logs/regression-2026-10-21-final-probes.json), [inventory CSV](../../../logs/regression-2026-10-21-inventory.csv).
 - Setup/router and original focused scripts are retained in `logs/regression-2026-10-21-harness/`; additional `regression-2026-10-21-*.cjs` scripts are in `logs/`. These are environment-specific audit harnesses, require the isolated snapshot/fixtures, and include deliberate failure probes. Do not point them at production or blindly rerun preparation over an existing audit snapshot. Test passwords and staff codes belong only to QA fixtures.
 
 ## Remaining acceptance work

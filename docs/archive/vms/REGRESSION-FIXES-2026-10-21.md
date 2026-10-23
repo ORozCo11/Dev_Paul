@@ -31,14 +31,14 @@ All **22 findings** in the [regression audit](REGRESSION-REPORT-2026-10-21.md) n
 
 ## Validation evidence
 
-- [Backend result](../logs/regression-fixes-backend.txt) and [JUnit](../logs/regression-fixes-junit.xml): **422 tests passed / 1,770 assertions**, including new security and migration checks.
-- [Targeted Chromium assertions](../logs/regression-fixes-browser-checks.json): **27 passed**, no uncaught browser errors. Includes both token stores, links, form/file state, recovery, policies, all four mobile findings, and private-file opening/deletion.
-- [Four-role browser smoke](../logs/regression-fixes-browser.json): 45 observations, no uncaught exceptions. Development impersonation-candidate 403s for non-Admin roles are expected.
-- [API workflow](../logs/regression-fixes-api.json) and [follow-up](../logs/regression-fixes-api-followup.json): registration/approval, whole-ticket repair/closure, scheduling/recurrence, reports, and role denials passed. Catalog insertion probe is now false.
-- [Ticket layout checks](../logs/regression-fixes-layout-verification.json): both methods at 1920/1440/1024/390 px, dark-theme sample, and two successful proposal submissions.
-- [Registration browser check](../logs/regression-fixes-focused-browser.json): wrong-code error and successful staff registration. The short animation-time width samples are diagnostic observations, not additional settled layout failures.
-- [ESLint](../logs/regression-fixes-eslint.json), [production build](../logs/regression-fixes-build.txt), and [frontend tests](../logs/regression-fixes-frontend-tests.txt): lint/build pass; seven geometry/calendar tests pass.
-- [Machine-readable summary](../logs/regression-fixes-summary.json). Environment-specific setup and workflow scripts are retained in `logs/regression-fixes-harness/`; the targeted browser assertions are in `logs/regression-fixes-browser-checks.cjs`. These require an isolated QA database and must not be pointed at production.
+- [Backend result](../../../logs/regression-fixes-backend.txt) and [JUnit](../../../logs/regression-fixes-junit.xml): **422 tests passed / 1,770 assertions**, including new security and migration checks.
+- [Targeted Chromium assertions](../../../logs/regression-fixes-browser-checks.json): **27 passed**, no uncaught browser errors. Includes both token stores, links, form/file state, recovery, policies, all four mobile findings, and private-file opening/deletion.
+- [Four-role browser smoke](../../../logs/regression-fixes-browser.json): 45 observations, no uncaught exceptions. Development impersonation-candidate 403s for non-Admin roles are expected.
+- [API workflow](../../../logs/regression-fixes-api.json) and [follow-up](../../../logs/regression-fixes-api-followup.json): registration/approval, whole-ticket repair/closure, scheduling/recurrence, reports, and role denials passed. Catalog insertion probe is now false.
+- [Ticket layout checks](../../../logs/regression-fixes-layout-verification.json): both methods at 1920/1440/1024/390 px, dark-theme sample, and two successful proposal submissions.
+- [Registration browser check](../../../logs/regression-fixes-focused-browser.json): wrong-code error and successful staff registration. The short animation-time width samples are diagnostic observations, not additional settled layout failures.
+- [ESLint](../../../logs/regression-fixes-eslint.json), [production build](../../../logs/regression-fixes-build.txt), and [frontend tests](../../../logs/regression-fixes-frontend-tests.txt): lint/build pass; seven geometry/calendar tests pass.
+- [Machine-readable summary](../../../logs/regression-fixes-summary.json). Environment-specific setup and workflow scripts are retained in `logs/regression-fixes-harness/`; the targeted browser assertions are in `logs/regression-fixes-browser-checks.cjs`. These require an isolated QA database and must not be pointed at production.
 
 ## Storage rollout and local database
 

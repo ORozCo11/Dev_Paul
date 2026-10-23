@@ -20,14 +20,14 @@
 
 **Code:** `frontend-spa/src/views/SuperAdminPanels.jsx:167` (search), `:170` (display).
 
-**Evidence:** [additional browser checks](../logs/superadmin-recheck-extra.json), [screenshot](../logs/superadmin-recheck-concern-reference.png). A fix should include the displayed reference in the searchable fields and retain a browser assertion for exact-reference lookup.
+**Evidence:** [additional browser checks](../../../logs/superadmin-recheck-extra.json), [screenshot](../../../logs/superadmin-recheck-concern-reference.png). A fix should include the displayed reference in the searchable fields and retain a browser assertion for exact-reference lookup.
 
 ## Verification completed
 
-- **433 backend tests passed, 1,825 assertions.** [Output](../logs/superadmin-recheck-backend.txt), [JUnit](../logs/superadmin-recheck-junit.xml).
+- **433 backend tests passed, 1,825 assertions.** [Output](../../../logs/superadmin-recheck-backend.txt), [JUnit](../../../logs/superadmin-recheck-junit.xml).
 - **104 API/browser scenarios: 103 passed, 1 failed** for SA-R01. Original 98-scenario set: all passed.
-- **7 frontend tests passed.** [Output](../logs/superadmin-recheck-frontend-tests.txt).
-- **Lint: zero errors and warnings; production build passed.** [Lint](../logs/superadmin-recheck-eslint.json), [build](../logs/superadmin-recheck-build.txt).
+- **7 frontend tests passed.** [Output](../../../logs/superadmin-recheck-frontend-tests.txt).
+- **Lint: zero errors and warnings; production build passed.** [Lint](../../../logs/superadmin-recheck-eslint.json), [build](../../../logs/superadmin-recheck-build.txt).
 - No browser runtime exceptions. All eight pages passed the existing desktop/mobile overflow checks in light and dark themes.
 
 The rerun covered onboarding/approvals, provisioning persistence, role safeguards, legacy roles, full activity search/pagination, account recovery, boundary staging/confirmation, registration codes, concern lifecycle, notifications, impersonation/return, passwords/logout, invalid routes, HTTP failure/retry, and stalled unrelated endpoints. Additional probes checked role-change confirmation cancellation, deactivation cancellation, browser Back from barangay detail, clearing an empty activity search, and concern-reference lookup.
@@ -38,6 +38,6 @@ The prior nine fixes remain verified within these scenarios. This new finding wa
 
 Tests used a fresh snapshot at `%TEMP%/vms-superadmin-recheck-20261021/regression.sqlite`, API port 8024, and frontend port 5194. The working database's SHA-256 hash was unchanged before/after. No live account or fleet mutations, migrations, commits, or deployment were performed. The isolated servers were stopped after the recheck.
 
-[Machine-readable summary](../logs/superadmin-recheck-summary.json), [API checks](../logs/superadmin-recheck-api.json), [main browser checks](../logs/superadmin-recheck-browser.json), [additional workflows](../logs/superadmin-recheck-corners.json), [stalled-request checks](../logs/superadmin-recheck-latency.json).
+[Machine-readable summary](../../../logs/superadmin-recheck-summary.json), [API checks](../../../logs/superadmin-recheck-api.json), [main browser checks](../../../logs/superadmin-recheck-browser.json), [additional workflows](../../../logs/superadmin-recheck-corners.json), [stalled-request checks](../../../logs/superadmin-recheck-latency.json).
 
 This remains local SQLite/Chromium verification. Production PostgreSQL, external email delivery, map accuracy, load stress, and exhaustive accessibility were outside this recheck.

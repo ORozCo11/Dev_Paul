@@ -1,6 +1,6 @@
 # Barangay VMS — Full System Capabilities Reference
 
-UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
+UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](../docs/archive/vms/UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
 
 A complete, code-verified catalog of everything the system can do today, organized by module. Every capability listed here was confirmed directly against the current codebase (not assumed) — where something is partially built, unused, or a known gap, it's flagged explicitly rather than glossed over. See `Documentation.md` in this folder for the shorter architectural overview; this document goes deep on every feature.
 
@@ -360,9 +360,9 @@ This document was compiled by direct code review, not from memory or prior docum
 - `frontend-spa/src/views/Workspace.jsx` and `frontend-spa/src/components/{LocationDensityMap,VehicleLocationMap,AddLocationMap}.jsx`
 - `frontend-spa/src/views/SuperAdminWorkspace.jsx` and `frontend-spa/src/utils/boundary.js`
 
-See `Documentation.md` for the shorter architectural overview, and `Role-Realignment-Analysis.md` for the history behind the current role/permission model.
+See `Documentation.md` for the shorter architectural overview, and [the archived role analysis](../docs/archive/vms/Role-Realignment-Analysis.md) for the history behind the current role/permission model.
 
-Audit follow-up: see [System Audit ? 2026-10-23](System-Audit-2026-10-23.md) for confirmed defects, corrections, regression checks, and verification limits.
+Audit follow-up: see [System Audit ? 2026-10-23](../docs/archive/vms/System-Audit-2026-10-23.md) for confirmed defects, corrections, regression checks, and verification limits.
 
 ## Follow-up corrections ? 23 October 2026
 

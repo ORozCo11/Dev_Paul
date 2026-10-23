@@ -22,18 +22,18 @@ Retesting also corrected reviewed-boundary status in provisioning/refresh respon
 
 ## Final verification
 
-[Machine-readable final result](../logs/superadmin-fixes-summary.json).
+[Machine-readable final result](../../../logs/superadmin-fixes-summary.json).
 
-- **433 backend tests passed, 1,825 assertions**, including 11 new regression tests covering provisioning, role/work safeguards, recovery, complete activity search, and code/boundary rules. [Result](../logs/superadmin-fixes-backend.txt), [JUnit](../logs/superadmin-fixes-junit.xml).
-- **98 API/browser scenarios passed**: [37 API checks](../logs/superadmin-fixes-api.json), [51 main browser checks](../logs/superadmin-fixes-browser.json), [8 additional workflow checks](../logs/superadmin-fixes-corners.json), and [2 stalled-request checks](../logs/superadmin-fixes-latency.json).
-- **7 frontend tests passed**. [Result](../logs/superadmin-fixes-frontend-tests.txt).
-- **ESLint: 0 errors, 0 warnings**; production build passed. [Lint](../logs/superadmin-fixes-eslint.json), [build](../logs/superadmin-fixes-build.txt).
+- **433 backend tests passed, 1,825 assertions**, including 11 new regression tests covering provisioning, role/work safeguards, recovery, complete activity search, and code/boundary rules. [Result](../../../logs/superadmin-fixes-backend.txt), [JUnit](../../../logs/superadmin-fixes-junit.xml).
+- **98 API/browser scenarios passed**: [37 API checks](../../../logs/superadmin-fixes-api.json), [51 main browser checks](../../../logs/superadmin-fixes-browser.json), [8 additional workflow checks](../../../logs/superadmin-fixes-corners.json), and [2 stalled-request checks](../../../logs/superadmin-fixes-latency.json).
+- **7 frontend tests passed**. [Result](../../../logs/superadmin-fixes-frontend-tests.txt).
+- **ESLint: 0 errors, 0 warnings**; production build passed. [Lint](../../../logs/superadmin-fixes-eslint.json), [build](../../../logs/superadmin-fixes-build.txt).
 - No browser runtime exceptions or document-level horizontal overflow across all eight pages at 1440×1000 and 390×844, in both light and dark themes.
 - New migration rollback/reapply checked on a separate snapshot, preserving all 42,048 barangay rows in that QA snapshot.
 
 The final isolated run exercised first-Administrator registration → pending login denial → approval → successful login; staff approval/rejection; account activation/deactivation; orphan recovery; role changes and assigned-work rejection; boundary upload/preview/staging/discard/confirmation; registration code rotation; concern resolve/reopen/delete; activity search beyond 200 entries and pagination; notifications; impersonation and return; password mismatch/update/restore; logout and protected-route redirect; request failures and retries; invalid routes; and stalled unrelated requests.
 
-Screenshots: [provisioned barangay retained](../logs/superadmin-fixes-provisioned.png), [secondary role removed](../logs/superadmin-fixes-role.png), [older activity found](../logs/superadmin-fixes-history.png), [reviewed boundary](../logs/superadmin-fixes-boundary.png), [geography retry](../logs/superadmin-fixes-provinces-retry.png).
+Screenshots: [provisioned barangay retained](../../../logs/superadmin-fixes-provisioned.png), [secondary role removed](../../../logs/superadmin-fixes-role.png), [older activity found](../../../logs/superadmin-fixes-history.png), [reviewed boundary](../../../logs/superadmin-fixes-boundary.png), [geography retry](../../../logs/superadmin-fixes-provinces-retry.png).
 
 ## Database and rerun notes
 

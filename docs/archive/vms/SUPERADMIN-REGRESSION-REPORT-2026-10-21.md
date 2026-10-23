@@ -37,7 +37,7 @@
 
 **Relevant code:** `backend-api/app/Http/Controllers/SuperAdminController.php:73`, `:131`; `frontend-spa/src/views/SuperAdminWorkspace.jsx:580`.
 
-**Evidence:** [API follow-up](../logs/superadmin-audit-api-followup.json), [browser workflows](../logs/superadmin-audit-workflows.json), [success plus missing row screenshot](../logs/superadmin-audit-provision-disappears.png).
+**Evidence:** [API follow-up](../../../logs/superadmin-audit-api-followup.json), [browser workflows](../../../logs/superadmin-audit-workflows.json), [success plus missing row screenshot](../../../logs/superadmin-audit-provision-disappears.png).
 
 **Fix direction:** Persist provisioning explicitly and include that state in management queries; cover provision → list → reload with a regression test.
 
@@ -53,7 +53,7 @@
 
 **Relevant code:** `backend-api/app/Http/Controllers/SuperAdminController.php:567`, `:635`; `backend-api/app/Http/Controllers/FleetController.php:2865`.
 
-**Evidence:** [API cases](../logs/superadmin-audit-api.json), [completion denied](../logs/superadmin-audit-api-followup.json), [persisted assignment and roles](../logs/superadmin-audit-fixture-state.json).
+**Evidence:** [API cases](../../../logs/superadmin-audit-api.json), [completion denied](../../../logs/superadmin-audit-api-followup.json), [persisted assignment and roles](../../../logs/superadmin-audit-fixture-state.json).
 
 ## SA-03 — Activity history and search silently exclude older entries
 
@@ -67,7 +67,7 @@
 
 **Relevant code:** `backend-api/app/Http/Controllers/SuperAdminController.php:688`; `frontend-spa/src/views/SuperAdminPanels.jsx:182`.
 
-**Evidence:** [API truncation](../logs/superadmin-audit-api-followup.json), [database count](../logs/superadmin-audit-fixture-state.json), [history search screenshot](../logs/superadmin-audit-history.png).
+**Evidence:** [API truncation](../../../logs/superadmin-audit-api-followup.json), [database count](../../../logs/superadmin-audit-fixture-state.json), [history search screenshot](../../../logs/superadmin-audit-history.png).
 
 ## SA-04 — Cannot remove secondary roles while retaining primary
 
@@ -79,7 +79,7 @@
 
 **Relevant code:** `frontend-spa/src/views/SuperAdminPanels.jsx:94`; `frontend-spa/src/views/SuperAdminWorkspace.jsx:632`.
 
-**Evidence:** [browser results](../logs/superadmin-audit-browser.json), [disabled Save Role screenshot](../logs/superadmin-audit-multirole.png).
+**Evidence:** [browser results](../../../logs/superadmin-audit-browser.json), [disabled Save Role screenshot](../../../logs/superadmin-audit-multirole.png).
 
 ## SA-05 — Role filter loses supported legacy accounts
 
@@ -93,7 +93,7 @@
 
 **Relevant code:** `frontend-spa/src/views/SuperAdminPanels.jsx:84`; `backend-api/app/Models/User.php:113`.
 
-**Evidence:** [before/after browser observations](../logs/superadmin-audit-browser.json), [effective roles](../logs/superadmin-audit-fixture-state.json), [filter screenshot](../logs/superadmin-audit-role-filter.png).
+**Evidence:** [before/after browser observations](../../../logs/superadmin-audit-browser.json), [effective roles](../../../logs/superadmin-audit-fixture-state.json), [filter screenshot](../../../logs/superadmin-audit-role-filter.png).
 
 ## SA-06 — A single failed endpoint disables unrelated pages
 
@@ -107,7 +107,7 @@
 
 **Relevant code:** `frontend-spa/src/views/SuperAdminWorkspace.jsx:473`.
 
-**Evidence:** [browser result](../logs/superadmin-audit-browser.json), [Users blocked by concern failure](../logs/superadmin-audit-one-endpoint-failure.png).
+**Evidence:** [browser result](../../../logs/superadmin-audit-browser.json), [Users blocked by concern failure](../../../logs/superadmin-audit-one-endpoint-failure.png).
 
 ## SA-07 — Add Barangay hides geography request failures
 
@@ -119,7 +119,7 @@
 
 **Relevant code:** `frontend-spa/src/views/SuperAdminWorkspace.jsx:188`, `:192`, `:199`.
 
-**Evidence:** [workflow observations](../logs/superadmin-audit-workflows.json), [empty form screenshot](../logs/superadmin-audit-provision-lookup-failure.png).
+**Evidence:** [workflow observations](../../../logs/superadmin-audit-workflows.json), [empty form screenshot](../../../logs/superadmin-audit-provision-lookup-failure.png).
 
 ## SA-08 — Boundary review guidance conflicts with registration code behavior
 
@@ -133,7 +133,7 @@
 
 **Relevant code:** `backend-api/app/Http/Controllers/SuperAdminController.php:655`, `:666`; `frontend-spa/src/views/SuperAdminWorkspace.jsx:264`.
 
-**Evidence:** [API checks](../logs/superadmin-audit-api.json), [UI regeneration](../logs/superadmin-audit-workflows.json).
+**Evidence:** [API checks](../../../logs/superadmin-audit-api.json), [UI regeneration](../../../logs/superadmin-audit-workflows.json).
 
 ## SA-09 — Unknown routes render password settings
 
@@ -147,7 +147,7 @@
 
 **Relevant code:** `frontend-spa/src/views/SuperAdminWorkspace.jsx:940`.
 
-**Evidence:** [browser route result](../logs/superadmin-audit-browser.json), [screenshot](../logs/superadmin-audit-unknown-tab.png).
+**Evidence:** [browser route result](../../../logs/superadmin-audit-browser.json), [screenshot](../../../logs/superadmin-audit-unknown-tab.png).
 
 ## Controls that passed
 
@@ -164,9 +164,9 @@
 
 ## Evidence and rerun notes
 
-Evidence files use the `logs/superadmin-audit-*` prefix. [Backend test output](../logs/superadmin-audit-backend-tests.txt) and JSON scenario results accompany the screenshots.
+Evidence files use the `logs/superadmin-audit-*` prefix. [Backend test output](../../../logs/superadmin-audit-backend-tests.txt) and JSON scenario results accompany the screenshots.
 
-The [isolated preparation/router](../logs/superadmin-audit-harness/prepare.php) use the local workspace path and a scratch folder named `vms-superadmin-20261021` under the Windows temporary directory. Rerun order: create that directory; run preparation; run [additional QA setup](../logs/superadmin-audit-setup.php); start the PHP router on 8022 and Vite on 5192 with `VITE_API_BASE_URL=http://127.0.0.1:8022/api`; run API harness; run [history/legacy setup](../logs/superadmin-audit-followup.php); run API follow-up and browser/workflow harnesses. Recreate the scratch database before a complete rerun; fixtures and mutations are intentionally stateful. The workflow script's reference ID 12556 is specific to this snapshot. Playwright resolves from the existing local npm cache path. Servers were stopped after the audit.
+The [isolated preparation/router](../../../logs/superadmin-audit-harness/prepare.php) use the local workspace path and a scratch folder named `vms-superadmin-20261021` under the Windows temporary directory. Rerun order: create that directory; run preparation; run [additional QA setup](../../../logs/superadmin-audit-setup.php); start the PHP router on 8022 and Vite on 5192 with `VITE_API_BASE_URL=http://127.0.0.1:8022/api`; run API harness; run [history/legacy setup](../../../logs/superadmin-audit-followup.php); run API follow-up and browser/workflow harnesses. Recreate the scratch database before a complete rerun; fixtures and mutations are intentionally stateful. The workflow script's reference ID 12556 is specific to this snapshot. Playwright resolves from the existing local npm cache path. Servers were stopped after the audit.
 
 ## Coverage limits
 

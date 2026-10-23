@@ -1,6 +1,6 @@
 # Barangay Vehicle Management System (VMS) — Documentation
 
-Requirements and audit status reviewed: **24 October 2026**, against revision `0027023`. See [the current audit](System-Audit-2026-10-24.md) for six open implementation findings and corrected documentation discrepancies. UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
+Requirements and audit status reviewed: **24 October 2026**, against revision `0027023`. See [the current audit](System-Audit-2026-10-24.md) for six open implementation findings and corrected documentation discrepancies. UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](../docs/archive/vms/UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
 
 ## 1. What this system is
 
@@ -109,16 +109,16 @@ Four navigation decisions are deliberate and final — not oversights to "fix" i
 
 ## 10. Related documents
 
-- `System-Architecture.svg` — component diagram (this folder).
-- `ERD.svg` — entity-relationship diagram of the database (this folder).
-- `System-Audit-2026-10-24.md` - current confirmed findings, evidence and acceptance criteria.
-- `Must-Haves.md` — required functionality checklist and known gaps (this folder).
-- `Role-Realignment-Analysis.md` — the analysis and decisions behind the current role/permission model and sidebar structure (this folder).
-- `System-Capabilities.md` — a full, module-by-module reference of everything the system can currently do, including explicitly-flagged partially-built/unused features (this folder).
-- `Production-Readiness-Audit.md`, `Final-Stabilization-Review.md`, `Final-Senior-System-Review.md`, and `Final-Capability-Impact-And-Audit.md` — four audit passes behind the current verification/authorization model (schedule-ticket pipeline, document access, verification-bypass removal, schedule-completion self-attribution, the Fleet Capability & Readiness Impact feature, and the mid-repair-reassignment self-verification fix) — point-in-time records of what was found and fixed, not living documentation (this folder).
-- Root `README.md` — a fuller project overview (setup, data model, API endpoints, deployment); kept in sync with this document's role/workflow model, but where the two ever disagree, treat this document (and the code) as current.
-- Root `ROLE-AUDIT.md` and `VMS Docs/VMS-IMPROVEMENT-PLAN.md` — **point-in-time audit/planning snapshots**, not living documentation; several of the role/permission decisions they describe have since been superseded (see `Role-Realignment-Analysis.md`). Useful for history, not for "how the system works today."
-- `docs/` (project root) — earlier QA, defense, and design documents from previous phases of the project; same caveat as above.
+Use [the current document index](README.md) to choose the right reference.
+
+- [System-Capabilities.md](System-Capabilities.md): detailed module and feature reference.
+- [Must-Haves.md](Must-Haves.md) and [the requirements PDF](VMS-Must-Haves-Updated.pdf): requirements mapping and acceptance criteria.
+- [Sample-Data.md](Sample-Data.md): team setup, demo accounts and recorded verification.
+- [System-Audit-2026-10-24.md](System-Audit-2026-10-24.md): current open findings and retest criteria.
+- [The presentation with examples](VMS-Evidence-and-Defense-Review-With-Examples.pptx): defense preparation and follow-along cases.
+- [System-Architecture.svg](System-Architecture.svg), [ERD.svg](ERD.svg) and [Use-Case-Diagram.svg](Use-Case-Diagram.svg): diagrams.
+- [Historical archive](../docs/archive/vms/README.md): earlier role decisions, audit passes, UI changes, geographic evidence and superseded exports. These describe earlier revisions.
+- Root [README.md](../README.md): project setup and technical overview. The root `docs/` folder also contains earlier manuals and QA material.
 
 ## Recent changes (see `System-Capabilities.md` §5.3, §5.4, §14b for detail)
 
@@ -146,4 +146,4 @@ Documentation discrepancies AUD-24-07/08 are now aligned with code: registration
 
 Verification record: the merged revision passed 480 backend tests (2,245 assertions), frontend lint/build and targeted desktop/mobile checks. A later six-test isolated investigation (36 assertions), plus a CSV-generation probe, reproduced the findings above. Passing those probes confirmed the defective behavior, not its resolution. The investigation files were removed and no application fixes were made in this documentation update.
 
-The current requirements PDF is `VMS-Must-Haves-Updated.pdf`, regenerated from `Must-Haves.md`. Older audit documents and the earlier generated DOCX are historical artifacts. Deployment storage policy, persistence, recovery and representative-user acceptance still need target-host evidence; this is not an exhaustive penetration-test certification.
+The current requirements PDF is `VMS-Must-Haves-Updated.pdf`, regenerated from `Must-Haves.md`. Older audit documents and the earlier generated DOCX are historical artifacts in `docs/archive/vms/`. Deployment storage policy, persistence, recovery and representative-user acceptance still need target-host evidence; this is not an exhaustive penetration-test certification.
