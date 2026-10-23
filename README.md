@@ -320,6 +320,8 @@ php artisan migrate --seed     # creates SQLite DB + seeds accounts & mock data
 
 For an existing database, run `php artisan migrate` to apply updates. The barangay numbering migration assigns separate record and ticket numbers to each barangay while preserving database IDs and relationships. Each module starts at 1; deleted numbers are not reused.
 
+Local/testing sample data now contains **five Paknaan vehicles: two fire trucks and three ambulances**, six staff profiles using the supplied cat photos, three ongoing tickets and four maintenance schedules. To replace the earlier 15-vehicle demo without rebuilding the database, back up first, then run `php artisan db:seed --class=SampleFleetSeeder`. Each run resets work attached to the named demo vehicles and refreshes dates/readiness; it preserves unrelated users and vehicles. See [the sample-data guide](VMS%20Docs/Sample-Data.md) for accounts, workflow examples and reset boundaries.
+
 By default the app uses **SQLite** (`DB_CONNECTION=sqlite`). Create the file if it doesn't exist:
 ```bash
 touch database/database.sqlite
@@ -344,7 +346,10 @@ VITE_API_BASE_URL=http://127.0.0.1:8001/api
 |---|---|---|
 | Admin | `admin@barangay.gov` | `admin123` |
 | Custodian | `custodian@barangay.gov` | `custodian123` |
+| Custodian | `custodian2@barangay.gov` | `custodian123` |
 | Maintenance Personnel | `maintenance@barangay.gov` | `maintenance123` |
+| Maintenance Personnel | `maintenance2@barangay.gov` | `maintenance123` |
+| Maintenance Personnel | `maintenance3@barangay.gov` | `maintenance123` |
 
 > ⚠️ These are **development** credentials — change them before any real deployment.
 

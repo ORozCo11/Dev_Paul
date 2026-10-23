@@ -29,18 +29,6 @@ class UserSeeder extends Seeder
             return;
         }
 
-        // Remove any other users not part of this fixed demo roster.
-        User::whereNotIn('email', [
-            'impersonation@test.com',
-            'superadmin@barangay.gov',
-            'admin@barangay.gov',
-            'custodian@barangay.gov',
-            'custodian2@barangay.gov',
-            'maintenance@barangay.gov',
-            'maintenance2@barangay.gov',
-            'maintenance3@barangay.gov',
-        ])->delete();
-
         // Same convention as FleetReferenceSeeder::seedDefaultHubs() — these
         // demo accounts represent real Paknaan staff, so they're stamped with
         // Paknaan's own barangay_id. Without it, BelongsToBarangay's global
@@ -106,6 +94,16 @@ class UserSeeder extends Seeder
             ],
         ];
 
+        $profilePhotos = [
+            'admin@barangay.gov' => 'cat-01.jpg',
+            'custodian@barangay.gov' => 'cat-05.jpg',
+            'custodian2@barangay.gov' => 'cat-06.jpg',
+            'maintenance@barangay.gov' => 'cat-04.jpg',
+            'maintenance2@barangay.gov' => 'cat-03.jpg',
+            'maintenance3@barangay.gov' => 'cat-02.jpg',
+        ];
+        $barangay = Barangay::find($paknaanId);
+
         foreach ($users as $user) {
             User::updateOrCreate(
                 ['email' => $user['email']],
@@ -113,7 +111,16 @@ class UserSeeder extends Seeder
                     'name' => $user['name'],
                     'password' => Hash::make($user['password']),
                     'role' => $user['role'],
+                    'roles' => [$user['role']],
                     'barangay_id' => $user['barangay_id'],
+                    'city_id' => $user['barangay_id'] ? $barangay?->city_id : null,
+                    'barangay_name' => $user['barangay_id'] ? $barangay?->name : null,
+                    'address' => $user['barangay_id'] ? 'Paknaan, Mandaue City, Cebu' : null,
+                    'photo_url' => isset($profilePhotos[$user['email']])
+                        ? rtrim(config('app.url'), '/').'/mockups/profiles/'.$profilePhotos[$user['email']]
+                        : null,
+                    'is_active' => true,
+                    'approved_at' => now(),
                 ],
             );
         }

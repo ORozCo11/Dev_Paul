@@ -25,7 +25,7 @@ class FleetReferenceSeeder extends Seeder
         ];
 
         foreach ($categories as $category => $domain) {
-            VehicleCategory::updateOrCreate(
+            VehicleCategory::firstOrCreate(
                 ['category_name' => $category],
                 ['domain' => $domain, 'description' => "{$category} fleet classification"],
             );
@@ -84,7 +84,7 @@ class FleetReferenceSeeder extends Seeder
         ];
 
         foreach ($hubs as $hub) {
-            VehicleHub::updateOrCreate(
+            VehicleHub::firstOrCreate(
                 ['hub_key' => $hub['hub_key']],
                 $hub + ['is_default' => true, 'barangay_id' => $paknaanId],
             );
