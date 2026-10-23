@@ -16483,6 +16483,26 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
 .workflow-status-controls .multi-select-dropdown { min-width:120px; }
 .workflow-status-controls .ghost-button { min-height:34px; padding:6px 10px; font-size:.75rem; }
 
+.custom-fields-body { display: grid; gap: 16px; padding: 18px 20px 20px; }
+.custom-fields-empty { margin: 0; padding: 16px; border: 1px dashed var(--border, #d0d7e2); background: var(--surface-2, #f8fafc); color: var(--text-muted, #64748b); font-size: .82rem; }
+.custom-field-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px; border: 1px solid var(--border, #d0d7e2); }
+.custom-field-editor { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 16px; padding-top: 18px; border-top: 1px solid var(--border, #d0d7e2); }
+.custom-field-editor > label { display: flex; flex: 1 1 150px; flex-direction: column; gap: 7px; min-width: 0; margin: 0; color: var(--text, #0f2741); font-size: .78rem; font-weight: 600; }
+.custom-field-editor > .custom-field-name { flex: 2 1 260px; }
+.custom-field-editor > .custom-field-options { flex: 2 1 240px; }
+.custom-field-editor input:not([type="checkbox"]),
+.custom-field-editor select { box-sizing: border-box; width: 100%; min-width: 0; height: 40px; padding: 9px 12px; border: 1px solid var(--border, #cbd5e1); border-radius: 6px; background: var(--surface, #fff); color: var(--text, #0f2741); font: inherit; font-weight: 400; }
+.custom-field-editor input:focus-visible,
+.custom-field-editor select:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.custom-field-editor > .custom-field-required { flex: 0 0 auto; flex-direction: row; align-items: center; height: 40px; gap: 8px; }
+.custom-field-required input { width: 16px; height: 16px; margin: 0; accent-color: #2563eb; }
+.custom-field-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.custom-field-actions button { min-height: 40px; white-space: nowrap; }
+@media (max-width: 640px) {
+  .custom-fields-body { padding: 16px; }
+  .custom-field-editor > label { flex-basis: 100%; }
+  .custom-field-actions { width: 100%; justify-content: flex-end; }
+}
 /* Ticket cards follow the photo-led layout used in the ticket reference. */
 .ticket-page :is(.status-badge, .ticket-stage-badge, .count-badge, .ticket-list-identity strong, .area-chart-tag, .ticket-preview-badge) {
   border-radius: 0 !important;

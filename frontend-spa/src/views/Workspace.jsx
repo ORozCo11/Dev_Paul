@@ -16743,14 +16743,14 @@ function CategoryFieldsManager({ categoryId, onChanged }) {
   };
 
   return (
-    <section className="veh-card" style={{ marginTop: 16 }}>
+    <section className="veh-card custom-fields-panel" style={{ marginTop: 16 }}>
       <div className="veh-card-head"><Icon name="list" size={16} /><h4>Custom Fields</h4></div>
-      <div style={{ padding: '0 20px 20px', display: 'grid', gap: 12 }}>
+      <div className="custom-fields-body">
         <p style={{ margin: 0, fontSize: 13 }}>Extra details asked for whenever a vehicle of this type is added or edited. Archived fields stop being asked, but existing values are kept.</p>
         {error && <div className="notice error">{error}</div>}
-        {fields.length === 0 && <p style={{ margin: 0, opacity: 0.7 }}>No custom fields yet.</p>}
+        {fields.length === 0 && <p className="custom-fields-empty">No custom fields yet. Add a field below to collect extra vehicle details.</p>}
         {fields.map((f, i) => (
-          <div key={f.field_id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', opacity: f.is_active ? 1 : 0.55 }}>
+          <div className="custom-field-row" key={f.field_id} style={{ opacity: f.is_active ? 1 : 0.55 }}>
             <strong style={{ flex: '1 1 200px' }}>{f.label}{f.is_required ? ' *' : ''}</strong>
             <span style={{ fontSize: 13 }}>{CUSTOM_FIELD_TYPES.find((t) => t.value === f.field_type)?.label}{f.unit ? ` · ${f.unit}` : ''}{f.options?.length ? ` · ${f.options.join(', ')}` : ''}{f.is_active ? '' : ' · archived'}</span>
             <button type="button" className="ghost-button" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label="Move up">▲</button>
@@ -16759,8 +16759,8 @@ function CategoryFieldsManager({ categoryId, onChanged }) {
             <button type="button" className="ghost-button" disabled={busy} onClick={() => run(() => api.put(`/category-fields/${f.field_id}`, { label: f.label, is_active: !f.is_active }))}>{f.is_active ? 'Archive' : 'Restore'}</button>
           </div>
         ))}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', borderTop: '1px solid var(--border, #d0d7e2)', paddingTop: 12 }}>
-          <label style={{ flex: '1 1 180px' }}>Field name
+        <div className="custom-field-editor">
+          <label className="custom-field-name">Field name
             <input type="text" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="e.g. Tank Capacity" />
           </label>
           <label>Type
@@ -16769,20 +16769,22 @@ function CategoryFieldsManager({ categoryId, onChanged }) {
             </SearchableSelect>
           </label>
           {(draft.field_type === 'number' || draft.field_type === 'text') && (
-            <label style={{ width: 90 }}>Unit
+            <label>Unit
               <input type="text" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="L, kg…" />
             </label>
           )}
           {draft.field_type === 'dropdown' && (
-            <label style={{ flex: '1 1 220px' }}>Options (comma-separated)
+            <label className="custom-field-options">Options (comma-separated)
               <input type="text" value={draft.options} onChange={(e) => setDraft({ ...draft, options: e.target.value })} placeholder="Front, Rear" />
             </label>
           )}
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label className="custom-field-required">
             <input type="checkbox" checked={draft.is_required} onChange={(e) => setDraft({ ...draft, is_required: e.target.checked })} /> Required
           </label>
-          <button type="button" className="primary-button" disabled={busy || !draft.label.trim()} onClick={save}>{editingId ? 'Update Field' : 'Add Field'}</button>
-          {editingId && <button type="button" className="ghost-button" onClick={() => { setEditingId(null); setDraft(BLANK_FIELD_DRAFT); }}>Cancel</button>}
+          <div className="custom-field-actions">
+            {editingId && <button type="button" className="ghost-button" disabled={busy} onClick={() => { setEditingId(null); setDraft(BLANK_FIELD_DRAFT); }}>Cancel</button>}
+            <button type="button" className="primary-button" disabled={busy || !draft.label.trim()} onClick={save}>{busy ? 'Saving…' : editingId ? 'Update Field' : 'Add Field'}</button>
+          </div>
         </div>
       </div>
     </section>
