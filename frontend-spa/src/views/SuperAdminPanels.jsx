@@ -6,6 +6,7 @@ import Icon from '../components/Icon';
 import { DonutChart } from '../components/charts';
 import { AdminActionDrawer, AdminEmptyState, AdminFilterField, AdminIdentity, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge } from '../components/SuperAdminUI';
 import { formatDate } from '../utils/adminDate';
+import './RegistrationCodes.css';
 
 const ROLES = ['Admin', 'Custodian', 'Maintenance Personnel'];
 const effectiveRoles = (account) => [...new Set([...(account.roles ?? []), account.role].filter(Boolean))];
