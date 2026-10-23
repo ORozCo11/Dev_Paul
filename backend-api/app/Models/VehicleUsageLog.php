@@ -11,9 +11,9 @@ class VehicleUsageLog extends Model
 
     protected $primaryKey = 'usage_id';
 
-    protected $fillable = ['vehicle_id', 'logged_by', 'purpose', 'destination', 'driver_name', 'started_at', 'ended_at', 'odometer_start', 'odometer_end', 'notes'];
+    protected $fillable = ['vehicle_id', 'logged_by', 'purpose', 'destination', 'driver_name', 'started_at', 'ended_at', 'odometer_start', 'odometer_end', 'notes', 'temporary_release'];
 
-    protected $casts = ['started_at' => 'datetime', 'ended_at' => 'datetime'];
+    protected $casts = ['started_at' => 'datetime', 'ended_at' => 'datetime', 'temporary_release' => 'array'];
 
     protected static function vehicleRelationPath(): string
     {

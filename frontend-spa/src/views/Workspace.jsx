@@ -11,7 +11,7 @@ import './ScheduleForm.css';
 import './MaintenanceDetails.css';
 import { FileCabinet, RepairFileCabinet } from '../components/LazyFileCabinets';
 import VMSLogo from '../components/VMSLogo';
-import { Children, useId, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
+import { lazy, Suspense, Children, useId, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, createContext, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../api/axios';
@@ -25,6 +25,8 @@ import { AuthContext } from '../context/AuthContextObject';
 import { geoJsonToPolygons, isPointWithinBoundaryPolygons, isLocationPointAllowed } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 import { calendarDate } from '../utils/adminDate';
+
+const DispatchAssessment = lazy(() => import('../components/DispatchAssessment'));
 
 const FormNoticeContext = createContext(null);
 // Lets shared table cells (VehicleCell, UserAvatarName) open the right detail
@@ -11839,6 +11841,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
           </div>
 
           <div className="ticket-detail-col-right">
+          {['Active', 'For Verification'].includes(ticket.status) && <Suspense fallback={null}><DispatchAssessment key={ticket.ticket_id} ticket={ticket} canAssess={isAssignedMechanic && canDo(user, 'usage.assess_release')} /></Suspense>}
           {/* Custodian-proposed ticket awaiting Admin review — a completely
               separate block from the normal sub-issue cards just below
               (which are explicitly excluded for this one status right

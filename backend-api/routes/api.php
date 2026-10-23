@@ -132,6 +132,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::get('/vehicles/{vehicle}/readiness', [FleetController::class, 'vehicleReadiness']);
     Route::post('/vehicles/{vehicle}/request-inspection', [FleetController::class, 'requestInspection']);
     Route::get('/vehicles/{vehicle}/usage', [VehicleUsageController::class, 'index']);
+    Route::post('/tickets/{ticket}/dispatch-assessment', [\App\Http\Controllers\DispatchAssessmentController::class, 'store']);
     Route::post('/vehicles/{vehicle}/usage', [VehicleUsageController::class, 'start']);
     Route::put('/usage-logs/{log}/end', [VehicleUsageController::class, 'end']);
     Route::post('/vehicles/{vehicle}/readiness-check', [FleetController::class, 'storeReadinessCheck']);

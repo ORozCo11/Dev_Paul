@@ -31,6 +31,8 @@ return [
     // Vehicle Usage Log: who took which vehicle where, and when it came back.
     'usage.view' => ['Admin', 'Custodian'],
     'usage.log' => ['Admin', 'Custodian'],
+    'usage.temporary_release' => ['Custodian'],
+    'usage.assess_release' => ['Maintenance Personnel'],
     'vehicle.edit' => ['Admin'],
     'vehicle.archive' => ['Admin'],
     'vehicle.restore' => ['Admin'],

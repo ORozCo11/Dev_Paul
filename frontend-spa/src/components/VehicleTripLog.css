@@ -29,3 +29,14 @@ html[data-theme="dark"] .vehicle-trip-log :is(input,textarea) { background:var(-
   .vehicle-dispatch-heading { align-items:flex-start; }
   .vehicle-dispatch-page .trip-log-pagination { flex-wrap:wrap; gap:8px; }
 }
+
+.temporary-release-fields { grid-column: 1 / -1; padding: 16px; border: 1px solid var(--border, #cbd5e1); border-radius: 8px; display: grid; gap: 12px; }
+.vehicle-trip-log label.release-check, .dispatch-assessment label.release-check { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; margin-top: 10px; }
+.vehicle-trip-log .release-check input, .dispatch-assessment .release-check input { width: 18px; height: 18px; min-height: 18px; flex: 0 0 18px; margin: 0; }
+.dispatch-assessment-form { display: grid; gap: 12px; }
+.dispatch-assessment-form label { display: grid; gap: 6px; }
+.dispatch-assessment-form textarea, .dispatch-assessment-form select { width: 100%; padding: 8px; color: inherit; background: var(--surface-2, #fff); border: 1px solid var(--border, #cbd5e1); border-radius: 6px; }
+
+.vehicle-trip-log .dispatch-release-notice { display: block; overflow-wrap: anywhere; }
+.vehicle-trip-log .dispatch-release-notice > * + * { margin-top: 12px; }
+.temporary-release-fields { min-width: 0; }

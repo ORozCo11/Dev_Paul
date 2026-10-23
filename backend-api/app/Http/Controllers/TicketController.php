@@ -132,6 +132,12 @@ class TicketController extends Controller
         }
 
         $ticket->load($this->eagerLoads());
+        $ticket->setAttribute('dispatch_assessments', DB::table('ticket_dispatch_assessments')
+            ->join('users', 'users.id', '=', 'ticket_dispatch_assessments.assessed_by')
+            ->where('ticket_id', $ticket->ticket_id)->orderByDesc('ticket_dispatch_assessments.id')
+            ->get(['ticket_dispatch_assessments.*', 'users.name'])->unique('assessed_by')->values());
+        $ticket->setAttribute('temporary_dispatch', \App\Models\VehicleUsageLog::where('vehicle_id', $ticket->vehicle_id)
+            ->whereNotNull('temporary_release')->whereNull('ended_at')->first());
 
         // This ticket's own Activity Log entries, for the Ticket Details
         // page's Activity History — only on this single-ticket endpoint.
@@ -1113,6 +1119,7 @@ class TicketController extends Controller
     private function verifyTicketLocked(Request $request, MaintenanceTicket $ticket)
     {
         $this->requireAbility($request, 'ticket.verify');
+        app(\App\Services\TemporaryDispatchService::class)->assertRepairIsInStation($ticket);
 
         abort_unless(
             (int) $ticket->assigned_custodian_id === (int) $request->user()->id,
@@ -1837,6 +1844,7 @@ class TicketController extends Controller
      */
     private function authorizeDonorEdit(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue): void
     {
+        app(\App\Services\TemporaryDispatchService::class)->assertRepairIsInStation($ticket);
         $this->requireAbility($request, 'subissue.log_repair');
         $this->assertBelongsToTicket($ticket, $subIssue);
         abort_unless((int) $subIssue->assigned_mechanic_id === (int) $request->user()->id, 403, 'This work order is not assigned to you.');
@@ -1859,6 +1867,15 @@ class TicketController extends Controller
 
     /** Choose (or clear) the donor vehicle. Clearing is refused while parts exist. */
     public function setDonorVehicle(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        return DB::transaction(function () use ($request, $ticket, $subIssue) {
+            $ticket = MaintenanceTicket::whereKey($ticket->ticket_id)->lockForUpdate()->firstOrFail();
+            $subIssue = TicketSubIssue::whereKey($subIssue->sub_issue_id)->lockForUpdate()->firstOrFail();
+            return $this->setDonorVehicleLocked($request, $ticket, $subIssue);
+        });
+    }
+
+    private function setDonorVehicleLocked(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
         $this->authorizeDonorEdit($request, $ticket, $subIssue);
         $data = $request->validate(['source_vehicle_id' => ['nullable', 'exists:vehicles,vehicle_id']]);
@@ -1895,6 +1912,15 @@ class TicketController extends Controller
 
     public function storeDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
+        return DB::transaction(function () use ($request, $ticket, $subIssue) {
+            $ticket = MaintenanceTicket::whereKey($ticket->ticket_id)->lockForUpdate()->firstOrFail();
+            $subIssue = TicketSubIssue::whereKey($subIssue->sub_issue_id)->lockForUpdate()->firstOrFail();
+            return $this->storeDonorPartLocked($request, $ticket, $subIssue);
+        });
+    }
+
+    private function storeDonorPartLocked(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
         $this->authorizeDonorEdit($request, $ticket, $subIssue);
         $this->requireDonorSet($ticket, $subIssue);
         $data = $request->validate($this->donorPartRules());
@@ -1907,6 +1933,15 @@ class TicketController extends Controller
 
     public function updateDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
     {
+        return DB::transaction(function () use ($request, $ticket, $subIssue, $part) {
+            $ticket = MaintenanceTicket::whereKey($ticket->ticket_id)->lockForUpdate()->firstOrFail();
+            $subIssue = TicketSubIssue::whereKey($subIssue->sub_issue_id)->lockForUpdate()->firstOrFail();
+            return $this->updateDonorPartLocked($request, $ticket, $subIssue, $part);
+        });
+    }
+
+    private function updateDonorPartLocked(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
+    {
         $this->authorizeDonorEdit($request, $ticket, $subIssue);
         $this->requireDonorSet($ticket, $subIssue);
         $record = $subIssue->donorParts()->where('part_id', $part)->firstOrFail();
@@ -1917,6 +1952,15 @@ class TicketController extends Controller
     }
 
     public function deleteDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
+    {
+        return DB::transaction(function () use ($request, $ticket, $subIssue, $part) {
+            $ticket = MaintenanceTicket::whereKey($ticket->ticket_id)->lockForUpdate()->firstOrFail();
+            $subIssue = TicketSubIssue::whereKey($subIssue->sub_issue_id)->lockForUpdate()->firstOrFail();
+            return $this->deleteDonorPartLocked($request, $ticket, $subIssue, $part);
+        });
+    }
+
+    private function deleteDonorPartLocked(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
     {
         $this->authorizeDonorEdit($request, $ticket, $subIssue);
         $record = $subIssue->donorParts()->where('part_id', $part)->firstOrFail();
@@ -1960,6 +2004,7 @@ class TicketController extends Controller
     {
         $this->assertBelongsToTicket($ticket, $subIssue);
         $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
+        app(\App\Services\TemporaryDispatchService::class)->assertRepairIsInStation($ticket);
         abort_unless($subIssue->status === 'Under Repair', 422, "Only an Under Repair sub-issue can be sent out. Current: {$subIssue->status}.");
         abort_if($subIssue->external_sent_at, 422, 'This repair has already been sent out.');
 
@@ -2001,6 +2046,7 @@ class TicketController extends Controller
     {
         $this->assertBelongsToTicket($ticket, $subIssue);
         $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
+        app(\App\Services\TemporaryDispatchService::class)->assertRepairIsInStation($ticket);
         abort_unless($subIssue->external_sent_at, 422, 'This repair has not been sent out yet.');
         abort_if($subIssue->external_returned_at, 422, 'This repair has already been marked returned.');
 
@@ -2029,6 +2075,7 @@ class TicketController extends Controller
     {
         $this->assertBelongsToTicket($ticket, $subIssue);
         $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
+        app(\App\Services\TemporaryDispatchService::class)->assertRepairIsInStation($ticket);
         abort_unless($ticket->status === 'Active', 422, "Repairs can only be logged while the ticket is Active. Current status: {$ticket->status}.");
         abort_unless($subIssue->status === 'Under Repair', 422, "Repairs can only be logged when the sub-issue is Under Repair. Current: {$subIssue->status}.");
 

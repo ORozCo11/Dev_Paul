@@ -466,4 +466,192 @@ class SystemWorkflowAuditTest extends TestCase
         $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage")->assertUnprocessable();
     }
 
+    private function temporaryReleaseData(array $tickets, array $extra = []): array
+    {
+        return $extra + ['temporary_release' => true, 'release_reason' => 'Urgent response; cosmetic repair can wait',
+            'expected_return_at' => now()->addHours(2)->toIso8601String(), 'personally_tested' => true,
+            'safe_for_intended_use' => true, 'fully_assembled' => true, 'no_safety_critical_fault' => true,
+            'ticket_ids' => array_map(fn ($ticket) => $ticket->ticket_id, $tickets),
+            'assessment_ids' => array_map(fn ($row) => $row->id, app(\App\Services\TemporaryDispatchService::class)->assessments(app(\App\Services\TemporaryDispatchService::class)->tickets($this->vehicle->fresh()))),
+            'driver_name' => 'Responder', 'destination' => 'City Hall', 'purpose' => 'Emergency response'];
+    }
+
+    private function assessDispatch(MaintenanceTicket $ticket, User $actor, array $extra = [])
+    {
+        Sanctum::actingAs($actor, ['*']);
+        return $this->postJson("/api/tickets/{$ticket->ticket_id}/dispatch-assessment", $extra + [
+            'safe_to_operate' => true, 'assembled' => true, 'no_safety_critical_fault' => true,
+            'notes' => 'Cosmetic work only; safe to operate for this mission.',
+        ]);
+    }
+
+    public function test_temporary_release_needs_no_admin_approval_and_preserves_open_ticket(): void
+    {
+        $ticket = $this->ticket(['status' => 'Pending Approval']);
+        $this->vehicle->update(['status' => 'Under Maintenance']);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertForbidden();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $trip = $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))
+            ->assertCreated()->assertJsonPath('temporary_release.authorized_by', $this->custodian->id)->json();
+        $this->assertSame('Pending Approval', $ticket->fresh()->status);
+        $this->assertSame('Under Maintenance', $this->vehicle->fresh()->status);
+        $this->assertDatabaseHas('notifications', ['user_id' => $this->admin->id, 'type' => 'temporary_dispatch']);
+        $this->assertDatabaseHas('vehicle_readiness_checks', ['checked_by' => $this->custodian->id, 'all_passed' => true]);
+        $this->assertDatabaseHas('activity_logs', ['action' => 'Temporary Dispatch Authorized', 'role' => 'Custodian']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        $this->assertDatabaseCount('vehicle_usage_logs', 1);
+        $this->assertDatabaseCount('vehicle_readiness_checks', 1);
+        $this->putJson("/api/usage-logs/{$trip['usage_id']}/end")->assertOk();
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage")->assertUnprocessable();
+    }
+
+    public function test_temporary_release_requires_every_assigned_mechanics_current_assessment(): void
+    {
+        $other = $this->person('Maintenance Personnel');
+        $ticket = $this->ticket();
+        $line = $this->line($ticket, $this->mechanic);
+        $this->line($ticket, $other);
+        $this->assessDispatch($ticket, $this->mechanic)->assertCreated();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        $this->assessDispatch($ticket, $other)->assertCreated();
+        $line->update(['work_order_notes' => 'Work changed after assessment']);
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        $this->assessDispatch($ticket, $this->mechanic)->assertCreated();
+        $this->assessDispatch($ticket, $other)->assertCreated();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertCreated();
+    }
+
+    public function test_unsafe_dismantled_or_stale_assessments_cannot_be_overridden_by_custodian(): void
+    {
+        $ticket = $this->ticket();
+        $this->line($ticket, $this->mechanic);
+        foreach (['safe_to_operate', 'assembled', 'no_safety_critical_fault'] as $field) {
+            $this->assessDispatch($ticket, $this->mechanic, [$field => false])->assertCreated();
+            Sanctum::actingAs($this->custodian, ['*']);
+            $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        }
+        $this->assessDispatch($ticket, $this->mechanic)->assertCreated();
+        $this->travel(25)->hours();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        $this->assertDatabaseCount('vehicle_usage_logs', 0);
+    }
+
+    public function test_failed_readiness_and_missing_attestation_prevent_temporary_release(): void
+    {
+        $ticket = $this->ticket(['status' => 'Pending Approval']);
+        Sanctum::actingAs($this->custodian, ['*']);
+        foreach (['personally_tested', 'safe_for_intended_use', 'fully_assembled', 'no_safety_critical_fault'] as $field) {
+            $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket], [$field => false]))->assertUnprocessable();
+        }
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket], ['expected_return_at' => now()->subHour()->toIso8601String()]))->assertUnprocessable();
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket], ['started_at' => now()->subMinute()->toIso8601String()]))->assertUnprocessable();
+        \App\Models\VehicleReadinessCheck::create(['vehicle_id' => $this->vehicle->vehicle_id, 'checked_by' => $this->custodian->id, 'checked_at' => now()->subHour(), 'all_passed' => false, 'checklist' => [['item' => 'Brakes', 'passed' => false]]]);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness-check", ['confirmed' => true])->assertCreated();
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertCreated();
+    }
+
+    public function test_all_current_tickets_must_be_reviewed_and_retired_vehicles_cannot_be_released(): void
+    {
+        $ticket = $this->ticket(['status' => 'Pending Approval']);
+        $other = $this->ticket(['status' => 'Pending Approval']);
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        foreach (['Inactive', 'Decommissioned'] as $status) {
+            $this->vehicle->update(['status' => $status]);
+            $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket, $other]))->assertUnprocessable();
+        }
+        $this->assertDatabaseCount('vehicle_usage_logs', 0);
+    }
+
+    public function test_only_assigned_mechanics_can_record_dispatch_assessments(): void
+    {
+        $ticket = $this->ticket();
+        $this->line($ticket, $this->mechanic);
+        foreach ([$this->admin, $this->custodian, $this->person('Maintenance Personnel')] as $actor) {
+            $this->assessDispatch($ticket, $actor)->assertForbidden();
+        }
+        $this->assessDispatch($ticket, $this->mechanic)->assertCreated();
+        $ticket->update(['status' => 'Closed']);
+        $this->assessDispatch($ticket, $this->mechanic)->assertUnprocessable();
+    }
+
+    public function test_repairs_pause_during_temporary_dispatch_and_resume_after_return(): void
+    {
+        $ticket = $this->ticket();
+        $line = $this->line($ticket, $this->mechanic);
+        $this->assessDispatch($ticket, $this->mechanic)->assertCreated();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $trip = $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertCreated()->json();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verdict' => 'Approved'])->assertUnprocessable();
+        $this->assessDispatch($ticket, $this->mechanic)->assertUnprocessable();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$line->sub_issue_id}/log-repairs", ['repair_logs' => 'Repaired'])->assertUnprocessable();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->putJson("/api/usage-logs/{$trip['usage_id']}/end")->assertOk();
+        $this->assertDatabaseHas('notifications', ['user_id' => $this->mechanic->id, 'type' => 'temporary_dispatch_returned']);
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$line->sub_issue_id}/log-repairs", ['repair_logs' => 'Repaired'])->assertOk();
+        $this->assertSame('For Verification', $ticket->fresh()->status);
+    }
+
+    public function test_external_shop_departure_blocks_temporary_release_until_return_is_recorded(): void
+    {
+        $ticket = $this->ticket();
+        $line = $this->line($ticket, $this->mechanic, ['repair_type' => 'external', 'assigned_mechanic_id' => null, 'external_sent_at' => now()->subHour()]);
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        $line->update(['external_returned_at' => now()]);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertCreated();
+    }
+
+    public function test_release_stores_reviewed_assessment_copy_and_donor_changes_invalidate_it(): void
+    {
+        $ticket = $this->ticket();
+        $line = $this->line($ticket, $this->mechanic);
+        $this->assessDispatch($ticket, $this->mechanic)->assertCreated();
+        $part = $line->donorParts()->create(['part_name' => 'Replacement bracket', 'quantity' => 1]);
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertUnprocessable();
+        $this->assessDispatch($ticket, $this->mechanic)->assertCreated();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->getJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage?page=1")
+            ->assertOk()->assertJsonPath('release_assessments.0.current', true)
+            ->assertJsonPath('release_assessments.0.notes', 'Cosmetic work only; safe to operate for this mission.');
+        $trip = $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))
+            ->assertCreated()->assertJsonPath('temporary_release.assessments.0.notes', 'Cosmetic work only; safe to operate for this mission.')->json();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$line->sub_issue_id}/donor-parts/{$part->part_id}", ['part_name' => 'Changed', 'quantity' => 2])->assertUnprocessable();
+        $this->assertSame(1, $part->fresh()->quantity);
+        $this->assertSame('Cosmetic work only; safe to operate for this mission.', VehicleUsageLog::find($trip['usage_id'])->temporary_release['assessments'][0]['notes']);
+    }
+
+    public function test_temporary_release_and_assessment_cannot_cross_barangays(): void
+    {
+        $ticket = $this->ticket();
+        $this->line($ticket, $this->mechanic);
+        $otherBarangay = Barangay::create(['name' => 'Different scope'])->id;
+        $outsider = $this->person('Custodian', ['barangay_id' => $otherBarangay]);
+        Sanctum::actingAs($outsider, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertNotFound();
+        $this->assessDispatch($ticket, $this->person('Maintenance Personnel', ['barangay_id' => $otherBarangay]))->assertNotFound();
+        $this->assertDatabaseCount('ticket_dispatch_assessments', 0);
+    }
+
+    public function test_custodian_must_review_new_assessment_notes_before_departure(): void
+    {
+        $ticket = $this->ticket();
+        $this->line($ticket, $this->mechanic);
+        $this->assessDispatch($ticket, $this->mechanic)->assertCreated();
+        $reviewed = $this->temporaryReleaseData([$ticket]);
+        $this->assessDispatch($ticket, $this->mechanic, ['notes' => 'Updated restriction: local travel only'])->assertCreated();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $reviewed)->assertUnprocessable();
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/usage", $this->temporaryReleaseData([$ticket]))->assertCreated();
+    }
+
 }

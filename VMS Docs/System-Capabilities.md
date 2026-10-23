@@ -169,6 +169,18 @@ Cancel/Uncancel (Admin only) works at any stage before Closed or Cancelled, exce
 
 ---
 
+### 5.7 Temporary dispatch while repairs remain open
+
+A **Custodian**, without waiting for Admin approval, may authorize a **single temporary trip** when a needed vehicle is safe for its intended use and repairs can wait. Admin has no release override unless that account also holds the Custodian role. This is not ticket closure or a permanent return to service: every ticket and work order retains its existing status, including linked schedule tickets.
+
+- Before release, each assigned mechanic records a **temporary dispatch assessment** on Ticket Details: safe for intended use, fully assembled, no safety-critical fault, and assessment notes/operating restrictions. A negative assessment blocks release. Assessments expire after 24 hours and become invalid if the ticket, work orders, donor parts, assignments or vehicle status/condition change. Each in-house work order on an approved repair must have an assigned mechanic; an unapproved proposal with no repair assigned does not require a mechanic assessment.
+- The Dispatch page shows all ongoing tickets, the recorded mechanic assessments and any release blockers. The Custodian explicitly selects temporary dispatch and records the driver, destination, purpose, reason repairs can wait, and expected return time (Philippine time).
+- For each release, the Custodian must attest that they personally checked, operated and tested the vehicle now, that it is safe for this trip, fully assembled, and has no unresolved safety-critical fault preventing operation. The server records a passing readiness check alongside the release. A latest failed readiness check must first be replaced by an explicit passing check; an Inactive/Decommissioned vehicle or a vehicle still at an external shop cannot be released.
+- The server rechecks the complete ticket list and all assessments under locks at departure. Changed assessment notes must be reviewed again before departure. Temporary trips cannot be backdated, and a second trip cannot start while one is open. The trip stores the authorizer, reason, expected return, readiness check, ticket IDs and copies of the assessments. Vehicle History and Activity Log record the authorization, and all active barangay Admins are notified immediately.
+- While the vehicle is out on temporary release, repair logging, donor-part changes, external-shop actions and ticket verification are blocked. Ticket Details shows the temporary-dispatch notice. Recording the return restores those actions and notifies the assigned Custodian and mechanics to resume outstanding repairs. Another trip requires another explicit release and readiness attestation; normal verification is still required to close the ticket.
+
+---
+
 ## 6. Maintenance Schedules
 
 Once a linked ticket is Active, For Verification, Closed or Cancelled, its schedule can no longer be edited or cancelled; the work is managed through the ticket.
@@ -221,6 +233,9 @@ Has its own two-step verify/confirm flow, separate from tickets (Custodian verif
 | A cannibalized repair is submitted / approved / rejected | Barangay Admins, then the mechanic |
 | Custodian approves the repair → ticket closed | The mechanic ("Repair Verified & Closed") |
 | Custodian returns the repair | The mechanic ("Repair Returned for Rework", with the failed checks and notes) |
+| Mechanic records a temporary-dispatch assessment | The assigned Custodian |
+| Custodian authorizes temporary dispatch with open tickets | Active barangay Admins + assigned mechanics (repairs paused) |
+| Vehicle returns from temporary dispatch | Assigned Custodian + assigned mechanics (resume outstanding repairs) |
 | An archived ticket is reopened | The newly-assigned Custodian |
 | An issue report is filed | Barangay Admins (+ Custodians too, if filed by a pure Maintenance Personnel account) |
 | An issue report is dismissed | The original reporter |
@@ -321,7 +336,7 @@ Stated plainly, as found in the code — not implied to be bugs, just not (yet) 
 - **Managed file delivery:** new managed uploads use private storage and five-minute signed delivery URLs. Renewal requires an authenticated user with access to the underlying record; deleting the managed-file row revokes delivery. A signed URL can be used by its holder until expiry. Historical legacy URLs require migration separately if old records still reference public storage.
 - The **last-Admin protection** stops specific actions (deactivate, remove Admin role, platform role change) but doesn't prevent every conceivable way a barangay could end up without an active Admin — the Super Admin recovery tool exists specifically to fix that case after the fact, not to make it impossible in advance.
 - **Import / custom-field limits:** an import takes at most 500 rows / 2 MB per file; custom fields are per Vehicle Type (a template column per distinct label), and the import template does not yet include a per-row hull/engine hint beyond the Instructions sheet.
-- **Dispatch eligibility:** departure requires an Available vehicle with no ongoing maintenance ticket (including Pending Approval). Closed, Cancelled and Declined tickets do not block departure. This is enforced server-side for Admins and Custodians. Returning an already-dispatched vehicle remains allowed if a ticket opens during its trip. Trip records never change vehicle status; no deferral bypass currently exists.
+- **Dispatch eligibility:** normal departure requires an Available vehicle with no ongoing ticket (Pending Approval included; Closed/Cancelled/Declined excluded). A Custodian can authorize a documented, one-trip temporary release under the rules in section 5.7, without waiting for Admin approval. Trip records never change the stored maintenance status; returning a dispatched vehicle remains allowed.
 - **Barangay boundary lookup** depends on a public third-party geocoder with no guaranteed coverage — a legitimate "no boundary found" result is expected for some barangays, not a bug.
 
 ---
