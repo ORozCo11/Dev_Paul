@@ -69,8 +69,10 @@ class SuperAdminController extends Controller
         return Barangay::with(['city.province', 'registrationSetting'])
             // Reference-only PSGC rows are registration choices, not platform tenants.
             // Keep manually added barangays visible before their first staff joins.
+            // A registration code on its own doesn't count: BarangaySeeder pre-issues
+            // codes for all of Mandaue City, and those barangays were never onboarded.
             ->where(function ($query) {
-                $query->whereNull('psgc_code')->orWhereNotNull('provisioned_at')->orWhereHas('users')->orWhereHas('registrationSetting');
+                $query->whereNull('psgc_code')->orWhereNotNull('provisioned_at')->orWhereHas('users');
             })
             ->select(['id', 'name', 'psgc_code', 'city_id', 'boundary_status', 'boundary_source', 'boundary_verified_by', 'pending_boundary', 'pending_boundary_source'])
             ->selectRaw('CASE WHEN boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
@@ -669,6 +671,7 @@ class SuperAdminController extends Controller
             'A live boundary outline is required before issuing a registration code. Confirm or discard any pending replacement first. An imported reference outline does not have to be marked reviewed.');
 
         $setting = RegistrationSetting::for($barangay->id);
+        $this->markProvisioned($barangay);
 
         return response()->json(['staff_code' => $setting->staff_code, 'updated_at' => $setting->updated_at]);
     }
@@ -680,6 +683,7 @@ class SuperAdminController extends Controller
             'A live boundary outline is required before issuing a registration code. Confirm or discard any pending replacement first. An imported reference outline does not have to be marked reviewed.');
 
         $setting = RegistrationSetting::regenerateFor($barangay->id);
+        $this->markProvisioned($barangay);
         $this->log($request, 'Edit', "Regenerated the staff registration code for {$barangay->name}.");
 
         return response()->json(['staff_code' => $setting->staff_code, 'updated_at' => $setting->updated_at]);
@@ -719,6 +723,14 @@ class SuperAdminController extends Controller
         // requests pagination so search covers the complete authorized history.
         if ($request->boolean('paginate')) return $query->paginate($data['per_page'] ?? 25)->withQueryString();
         return $query->limit(200)->get();
+    }
+
+    // A Super Admin issuing a code onboards that barangay onto the platform.
+    private function markProvisioned(Barangay $barangay): void
+    {
+        if ($barangay->provisioned_at === null) {
+            $barangay->update(['provisioned_at' => now()]);
+        }
     }
 
     private function boundaryStatus(Barangay $barangay): string
