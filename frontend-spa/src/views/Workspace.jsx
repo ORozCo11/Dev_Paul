@@ -510,6 +510,7 @@ const moduleIcons = {
 function Workspace() {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatchVehicleId = location.pathname.match(/\/vehicles\/(\d+)\/dispatch$/)?.[1] ?? null;
   const vehicleUrlMatch = location.pathname.match(/\/vehicles\/(new|\d+)$/);
   const vehicleProfileId = vehicleUrlMatch && vehicleUrlMatch[1] !== 'new' ? vehicleUrlMatch[1] : null;
   const isNewVehiclePage = vehicleUrlMatch?.[1] === 'new';
@@ -543,7 +544,7 @@ function Workspace() {
   const inspectTicketId = location.pathname.match(/\/inspections\/(\d+)\/inspect$/)?.[1] ?? null;
   const isProfilePage = /\/profile$/.test(location.pathname);
   const isOnSpecialPage = Boolean(
-    isNewVehiclePage || vehicleProfileId || isNewTicketPage || ticketProfileId
+    isNewVehiclePage || vehicleProfileId || dispatchVehicleId || isNewTicketPage || ticketProfileId
     || isNewCategoryPage || editCategoryId || isNewSchedulePage || editScheduleId || scheduleProfileId
     || isNewIssuePage || editIssueId || viewIssueId || isNewConditionPage || editConditionId
     || isNewMaintenancePage || editMaintenanceId || maintenanceProfileId || isNewUserPage || editUserId || viewUserId
@@ -553,7 +554,8 @@ function Workspace() {
   // null when just looking at a module's own list, in which case the heading
   // falls back to plain "{Module Name}" with no breadcrumb line above it.
   const subPageTitle =
-    (isNewVehiclePage && 'Add Vehicle')
+    (dispatchVehicleId && 'Dispatch')
+    || (isNewVehiclePage && 'Add Vehicle')
     || (vehicleProfileId && 'Vehicle Profile')
     || (isNewTicketPage && 'Create New Ticket')
     || (ticketProfileId && 'Ticket Details')
@@ -632,7 +634,7 @@ function Workspace() {
     // this keeps falling through to 'workTracker' (its My Tasks -> History tab) for them.
     if (ticketProfileId || isNewTicketPage) return user.role === 'Admin' ? 'tickets' : (modules.some(([k]) => k === 'ticketWorkOrders') ? 'ticketWorkOrders' : 'workTracker');
     if (maintenanceProfileId || isNewMaintenancePage || editMaintenanceId) return 'maintenance';
-    if (isNewVehiclePage || vehicleProfileId) return 'vehicles';
+    if (isNewVehiclePage || vehicleProfileId || dispatchVehicleId) return 'vehicles';
     if (isNewCategoryPage || editCategoryId) return 'categories';
     if (isNewSchedulePage || editScheduleId || scheduleProfileId) return 'schedules';
     if (isNewIssuePage || editIssueId || viewIssueId) return 'issues';
@@ -704,7 +706,7 @@ function Workspace() {
         ? (hasReportOrProposeNav ? 'reportOrPropose' : 'ticketPropose')
         : (hasMyTasksNav ? 'myTasks' : (modules.some(([k]) => k === 'ticketWorkOrders') ? 'ticketWorkOrders' : 'workTracker'))))
     : maintenanceProfileId || isNewMaintenancePage || editMaintenanceId ? (hasMaintenanceLedgerNav ? 'maintenanceLedger' : 'maintenance')
-    : isNewVehiclePage || vehicleProfileId ? 'vehicles'
+    : isNewVehiclePage || vehicleProfileId || dispatchVehicleId ? 'vehicles'
     : isNewCategoryPage || editCategoryId ? 'categories'
     : isNewSchedulePage || editScheduleId || scheduleProfileId ? 'schedules'
     : isNewIssuePage || editIssueId || viewIssueId ? (hasReportOrProposeNav ? 'reportOrPropose' : 'issues')
@@ -794,7 +796,6 @@ function Workspace() {
   // vehicle — offer the Readiness Check right then instead of making them
   // come back for a second visit. Holds the vehicle to check, or null.
   const [readinessPromptTarget, setReadinessPromptTarget] = useState(null);
-  const [dispatchTarget, setDispatchTarget] = useState(null);
   // Admin's Maintenance Schedule defaults to the card ("ticket") view rather
   // than the plain table — a schedule reads more like a ticket now that its
   // row-level actions are ownership-gated (see scheduleColumns). Everyone
@@ -2328,7 +2329,7 @@ function Workspace() {
   // "All Vehicles" is the pilot table for the Choose Columns toolbar button
   // (show/hide + drag to reorder, persisted per browser) — see
   // ColumnChooserButton/useColumnChooser below.
-  const vehicleColumnDefs = (() => vehicleColumns(user, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile, (row) => setReadinessPromptTarget(row), (row) => setDispatchTarget(row)))();
+  const vehicleColumnDefs = (() => vehicleColumns(user, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile, (row) => setReadinessPromptTarget(row), (row) => guardedNavigate(() => navigate(`${roleRoutes[user.role]}/vehicles/${row.vehicle_id}/dispatch`))))();
   const vehicleColumnChooser = useColumnChooser('vms_vehicle_columns_v2', vehicleColumnDefs);
 
   // Every other module's table gets the same Choose Columns / drag-to-reorder
@@ -2858,6 +2859,15 @@ function Workspace() {
                 <button className="ghost-button" type="button" onClick={() => returnToModule('tickets')}>Back to Maintenance Tickets</button>
               </ModulePanel>
             )
+          ) : dispatchVehicleId ? (
+            <VehicleDispatchPage
+              key={dispatchVehicleId}
+              vehicle={(records.vehicles ?? []).find((v) => String(v.vehicle_id) === String(dispatchVehicleId))}
+              loading={loading}
+              user={user}
+              onBack={() => returnToModule('vehicles')}
+              onChanged={refreshCurrent}
+            />
           ) : vehicleProfileId ? (
             <VehicleProfilePage key={vehicleProfileId}
               vehicleId={vehicleProfileId}
@@ -3333,16 +3343,6 @@ function Workspace() {
           </div>
           <PaginatedTable columns={vehicleColumnChooser.visibleColumns} rows={visibleRows} onRowClick={openVehicleProfile} onReorderColumn={vehicleColumnChooser.reorderColumn} emptyMessage="No vehicles here yet — click the + button to register one." />
           <VehicleImportModal open={vehicleImportOpen} onClose={() => setVehicleImportOpen(false)} onImported={refreshCurrent} />
-          <FormModal open={!!dispatchTarget} title={`Dispatch — ${dispatchTarget?.vehicle_name ?? ''}`} onClose={() => setDispatchTarget(null)}>
-            {dispatchTarget && (
-              <VehicleDispatchModal
-                key={dispatchTarget.vehicle_id}
-                vehicle={(records.vehicles ?? []).find((v) => v.vehicle_id === dispatchTarget.vehicle_id) ?? dispatchTarget}
-                onClose={() => setDispatchTarget(null)}
-                onChanged={refreshCurrent}
-              />
-            )}
-          </FormModal>
           <FormModal
             open={!!readinessPromptTarget}
             title={`Readiness Check — ${readinessPromptTarget?.vehicle_name ?? ''}`}
@@ -16902,14 +16902,21 @@ function CapabilityImpactCard({ items, onNavigate, basePath }) {
 
 // Vehicle Usage Log — open a trip when the vehicle goes out, close it when it
 // is back. Recording only; it never changes the vehicle's status.
-// Row-level "Dispatch" popup on Vehicle Management: see whether a vehicle is in
-// the station or out on a trip, and take it out / mark it returned. Uses the
-// existing Usage Log endpoints (the server enforces who may do this).
-function VehicleDispatchModal({ vehicle, onClose, onChanged }) {
-  const { user } = useContext(AuthContext);
-  return <><VehicleTripLog vehicle={vehicle} canLog={canDo(user, 'usage.log')} onChanged={onChanged} /><div className="can-actions"><button type="button" className="ghost-button" onClick={onClose}>Close</button></div></>;
+// Full-page dispatch and trip history, reached from Vehicle Management.
+function VehicleDispatchPage({ vehicle, loading, user, onBack, onChanged }) {
+  if (!canDo(user, 'usage.view')) return <ModulePanel><p role="alert">You do not have access to vehicle dispatch.</p><button type="button" className="ghost-button" onClick={onBack}>Back to Vehicle Management</button></ModulePanel>;
+  if (!vehicle && loading) return <ModuleLoader label="Loading vehicle dispatch" />;
+  if (!vehicle) return <ModulePanel><p role="alert">This vehicle was not found or is not available to your account.</p><button type="button" className="ghost-button" onClick={onBack}>Back to Vehicle Management</button></ModulePanel>;
+  return <ModulePanel description="Record departures and returns, and review this vehicle's past trips.">
+    <div className="vehicle-dispatch-page">
+      <div className="vehicle-dispatch-heading">
+        <div><h2>{vehicle.vehicle_name}</h2><p className="muted">{vehicle.plate_number}{vehicle.category?.category_name ? ` - ${vehicle.category.category_name}` : ''}</p></div>
+        <button type="button" className="ghost-button" onClick={onBack}><Icon name="arrowLeft" size={16} /> Back to Vehicle Management</button>
+      </div>
+      <VehicleTripLog vehicle={vehicle} canLog={canDo(user, 'usage.log')} onChanged={onChanged} />
+    </div>
+  </ModulePanel>;
 }
-
 
 function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport, onAdd, addLabel = "Add", onImport, columnChooser }) {
   return (

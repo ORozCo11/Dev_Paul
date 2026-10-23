@@ -13,3 +13,19 @@
 
 .schedule-table-actions .sch-card-actions { margin: 0; padding: 0; border: 0; justify-content: center; }
 .sch-card-actions .sch-action svg { flex-shrink: 0; display: block; }
+
+.vehicle-dispatch-page { width:100%; min-width:0; }
+.vehicle-dispatch-heading { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:20px; }
+.vehicle-dispatch-heading h2 { margin:0 0 6px; color:var(--text-strong); }
+.vehicle-dispatch-heading .ghost-button { display:inline-flex; align-items:center; gap:8px; }
+.vehicle-dispatch-page .vehicle-trip-log { margin-top:0; }
+.vehicle-dispatch-page .trip-log-form { grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding:20px 0; }
+.vehicle-dispatch-page .trip-log-table table { min-width:850px; }
+.vehicle-dispatch-page .trip-log-table th { white-space:nowrap; }
+html[data-theme="dark"] .vehicle-trip-log .trip-log-table th { background:var(--surface-2); color:var(--text); }
+html[data-theme="dark"] .vehicle-trip-log :is(input,textarea) { background:var(--surface-2); border-color:var(--border); color:var(--text); }
+@media(max-width:767px) {
+  .vehicle-dispatch-page .trip-log-form { grid-template-columns:1fr; }
+  .vehicle-dispatch-heading { align-items:flex-start; }
+  .vehicle-dispatch-page .trip-log-pagination { flex-wrap:wrap; gap:8px; }
+}
