@@ -2929,9 +2929,6 @@ function Workspace() {
               categoryVehicleCount={editCategoryId ? (records.categories ?? []).find((c) => String(c.category_id) === String(editCategoryId))?.vehicles_count : null}
               onDirty={() => setHasUnsavedChanges(true)}
             />
-            {editCategoryId && canDo(user, 'vehicle_type.edit') && (
-              <CategoryFieldsManager categoryId={editCategoryId} onChanged={loadLookups} />
-            )}
             </>
           ) : (isNewSchedulePage || editScheduleId) ? (
             <FormPage
@@ -16679,118 +16676,6 @@ function VehicleImportModal({ open, onClose, onImported }) {
     </FormModal>
   );
 }
-// Admin-defined custom fields for one Vehicle Type. Fields are archived, not
-// deleted, so vehicles keep the values they already hold.
-const CUSTOM_FIELD_TYPES = [
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
-  { value: 'dropdown', label: 'Dropdown' },
-  { value: 'date', label: 'Date' },
-  { value: 'yes_no', label: 'Yes / No' },
-];
-const BLANK_FIELD_DRAFT = { label: '', field_type: 'text', is_required: false, unit: '', options: '' };
-
-function CategoryFieldsManager({ categoryId, onChanged }) {
-  const [fields, setFields] = useState([]);
-  const [draft, setDraft] = useState(BLANK_FIELD_DRAFT);
-  const [editingId, setEditingId] = useState(null);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    const res = await api.get(`/categories/${categoryId}/fields`);
-    setFields(res.data);
-  }, [categoryId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.get(`/categories/${categoryId}/fields`).then((res) => { if (!cancelled) setFields(res.data); }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [categoryId]);
-
-  const run = async (fn) => {
-    setBusy(true); setError('');
-    try { await fn(); await load(); await onChanged?.(); } catch (err) {
-      setError(err.response?.data?.message || 'Could not save the field.');
-    } finally { setBusy(false); }
-  };
-
-  const toPayload = (d) => ({
-    label: d.label.trim(),
-    field_type: d.field_type,
-    is_required: d.is_required,
-    unit: d.unit?.trim() || null,
-    options: d.field_type === 'dropdown' ? String(d.options).split(',').map((o) => o.trim()).filter(Boolean) : null,
-  });
-
-  const save = () => run(async () => {
-    if (editingId) await api.put(`/category-fields/${editingId}`, toPayload(draft));
-    else await api.post(`/categories/${categoryId}/fields`, toPayload(draft));
-    setDraft(BLANK_FIELD_DRAFT); setEditingId(null);
-  });
-
-  const move = (index, delta) => run(async () => {
-    const a = fields[index]; const b = fields[index + delta];
-    if (!b) return;
-    // Renumber both neighbours so equal sort_orders can't leave them stuck.
-    await api.put(`/category-fields/${a.field_id}`, { label: a.label, sort_order: index + delta });
-    await api.put(`/category-fields/${b.field_id}`, { label: b.label, sort_order: index });
-  });
-
-  const startEdit = (f) => {
-    setEditingId(f.field_id);
-    setDraft({ label: f.label, field_type: f.field_type, is_required: f.is_required, unit: f.unit ?? '', options: (f.options ?? []).join(', ') });
-  };
-
-  return (
-    <section className="veh-card custom-fields-panel" style={{ marginTop: 16 }}>
-      <div className="veh-card-head"><Icon name="list" size={16} /><h4>Custom Fields</h4></div>
-      <div className="custom-fields-body">
-        <p style={{ margin: 0, fontSize: 13 }}>Extra details asked for whenever a vehicle of this type is added or edited. Archived fields stop being asked, but existing values are kept.</p>
-        {error && <div className="notice error">{error}</div>}
-        {fields.length === 0 && <p className="custom-fields-empty">No custom fields yet. Add a field below to collect extra vehicle details.</p>}
-        {fields.map((f, i) => (
-          <div className="custom-field-row" key={f.field_id} style={{ opacity: f.is_active ? 1 : 0.55 }}>
-            <strong style={{ flex: '1 1 200px' }}>{f.label}{f.is_required ? ' *' : ''}</strong>
-            <span style={{ fontSize: 13 }}>{CUSTOM_FIELD_TYPES.find((t) => t.value === f.field_type)?.label}{f.unit ? ` · ${f.unit}` : ''}{f.options?.length ? ` · ${f.options.join(', ')}` : ''}{f.is_active ? '' : ' · archived'}</span>
-            <button type="button" className="ghost-button" disabled={busy || i === 0} onClick={() => move(i, -1)} aria-label="Move up">▲</button>
-            <button type="button" className="ghost-button" disabled={busy || i === fields.length - 1} onClick={() => move(i, 1)} aria-label="Move down">▼</button>
-            <button type="button" className="ghost-button" disabled={busy} onClick={() => startEdit(f)}>Edit</button>
-            <button type="button" className="ghost-button" disabled={busy} onClick={() => run(() => api.put(`/category-fields/${f.field_id}`, { label: f.label, is_active: !f.is_active }))}>{f.is_active ? 'Archive' : 'Restore'}</button>
-          </div>
-        ))}
-        <div className="custom-field-editor">
-          <label className="custom-field-name">Field name
-            <input type="text" value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} placeholder="e.g. Tank Capacity" />
-          </label>
-          <label>Type
-            <SearchableSelect value={draft.field_type} disabled={!!editingId} onChange={(e) => setDraft({ ...draft, field_type: e.target.value })}>
-              {CUSTOM_FIELD_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </SearchableSelect>
-          </label>
-          {(draft.field_type === 'number' || draft.field_type === 'text') && (
-            <label>Unit
-              <input type="text" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value })} placeholder="L, kg…" />
-            </label>
-          )}
-          {draft.field_type === 'dropdown' && (
-            <label className="custom-field-options">Options (comma-separated)
-              <input type="text" value={draft.options} onChange={(e) => setDraft({ ...draft, options: e.target.value })} placeholder="Front, Rear" />
-            </label>
-          )}
-          <label className="custom-field-required">
-            <input type="checkbox" checked={draft.is_required} onChange={(e) => setDraft({ ...draft, is_required: e.target.checked })} /> Required
-          </label>
-          <div className="custom-field-actions">
-            {editingId && <button type="button" className="ghost-button" disabled={busy} onClick={() => { setEditingId(null); setDraft(BLANK_FIELD_DRAFT); }}>Cancel</button>}
-            <button type="button" className="primary-button" disabled={busy || !draft.label.trim()} onClick={save}>{busy ? 'Saving…' : editingId ? 'Update Field' : 'Add Field'}</button>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // Fleet Readiness & Criticality Watch — every operational vehicle that isn't
 // verified ready, Critical first. Shown on the lean (Custodian/Maintenance)
 // dashboard; Admin sees the same list inside Risk & Readiness Watch.
