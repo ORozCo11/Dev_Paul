@@ -327,7 +327,6 @@ function LocationDensityMap({
   const [resetViewRequest, setResetViewRequest] = useState(0);
   const [isMaximized, setIsMaximized] = useState(false);
   const [basemap, setBasemap] = useState('satellite'); // 'map' | 'satellite'
-  const [showPlaceLabels, setShowPlaceLabels] = useState(false);
   const mapShellRef = useRef(null);
   const nameInputRef = useRef(null);
 
@@ -726,7 +725,7 @@ function LocationDensityMap({
         {basemap === 'satellite' ? (
           <>
             <TileLayer attribution={`${ESRI_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} crossOrigin="anonymous" maxZoom={19} url={ESRI_IMAGERY_URL} />
-            {showPlaceLabels && <TileLayer attribution="" crossOrigin="anonymous" maxZoom={19} url={ESRI_LABELS_URL} />}
+            <TileLayer attribution="" crossOrigin="anonymous" maxZoom={19} url={ESRI_LABELS_URL} />
           </>
         ) : (
           <TileLayer attribution={`${STREET_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} crossOrigin="anonymous" maxZoom={19} url={STREET_TILE_URL} />
@@ -741,7 +740,6 @@ function LocationDensityMap({
         >
           <button type="button" className={basemap === 'map' ? 'is-active' : ''} onClick={() => setBasemap('map')}>Map</button>
           <button type="button" className={basemap === 'satellite' ? 'is-active' : ''} onClick={() => setBasemap('satellite')}>Satellite</button>
-          {basemap === 'satellite' && <button type="button" aria-pressed={showPlaceLabels} className={showPlaceLabels ? 'is-active' : ''} title="Show place names supplied by the map provider. These do not define barangay boundaries." onClick={() => setShowPlaceLabels((value) => !value)}>Map labels</button>}
         </div>
         {boundaryPolygons.length > 0 && <BoundaryMapDetails
           name={barangayName}
