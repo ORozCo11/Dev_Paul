@@ -115,6 +115,7 @@ Use [the current document index](README.md) to choose the right reference.
 - [Must-Haves.md](Must-Haves.md) and [the requirements PDF](VMS-Must-Haves-Updated.pdf): requirements mapping and acceptance criteria.
 - [Sample-Data.md](Sample-Data.md): team setup, demo accounts and recorded verification.
 - [System-Audit-2026-10-24.md](System-Audit-2026-10-24.md): current open findings and retest criteria.
+- [Ticket process review](Ticket-Process-Review-2026-10-24.md): field review, reproduced ticket workflow gaps and proposed improvements.
 - [The presentation with examples](VMS-Evidence-and-Defense-Review-With-Examples.pptx): defense preparation and follow-along cases.
 - [System-Architecture.svg](System-Architecture.svg), [ERD.svg](ERD.svg) and [Use-Case-Diagram.svg](Use-Case-Diagram.svg): diagrams.
 - [Historical archive](../docs/archive/vms/README.md): earlier role decisions, audit passes, UI changes, geographic evidence and superseded exports. These describe earlier revisions.
