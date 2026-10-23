@@ -63,3 +63,6 @@ html[data-theme="dark"] .superadmin-shell :is(.sa-code-feedback.is-error, .sa-co
   html:root[data-theme] .superadmin-shell .sa-code-value .sa-row-actions > button, html:root[data-theme] .superadmin-shell .sa-code-regenerate > button { flex:1 1 auto; min-height:44px; }
   .superadmin-shell .sa-code-value code { font-size:20px; letter-spacing:2px; }
 }
+.superadmin-shell .sa-code-pages { padding:12px 16px; }
+.superadmin-shell .sa-code-pages label { white-space:nowrap; }
+html:root[data-theme] .superadmin-shell .sa-code-pages label > * { width:84px; flex:0 0 84px; }

@@ -1,5 +1,5 @@
 import SearchableSelect from '../components/SearchableSelect';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import Icon from '../components/Icon';
@@ -124,10 +124,10 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onApprove, onRej
   </AdminManagementCard>{editing && <AdminActionDrawer title="Edit account role" description="Review this account's access before saving." onClose={() => setEditing(null)}><AdminIdentity name={editing.name} email={editing.email} /><form className="sa-role-form" onSubmit={requestRoleChange}><p>Current roles: <strong>{effectiveRoles(editing).join(', ')}</strong></p><AdminFilterField label="New role"><SearchableSelect value={nextRole} onChange={(event) => setNextRole(event.target.value)}>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><p className="muted">Saving replaces the account's current roles. Last-Administrator and account restrictions still apply.</p><div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => setEditing(null)}>Cancel</button><button type="submit" className="primary-button" disabled={nextRole === editing.role && effectiveRoles(editing).length === 1}>Save Role</button></div></form></AdminActionDrawer>}</div>;
 }
 
-const CODE_LIST_LIMIT = 50;
 const CODE_REVEAL_MS = 60000;
 // The API refuses to issue or show a code without a live, settled boundary.
-const codeState = (b) => !b.has_boundary || b.pending_boundary ? 'boundary' : b.has_registration_code ? 'active' : 'none';
+const hasPendingBoundary = (b) => Boolean(b.has_pending_boundary ?? b.pending_boundary);
+const codeState = (b) => !b.has_boundary || hasPendingBoundary(b) ? 'boundary' : b.has_registration_code ? 'active' : 'none';
 const CODE_STATE_LABELS = { active: 'Code active', none: 'No code yet', boundary: 'Boundary required' };
 const sameMoment = (a, b) => a && b && Math.abs(new Date(a) - new Date(b)) < 1000;
 const historyFor = (name) => `registration code for ${name}.`;
@@ -225,10 +225,10 @@ function CodePanel({ barangay, onRequestConfirmation, setNotice, onChanged }) {
   });
   return <section className="sa-code-panel" aria-labelledby="sa-code-panel-title">
     <header>
-      <div><h3 id="sa-code-panel-title" tabIndex={-1}>{barangay.name}</h3><p>{[barangay.city_name, barangay.province_name].filter(Boolean).join(', ') || 'Location not specified'}</p></div>
+      <div><h3 id="sa-code-panel-title" tabIndex={-1}>{barangay.name}</h3><p>{placeLabel(barangay)}{barangay.psgc_code && <> · PSGC {barangay.psgc_code}</>}</p></div>
       <StatusBadge value={state === 'active' || code ? 'Active' : state === 'none' ? 'No code yet' : 'Boundary required'} />
     </header>
-    {state === 'boundary' ? <AdminEmptyState icon="pin" title="A boundary is needed first" description={barangay.pending_boundary ? 'A replacement boundary is waiting for review. Confirm or discard it before this barangay can use a registration code.' : 'This barangay has no live boundary outline yet. Add one before issuing a registration code.'}><button type="button" className="ghost-button" onClick={() => navigate(`/superadmin/barangays/${barangay.id}`)}>Open barangay boundary</button></AdminEmptyState>
+    {state === 'boundary' ? <AdminEmptyState icon="pin" title="A boundary is needed first" description={hasPendingBoundary(barangay) ? 'A replacement boundary is waiting for review. Confirm or discard it before this barangay can use a registration code.' : 'This barangay has no live boundary outline yet. Add one before issuing a registration code.'}><button type="button" className="ghost-button" onClick={() => navigate(`/superadmin/barangays/${barangay.id}`)}>Open barangay boundary</button></AdminEmptyState>
       : state === 'none' && !code ? <AdminEmptyState icon="key" title="No registration code yet" description="Issue a code so staff can create accounts for this barangay. Share it only with the barangay's staff.">{loaded.error ? <p role="alert" className="sa-code-error">{loaded.error}</p> : null}<button type="button" className="primary-button" disabled={issuing} onClick={() => { setIssuing(true); setAttempt((value) => value + 1); }}>{issuing ? 'Issuing code…' : 'Issue registration code'}</button></AdminEmptyState>
       : loaded.error ? <AdminEmptyState icon="alert" title="Code unavailable" description={loaded.error}><button type="button" className="ghost-button" onClick={() => setAttempt((value) => value + 1)}>Retry</button></AdminEmptyState>
       : !code ? <p className="sa-code-loading" role="status">Loading registration code…</p>
@@ -257,57 +257,117 @@ function CodePanel({ barangay, onRequestConfirmation, setNotice, onChanged }) {
   </section>;
 }
 
-export function RegistrationCodesTab({ barangays, initialBarangay, onRequestConfirmation, setNotice, onChanged }) {
+const CODE_PAGE_SIZES = [10, 25, 50];
+const CODE_FILTER_KEYS = ['region', 'province', 'city', 'barangay'];
+const placeLabel = (b) => [b.city_name, b.province_name, b.region_name].filter(Boolean).join(', ') || 'Location not specified';
+
+// Fetches `path` whenever it (or `version`) changes; null skips the request.
+function useAdminResource(path, version, fallbackError) {
+  const [result, setResult] = useState({ key: '', data: null, error: null });
+  const key = path ? `${path}#${version}` : '';
+  useEffect(() => {
+    if (!path) return;
+    let current = true;
+    api.get(path).then(({ data }) => { if (current) setResult({ key, data, error: null }); })
+      .catch((error) => { if (current) setResult({ key, data: null, error: error.response?.data?.message ?? fallbackError }); });
+    return () => { current = false; };
+  }, [path, key, fallbackError]);
+  const settled = Boolean(key) && result.key === key;
+  return { data: settled ? result.data : null, error: settled ? result.error : null, loading: Boolean(key) && !settled };
+}
+
+export function RegistrationCodesTab({ initialBarangay, onRequestConfirmation, setNotice, onChanged }) {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
-  const [showLocation, setShowLocation] = useState(false);
-  const [province, setProvince] = useState('');
-  const [city, setCity] = useState('');
-  const [barangayName, setBarangayName] = useState('');
-  const [selectedId, setSelectedId] = useState(initialBarangay ? String(initialBarangay.id) : '');
+  const [params, setParams] = useSearchParams();
+  const value = (name) => params.get(name) ?? '';
+  const [draft, setDraft] = useState(value('q'));
+  const [version, setVersion] = useState(0);
+  const [showLocation, setShowLocation] = useState(CODE_FILTER_KEYS.some((name) => params.get(name)));
   const panelRef = useRef(null);
-  const provinces = [...new Set(barangays.map((b) => b.province_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const cities = [...new Set(barangays.filter((b) => b.province_name === province).map((b) => b.city_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const names = [...new Set(barangays.filter((b) => b.province_name === province && b.city_name === city).map((b) => b.name))].sort((a, b) => a.localeCompare(b));
-  const term = search.trim().toLowerCase();
-  const matches = barangays.filter((b) => (!province || b.province_name === province) && (!city || b.city_name === city) && (!barangayName || b.name === barangayName)
-    && (!term || [b.name, b.city_name, b.province_name, b.psgc_code].join(' ').toLowerCase().includes(term)));
-  const shown = matches.slice(0, CODE_LIST_LIMIT);
-  const selected = barangays.find((b) => String(b.id) === selectedId);
-  const filtered = Boolean(term || province);
-  const clear = () => { setSearch(''); setProvince(''); setCity(''); setBarangayName(''); };
+  // Filters, page and selection live in the URL so Back, refresh and
+  // shared links all return to the same view.
+  const update = useCallback((changes, { keepPage = false, replace = true } = {}) => setParams((current) => {
+    const next = new URLSearchParams(current);
+    Object.entries(changes).forEach(([name, val]) => { if (val) next.set(name, String(val)); else next.delete(name); });
+    if (!keepPage) next.delete('page');
+    return next;
+  }, { replace }), [setParams]);
+  useEffect(() => {
+    if (initialBarangay && !params.get('selected')) update({ selected: initialBarangay.id }, { keepPage: true });
+  }, [initialBarangay, params, update]);
+  useEffect(() => {
+    if (draft.trim() === (params.get('q') ?? '')) return undefined;
+    const timer = setTimeout(() => update({ q: draft.trim() }), 300);
+    return () => clearTimeout(timer);
+  }, [draft, params, update]);
+
+  const region = value('region');
+  const province = value('province');
+  const city = value('city');
+  const barangay = value('barangay');
+  const page = Number(value('page')) || 1;
+  const size = CODE_PAGE_SIZES.includes(Number(value('per_page'))) ? Number(value('per_page')) : 10;
+  const selectedId = value('selected');
+  const query = (entries) => new URLSearchParams(Object.entries(entries).filter(([, val]) => val)).toString();
+  const locations = useAdminResource(`/superadmin/barangays/locations?${query({ region, province_id: province, city_id: city })}`, version, 'Location filters could not be loaded.');
+  const results = useAdminResource(`/superadmin/barangays/search?${query({ q: value('q'), region, province_id: province, city_id: city, barangay_id: barangay, page, per_page: size })}`, version, 'Registered barangays could not be loaded.');
+  const rows = results.data?.data ?? [];
+  const listed = rows.find((b) => String(b.id) === selectedId);
+  const lookup = useAdminResource(selectedId && !listed ? `/superadmin/barangays/search?barangay_id=${selectedId}` : null, version, 'This barangay could not be loaded.');
+  const selected = listed ?? lookup.data?.data?.[0];
+  const filtered = Boolean(value('q') || region || province || city || barangay);
+  const options = locations.data ?? { regions: [], provinces: [], cities: [], barangays: [] };
+  const clear = () => { setDraft(''); update({ q: '', region: '', province: '', city: '', barangay: '' }); };
   const choose = (b) => {
-    setSelectedId(String(b.id));
+    update({ selected: b.id }, { keepPage: true, replace: false });
     // On narrow screens the panel sits below the list; bring it into view.
     requestAnimationFrame(() => { panelRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' }); panelRef.current?.querySelector('h3')?.focus({ preventScroll: true }); });
   };
+  const changed = useCallback(() => { setVersion((current) => current + 1); onChanged(); }, [onChanged]);
+  const lastPage = results.data?.last_page ?? 1;
   return <div className="superadmin-tab sa-codes-page">
     <section className="sa-management-card sa-code-finder" aria-labelledby="sa-code-finder-title">
-      <header className="sa-code-head"><div><h2 id="sa-code-finder-title">Find a barangay</h2><p>Search registered barangays by name, city, province, or PSGC code.</p></div></header>
+      <header className="sa-code-head"><div><h2 id="sa-code-finder-title">Find a registered barangay</h2><p>Search nationwide by barangay, city or municipality, province, or PSGC code.</p></div></header>
       <div className="sa-code-finder-controls">
-        <LocalSearchInput value={search} onChange={setSearch} placeholder="Search barangays..." />
+        <LocalSearchInput value={draft} onChange={setDraft} placeholder="Search barangays nationwide..." />
         <button type="button" className="ghost-button sa-location-toggle" aria-expanded={showLocation} aria-controls="sa-code-location" onClick={() => setShowLocation((open) => !open)}><Icon name="pin" size={15} />Filter by location<Icon name="chevronDown" size={14} /></button>
         {showLocation && <fieldset id="sa-code-location" className="sa-code-location">
           <legend>Location (optional)</legend>
-          <AdminFilterField label="Province"><SearchableSelect value={province} onChange={(event) => { setProvince(event.target.value); setCity(''); setBarangayName(''); }}><option value="">All provinces</option>{provinces.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField>
-          <AdminFilterField label="City / Municipality"><SearchableSelect value={city} disabled={!province} onChange={(event) => { setCity(event.target.value); setBarangayName(''); }}><option value="">{province ? 'All cities / municipalities' : 'Choose a province first'}</option>{cities.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField>
-          <AdminFilterField label="Barangay"><SearchableSelect value={barangayName} disabled={!city} onChange={(event) => setBarangayName(event.target.value)}><option value="">{city ? 'All barangays' : 'Choose a city first'}</option>{names.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField>
+          {locations.error && <p role="alert" className="sa-code-error">{locations.error} <button type="button" className="sa-text-button" onClick={() => setVersion((current) => current + 1)}>Retry</button></p>}
+          <AdminFilterField label="Region"><SearchableSelect value={region} disabled={locations.loading && !locations.data} onChange={(event) => update({ region: event.target.value, province: '', city: '', barangay: '' })}><option value="">All regions</option>{options.regions.map((r) => <option key={r.code} value={r.code}>{r.name === r.long_name ? r.name : `${r.name} (${r.long_name})`}</option>)}</SearchableSelect></AdminFilterField>
+          <AdminFilterField label="Province"><SearchableSelect value={province} onChange={(event) => update({ province: event.target.value, city: '', barangay: '' })}><option value="">All provinces</option>{options.provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</SearchableSelect></AdminFilterField>
+          <AdminFilterField label="City / Municipality"><SearchableSelect value={city} disabled={!province} onChange={(event) => update({ city: event.target.value, barangay: '' })}><option value="">{province ? 'All cities / municipalities' : 'Choose a province first'}</option>{options.cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</SearchableSelect></AdminFilterField>
+          <AdminFilterField label="Barangay"><SearchableSelect value={barangay} disabled={!city} onChange={(event) => update({ barangay: event.target.value })}><option value="">{city ? 'All barangays' : 'Choose a city first'}</option>{options.barangays.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</SearchableSelect></AdminFilterField>
         </fieldset>}
-        <p className="sa-code-count" role="status">{matches.length === barangays.length ? `${barangays.length} registered barangays` : `${matches.length} of ${barangays.length} barangays match`}{filtered && <> · <button type="button" className="sa-text-button" onClick={clear}>Clear filters</button></>}</p>
+        <p className="sa-code-count" role="status">{results.loading ? 'Searching registered barangays…' : results.data ? `${results.data.total} registered ${results.data.total === 1 ? 'barangay' : 'barangays'}${filtered ? ' match' : ''}` : ''}{filtered && <> · <button type="button" className="sa-text-button" onClick={clear}>Clear filters</button></>}</p>
       </div>
-      {!barangays.length ? <AdminEmptyState icon="pin" title="No registered barangays yet" description="Add a barangay before issuing its registration code."><button type="button" className="ghost-button" onClick={() => navigate('/superadmin/barangays')}>Go to Barangay Management</button></AdminEmptyState>
-        : !matches.length ? <AdminEmptyState title="No matching barangays" description="Try another name or clear the location filters. Only registered barangays are listed here."><button type="button" className="ghost-button" onClick={clear}>Clear filters</button></AdminEmptyState>
-        : <ul className="sa-code-list">{shown.map((b) => { const state = codeState(b); return <li key={b.id}>
-          <button type="button" aria-current={String(b.id) === selectedId ? 'true' : undefined} onClick={() => choose(b)}>
-            <span><strong>{b.name}</strong><small>{[b.city_name, b.province_name].filter(Boolean).join(', ') || 'Location not specified'}</small></span>
-            <span className={`sa-code-chip ${state}`}>{CODE_STATE_LABELS[state]}</span>
-          </button>
-        </li>; })}</ul>}
-      {matches.length > CODE_LIST_LIMIT && <p className="sa-code-count">Showing the first {CODE_LIST_LIMIT} matches. Search to narrow the list.</p>}
+      {results.error ? <AdminEmptyState icon="alert" title="Barangays unavailable" description={results.error}><button type="button" className="ghost-button" onClick={() => setVersion((current) => current + 1)}>Retry</button></AdminEmptyState>
+        : results.loading && !rows.length ? <p className="sa-code-loading" role="status">Loading registered barangays…</p>
+        : !rows.length ? (filtered
+          ? <AdminEmptyState title="No matching barangays" description="Try another name or clear the filters. Only barangays registered on the platform are listed."><button type="button" className="ghost-button" onClick={clear}>Clear filters</button></AdminEmptyState>
+          : <AdminEmptyState icon="pin" title="No registered barangays yet" description="Add a barangay in Barangay Management before issuing its registration code."><button type="button" className="ghost-button" onClick={() => navigate('/superadmin/barangays')}>Go to Barangay Management</button></AdminEmptyState>)
+        : <>
+          <ul className="sa-code-list" aria-busy={results.loading}>{rows.map((b) => { const state = codeState(b); return <li key={b.id}>
+            <button type="button" aria-current={String(b.id) === selectedId ? 'true' : undefined} onClick={() => choose(b)}>
+              <span><strong>{b.name}</strong><small>{placeLabel(b)}</small>{b.psgc_code && <small>PSGC {b.psgc_code}</small>}</span>
+              <span className={`sa-code-chip ${state}`}>{CODE_STATE_LABELS[state]}</span>
+            </button>
+          </li>; })}</ul>
+          <nav className="sa-pagination sa-code-pages" aria-label="Barangay result pages">
+            <span>Page {Math.min(page, lastPage)} of {lastPage}</span>
+            <div className="sa-page-buttons">
+              <button type="button" disabled={page <= 1} aria-label="Previous page" onClick={() => update({ page: page - 1 }, { keepPage: true })}><Icon name="arrowLeft" size={16} /></button>
+              <button type="button" disabled={page >= lastPage} aria-label="Next page" onClick={() => update({ page: page + 1 }, { keepPage: true })}><Icon name="chevronRight" size={16} /></button>
+            </div>
+            <label>Per page<SearchableSelect value={size} onChange={(event) => update({ per_page: event.target.value })}>{CODE_PAGE_SIZES.map((option) => <option key={option}>{option}</option>)}</SearchableSelect></label>
+          </nav>
+        </>}
     </section>
     <div className="sa-code-detail" ref={panelRef}>
-      {selected ? <CodePanel key={selected.id} barangay={selected} onRequestConfirmation={onRequestConfirmation} setNotice={setNotice} onChanged={onChanged} />
-        : <section className="sa-management-card"><AdminEmptyState icon="key" title="Select a barangay" description="Choose a barangay from the list to view, copy, or regenerate its staff registration code." /></section>}
+      {selected ? <CodePanel key={selected.id} barangay={selected} onRequestConfirmation={onRequestConfirmation} setNotice={setNotice} onChanged={changed} />
+        : selectedId && lookup.loading ? <section className="sa-management-card"><p className="sa-code-loading" role="status">Loading barangay…</p></section>
+        : selectedId && (lookup.error || lookup.data) ? <section className="sa-management-card"><AdminEmptyState icon="alert" title="Barangay unavailable" description={lookup.error ?? 'This barangay is not registered on the platform.'} /></section>
+        : <section className="sa-management-card"><AdminEmptyState icon="key" title="Select a barangay" description="Choose a registered barangay to view, copy, or regenerate its staff registration code." /></section>}
     </div>
   </div>;
 }

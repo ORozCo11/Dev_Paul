@@ -389,7 +389,7 @@ export default function SuperAdminWorkspace() {
   const [resourceLoading, setResourceLoading] = useState({ barangays: true, users: true, pending: true });
   const [resourceErrors, setResourceErrors] = useState({});
   const loadVersion = useRef(0);
-  const requiredResources = { dashboard: ['barangays', 'pending'], barangays: ['barangays', 'users'], pending: ['pending', 'barangays'], users: ['users'], codes: ['barangays'] };
+  const requiredResources = { dashboard: ['barangays', 'pending'], barangays: ['barangays', 'users'], pending: ['pending', 'barangays'], users: ['users'] };
   const loading = (requiredResources[activeTab] ?? []).some((key) => resourceLoading[key]);
   const loadError = (requiredResources[activeTab] ?? []).some((key) => resourceErrors[key]);
 
@@ -806,7 +806,7 @@ export default function SuperAdminWorkspace() {
             ) : activeTab === 'users' ? (
               <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onApprove={approvePending} onReject={rejectPending} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'codes' ? (
-              <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} barangays={barangays} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} onChanged={refreshInBackground} />
+              <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} onChanged={refreshInBackground} />
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
             ) : activeTab === 'support' ? (

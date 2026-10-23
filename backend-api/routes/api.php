@@ -164,6 +164,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     |--------------------------------------------------------------------------
     */
     Route::get('/superadmin/barangays', [SuperAdminController::class, 'barangays']);
+    Route::get('/superadmin/barangays/search', [SuperAdminController::class, 'searchBarangays']);
+    Route::get('/superadmin/barangays/locations', [SuperAdminController::class, 'barangayLocations']);
     Route::post('/superadmin/barangays', [SuperAdminController::class, 'storeBarangay']);
     Route::get('/superadmin/users', [SuperAdminController::class, 'users']);
     Route::get('/superadmin/pending-approvals', [SuperAdminController::class, 'pendingApprovals']);

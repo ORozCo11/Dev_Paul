@@ -43,6 +43,21 @@ class Barangay extends Model
     }
 
     /**
+     * Barangays onboarded onto the platform: added by a Super Admin
+     * (provisioned), already staffed, or created by hand. Reference-only
+     * PSGC rows -- and rows that merely hold a seeded registration code --
+     * are registration choices, not platform tenants.
+     */
+    public function scopeRegistered($query)
+    {
+        return $query->where(function ($query) {
+            $query->whereNull($this->qualifyColumn('psgc_code'))
+                ->orWhereNotNull($this->qualifyColumn('provisioned_at'))
+                ->orWhereHas('users');
+        });
+    }
+
+    /**
      * Used wherever a barangay's boundary is labeled for a viewer (e.g. the
      * Vehicle Location map) — several barangay names repeat across
      * neighboring cities (Banilad, Basak, ...), so the bare name alone is
