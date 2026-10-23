@@ -175,3 +175,73 @@ Schedule conversion checks every minute against the Philippine calendar and sele
 - A full-suite run exposed a pre-existing random plate collision in `ScheduleConflictWarningTest`; its fixture now uses deterministic unique values. The complete suite passed after that correction.
 
 No changes to dispatch, impersonation, registration, hubs or unrelated role grants were made. The six broader system-audit findings remain open. Representative-user timing studies and target-host acceptance remain necessary before claiming measured speed improvements or production readiness.
+
+## Decision-path recheck — 24 October 2026
+
+Reviewed revision: `4e5e222`. This additional review focuses on proposal decisions and cancellation/deletion/restoration. The earlier TPR fixes remain in place; the findings below are additional and **open**. No application fixes were made during this recheck.
+
+### Current rules confirmed
+
+- Admin approves only Pending Approval proposals. In-house work requires an active mechanic for every item; approved external work has no in-house mechanic.
+- Decline requires a reason and produces Declined. It does not delete the proposal or mean the physical defect has been fixed.
+- Admin must undecline before approving a declined proposal. Undecline returns it to Pending Approval and notifies the Custodian; it does not activate work.
+- Proposal approval and repair approval are different: only the assigned independent Custodian can approve completed repair work and close the ticket.
+- Closed tickets are rejected by ordinary cancellation/deletion requests. The stale-state findings below concern missing rechecks after another decision changes the record.
+
+### TDR-01 — Decision actions can overwrite a newer state
+
+**High priority. Reproduced using stale controller-model snapshots; real parallel database requests were not exercised.** Approval rereads and locks the ticket before changing status. Decline, undecline, cancel, uncancel and delete do not consistently do so. Their initial checks rely on an earlier model snapshot.
+
+Probes demonstrated: a stale pending snapshot declined an already-approved ticket while its item remained Under Repair; a stale ticket/work snapshot cancelled a Closed ticket while retaining its closure date; and a stale active snapshot deleted a Closed ticket while its ledger record remained. The cancellation probe includes previously read work-item relations, modelling a competing decision after the eligibility check. These are authorized Admin decision races, not unauthenticated access.
+
+Source: `TicketController.php:814-817`, `:1291-1347`, `:2846-2949`.
+
+**Required rule:** lock and freshly validate the ticket and affected linked records inside every decision transaction. Once another action closes or changes it, reject the stale decision and refresh the UI. Keep status, evidence, logs and notifications in the same transaction.
+
+### TDR-02 — Deleting submitted paid work loses repair evidence
+
+**High priority. Reproduced through the API.** A mechanic submitted real repair notes and PHP 500 cost. Admin then deleted the ticket. No archive or maintenance record remained, and the work item was deleted. The archive condition checks only `status === Done`; modern submissions are For Inspection until the entire ticket closes.
+
+Source: `TicketController.php:2927-2948`; `Workspace.jsx:12219-12220` exposes Delete for submitted, non-Closed work.
+
+**Required rule:** restrict permanent deletion to untouched mistakes. Once work, attachments, donor use, shop events or cost exist, retain a full immutable archive or refuse deletion and require audited cancellation. Submitted work is evidence even before Custodian verification.
+
+### TDR-03 — Restoring an external ticket can strand completed submissions
+
+**High priority. Reproduced through the API.** Cancel an external ticket already For Verification, then restore it: the ticket becomes Active but its item stays For Inspection. Admin cannot call the mechanic-only submission fallback, repair logging rejects the already-submitted item, and Custodian verification rejects the Active ticket. There is no normal next action to complete it.
+
+Source: `TicketController.php:2890-2911`, `:954` (submission fallback), `:1096` (verification state check).
+
+**Required rule:** restoration must derive the correct state from preserved work. If every repair is already submitted, restore directly to For Verification and notify the assigned Custodian once. Otherwise restore Active with only unfinished items available to their responsible actor. Do not require retyping completed work.
+
+### TDR-04 — Undecline can reclaim an issue already assigned elsewhere
+
+**High priority. Reproduced through the API.** Decline proposal A, reuse its now-Pending report in a corrected proposal B, approve B, then undecline and approve A. Both became Active for the same report. Closing B marked that report Resolved while A remained Active. Undecline does not recheck whether another ticket claimed the report, and report resets blindly update its status.
+
+Source: `TicketController.php:574-577`, `:1335-1347`, `:3182-3191`.
+
+**Required rule:** one current ownership rule for linked reports/checks, enforced under lock during propose, approve, undecline and restore. Reject an old proposal's return if another live ticket owns its source; show the owning ticket and permitted next action. Do not let old-ticket actions reset another ticket's report.
+
+### TDR-05 — Decline has no Custodian correction/resubmission path
+
+**Medium priority; confirmed usability gap.** Declining with “correct the details” leaves the Custodian unable to edit/resubmit that proposal. A new proposal for the same first issue was rejected as a duplicate because Declined still participates in the open-ticket duplicate check. Admin can undecline and edit, but the original reporter has no direct correction action.
+
+Source: `TicketController.php:622-630`; `Workspace.jsx:11215-11239`, `:11445-11458`; `permissions.php:154-170`.
+
+**Recommended rule:** distinguish “Request corrections” from final decline. Let the assigned Custodian revise the same unapproved proposal and submit it for fresh Admin review, preserving review history. A final decline should clearly explain whether the concern remains open and who must act. Undecline remains an Admin reconsideration action.
+
+### TDR-06 — Cancellation lacks a required reason and targeted notice
+
+**Medium priority; confirmed by source inspection, not a separate API probe.** The UI sends an empty cancellation payload; the backend permits missing notes and does not notify assigned mechanics/Custodian. Its activity entry records only that cancellation occurred. Restoring clears `closing_notes`, so even a supplied reason is not preserved in that ticket field.
+
+Source: `Workspace.jsx:11661-11670`, `:12306`; `TicketController.php:2863-2880`, `:2898-2911`.
+
+**Recommended rule:** require a short reason, preserve cancellation/restoration as history events, and notify the responsible actors. Cancellation must not imply the vehicle's defect was repaired or verified.
+
+### Recheck evidence and limits
+
+- Existing targeted regressions: **108 tests / 716 assertions passed** (`TicketProposalWorkflowTest`, `TicketWorkflowTest`, `ExternalShopTicketTest`, `ConvertDueSchedulesToTicketsTest`, `TicketProcessIntegrityTest`).
+- Seven isolated investigation probes: **7 tests / 52 assertions** reproduced the observed gaps. They assert defective behavior, not acceptance. Three probes use retained model snapshots to simulate competing decisions; the other four exercise sequential API requests.
+- Probe source is ignored local scratch: `tmp/ticket-decisions/TicketDecisionProbeTest.php`. Run from `backend-api`: `php vendor/phpunit/phpunit/phpunit ../tmp/ticket-decisions/TicketDecisionProbeTest.php --no-progress`.
+- SQLite in-memory test data only; no live accounts, vehicle records or remote services were modified. No new frontend source changes, browser session or full-suite run was needed for this review.
+- The recommended fix order is atomic decision guards and evidence retention, then safe restoration/source ownership, followed by correction/resubmission and cancellation notices.

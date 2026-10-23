@@ -10,7 +10,7 @@ Start with the overview, then open the detailed reference or the document needed
 | [VMS-Must-Haves-Updated.pdf](VMS-Must-Haves-Updated.pdf) | Shareable requirements reference. |
 | [Sample-Data.md](Sample-Data.md) | Team setup, demo accounts, five vehicles, sample work and verification results. |
 | [System-Audit-2026-10-24.md](System-Audit-2026-10-24.md) | Six open implementation findings, evidence and required retests. |
-| [Ticket-Process-Review-2026-10-24.md](Ticket-Process-Review-2026-10-24.md) | Ticket fields, confirmed workflow gaps, usability decisions and proposed improvements. |
+| [Ticket-Process-Review-2026-10-24.md](Ticket-Process-Review-2026-10-24.md) | Ticket fixes and verification, plus six additional open decision-path findings. |
 | [VMS-Evidence-and-Defense-Review-With-Examples.pptx](VMS-Evidence-and-Defense-Review-With-Examples.pptx) | Latest defense presentation, including examples and speaker notes. |
 | [System-Architecture.svg](System-Architecture.svg) | Component diagram. |
 | [ERD.svg](ERD.svg) | Database relationship diagram. |
