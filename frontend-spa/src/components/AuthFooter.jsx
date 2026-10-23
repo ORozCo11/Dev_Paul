@@ -6,7 +6,7 @@ export default function AuthFooter() {
     <footer className="auth-footer">
       <div className="auth-footer-main">
         <div className="auth-footer-brand">
-          <h2 className="auth-footer-tagline">A system to manage your barangays fleet</h2>
+          <h2 className="auth-footer-tagline">A System to Manage your Barangay's fleet</h2>
         </div>
       </div>
       <div className="auth-footer-bottom">
@@ -14,7 +14,6 @@ export default function AuthFooter() {
           © {new Date().getFullYear()} Barangay Vehicle Management System
         </p>
         <div className="auth-footer-legal">
-          <Link to="/support">Support Center</Link>
           <Link to="/privacy">Privacy Policy</Link>
           <Link to="/terms">Terms of Service</Link>
         </div>

@@ -1426,7 +1426,7 @@
   }
 }
 
-/* Public-page footer: tagline with centered copyright and legal links. */
+/* Public-page footer: centered copyright with legal links on the right. */
 .auth-footer {
   margin-top: auto;
   background: #1d4ed8;
@@ -1469,9 +1469,8 @@
 .auth-footer-social a:hover { background: rgba(255, 255, 255, 0.26); color: yellowgreen; transform: translateY(-2px); }
 .auth-footer-social a:active { transform: scale(0.92); }
 .auth-footer-bottom {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px 28px;
   text-align: center;
@@ -1481,6 +1480,7 @@
   border-top: 1px solid rgba(255, 255, 255, 0.22);
 }
 .auth-footer-copyright {
+  grid-column: 2;
   margin: 0;
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.75);
@@ -1488,7 +1488,7 @@
 .auth-footer-legal {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 24px;
 }
 .auth-footer-legal a {
@@ -1498,10 +1498,52 @@
   transition: color 0.15s ease;
 }
 .auth-footer-legal a:hover { color: yellowgreen; text-decoration: underline; }
+@media (max-width: 960px) {
+  .auth-footer-bottom { grid-template-columns: 1fr; }
+  .auth-footer-copyright { grid-column: 1; }
+  .auth-footer-legal { justify-content: center; }
+}
 @media (max-width: 720px) {
   .auth-footer-main { flex-direction: column; }
-  .auth-footer-bottom { flex-direction: column; }
 }
+
+.ticket-list-identity,
+.ticket-list-title,
+.ticket-list-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ticket-list-identity strong {
+  padding: 8px 18px;
+  border-radius: 5px;
+  background: var(--ts-bg, #f8fafc);
+  color: var(--ts-text, #475569);
+}
+.ticket-list-identity small {
+  font-size: 0.65rem;
+  line-height: 1.2;
+}
+.ticket-list-title { min-width: 200px; max-width: 320px; }
+.ticket-list-title strong { white-space: normal; }
+.ticket-list-progress { min-width: 150px; }
+.ticket-list-progress > div { display: flex; align-items: center; gap: 10px; }
+.ticket-list-progress progress {
+  width: 130px;
+  height: 9px;
+  border: 0;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e2e8f0;
+  accent-color: #2563eb;
+}
+.ticket-list-progress progress::-webkit-progress-bar { background: #e2e8f0; }
+.ticket-list-progress progress::-webkit-progress-value { background: #2563eb; border-radius: 999px; }
+.ticket-list-progress progress::-moz-progress-bar { background: #2563eb; border-radius: 999px; }
+.ticket-list-people { display: flex; align-items: center; gap: 10px; min-width: 170px; }
+.ticket-list-people > small { white-space: normal; }
+.ticket-ledger-panel > .panel-header-bar { flex-wrap: wrap; gap: 12px; }
+.ticket-ledger-panel > .panel-header-bar > div { flex-wrap: wrap; }
 
 /* NOTICES */
 .notice {
@@ -16440,3 +16482,76 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
 .workflow-status-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; padding:0; border:0; background:transparent; color:var(--text); }
 .workflow-status-controls .multi-select-dropdown { min-width:120px; }
 .workflow-status-controls .ghost-button { min-height:34px; padding:6px 10px; font-size:.75rem; }
+
+/* Ticket cards follow the photo-led layout used in the ticket reference. */
+.ticket-page :is(.status-badge, .ticket-stage-badge, .count-badge, .ticket-list-identity strong, .area-chart-tag, .ticket-preview-badge) {
+  border-radius: 0 !important;
+}
+html .ticket-page .status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  padding: 3px 7px !important;
+  box-shadow: none !important;
+  font-size: .7rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.ticket-page .ticket-next-step-badge {
+  display: inline-block;
+  padding: 3px 7px;
+  border-radius: 0;
+  font-size: .7rem;
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.ticket-card-grid:has(> div > .ticket-reference-card) {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  gap: 20px;
+}
+.ticket-card-grid > div > .ticket-reference-card {
+  padding: 22px;
+  gap: 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 0;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .06);
+}
+.ticket-reference-card:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+.ticket-reference-id {
+  align-self: flex-start;
+  padding: 9px 16px;
+  background: var(--ts-bg);
+  color: var(--ts-text);
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.ticket-reference-main { display: grid; grid-template-columns: 42% minmax(0, 1fr); gap: 18px; align-items: start; }
+.ticket-reference-photo { aspect-ratio: 1.2; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #f1f5f9; color: #94a3b8; }
+.ticket-reference-photo img { width: 100%; height: 100%; object-fit: cover; }
+.ticket-reference-info { min-width: 0; }
+.ticket-reference-info h4 { margin: 4px 0 12px; color: #0f2741; font-size: 1.15rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ticket-reference-info p { margin: 0 0 6px; color: #7b8797; font-size: .9rem; font-weight: 600; overflow-wrap: anywhere; }
+.ticket-reference-progress { color: #7b8797; font-size: .95rem; font-weight: 600; }
+.ticket-reference-stage { margin-top: auto; }
+.ticket-reference-stage > div { min-height: 42px; border-radius: 0 !important; }
+.ticket-reference-bottom { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.ticket-reference-bottom .ticket-card-badges { margin-right: auto; }
+.ticket-reference-bottom .status-badge { border-radius: 0; padding: 8px 12px; }
+.ticket-reference-bottom .tpa-avatar { width: 34px; height: 34px; margin-left: 4px; box-shadow: none; }
+.ticket-reference-bottom .tpa-initials { font-size: .8rem; }
+html[data-theme="dark"] .ticket-card-grid > div > .ticket-reference-card { background: var(--surface); border-color: var(--border); }
+html[data-theme="dark"] .ticket-reference-info h4 { color: var(--text); }
+html[data-theme="dark"] .ticket-reference-info p,
+html[data-theme="dark"] .ticket-reference-progress { color: var(--muted); }
+@media (max-width: 480px) {
+  .ticket-card-grid > div > .ticket-reference-card { padding: 16px; gap: 12px; }
+  .ticket-reference-main { gap: 12px; }
+  .ticket-reference-info h4 { font-size: 1rem; }
+  .ticket-reference-info p { font-size: .8rem; }
+}
