@@ -305,9 +305,11 @@ All routes are under `/api` (see `backend-api/routes/api.php`). All protected ro
 
 ## Setup & Installation
 
+For teammates on Windows, pull the shared branch and run `powershell -ExecutionPolicy Bypass -File .\setup-demo.ps1` from the repository root. This installs dependencies from the committed lockfiles, creates missing `.env` files/keys, backs up local SQLite, applies migrations and seeds the shared demo. Existing configuration and keys are preserved. With dependencies already installed, add `-SkipInstall`. A Git pull alone does not update your database. See [team demo setup](VMS%20Docs/Sample-Data.md#teammates-after-pulling).
+
 ### Prerequisites
 - PHP 8.3+ and Composer
-- Node.js 18+ and npm
+- Node.js 20.19+ or 22.12+ (Vite 8 requirement) and npm
 
 ### 1. Backend (`backend-api/`)
 ```bash

@@ -138,7 +138,7 @@ class SampleFleetSeeder extends Seeder
                     'vehicle_id' => $vehicle->vehicle_id, 'condition_result' => $vehicle->condition,
                     'observations' => 'Sample inspection: '.$vehicle->condition.'.', 'checked_by' => $custodian->id,
                 ]);
-                if ($vehicle->status === 'Available') {
+                if ($vehicle->status === 'Available' && $vehicle->condition === 'Good') {
                     $items = $vehicle->plate_number === 'FDT-2801'
                         ? ['Fuel sufficient', 'Engine starts', 'Water tank filled', 'Pump operates', 'Hoses checked', 'Lights and siren operate']
                         : ['Fuel sufficient', 'Engine starts', 'Oxygen stocked', 'Lights and siren operate', 'Stretcher secured'];
@@ -216,8 +216,9 @@ class SampleFleetSeeder extends Seeder
             'created_at' => now()->subDays(2),
         ])->save();
         $vehicle->update([
-            'status' => 'Under Maintenance', 'condition' => $status === 'Pending Approval' ? 'Needs Inspection' : 'Needs Repair',
-            'estimated_return_date' => now()->addDays(2)->toDateString(),
+            'status' => $status === 'Pending Approval' ? 'Available' : 'Under Maintenance',
+            'condition' => $status === 'Pending Approval' ? 'Needs Inspection' : 'Needs Repair',
+            'estimated_return_date' => $status === 'Pending Approval' ? null : now()->addDays(2)->toDateString(),
         ]);
         $this->history($vehicle, 'Issue Reported', $summary, 'vehicle_issue_reports', $issue->issue_report_id, $custodian);
         return $ticket;

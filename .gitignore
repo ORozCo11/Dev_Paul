@@ -4,3 +4,6 @@
 
 # Local MCP server config (machine-specific absolute paths)
 .mcp.json
+
+# Local setup verification and scratch artifacts
+/tmp/

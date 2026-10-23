@@ -93,6 +93,18 @@ class SampleFleetSeederTest extends TestCase
         }
     }
 
+    public function test_initial_vehicle_states_do_not_change_when_the_list_is_opened(): void
+    {
+        $this->seed(SampleFleetSeeder::class);
+        $snapshot = fn () => Vehicle::orderBy('vehicle_id')->get()->map(fn ($v) => [$v->status, $v->condition, $v->estimated_return_date?->toDateString()])->all();
+        $before = $snapshot();
+        Sanctum::actingAs($this->staff('admin'), ['*']);
+        $this->getJson('/api/vehicles')->assertOk();
+        $this->assertSame($before, $snapshot());
+        $this->assertDatabaseHas('vehicles', ['plate_number' => 'FDR-303', 'status' => 'Available', 'condition' => 'Needs Inspection', 'estimated_return_date' => null]);
+        $this->assertDatabaseCount('vehicle_readiness_checks', 2);
+    }
+
     public function test_sample_work_orders_verification_and_schedule_completion_are_actionable(): void
     {
         $this->seed(SampleFleetSeeder::class);
