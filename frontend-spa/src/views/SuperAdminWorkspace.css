@@ -75,6 +75,18 @@ html:root[data-theme] .superadmin-shell .sa-table .sa-group-row th { padding:9px
 .superadmin-shell .sa-description-cell { max-width:300px; min-width:180px; }
 .superadmin-shell .sa-log-details { max-width:400px; min-width:240px; }
 .superadmin-shell .sa-text-button { padding:5px 0; background:none; border:0; color:#2563eb; font:inherit; font-weight:600; cursor:pointer; }
+.superadmin-shell .sa-barangay-link { display:grid; gap:2px; text-align:left; text-decoration:none; }
+.superadmin-shell .sa-barangay-link span { color:var(--sa-muted); font-size:11px; font-weight:500; }
+.superadmin-shell .sa-management-summary { display:grid; gap:10px; }
+.superadmin-shell .sa-management-summary p { margin:0; color:var(--sa-muted); font-size:13px; }
+.superadmin-shell .sa-management-summary p strong { color:var(--sa-text); font-variant-numeric:tabular-nums; }
+.superadmin-shell .sa-clear-filters { align-self:end; }
+.superadmin-shell .sa-detail-tabs { display:flex; flex-wrap:wrap; gap:4px; padding:0 24px; border-bottom:1px solid var(--sa-border); background:var(--sa-subtle); }
+.superadmin-shell .sa-detail-tabs a { min-height:42px; display:inline-flex; align-items:center; padding:0 10px; color:var(--sa-muted); font-size:13px; font-weight:600; text-decoration:none; border-bottom:2px solid transparent; }
+.superadmin-shell .sa-detail-tabs a:hover, .superadmin-shell .sa-detail-tabs a:focus-visible { color:#1d4ed8; border-bottom-color:#2563eb; }
+.superadmin-shell .sa-add-barangay-form { display:grid; gap:10px; }
+.superadmin-shell .sa-required-note { margin:0; color:var(--sa-muted); font-size:12px; }
+.superadmin-shell .sa-required-note span { color:#dc2626; font-weight:700; }
 html:root[data-theme] .superadmin-shell .status-badge { display:inline-flex; width:fit-content; gap:5px; font-size:11px; font-weight:600; line-height:1.5; text-transform:none; letter-spacing:normal; padding:3px 8px; border-radius:6px; background:var(--sa-subtle); color:var(--sa-muted); border:1px solid var(--sa-border); white-space:nowrap; }
 html:root[data-theme] .superadmin-shell .status-badge:is(.active,.active-admin,.verified,.resolved,.activate,.approve) { background:#f0fdf4; color:#15803d; border-color:#dcfce7; }
 html:root[data-theme] .superadmin-shell .status-badge:is(.pending-approval,.initial-administrator,.needs-review,.no-active-admin,.open) { background:#fffbeb; color:#a16207; border-color:#fef3c7; }
@@ -157,6 +169,8 @@ html:root[data-theme] .superadmin-shell:has(.sidebar-collapsed) .workspace-foote
  html:root[data-theme] .superadmin-shell .page-heading-row { margin-bottom:20px; }
  .superadmin-shell .page-heading-text h1 { font-size:24px; }
  .superadmin-shell .sa-toolbar, .superadmin-shell .sa-card-summary { padding:16px; }
+ .superadmin-shell .sa-detail-tabs { padding-inline:16px; overflow-x:auto; flex-wrap:nowrap; }
+ .superadmin-shell .sa-detail-tabs a { white-space:nowrap; }
  .superadmin-shell .sa-search, .superadmin-shell .sa-filter-field { flex:1 1 100%; max-width:none; width:100%; }
  html:root[data-theme] .superadmin-shell .sa-table table { min-width:0; display:block; }
  .superadmin-shell .sa-table thead { display:none; }
