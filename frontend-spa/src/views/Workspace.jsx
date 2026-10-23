@@ -10121,7 +10121,7 @@ function resolveRelationLabel(value) {
 }
 
 function prettifyKey(key) {
-  return key.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return key.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace(/\bId\b/g, 'ID');
 }
 
 function formatReportValue(key, value) {

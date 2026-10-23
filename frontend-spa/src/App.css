@@ -3698,10 +3698,12 @@ table button.icon-btn svg,
 .report-section-bar h3 { margin: 0; color: inherit; font-size: .78rem; font-weight: 750; }
 .report-section-bar span { color: #e8f0ff; font-size: .68rem; }
 .report-document-table-wrap { width: 100%; overflow-x: auto; border: 1px solid #3b82f6; border-top: 0; }
-.report-document-table { width: 100%; border-collapse: collapse; font-size: .7rem; }
+.report-document-table { width: 100%; table-layout: auto; border-collapse: collapse; font-size: .75rem; line-height: 1.5; }
 .report-document-table thead { display: table-header-group; }
-.report-document-table th, .report-document-table td { padding: 8px 9px; border: 1px solid #dbe3ed; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-.report-document-table th { background: #2d95e3; color: #fff; font-size: .64rem; font-weight: 800; }
+.report-document-table th, .report-document-table td { padding: 9px 10px; border: 1px solid #dbe3ed; text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; hyphens: none; white-space: normal; }
+.report-document-table th { background: #2d95e3; color: #fff; font-size: .72rem; font-weight: 800; }
+.report-document.is-landscape { min-width: 1123px; box-sizing: border-box; }
+.report-document-table td { max-width: 260px; }
 .report-document-table tbody tr:nth-child(even) { background: #f8fafd; }
 .report-document-table tbody tr { break-inside: avoid; page-break-inside: avoid; }
 .report-no-records { padding: 24px !important; color: #64748b; text-align: center !important; }
@@ -3725,7 +3727,9 @@ table button.icon-btn svg,
   .report-section-bar { break-after: avoid-page; page-break-after: avoid; }
   .report-section-bar, .report-document-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .report-document-table { font-size: 8pt; }
-  .report-document-table th, .report-document-table td { padding: 5pt 6pt; }
+  .report-document-table th, .report-document-table td { padding: 5pt 6pt; font-size: 8pt; }
+  .report-print-view .report-document.is-landscape { min-width: 0; width: 100%; }
+  .report-document-table-wrap { overflow: visible; }
 }
 
 /* ANIMATIONS */
