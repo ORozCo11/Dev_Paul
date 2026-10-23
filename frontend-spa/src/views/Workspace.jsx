@@ -8523,7 +8523,7 @@ function LatestIssueCard({ issues = [] }) {
     [issues]
   );
 
-  const pagination = usePagination(sorted.length, { pageSizeOptions: [5, 10, 25], initialPageSize: 5 });
+  const pagination = usePagination(sorted.length, { pageSizeOptions: [5], initialPageSize: 5 });
 
   return (
     <aside className="panel latest-issue-card latest-issue-timeline">
@@ -8553,7 +8553,7 @@ function LatestIssueCard({ issues = [] }) {
           ))
         )}
       </div>
-      <PaginationControls {...pagination} />
+      <PaginationControls {...pagination} showPageSize={false} />
     </aside>
   );
 }
@@ -10032,8 +10032,8 @@ function paginationPageList(current, total) {
   return withGaps;
 }
 
-function PaginationControls({ page, setPage, pageSize, setPageSize, pageSizeOptions, totalPages }) {
-  if (totalPages <= 1 && pageSizeOptions.length <= 1) return null;
+function PaginationControls({ page, setPage, pageSize, setPageSize, pageSizeOptions, totalPages, showPageSize = true }) {
+  if (totalPages <= 1 && (!showPageSize || pageSizeOptions.length <= 1)) return null;
   const pageList = paginationPageList(page, totalPages);
   return (
     <div className="table-pagination">
@@ -10046,12 +10046,12 @@ function PaginationControls({ page, setPage, pageSize, setPageSize, pageSizeOpti
         ))}
         <button type="button" className="pagination-arrow" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} aria-label="Next page">›</button>
       </div>
-      <div className="table-pagination-size">
+      {showPageSize && <div className="table-pagination-size">
         <span className="muted">Page size:</span>
         {pageSizeOptions.map((n) => (
           <button key={n} type="button" className={`pagination-page${n === pageSize ? ' active' : ''}`} onClick={() => setPageSize(n)}>{n}</button>
         ))}
-      </div>
+      </div>}
     </div>
   );
 }
