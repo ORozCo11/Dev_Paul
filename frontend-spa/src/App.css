@@ -16325,21 +16325,16 @@ html[data-theme] .ticket-card-grid .sch-card .sch-card-edit-cancel .sch-action.i
 td:has(> .row-actions-visible) { min-width: 140px; }
 .row-actions-visible .icon-btn { flex-shrink: 0; }
 
-/* Keep issue actions in the same slots even when a row has fewer actions. */
+/* Pack the available issue actions together without reserving hidden slots. */
 .module-grid:has(> .issue-summary-grid) .table-shell.is-fixed table { table-layout: auto; }
-.module-grid:has(> .issue-summary-grid) td:has(> .row-actions-visible) { min-width: 150px; }
+.module-grid:has(> .issue-summary-grid) td:has(> .row-actions-visible) { min-width: 0; }
 .module-grid:has(> .issue-summary-grid) .row-actions-visible {
-  display: inline-grid;
-  grid-template-columns: repeat(4, 36px);
+  display: inline-flex;
   gap: 6px;
   align-items: center;
-  min-width: 162px;
+  min-width: 0;
 }
-.module-grid:has(> .issue-summary-grid) .row-actions-visible .icon-btn { grid-row: 1; margin: 0; }
-.module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-view-action { grid-column: 1; }
-.module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-confirm-action { grid-column: 2; }
-.module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-edit-action { grid-column: 3; }
-.module-grid:has(> .issue-summary-grid) .row-actions-visible .btn-delete-action { grid-column: 4; }
+.module-grid:has(> .issue-summary-grid) .row-actions-visible .icon-btn { margin: 0; }
 
 /* Soft alert tones shared by validation summaries, toasts and inline notices. */
 :root {
@@ -16421,7 +16416,6 @@ html :is(table, .table-shell, .row-actions, .row-actions-popover) button.icon-bt
 
 @media(max-width:767px) {
   .row-actions.condition-record-actions { grid-template-columns:repeat(3,44px); min-width:144px; }
-  .module-grid:has(> .issue-summary-grid) .row-actions-visible { grid-template-columns:repeat(4,44px); min-width:194px; }
 }
 
 .schedule-table-actions .sch-card-actions { justify-content:center; gap:6px; }
