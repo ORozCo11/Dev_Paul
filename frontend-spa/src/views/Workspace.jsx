@@ -1,3 +1,4 @@
+import ThemeToggle from '../components/ThemeToggle';
 import SearchableSelect from '../components/SearchableSelect';
 import ImpersonationPicker from '../components/ImpersonationPicker';
 import VehicleTripLog from '../components/VehicleTripLog';
@@ -2527,7 +2528,7 @@ function Workspace() {
         </div>
 
         <div className="topbar-right">
-          <EndImpersonationAction compact />
+          <ThemeToggle /><EndImpersonationAction compact />
           {/* The Return control now lives in the persistent banner below the
               topbar (Phase A5) — a single, more visible home for it instead
               of duplicating the button here too. */}
@@ -3972,7 +3973,7 @@ function Workspace() {
             <button type="button" className="ghost-button" onClick={() => returnToModule('schedules')}>Back to Maintenance Schedules</button>
           </ModulePanel>;
         }
-        return <MaintenanceScheduleDetailPage
+        return <><MaintenanceScheduleDetailPage
           row={schedule}
           currentUser={user}
           onBack={() => returnToModule('schedules')}
@@ -3986,7 +3987,11 @@ function Workspace() {
           onViewTicket={openTicketProfile}
           onApprove={approveSchedule}
           onDecline={setDeclineScheduleTarget}
-        />;
+        />
+          {renderCompleteScheduleModal()}
+          {renderReassignScheduleModal()}
+          {renderDeclineScheduleModal()}
+        </>;
       }
 
       // A mechanic's own assignments surface first — the shared list still
@@ -9646,7 +9651,7 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
 function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onComplete, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline }) {
   const actionClass = (tone = '') => `sch-action ${tone}${iconOnly ? ' icon-btn' : ''}`;
   const isMine = currentUser?.id != null && String(row.assigned_to) === String(currentUser.id);
-  const canComplete = row.status === 'Scheduled' && !row.resulting_ticket_id && onComplete && isMine;
+  const canComplete = row.status === 'Scheduled' && !row.resulting_ticket_id && canDo(currentUser, 'schedule.complete') && onComplete && isMine;
   const becameTicket = row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket;
   return (
     <div className="sch-card-actions">
@@ -9682,7 +9687,7 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
   // system review (2026-10-05, §2) — Admin no longer completes a schedule
   // directly (that's physically performing the work); only the assigned
   // Maintenance Personnel can.
-  const canComplete = row.status === 'Scheduled' && !row.resulting_ticket_id && onComplete && isMine;
+  const canComplete = row.status === 'Scheduled' && !row.resulting_ticket_id && canDo(currentUser, 'schedule.complete') && onComplete && isMine;
   const becameTicket = row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket;
 
   const canViewSchedule = Boolean(onViewSchedule);

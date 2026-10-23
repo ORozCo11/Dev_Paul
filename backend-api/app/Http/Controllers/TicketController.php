@@ -779,7 +779,7 @@ class TicketController extends Controller
 
         if (isset($data['assigned_custodian_id'])) {
             $newCustodian = User::findOrFail($data['assigned_custodian_id']);
-            abort_unless($newCustodian->hasRole('Custodian'), 422, 'The selected user is not a Custodian.');
+            abort_unless($newCustodian->is_active && $newCustodian->hasRole('Custodian'), 422, 'The selected user is not a Custodian.');
             abort_unless($newCustodian->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected Custodian does not belong to this barangay.');
         }
 
@@ -1670,7 +1670,7 @@ class TicketController extends Controller
         ]);
 
         $newCustodian = User::findOrFail($data['assigned_custodian_id']);
-        abort_unless($newCustodian->hasRole('Custodian'), 422, 'The selected user is not a Custodian.');
+        abort_unless($newCustodian->is_active && $newCustodian->hasRole('Custodian'), 422, 'The selected user is not a Custodian.');
         abort_unless($newCustodian->barangay_id === $ticket->vehicle->barangay_id, 422, 'The selected Custodian does not belong to this barangay.');
         abort_if($newCustodian->id === $ticket->assigned_custodian_id, 422, 'That Custodian is already assigned to this ticket.');
 
@@ -1948,6 +1948,16 @@ class TicketController extends Controller
     /** The responsible person hands the vehicle (or part) to an outside shop. */
     public function markExternalSent(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
+        return DB::transaction(function () use ($request, $ticket, $subIssue) {
+            $ticket = MaintenanceTicket::whereKey($ticket->ticket_id)->lockForUpdate()->firstOrFail();
+            $subIssue = TicketSubIssue::whereKey($subIssue->sub_issue_id)->lockForUpdate()->firstOrFail();
+            abort_unless($ticket->status === 'Active', 422, 'External shop actions require an Active ticket.');
+            return $this->markExternalSentLocked($request, $ticket, $subIssue);
+        });
+    }
+
+    private function markExternalSentLocked(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
         $this->assertBelongsToTicket($ticket, $subIssue);
         $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
         abort_unless($subIssue->status === 'Under Repair', 422, "Only an Under Repair sub-issue can be sent out. Current: {$subIssue->status}.");
@@ -1978,6 +1988,16 @@ class TicketController extends Controller
 
     /** The shop returns it; the mechanic records the outcome before writing up the repair. */
     public function markExternalReturned(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        return DB::transaction(function () use ($request, $ticket, $subIssue) {
+            $ticket = MaintenanceTicket::whereKey($ticket->ticket_id)->lockForUpdate()->firstOrFail();
+            $subIssue = TicketSubIssue::whereKey($subIssue->sub_issue_id)->lockForUpdate()->firstOrFail();
+            abort_unless($ticket->status === 'Active', 422, 'External shop actions require an Active ticket.');
+            return $this->markExternalReturnedLocked($request, $ticket, $subIssue);
+        });
+    }
+
+    private function markExternalReturnedLocked(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
         $this->assertBelongsToTicket($ticket, $subIssue);
         $this->authorizeWorkOrderActor($request, $ticket, $subIssue);

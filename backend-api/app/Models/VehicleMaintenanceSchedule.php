@@ -92,16 +92,12 @@ class VehicleMaintenanceSchedule extends Model
         // past a shorter target month (Jan 31 + 1 month lands on Mar 3, not
         // Feb 28) instead of clamping to that month's last day.
         $nextDate = \Illuminate\Support\Carbon::parse($completedDate)->addMonthsNoOverflow($this->recurrence_months);
-        for ($shift = 0; $shift < 60; $shift++) {
-            $candidate = $nextDate->copy()->addDays($shift);
-            $collides = static::where('vehicle_id', $this->vehicle_id)
-                ->whereDate('scheduled_date', $candidate->toDateString())
-                ->where('status', 'Scheduled')
-                ->exists();
-            if (!$collides) {
-                $nextDate = $candidate;
-                break;
-            }
+        $occupied = static::where('vehicle_id', $this->vehicle_id)
+            ->where('status', 'Scheduled')
+            ->whereDate('scheduled_date', '>=', $nextDate->toDateString())
+            ->pluck('scheduled_date')->mapWithKeys(fn ($date) => [\Illuminate\Support\Carbon::parse($date)->toDateString() => true]);
+        while ($occupied->has($nextDate->toDateString())) {
+            $nextDate->addDay();
         }
 
         return static::create([

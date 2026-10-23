@@ -1120,6 +1120,8 @@ class FleetController extends Controller
             'decommissioned_at' => null,
         ]);
 
+        \App\Services\VehicleOperationalState::refresh($vehicle, true);
+
         $verb = $wasDecommissioned ? 'recommissioned' : 'restored';
         $this->history($vehicle, 'Vehicle Restored', "{$vehicle->vehicle_name} was {$verb} to active service.", 'vehicles', $vehicle->vehicle_id, $request);
         $this->log($request, 'Restore', 'Vehicle Management', $vehicle->vehicle_id, ucfirst($verb) . " vehicle {$vehicle->vehicle_name}");
@@ -2102,6 +2104,14 @@ class FleetController extends Controller
 
     public function updateMaintenanceRecord(Request $request, VehicleMaintenanceRecord $record)
     {
+        return DB::transaction(function () use ($request, $record) {
+            $record = VehicleMaintenanceRecord::whereKey($record->getKey())->lockForUpdate()->firstOrFail();
+            return $this->updateMaintenanceRecordLocked($request, $record);
+        });
+    }
+
+    private function updateMaintenanceRecordLocked(Request $request, VehicleMaintenanceRecord $record)
+    {
         $this->requireAbility($request, 'record.edit');
 
         $data = $request->validate([
@@ -2126,6 +2136,19 @@ class FleetController extends Controller
         ], [
             'source_vehicle_id.different' => 'A vehicle cannot be the source of its own part.',
         ]);
+
+        if (!empty($data['source_vehicle_id'])) {
+            $donor = Vehicle::findOrFail($data['source_vehicle_id']);
+            abort_if($donor->vehicle_id === $record->vehicle_id, 422, 'A vehicle cannot donate a part to itself.');
+        }
+        if (!empty($data['issue_report_id'])) {
+            $issue = VehicleIssueReport::findOrFail($data['issue_report_id']);
+            abort_unless($issue->vehicle_id === $record->vehicle_id, 422, 'The issue must belong to this maintenance record vehicle.');
+        }
+        if (!empty($data['maintenance_personnel_id'])) {
+            $person = User::findOrFail($data['maintenance_personnel_id']);
+            abort_unless($person->barangay_id === $record->vehicle->barangay_id, 422, 'The repair performer must belong to this barangay.');
+        }
 
         if (isset($data['maintenance_type'])) {
             $data['maintenance_type'] = MaintenanceType::resolve($data['maintenance_type']);
@@ -2180,7 +2203,15 @@ class FleetController extends Controller
             }
         }
 
-        $record->update($data);
+        $record->fill($data);
+        $repairFields = ['source_vehicle_id', 'part_name', 'issue_report_id', 'maintenance_type', 'problem_reason', 'maintenance_personnel_id', 'performed_by_other', 'is_external', 'external_vendor', 'receipt_url', 'action_taken', 'parts_used', 'progress_status'];
+        $repairChanged = $record->isDirty($repairFields);
+        abort_if($record->getOriginal('progress_status') === 'Completed' && $repairChanged, 422, 'Completed repair work is locked. Only administrative details may be corrected.');
+        if ($repairChanged && $record->verification_result !== null) {
+            $record->fill(['verification_result' => null, 'verification_notes' => null, 'verified_by' => null, 'verified_at' => null, 'confirmed_by' => null, 'confirmed_at' => null]);
+            if (!array_key_exists('progress_status', $data)) $record->progress_status = 'For Verification';
+        }
+        $record->save();
 
         if ($record->issue_report_id) {
             $record->issueReport()->update([
@@ -2301,6 +2332,7 @@ class FleetController extends Controller
             422,
             'This maintenance record has not passed Custodian verification yet.'
         );
+        abort_if($record->verified_by !== null && (int) $record->verified_by === (int) $record->maintenance_personnel_id, 422, 'Repair work must be verified by someone other than the performer.');
 
         $data = $request->validate([
             'confirmed' => ['required', 'boolean'],

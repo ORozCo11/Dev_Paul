@@ -72,3 +72,13 @@ All items below are addressed in this change. Related symptoms are grouped so th
 ## Verification limits
 
 The final clean pass means no unresolved defect was found in the reviewed paths and executed checks. It is not a guarantee about untested inputs, every browser/device, production data or external services. Stale-request tests are deterministic; a parallel multi-process load test against the deployed database was not performed. The audit did not alter production data or rerun destructive user seeders. External geocoder coverage and national geographic-reference completeness were not independently certified in this software audit. Historical public file URLs, if present in old data, still need a separate migration; new managed uploads use private storage and expiring signed delivery.
+
+## Follow-up review and fixes
+
+A later targeted review reproduced seven additional defects: verified record edits retained old sign-off; record edits accepted a different vehicle's issue; restoration ignored unfinished records; inactive Custodians could receive tickets; cancelled tickets accepted external-shop actions; record edits permitted self-donor vehicles; and recurrence duplicated a booking after 60 occupied dates. These are now corrected, with seven permanent regression tests (including the legacy self-verification guard and both external-shop actions).
+
+The reported schedule completion problem was traced to the detail-page early return omitting the dialogs: clicking Mark as Done set state without displaying anything. Completion, reassignment and decline dialogs now render on the detail page. Browser QA exercises completion submission, all three dialogs, light/dark theme persistence, and the mobile toggle. Restored the shared light/dark header control for every workspace role.
+
+Follow-up backend validation: 481 tests passed, 2,131 assertions. See `logs/schedule-theme-qa.mjs` for the new browser workflow checks. The earlier audit's clean pass applied to its tested paths; these additional findings demonstrate why it was not a guarantee of a defect-free system.
+
+Follow-up frontend validation: ESLint, production build, schedule/theme browser checks, and the existing ticket-form/workflow browser checks passed.

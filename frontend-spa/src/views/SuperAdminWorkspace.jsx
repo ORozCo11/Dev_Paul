@@ -1,3 +1,4 @@
+import ThemeToggle from '../components/ThemeToggle';
 import SearchableSelect from '../components/SearchableSelect';
 import ImpersonationPicker from '../components/ImpersonationPicker';
 import EndImpersonationAction from '../components/EndImpersonationAction';
@@ -647,7 +648,7 @@ export default function SuperAdminWorkspace() {
           <ImpersonationPicker user={user} />
         </div>
 
-        <div className="topbar-right"><EndImpersonationAction compact />
+        <div className="topbar-right"><ThemeToggle /><EndImpersonationAction compact />
           <div className="notifications-dropdown-container" ref={notificationsRef}>
             <button
               className="icon-btn notification-btn"

@@ -16428,3 +16428,17 @@ html :is(table, .table-shell, .row-actions, .row-actions-popover) button.icon-bt
 @media(max-width:767px) {
   .schedule-table-actions .sch-action.icon-btn { min-width:44px; min-height:44px; }
 }
+
+/* Restore dark surfaces for sections added while the app was light-only. */
+html[data-theme="dark"] :is(.schedule-detail-main,.schedule-detail-workflow,.schedule-detail-actions,.schedule-detail-fact,.schedule-detail-notes,.schedule-detail-vehicle,.schedule-detail-summary,.schedule-detail-header) { background:var(--surface); border-color:var(--border); color:var(--text); }
+html[data-theme="dark"] :is(.schedule-detail-section-heading h3,.schedule-detail-workflow h3,.schedule-detail-actions h3,.schedule-detail-fact dd,.schedule-detail-notes p,.schedule-detail-workflow > p) { color:var(--text); }
+html[data-theme="dark"] :is(.schedule-detail-kicker,.schedule-detail-fact dt,.schedule-detail-subvalue) { color:var(--text-muted); }
+.theme-toggle-btn { flex-shrink:0; }
+
+html[data-theme="dark"] .schedule-detail-hero { background:var(--surface-2); border-color:var(--border); border-left-color:var(--primary); }
+html[data-theme="dark"] .schedule-detail-heading h2 { color:var(--text-strong); }
+html[data-theme="dark"] .schedule-detail-heading p { color:var(--text-muted); }
+
+html[data-theme="dark"] .workspace > .sidebar { backface-visibility:visible; }
+@media (min-width: 768px) { html[data-theme="dark"] .workspace > .sidebar { transform:none; } }
+html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-count,.schedule-detail-workflow-icon) { background:var(--surface-2); border-color:var(--border); color:#93c5fd; }

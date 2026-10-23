@@ -246,6 +246,7 @@ const PATHS = {
     </>
   ),
   // Weather
+  moon: <path d="M21 12.8A9 9 0 0 1 11.2 3 9 9 0 1 0 21 12.8Z" />,
   sun: (
     <>
       <circle cx="12" cy="12" r="4" />

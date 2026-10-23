@@ -11,6 +11,7 @@ use App\Models\TicketSubIssue;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleCategory;
+use App\Models\VehicleIssueReport;
 use App\Models\VehicleMaintenanceRecord;
 use App\Models\VehicleMaintenanceSchedule;
 use App\Models\VehicleUsageLog;
@@ -365,5 +366,73 @@ class SystemWorkflowAuditTest extends TestCase
             $this->assertSame(403, $e->getStatusCode());
         }
         $this->assertNull($line->fresh()->repair_logs);
+    }
+
+    public function test_record_repair_edits_invalidate_a_passed_verification(): void
+    {
+        $record = $this->record(['verification_result' => 'Passed', 'verified_by' => $this->custodian->id]);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/maintenance-records/{$record->maintenance_id}", ['action_taken' => 'Changed repair', 'maintenance_personnel_id' => $this->custodian->id])->assertOk();
+        $this->assertNull($record->fresh()->verification_result);
+        $this->putJson("/api/maintenance-records/{$record->maintenance_id}/confirm", ['confirmed' => true])->assertUnprocessable();
+    }
+
+    public function test_record_confirmation_rejects_legacy_self_verification(): void
+    {
+        $record = $this->record(['verification_result' => 'Passed', 'verified_by' => $this->mechanic->id]);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/maintenance-records/{$record->maintenance_id}/confirm", ['confirmed' => true])->assertUnprocessable();
+    }
+
+    public function test_record_edit_rejects_self_donor_and_another_vehicles_issue(): void
+    {
+        $record = $this->record();
+        $other = $this->vehicle->replicate();
+        $other->plate_number = 'AUD-002';
+        $other->save();
+        $issue = VehicleIssueReport::create(['vehicle_id' => $other->vehicle_id, 'issue_type' => 'Other issue', 'issue_description' => 'Other vehicle', 'severity_level' => 'Low', 'reported_by' => $this->custodian->id, 'status' => 'Pending']);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/maintenance-records/{$record->maintenance_id}", ['source_vehicle_id' => $this->vehicle->vehicle_id])->assertUnprocessable();
+        $this->putJson("/api/maintenance-records/{$record->maintenance_id}", ['issue_report_id' => $issue->issue_report_id])->assertUnprocessable();
+        $this->assertSame('Pending', $issue->fresh()->status);
+    }
+
+    public function test_inactive_custodian_cannot_receive_ticket_assignment(): void
+    {
+        $ticket = $this->ticket();
+        $inactive = $this->person('Custodian', ['is_active' => false]);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/reassign-custodian", ['assigned_custodian_id' => $inactive->id, 'reassign_reason' => 'Shift change'])->assertUnprocessable();
+    }
+
+    public function test_cancelled_ticket_rejects_external_dispatch_and_return(): void
+    {
+        $ticket = $this->ticket(['status' => 'Cancelled']);
+        $line = $this->line($ticket, $this->mechanic);
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $base = "/api/tickets/{$ticket->ticket_id}/sub-issues/{$line->sub_issue_id}";
+        $this->putJson($base.'/external-sent', ['external_vendor' => 'Shop', 'external_reason' => 'Repair', 'external_work_scope' => 'Repair engine'])->assertUnprocessable();
+        $line->update(['external_sent_at' => now()]);
+        $this->putJson($base.'/external-returned', ['external_return_notes' => 'Returned'])->assertUnprocessable();
+    }
+
+    public function test_restored_vehicle_with_unfinished_work_stays_under_maintenance(): void
+    {
+        $this->record();
+        $this->vehicle->update(['status' => 'Inactive']);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/restore")->assertOk();
+        $this->assertSame('Under Maintenance', $this->vehicle->fresh()->status);
+    }
+
+    public function test_recurrence_uses_a_free_date_beyond_sixty_occupied_days(): void
+    {
+        $source = $this->schedule(['status' => 'Completed', 'recurrence_months' => 1]);
+        $base = now()->addMonthsNoOverflow(1)->startOfDay();
+        for ($i = 0; $i < 60; $i++) {
+            $this->schedule(['status' => 'Scheduled', 'scheduled_date' => $base->copy()->addDays($i)->toDateString()]);
+        }
+        $next = $source->seedNextRecurrence(now()->toDateString(), $this->custodian->id);
+        $this->assertSame($base->copy()->addDays(60)->toDateString(), $next->scheduled_date);
     }
 }

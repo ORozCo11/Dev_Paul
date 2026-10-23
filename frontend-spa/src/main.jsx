@@ -4,9 +4,10 @@ import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext'
 
-// The application uses a single light appearance.
-document.documentElement.setAttribute('data-theme', 'light');
-try { localStorage.removeItem('theme'); } catch { /* Storage may be unavailable. */ }
+let theme = 'light';
+try { if (localStorage.getItem('theme') === 'dark') theme = 'dark'; } catch { /* Use the default when storage is unavailable. */ }
+document.documentElement.dataset.theme = theme;
+document.documentElement.style.colorScheme = theme;
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

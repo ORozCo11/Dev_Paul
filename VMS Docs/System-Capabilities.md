@@ -361,3 +361,12 @@ This document was compiled by direct code review, not from memory or prior docum
 See `Documentation.md` for the shorter architectural overview, and `Role-Realignment-Analysis.md` for the history behind the current role/permission model.
 
 Audit follow-up: see [System Audit ? 2026-10-23](System-Audit-2026-10-23.md) for confirmed defects, corrections, regression checks, and verification limits.
+
+## Follow-up corrections ? 23 October 2026
+
+- Editing verified repair details or changing the recorded performer clears the old verification and requires a fresh Custodian check. Completed repair details stay locked; administrative corrections remain available. Confirmation rejects legacy self-verification.
+- Maintenance-record edits reject self-donor vehicles, issue reports from another vehicle, and performers from another barangay.
+- Ticket Custodian assignments require active accounts. External-shop dispatch and return require an Active parent ticket.
+- Restoring a vehicle considers unfinished maintenance before making it available. Recurrence searches beyond 60 occupied dates without creating a duplicate booking.
+- Light/dark mode is available from the workspace header for barangay roles and Super Admin; the preference survives navigation and reload.
+- Schedule detail pages render completion, reassignment and decline dialogs. Only the assigned mechanic can mark an approved, unconverted schedule done. This creates a record awaiting Custodian verification; it does not approve the repair. A schedule already converted to a ticket is completed through the ticket workflow instead.
