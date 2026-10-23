@@ -1,12 +1,12 @@
 # Barangay Vehicle Management System (VMS) — Documentation
 
-UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
+Requirements and audit status reviewed: **24 October 2026**, against revision `0027023`. See [the current audit](System-Audit-2026-10-24.md) for six open implementation findings and corrected documentation discrepancies. UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
 
 ## 1. What this system is
 
 The Barangay VMS is a fleet management platform for a barangay's emergency response vehicles — ambulances, fire trucks, and rescue boats. It tracks whether a vehicle is ready to respond right now, and manages the full lifecycle of keeping it that way: reporting problems, inspecting them, repairing them, verifying the repair, and scheduling preventive maintenance before problems happen.
 
-It is explicitly **not** a dispatch/operations system, a document-compliance tracker, or a mileage-based service planner — those are out of scope by design.
+It is explicitly **not** a dispatch/operations system, a document-compliance tracker, or a mileage-based service planner. Vehicle dispatch, the Dispatched badge/action, Usage Log and temporary-release feature have been removed. Availability, physical condition and verified readiness remain separate. Sending a vehicle to an external shop remains part of the repair workflow.
 
 See `System-Architecture.svg` in this folder for the full component diagram.
 
@@ -27,30 +27,30 @@ The frontend is almost entirely one large component tree (`frontend-spa/src/view
 | Role | Scope | What they do |
 |---|---|---|
 | **Admin** | One Barangay | Runs the fleet: reviews and approves/declines Custodian-proposed tickets and schedules, assigns mechanics, handles external-shop work, approves accounts, manages vehicle types/locations/master data, and generates reports. Admin does **not** create tickets directly or verify repairs — see §5. |
-| **Custodian** | One Barangay | Files Issue Reports, is the **only** role that creates a Maintenance Ticket (by proposing one for Admin's approval), registers vehicles when delegated to, verifies a mechanic's completed repair, records preventive-maintenance checks and schedules. |
+| **Custodian** | One Barangay | Files Issue Reports, is the **only** role that creates a Maintenance Ticket (by proposing one for Admin's approval), registers/imports vehicles as a standard role duty, verifies a mechanic's completed repair, records preventive-maintenance checks and schedules. |
 | **Maintenance Personnel** | One Barangay | Can file a technical Issue Report (routed to the Custodian, who still owns ticket creation), repairs assigned sub-issues, logs work and parts used. |
 | **Super Admin** | Platform-wide | Manages Barangays and their user accounts, approves each Barangay's first-ever Admin, regenerates registration codes, handles concern reports, can impersonate accounts for support. Sees **no** fleet data — vehicles, tickets, and issues are intentionally out of its scope. |
 
-Admin, Custodian, and Maintenance Personnel are strictly scoped to the one Barangay they registered under. A user can hold more than one of these three roles at once (e.g. a small Barangay's one staff member covering both Custodian and Maintenance Personnel duties).
+The intended operational boundary for Admin, Custodian and Maintenance Personnel is their own Barangay. Vehicle-rooted query scopes enforce that boundary for many records, but shared-catalog writes and issue/file access have confirmed open exceptions (AUD-24-01/02/03); full isolation must not be claimed as accepted yet. A user can hold more than one of these three roles at once (e.g. a small Barangay's one staff member covering both Custodian and Maintenance Personnel duties).
 
 ## 4. Registration & onboarding
 
 - Anyone can reach the public `/register` page, but every registration requires a **Staff Registration Code** — a per-Barangay code the barangay office hands out, checked server-side (`hash_equals`).
 - The **first person to register for a given Barangay becomes its Admin** — but, like every other registrant, starts inactive and cannot log in until approved. Because that Barangay has no Admin yet to approve them, a **Super Admin** reviews and approves this specific case instead, from a dedicated Pending Approvals queue; they're notified the moment the registration happens.
 - Everyone who registers after that must choose Custodian or Maintenance Personnel, and their account stays inactive until an existing Admin approves them from the Users page.
-- See `Must-Haves.md`'s "Resolved Gaps" for why this two-track approval flow replaced the old "first registrant goes live instantly" behavior.
+- See `Must-Haves.md`'s workflow safeguards and acceptance notes for why this two-track approval flow replaced the old "first registrant goes live instantly" behavior.
 
 ## 5. Core workflow: the maintenance ticket lifecycle
 
-This is the heart of the system. **Every ticket enters as a Custodian's proposal that an Admin must review and approve before it's live** — Admin has no direct "create ticket" path: `ticket.create` is a permanently empty permission grant (nobody holds it, by design). A proposal has two possible sources: a human Custodian (`POST /tickets/propose`), or the system itself, auto-proposing one when a Maintenance Schedule's date arrives (§6) — either way, it lands at `Pending Approval` and goes through the exact same Admin review, never a bypass to `Active`. A Custodian who already knows what's wrong (they filed, or were pointed to, an Issue Report) submits a full proposal, picking one repair path: **in-house** (repaired by the barangay's own mechanics; can optionally be flagged as **cannibalized**, swapping in a part taken from a donor vehicle instead of a new one), or **external** (sent to an outside shop). Each sub-issue in the proposal carries its own Maintenance Type and Suggested Mechanic — a single ticket can mix different kinds of repair (e.g. a brake job and an electrical fix) without forcing one category on every sub-issue. The ticket's title is generated automatically from the vehicle and repair type (the Custodian never types one); on approval, the ticket's own number is folded into it, e.g. `#42 - Ambulance 1 - Brake Repair`. A proposal can optionally link to an existing open Issue Report on that vehicle, carrying forward its vehicle, issue type, description, severity, and reporter so none of it is re-typed.
+This is the heart of the system. **Every ticket enters as a Custodian's proposal that an Admin must review and approve before it's live** — Admin has no direct "create ticket" path: `ticket.create` is a permanently empty permission grant (nobody holds it, by design). A proposal has two possible sources: a human Custodian (`POST /tickets/propose`), or the system itself, auto-proposing one when a Maintenance Schedule's date arrives (§6) — either way, it lands at `Pending Approval` and goes through the exact same Admin review, never a bypass to `Active`. A Custodian who already knows what's wrong (they filed, or were pointed to, an Issue Report) submits a full proposal, picking one repair path: **in-house** (repaired by the barangay's own mechanics; can optionally be flagged as **cannibalized**, swapping in a part taken from a donor vehicle instead of a new one), or **external** (sent to an outside shop). Each sub-issue in the proposal carries its own Repair Type and optional Suggested Mechanic — a single ticket can mix different kinds of repair (e.g. a brake job and an electrical fix) without forcing one category on every sub-issue. The ticket's title is generated automatically when the proposal is created, using the barangay ticket number, vehicle and issue summary; the Custodian does not type a separate title. Admin assigns a mechanic to each in-house sub-issue at approval, and different sub-issues may have different mechanics. A proposal can optionally link to an existing open Issue Report on that vehicle, carrying forward its vehicle, issue type, description, severity, and reporter so none of it is re-typed.
 
 The workflow end to end:
 
 1. **Report** — a Custodian or Maintenance Personnel files an Issue Report (a Maintenance Personnel account is notified-forward to the Custodian, since they still can't create the ticket themselves — see §3).
 2. **Propose** — the Custodian proposes a ticket (optionally linked to that report), entering **Pending Approval**.
-3. **Approve** — the Admin reviews, can edit ticket/sub-issue fields, and approves (the ticket becomes **Active**, assigning its mechanic) or declines (the proposal remains traceable as **Declined**).
+3. **Approve** — the Admin reviews, can edit ticket/sub-issue fields, and approves (the ticket becomes **Active**, assigning the mechanics for its in-house sub-issues) or declines (the proposal remains traceable as **Declined**).
 4. **Repair** — the assigned Maintenance Personnel logs work on the ticket's sub-issues. Admin handles external-shop dispatch and return details; the handler cannot verify that work.
-5. **Verify** — the assigned Custodian runs a functional test. A user can never verify their own repair — enforced server-side even for a dual-role (Custodian + Maintenance Personnel) account on the same sub-issue. Verification is Custodian-only, with no Admin fallback; if the assigned Custodian is unavailable, the ticket is reassigned to a different Custodian instead.
+5. **Verify** — the assigned Custodian runs a functional test. A user must not verify their own repair — enforced server-side even for a dual-role (Custodian + Maintenance Personnel) account on the same sub-issue. Verification is Custodian-only, with no Admin fallback; if the assigned Custodian is unavailable, the ticket is reassigned to a different Custodian instead.
 6. **Decide** — the assigned Custodian uses the verification popup to Approve or Disapprove. Disapproval requires a reason and returns the ticket for repair. The former Admin confirmation and decision-close flow is not the current closure path.
 7. **Close** — successful Custodian verification closes the ticket and notifies the Admin. The server checks assignment, repair readiness, and self-verification restrictions before accepting the decision.
 
@@ -58,8 +58,8 @@ Extra signals layered on top: **recurrence detection** (the same fault reported 
 
 ## 6. Other modules
 
-- **Issue Reports** — both a reporting inbox (Admin, Custodian, and Maintenance Personnel can each file one — "Report Vehicle Issue" / "Report Technical Issue" in their sidebar) and a running to-do list of known, not-yet-repaired defects: deferred sub-issues, leftover notes from a cannibalized-repair donor vehicle, and other flagged concerns. Filing one lands straight on that report's own page with a **Create Maintenance Ticket** action right there (Custodian only) — not back on a list to search for what was just submitted. A Maintenance Personnel account sees only the reports they personally filed (everyone else's queue stays a Custodian/Admin concern), and filing one notifies that barangay's Custodians directly. The only Admin action on one is **Dismiss** (with a required reason) once it's no longer relevant; if a ticket already exists for it, the report's View action opens that ticket directly instead.
-- **Vehicle Management / Vehicle Types** — the vehicle catalog. Admin registers vehicles directly; a Custodian may also register one when the barangay delegates that to them (registration is data entry, not a transfer of accountability — editing a vehicle's protected master data afterward stays Admin-only regardless of who registered it). Vehicle Types carry a Domain (Land/Water) that changes which fields a vehicle of that type asks for (Hull Material/Engine Type for Water vehicles).
+- **Issue Reports** — a reporting inbox where Custodians and Maintenance Personnel file reports and Admin reviews them. It also tracks reported donor-vehicle findings and other defects. Filing one lands straight on that report's own page with a **Create Maintenance Ticket** action right there (Custodian only) — not back on a list to search for what was just submitted. The Maintenance Personnel list is limited to reports they personally filed; direct detail access currently bypasses that restriction (AUD-24-02), and filing one notifies that barangay's Custodians directly. The only Admin action on one is **Dismiss** (with a required reason) once it's no longer relevant; if a ticket already exists for it, the report's View action opens that ticket directly instead.
+- **Vehicle Management / Vehicle Types** — the vehicle catalog. Admin registers vehicles directly; Custodians may register/import as a standard role duty. The legacy per-account flag does not revoke that capability; protected master-data edits remain Admin-only. Vehicle Types carry a Domain (Land/Water) that changes which fields a vehicle of that type asks for (Hull Material/Engine Type for Water vehicles). These types are shared; cross-barangay write effects remain open under AUD-24-03.
 - **Vehicle Location** — a map of hubs (named parking/stationing points) with vehicles grouped under them; hubs can't be deleted while a vehicle is still assigned to them.
 - **Vehicle History** — an automatic timeline of every location/issue/condition/maintenance event per vehicle.
 - **Condition Monitoring** — a Custodian's routine physical check-in on a vehicle, independent of any reported issue.
@@ -87,7 +87,7 @@ Four navigation decisions are deliberate and final — not oversights to "fix" i
 ## 8. Security posture
 
 - Sanctum bearer tokens, no server-side session state.
-- Per-role scoping enforced both in the UI (which modules render) and in the backend (`RestrictSuperAdminScope`, `EnsureUserIsActive`, and per-Barangay query scoping via a `BelongsToBarangay` model concern).
+- Role/ownership guards exist in the backend, including `RestrictSuperAdminScope`, `EnsureUserIsActive`, and per-Barangay query scopes. These do not close the confirmed issue-detail, file-signing and shared-catalog findings. UI visibility is not sufficient authorization.
 - Inactive accounts cannot log in at all.
 - Destructive actions that matter operationally (e.g. deleting a hub with vehicles still on it) are blocked server-side, not just hidden in the UI.
 
@@ -111,6 +111,7 @@ Four navigation decisions are deliberate and final — not oversights to "fix" i
 
 - `System-Architecture.svg` — component diagram (this folder).
 - `ERD.svg` — entity-relationship diagram of the database (this folder).
+- `System-Audit-2026-10-24.md` - current confirmed findings, evidence and acceptance criteria.
 - `Must-Haves.md` — required functionality checklist and known gaps (this folder).
 - `Role-Realignment-Analysis.md` — the analysis and decisions behind the current role/permission model and sidebar structure (this folder).
 - `System-Capabilities.md` — a full, module-by-module reference of everything the system can currently do, including explicitly-flagged partially-built/unused features (this folder).
@@ -126,4 +127,23 @@ Four navigation decisions are deliberate and final — not oversights to "fix" i
 - Cannibalized repairs have **no Admin approval**: the mechanic records one donor vehicle and a CRUD list of donor parts on the Record Repair Work page; submitting goes straight to the Custodian and files one donor Issue Report. Standalone Cannibalization records live on the vehicle profile (no sidebar item).
 - External-shop repairs are handled by the Admin (dispatch and return details); the handler can't verify.
 - The Custodian closes tickets: verification is a popup (Approve / Disapprove with reason); "Tickets Ready to Close" is on the Custodian page; closing notifies the Admin. Verification is never done by Admin or by the repairer.
-- Assigned-personnel avatars on tickets, schedules and records; progress ring on ticket cards; inline per-field validation messages in the shared form.
+- Assigned-personnel avatars on tickets, schedules and records; completion counts/stages on ticket cards and a progress bar/percentage in the ticket list; inline per-field validation messages in the shared form.
+
+## 11. Current audit findings and acceptance - 24 October 2026
+
+The source review and isolated probes confirmed six implementation findings, all still open:
+
+| ID | Severity | Current problem |
+|---|---|---|
+| AUD-24-01 | High | A profile/free-text response can issue a signed URL for an inaccessible same-barangay managed file, bypassing the renewal endpoint's parent-record check. |
+| AUD-24-02 | High | Direct issue details expose reports hidden by the list policy, including linked ticket details denied by the ticket endpoint. |
+| AUD-24-03 | High | Barangay Admin edits to shared catalogs affect other barangays' types and completed records; catalog-backed historical rewrites have no corresponding edit audit entry. |
+| AUD-24-04 | High | Parts removal flags condition for inspection but does not invalidate an earlier readiness pass. |
+| AUD-24-05 | Medium | Shared CSV exports retain formula-leading untrusted values. Spreadsheet execution depends on the receiving application/settings. |
+| AUD-24-06 | Medium | Schedule completion accepts future dates and uses them to seed future recurrences. |
+
+Documentation discrepancies AUD-24-07/08 are now aligned with code: registration is a standard Custodian duty and the ticket list currently has percentage progress. This does not approve any change to the supplied academic baseline. See [the audit evidence and retest criteria](System-Audit-2026-10-24.md) and [Must-Haves acceptance criteria](Must-Haves.md#8-required-acceptance-criteria-from-the-24-october-audit).
+
+Verification record: the merged revision passed 480 backend tests (2,245 assertions), frontend lint/build and targeted desktop/mobile checks. A later six-test isolated investigation (36 assertions), plus a CSV-generation probe, reproduced the findings above. Passing those probes confirmed the defective behavior, not its resolution. The investigation files were removed and no application fixes were made in this documentation update.
+
+The current requirements PDF is `VMS-Must-Haves-Updated.pdf`, regenerated from `Must-Haves.md`. Older audit documents and the earlier generated DOCX are historical artifacts. Deployment storage policy, persistence, recovery and representative-user acceptance still need target-host evidence; this is not an exhaustive penetration-test certification.
