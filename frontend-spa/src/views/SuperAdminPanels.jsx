@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import Icon from '../components/Icon';
-import { DonutChart } from '../components/charts';
 import { AdminActionDrawer, AdminEmptyState, AdminFilterField, AdminIdentity, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge } from '../components/SuperAdminUI';
 import { formatDate } from '../utils/adminDate';
 
@@ -12,29 +11,169 @@ const effectiveRoles = (account) => [...new Set([...(account.roles ?? []), accou
 const location = (record) => [record.barangay_name, record.city_name, record.province_name].filter(Boolean).join(', ') || 'Unassigned';
 const firstAdmin = (account, barangays) => account.role === 'Admin' && !barangays.find((b) => b.id === account.barangay_id)?.has_active_admin;
 
-export function PlatformOverview({ barangays, approvals, onNavigate }) {
-  const [expanded, setExpanded] = useState(false);
-  const boundaries = barangays.filter((b) => b.boundary_status === 'needs_review');
-  const active = barangays.filter((b) => b.has_active_admin).length;
+const QUEUE_TYPES = [
+  ['approval', 'Account approvals'],
+  ['recovery', 'Administrator recovery'],
+  ['boundary', 'Boundary review'],
+];
+const QUEUE_SORTS = [
+  ['priority', 'Priority'],
+  ['barangay', 'Barangay (A–Z)'],
+  ['newest', 'Newest first'],
+  ['oldest', 'Oldest first'],
+];
+const QUEUE_PAGE_SIZE = 8;
+const percent = (part, whole) => whole ? Math.round((part / whole) * 100) : 0;
+const uniqueSorted = (values) => [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+// Every queue entry comes straight from the loaded records. A date is shown
+// only when the record carries one, under the label that matches its meaning.
+function buildQueue(barangays, approvals) {
+  return [
+    ...approvals.map((account) => {
+      const initial = firstAdmin(account, barangays);
+      return { key: `approval-${account.id}`, type: 'approval', priority: initial ? 0 : 1, barangay: account.barangay_name || 'Unassigned barangay', city: account.city_name, province: account.province_name, request: initial ? 'Initial Administrator registration' : 'Staff account registration', detail: `${account.name} · applying as ${account.role}`, status: 'Pending Approval', date: account.created_at, dateLabel: 'Submitted', action: 'Review application', path: `/superadmin/pending?application=${account.id}`, search: [account.name, account.email] };
+    }),
+    ...barangays.filter((b) => !b.has_active_admin).map((b) => ({ key: `recovery-${b.id}`, type: 'recovery', priority: 2, barangay: b.name, city: b.city_name, province: b.province_name, request: 'Administrator recovery', detail: b.staff_count ? `${b.staff_count} registered staff · no active Administrator` : 'No registered staff · share the registration code to onboard', status: 'No Active Admin', action: 'Assign administrator', path: `/superadmin/barangays/${b.id}`, search: [] })),
+    ...barangays.filter((b) => b.boundary_status === 'needs_review').map((b) => ({ key: `boundary-${b.id}`, type: 'boundary', priority: 3, barangay: b.name, city: b.city_name, province: b.province_name, request: 'Boundary review', detail: b.pending_boundary ? 'A candidate outline is waiting for review' : 'The current outline is an unverified reference', status: 'Needs Review', date: b.updated_at, dateLabel: 'Last updated', action: 'Review boundary', path: `/superadmin/barangays/${b.id}`, search: [] })),
+  ];
+}
+
+const byDate = (direction) => (a, b) => {
+  if (!a.date && !b.date) return 0;
+  if (!a.date) return 1;
+  if (!b.date) return -1;
+  return direction * (new Date(a.date) - new Date(b.date));
+};
+const QUEUE_SORTERS = {
+  priority: (a, b) => a.priority - b.priority || byDate(1)(a, b) || a.barangay.localeCompare(b.barangay),
+  barangay: (a, b) => a.barangay.localeCompare(b.barangay) || a.priority - b.priority,
+  newest: (a, b) => byDate(-1)(a, b) || a.priority - b.priority,
+  oldest: (a, b) => byDate(1)(a, b) || a.priority - b.priority,
+};
+
+function ActionQueue({ items, onOpen }) {
+  const [search, setSearch] = useState('');
+  const [type, setType] = useState('');
+  const [sort, setSort] = useState('priority');
+  const [province, setProvince] = useState('');
+  const [city, setCity] = useState('');
+  const [barangay, setBarangay] = useState('');
+  const [page, setPage] = useState(1);
+  const update = (setter) => (value) => { setter(value); setPage(1); };
+  const provinces = uniqueSorted(items.map((item) => item.province));
+  const cities = uniqueSorted(items.filter((item) => item.province === province).map((item) => item.city));
+  const barangayNames = uniqueSorted(items.filter((item) => item.province === province && item.city === city).map((item) => item.barangay));
+  const term = search.trim().toLowerCase();
+  const visible = items
+    .filter((item) => (!type || item.type === type)
+      && (!province || item.province === province)
+      && (!city || item.city === city)
+      && (!barangay || item.barangay === barangay)
+      && (!term || [item.barangay, item.city, item.province, item.request, ...item.search].join(' ').toLowerCase().includes(term)))
+    .sort(QUEUE_SORTERS[sort]);
+  const totalPages = Math.max(1, Math.ceil(visible.length / QUEUE_PAGE_SIZE));
+  const current = Math.min(page, totalPages);
+  const start = (current - 1) * QUEUE_PAGE_SIZE;
+  const rows = visible.slice(start, start + QUEUE_PAGE_SIZE);
+  const filtered = Boolean(term || type || province);
+  const clear = () => { setSearch(''); setType(''); setProvince(''); setCity(''); setBarangay(''); setPage(1); };
+  return <section className="sa-management-card sa-queue" aria-labelledby="sa-queue-title">
+    <header className="sa-queue-head">
+      <div><h2 id="sa-queue-title">Administrative Action Queue</h2><p>Requests waiting on a Super Admin decision, most urgent first.</p></div>
+      <span className="sa-count">{items.length} open</span>
+    </header>
+    {items.length > 0 && <div className="sa-queue-controls">
+      <div className="sa-queue-row">
+        <LocalSearchInput value={search} onChange={update(setSearch)} placeholder="Search barangay, applicant, or email..." />
+        <AdminFilterField label="Request type"><SearchableSelect value={type} onChange={(event) => update(setType)(event.target.value)}><option value="">All requests ({items.length})</option>{QUEUE_TYPES.map(([key, label]) => <option key={key} value={key}>{label} ({items.filter((item) => item.type === key).length})</option>)}</SearchableSelect></AdminFilterField>
+        <AdminFilterField label="Sort by"><SearchableSelect value={sort} onChange={(event) => update(setSort)(event.target.value)}>{QUEUE_SORTS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</SearchableSelect></AdminFilterField>
+      </div>
+      <fieldset className="sa-location-filter">
+        <legend><Icon name="pin" size={14} />Location</legend>
+        <AdminFilterField label="Province"><SearchableSelect value={province} onChange={(event) => { update(setProvince)(event.target.value); setCity(''); setBarangay(''); }}><option value="">All provinces</option>{provinces.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField>
+        <AdminFilterField label="City / Municipality"><SearchableSelect value={city} disabled={!province} onChange={(event) => { update(setCity)(event.target.value); setBarangay(''); }}><option value="">{province ? 'All cities / municipalities' : 'Choose a province first'}</option>{cities.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField>
+        <AdminFilterField label="Barangay"><SearchableSelect value={barangay} disabled={!city} onChange={(event) => update(setBarangay)(event.target.value)}><option value="">{city ? 'All barangays' : 'Choose a city first'}</option>{barangayNames.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField>
+        {filtered && <button type="button" className="ghost-button sa-clear-filters" onClick={clear}>Clear filters</button>}
+      </fieldset>
+    </div>}
+    {!items.length ? <AdminEmptyState icon="checkCircle" title="You're up to date" description="No account applications, administrator gaps, or boundary reviews are waiting." />
+      : !visible.length ? <AdminEmptyState title="No matching requests" description="Try another search term or clear the filters."><button type="button" className="ghost-button" onClick={clear}>Clear filters</button></AdminEmptyState>
+      : <>
+        <ul className="sa-queue-list">{rows.map((item) => <li key={item.key}>
+          <div className="sa-queue-item">
+            <div className="sa-queue-title"><h3>{item.barangay}</h3><StatusBadge value={item.status} /></div>
+            <span className="sa-queue-place">{[item.city, item.province].filter(Boolean).join(', ') || 'Location not specified'}{item.date && <> · {item.dateLabel} <time dateTime={item.date}>{formatDate(item.date)}</time></>}</span>
+            <p><strong>{item.request}</strong> · {item.detail}</p>
+          </div>
+          <button type="button" className="ghost-button sa-queue-action" onClick={() => onOpen(item.path)}>{item.action}<Icon name="chevronRight" size={14} /></button>
+        </li>)}</ul>
+        <nav className="sa-pagination" aria-label="Action queue pages">
+          <span>Showing {start + 1}–{start + rows.length} of {visible.length}</span>
+          <div className="sa-page-buttons">
+            <button type="button" disabled={current === 1} aria-label="Previous page" onClick={() => setPage(current - 1)}><Icon name="arrowLeft" size={16} /></button>
+            <span aria-live="polite">Page {current} of {totalPages}</span>
+            <button type="button" disabled={current === totalPages} aria-label="Next page" onClick={() => setPage(current + 1)}><Icon name="chevronRight" size={16} /></button>
+          </div>
+        </nav>
+      </>}
+  </section>;
+}
+
+function CoverageBar({ label, value, total, tone }) {
+  const share = percent(value, total);
+  return <div className="sa-coverage-row">
+    <div><span>{label}</span><strong>{value} <small>({share}%)</small></strong></div>
+    <div className="sa-coverage-track" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={total} aria-valuenow={value} aria-valuetext={`${value} of ${total} barangays (${share}%)`}><span className={`sa-coverage-fill ${tone}`} style={{ width: `${share}%` }} /></div>
+  </div>;
+}
+
+function PlatformStatus({ barangays, onNavigate }) {
+  const total = barangays.length;
+  const covered = barangays.filter((b) => b.has_active_admin).length;
+  const soleAdmin = barangays.filter((b) => b.sole_active_admin).length;
+  const reviewed = barangays.filter((b) => b.boundary_status === 'verified').length;
+  const needsReview = barangays.filter((b) => b.boundary_status === 'needs_review').length;
+  return <section className="sa-management-card sa-platform-status" aria-labelledby="sa-status-title">
+    <header className="sa-queue-head"><div><h2 id="sa-status-title">Platform Status</h2><p>Coverage across {total} registered {total === 1 ? 'barangay' : 'barangays'}.</p></div></header>
+    {!total ? <AdminEmptyState icon="pin" title="No barangays registered" description="Add a barangay to begin platform onboarding."><button type="button" className="ghost-button" onClick={() => onNavigate('barangays')}>Go to Barangay Management</button></AdminEmptyState> : <div className="sa-status-body">
+      <div className="sa-status-headline"><strong>{percent(covered, total)}%</strong><span>{covered} of {total} barangays have an active Administrator</span></div>
+      <CoverageBar label="With an active Administrator" value={covered} total={total} tone="good" />
+      <CoverageBar label="Without an active Administrator" value={total - covered} total={total} tone="warn" />
+      {soleAdmin > 0 && <p className="sa-status-note"><Icon name="alert" size={13} />{soleAdmin} {soleAdmin === 1 ? 'barangay relies' : 'barangays rely'} on a single active Administrator.</p>}
+      <h3>Boundary records</h3>
+      <CoverageBar label="Reviewed" value={reviewed} total={total} tone="good" />
+      <CoverageBar label="Needs review" value={needsReview} total={total} tone="warn" />
+      <CoverageBar label="No boundary found" value={total - reviewed - needsReview} total={total} tone="muted" />
+    </div>}
+    {total - covered > 0 && <footer className="sa-status-actions"><button type="button" className="primary-button" onClick={() => onNavigate('barangays', 'orphaned')}>Assign administrators ({total - covered})</button></footer>}
+  </section>;
+}
+
+export function PlatformOverview({ barangays, approvals, onNavigate, onOpen }) {
+  const items = useMemo(() => buildQueue(barangays, approvals), [barangays, approvals]);
+  const covered = barangays.filter((b) => b.has_active_admin).length;
+  const orphaned = barangays.length - covered;
+  const boundaries = barangays.filter((b) => b.boundary_status === 'needs_review').length;
   const metrics = [
-    { label: 'Registered Barangays', value: barangays.length, icon: 'pin', tab: 'barangays', detail: `${active} with an active Administrator` },
-    { label: 'Pending Account Approvals', value: approvals.length, icon: 'clipboard', tab: 'pending', detail: 'Registrations awaiting a decision' },
-    { label: 'Boundaries Needing Review', value: boundaries.length, icon: 'pin', tab: 'barangays', filter: 'boundary_review', detail: 'Candidate boundaries to verify' },
+    { label: 'Registered Barangays', value: barangays.length, kind: 'Total', icon: 'pin', tab: 'barangays', detail: `${covered} covered by an active Administrator`, cta: 'View all barangays' },
+    { label: 'Pending Account Approvals', value: approvals.length, kind: approvals.length ? 'Needs action' : 'All clear', icon: 'clipboard', tab: 'pending', detail: approvals.length ? 'Registrations awaiting your decision' : 'Every registration has been reviewed', cta: 'Review approvals' },
+    { label: 'Barangays Without an Admin', value: orphaned, kind: orphaned ? 'Needs action' : 'All clear', icon: 'alert', tab: 'barangays', filter: 'orphaned', detail: orphaned ? 'Promote staff or onboard an Administrator' : 'Every barangay has an Administrator', cta: 'Assign administrators' },
+    { label: 'Boundaries Needing Review', value: boundaries, kind: boundaries ? 'Needs action' : 'All clear', icon: 'flag', tab: 'barangays', filter: 'boundary_review', detail: boundaries ? 'Outlines to check against LGU sources' : 'No outlines are waiting for review', cta: 'Review boundaries' },
   ];
-  const items = [
-    ...[...approvals].sort((a, b) => Number(firstAdmin(b, barangays)) - Number(firstAdmin(a, barangays))).map((account) => ({ key: `approval-${account.id}`, title: firstAdmin(account, barangays) ? 'Review initial Administrator registration' : 'Review account registration', detail: `${account.name} · ${location(account)}`, status: 'Pending Approval', date: account.created_at, tab: 'pending' })),
-    ...boundaries.map((b) => ({ key: `boundary-${b.id}`, title: 'Review candidate boundary', detail: `${b.name}, ${b.city_name ?? ''}`, status: 'Needs Review', date: b.updated_at, tab: 'barangays', filter: 'boundary_review' })),
-    ...barangays.filter((b) => !b.has_active_admin).map((b) => ({ key: `recovery-${b.id}`, title: 'Recover Administrator coverage', detail: `${b.name}, ${b.city_name ?? ''}`, status: 'No Active Admin', tab: 'barangays', filter: 'orphaned' })),
-  ];
-  const segments = [{ label: 'Active Administrator', value: active, color: '#16a34a' }, { label: 'Without active Administrator', value: barangays.length - active, color: '#d97706' }];
-  return <div className="focus-dashboard sa-overview">
-    <div className="focus-kpis">{metrics.map((metric) => <button key={metric.label} type="button" onClick={() => onNavigate(metric.tab, metric.filter)}><span className="focus-kpi-icon"><Icon name={metric.icon} size={20} /></span><span>{metric.label}<strong>{metric.value}</strong><small>{metric.detail}</small></span><Icon name="chevronRight" size={15} /></button>)}</div>
-    <div className="focus-columns">
-      <section className="focus-card sa-queue"><header><div><h3>Administrative Action Queue</h3><p>Review the requests that need your attention.</p></div><span className="sa-count">{items.length} pending</span></header>
-        {!items.length ? <AdminEmptyState icon="checkCircle" title="You're up to date" description="No administrative actions are waiting for review." /> : <ul className="focus-tasks">{(expanded ? items : items.slice(0, 5)).map((item) => <li key={item.key}><div><strong>{item.title}</strong><span>{item.detail}</span><div className="sa-queue-meta"><StatusBadge value={item.status} /><time>{item.date ? formatDate(item.date) : 'Date not recorded'}</time></div></div><button type="button" onClick={() => onNavigate(item.tab, item.filter)}>Review <Icon name="chevronRight" size={14} /></button></li>)}</ul>}
-        {items.length > 5 && <button type="button" className="focus-more" onClick={() => setExpanded(!expanded)}>{expanded ? 'Show fewer actions' : `View all ${items.length} actions`}</button>}
-      </section>
-      <section className="focus-card sa-platform-status"><header><div><h3>Platform Status</h3><p>Administrator coverage across registered barangays.</p></div></header>{barangays.length ? <div className="focus-donut"><DonutChart segments={segments} centerLabel={barangays.length} centerSubLabel="barangays" /><ul>{segments.map((segment) => <li key={segment.label}><i style={{ background: segment.color }} />{segment.label}<strong>{segment.value}</strong></li>)}</ul></div> : <AdminEmptyState icon="pin" title="No barangays registered" description="Add a barangay to begin platform onboarding." />}<button type="button" className="focus-more" onClick={() => onNavigate('barangays')}>Manage barangays <Icon name="chevronRight" size={14} /></button></section>
+  return <div className="sa-overview">
+    <ul className="sa-kpis" aria-label="Platform summary">{metrics.map((metric) => <li key={metric.label}>
+      <button type="button" className={`sa-kpi${metric.kind === 'Needs action' ? ' is-attention' : ''}`} onClick={() => onNavigate(metric.tab, metric.filter)}>
+        <span className="sa-kpi-top"><span className="sa-kpi-icon" aria-hidden="true"><Icon name={metric.icon} size={18} /></span><span className={`sa-kpi-kind ${metric.kind === 'Needs action' ? 'attention' : metric.kind === 'All clear' ? 'clear' : 'total'}`}>{metric.kind}</span></span>
+        <span className="sa-kpi-label">{metric.label}</span>
+        <strong>{metric.value}</strong>
+        <small>{metric.detail}</small>
+        <span className="sa-kpi-cta">{metric.cta}<Icon name="chevronRight" size={14} /></span>
+      </button>
+    </li>)}</ul>
+    <div className="sa-overview-columns">
+      <ActionQueue items={items} onOpen={onOpen} />
+      <PlatformStatus barangays={barangays} onNavigate={onNavigate} />
     </div>
   </div>;
 }

@@ -18,6 +18,7 @@ import { formatDate } from '../utils/adminDate';
 import { geoJsonToPolygons } from '../utils/boundary';
 import { ActivityLogTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
+import { impersonationRootToken } from '../utils/impersonation';
 import SupportCenterTab from './SupportCenterTab';
 
 
@@ -33,6 +34,15 @@ const TABS = [
   ['users', 'Users'], ['codes', 'Registration Codes'], ['activity', 'Activity Log'],
   ['support', 'Support Center'],
 ];
+
+// Sidebar sections group related modules; every key above appears once.
+const NAV_GROUPS = [
+  ['Overview', ['dashboard']],
+  ['Barangays', ['barangays', 'codes']],
+  ['Accounts', ['pending', 'users']],
+  ['Monitoring', ['activity', 'support']],
+];
+const TAB_LABELS = Object.fromEntries(TABS);
 
 const TAB_DESCRIPTIONS = {
   dashboard: 'Manage barangays, user accounts, and platform administration.',
@@ -81,7 +91,7 @@ const TAB_ICONS = {
   pending: <Icon name="clipboard" size={18} className="nav-icon" />,
   users: <UsersIcon />,
   codes: <Icon name="key" size={18} className="nav-icon" />,
-  activity: <Icon name="clipboard" size={18} className="nav-icon" />,
+  activity: <Icon name="list" size={18} className="nav-icon" />,
   settings: <Icon name="key" size={18} className="nav-icon" />,
   support: <Icon name="mail" size={18} className="nav-icon" />,
 };
@@ -345,6 +355,7 @@ export default function SuperAdminWorkspace() {
   const [barangayFilter, setBarangayFilter] = useState('all');
   const [codeBarangay, setCodeBarangay] = useState(null);
   const [showAddBarangay, setShowAddBarangay] = useState(false);
+  const openPath = (path) => { navigate(path); setMobileNavOpen(false); setShowAddBarangay(false); window.scrollTo({ top: 0, behavior: 'instant' }); };
   const navigateTab = (tab, filter) => { navigate(`/superadmin/${tab}`); setMobileNavOpen(false); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
   // Always starts expanded — a collapsed sidebar should only ever be a
   // deliberate, in-session choice (the toggle button), never the default a
@@ -367,6 +378,9 @@ export default function SuperAdminWorkspace() {
     setIsSidebarCollapsed((v) => !v);
   };
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  // Phone widths fold the impersonation controls behind one button so the
+  // header stays short; wider screens always show them.
+  const [impersonationOpen, setImpersonationOpen] = useState(false);
   const [notice, setNotice] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -495,6 +509,11 @@ export default function SuperAdminWorkspace() {
   // "Total Users"/"Pending Registrations" counts on the dashboard can never
   // drift from the "All Users" tab's own count badge — both read the same
   // Super-Admin-excluded list instead of each filtering independently.
+  const orphanedCount = barangays.filter((b) => !b.has_active_admin).length;
+  const boundaryCount = barangays.filter((b) => b.boundary_status === 'needs_review').length;
+  const attentionParts = [[pendingApprovals.length, 'account approval'], [orphanedCount, 'barangay without an Administrator', 'barangays without an Administrator'], [boundaryCount, 'boundary review']]
+    .filter(([count]) => count > 0).map(([count, one, many]) => `${count} ${count === 1 ? one : many ?? `${one}s`}`);
+  const attentionSummary = attentionParts.length ? `Needs your attention: ${attentionParts.join(', ')}.` : 'Everything is up to date. No requests are waiting for review.';
   const visibleUsers = useMemo(() => users.filter((u) => u.role !== 'Super Admin'), [users]);
 
   const promoteToAdmin = async (target) => {
@@ -635,6 +654,7 @@ export default function SuperAdminWorkspace() {
           <div className="topbar-brand-cluster">
             <button
               aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-controls="superadmin-sidebar"
               className="sidebar-toggle-btn"
               onClick={toggleSidebar}
               title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -645,7 +665,11 @@ export default function SuperAdminWorkspace() {
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
-          <ImpersonationPicker user={user} />
+          {impersonationRootToken(user) && <div className={`sa-impersonation-zone${impersonationOpen ? ' is-open' : ''}`} role="group" aria-labelledby="sa-impersonation-label">
+            <button type="button" className="sa-impersonation-toggle" aria-expanded={impersonationOpen} aria-controls="sa-impersonation-controls" onClick={() => setImpersonationOpen((open) => !open)}><Icon name="eye" size={15} />Impersonate<Icon name="chevronDown" size={14} /></button>
+            <span className="sa-impersonation-label" id="sa-impersonation-label"><Icon name="eye" size={15} /><span>Impersonate account</span></span>
+            <div id="sa-impersonation-controls" className="sa-impersonation-controls"><ImpersonationPicker user={user} /></div>
+          </div>}
         </div>
 
         <div className="topbar-right"><ThemeToggle /><EndImpersonationAction compact />
@@ -738,19 +762,21 @@ export default function SuperAdminWorkspace() {
       <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="superadmin-sidebar">
           <nav className="module-nav" aria-label="Super Admin modules">
-            {TABS.map(([key, label]) => <button key={key} type="button" aria-label={label} aria-current={key === activeTab ? 'page' : undefined} className={key === activeTab ? 'active' : ''} onClick={() => navigateTab(key)} title={label}>
-              {TAB_ICONS[key]}<span>{label}</span>{key === 'pending' && pendingApprovals.length > 0 && <span className="module-nav-badge">{pendingApprovals.length}</span>}
-            </button>)}
-
+            {NAV_GROUPS.map(([group, keys]) => <div key={group} className="module-nav-group sa-nav-group" role="group" aria-labelledby={`sa-nav-${group}`}>
+              <span className="sa-nav-heading" id={`sa-nav-${group}`}>{group}</span>
+              {keys.map((key) => <button key={key} type="button" aria-label={key === 'pending' && pendingApprovals.length ? `${TAB_LABELS[key]}, ${pendingApprovals.length} waiting` : TAB_LABELS[key]} aria-current={key === activeTab ? 'page' : undefined} className={key === activeTab ? 'active' : ''} onClick={() => navigateTab(key)} title={TAB_LABELS[key]}>
+                {TAB_ICONS[key]}<span>{TAB_LABELS[key]}</span>{key === 'pending' && pendingApprovals.length > 0 && <span className="module-nav-badge" aria-hidden="true">{pendingApprovals.length}</span>}
+              </button>)}
+            </div>)}
           </nav>
         </aside>
         {mobileNavOpen && <div className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
 
         <section className="content-area">
-          <div className={`page-heading-row${activeTab === 'dashboard' ? ' focus-branded-heading' : ''}`}>
+          <div className="page-heading-row">
             <div className="page-heading-text">
               <h1>{!validRoute ? 'Page not found' : TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h1>
-              <p>{!validRoute ? 'This Super Admin page does not exist.' : TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
+              <p>{!validRoute ? 'This Super Admin page does not exist.' : activeTab === 'dashboard' && !loading && !loadError ? attentionSummary : TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
             </div>
             {activeTab === 'barangays' && !location.pathname.split('/')[3] && <button type="button" className="primary-button" onClick={() => setShowAddBarangay(!showAddBarangay)}><Icon name={showAddBarangay ? 'close' : 'plus'} size={16} />{showAddBarangay ? 'Cancel' : 'Add Barangay'}</button>}
           </div>
@@ -775,7 +801,7 @@ export default function SuperAdminWorkspace() {
             ) : loadError ? (
               <div className="sa-management-card"><p className="sa-load-error" role="alert">Data for this page could not be loaded. <button type="button" className="ghost-button" onClick={() => loadAll()}>Retry</button></p></div>
             ) : activeTab === 'dashboard' ? (
-              <PlatformOverview barangays={barangays} approvals={pendingApprovals} onNavigate={navigateTab} />
+              <PlatformOverview barangays={barangays} approvals={pendingApprovals} onNavigate={navigateTab} onOpen={openPath} />
             ) : activeTab === 'barangays' ? (
               <BarangayManagementTab
                 onBoundarySaved={() => loadAll()}
