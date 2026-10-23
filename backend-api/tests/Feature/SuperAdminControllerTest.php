@@ -29,13 +29,17 @@ class SuperAdminControllerTest extends TestCase
         $city = \App\Models\City::create(['province_id' => $province->id, 'code' => 'TESTCITY', 'name' => 'Test City']);
         $reference = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Reference only', 'psgc_code' => '0100000001']);
         $tenant = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Registered', 'psgc_code' => '0100000002', 'boundary' => ['type' => 'Polygon', 'coordinates' => [[[0, 0], [1, 0], [1, 1], [0, 0]]]]]);
-        $provisioned = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Code provisioned', 'psgc_code' => '0100000003']);
+        $provisioned = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Code provisioned', 'psgc_code' => '0100000003', 'boundary' => ['type' => 'Polygon', 'coordinates' => [[[0, 0], [1, 0], [1, 1], [0, 0]]]]]);
+        $seededCodeOnly = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Seeded code only', 'psgc_code' => '0100000004']);
         $manual = \App\Models\Barangay::create(['city_id' => $city->id, 'name' => 'Manually added']);
-        \App\Models\RegistrationSetting::for($provisioned->id);
+        \App\Models\RegistrationSetting::for($seededCodeOnly->id);
         User::factory()->create(['barangay_id' => $tenant->id, 'role' => 'Custodian', 'roles' => ['Custodian', 'Admin'], 'is_active' => true]);
         User::factory()->create(['barangay_id' => $tenant->id, 'role' => 'Admin', 'roles' => ['Admin'], 'is_active' => false]);
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
         Sanctum::actingAs($superAdmin, ['*']);
+        // Issuing a code through the platform onboards the barangay; a code
+        // row created any other way (e.g. by a seeder) does not.
+        $this->getJson("/api/superadmin/barangays/{$provisioned->id}/registration-code")->assertOk();
 
         \Illuminate\Support\Facades\DB::enableQueryLog();
         $rows = collect($this->getJson('/api/superadmin/barangays')->assertOk()->json());
@@ -43,6 +47,7 @@ class SuperAdminControllerTest extends TestCase
         \Illuminate\Support\Facades\DB::disableQueryLog();
         $this->assertEqualsCanonicalizing([$tenant->id, $provisioned->id, $manual->id], $rows->pluck('id')->all());
         $this->assertNotContains($reference->id, $rows->pluck('id')->all());
+        $this->assertNotContains($seededCodeOnly->id, $rows->pluck('id')->all());
         $registered = $rows->firstWhere('id', $tenant->id);
         $this->assertSame(2, $registered['staff_count']);
         $this->assertTrue($registered['has_active_admin']);
