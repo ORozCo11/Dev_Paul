@@ -304,8 +304,9 @@ function WorkflowStatusControls({ options, selected, onChange, defaults }) {
   const allowed = options.map((option) => typeof option === 'object' ? option.value : option);
   const statuses = selected.filter((value) => allowed.includes(value));
   return <div className="workflow-status-controls" role="group" aria-label="Work status filters">
-    <span>Status</span>
-    <MultiSelectDropdown placeholder="All statuses" options={options} selected={statuses} onChange={onChange} />
+    <div className="filter-date-group"><span>Status</span>
+      <MultiSelectDropdown placeholder="All statuses" options={options} selected={statuses} onChange={onChange} />
+    </div>
     <button type="button" className="ghost-button" onClick={() => onChange([...defaults])}>Ongoing only</button>
     <button type="button" className="ghost-button" onClick={() => onChange([])}>All statuses</button>
   </div>;
@@ -4038,9 +4039,9 @@ function Workspace() {
               gridClassName="schedule-stat-grid"
             />
           }
-          filterBar={<>
-            <WorkflowStatusControls options={['Pending Approval','Scheduled','Declined','Completed','Cancelled']} selected={filterStatus} onChange={setFilterStatus} defaults={defaultWorkflowStatuses('schedules', user)} />
+          filterBar={
             <FilterBar
+          statusControls={<WorkflowStatusControls options={['Pending Approval','Scheduled','Declined','Completed','Cancelled']} selected={filterStatus} onChange={setFilterStatus} defaults={defaultWorkflowStatuses('schedules', user)} />}
               categories={lookups.categories}
               vehicles={lookups.vehicles}
               filterCategory={filterCategory}
@@ -4059,7 +4060,7 @@ function Workspace() {
                 setSelected: setFilterLocation,
               }]}
             />
-          </>}
+          }
         >
           <div className="panel-header-bar schedule-panel-header">
             <div className="schedule-panel-heading">
@@ -14745,9 +14746,9 @@ function CustodianVerificationModule({
       />
       {tabBar}
       <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
-      <WorkflowStatusControls options={TICKET_VERIFICATION_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Active','Pending']} />
       <section className="panel module-filter-panel">
         <FilterBar
+          statusControls={<WorkflowStatusControls options={TICKET_VERIFICATION_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Active','Pending']} />}
           categories={categories}
           vehicles={vehicles}
           filterCategory={filterCategory}
@@ -14930,9 +14931,9 @@ function MechanicWorkOrderModule({
             activeFilter={activeFilter}
             onFilterChange={onFilterChange}
           />
-          <WorkflowStatusControls options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Pending','Submitted']} />
           <section className="panel module-filter-panel">
             <FilterBar
+          statusControls={<WorkflowStatusControls options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Pending','Submitted']} />}
               categories={categories}
               vehicles={vehicles}
               filterCategory={filterCategory}
@@ -16363,6 +16364,7 @@ function FilterBar({
   priorityLabel = "Priority",
   statusLabel = "Status",
   trailing,
+  statusControls,
   filterLocation,
   setFilterLocation,
   filterDomain,
@@ -16550,6 +16552,8 @@ function FilterBar({
           immediately, not staged. */}
       {extraFiltersJsx}
       {dateRangeJsx}
+
+      {statusControls}
 
       {/* Apply Filter button */}
       <button
