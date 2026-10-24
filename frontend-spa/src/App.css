@@ -1508,8 +1508,7 @@
 }
 
 .ticket-list-identity,
-.ticket-list-title,
-.ticket-list-progress {
+.ticket-list-title {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -1526,20 +1525,6 @@
 }
 .ticket-list-title { min-width: 200px; max-width: 320px; }
 .ticket-list-title strong { white-space: normal; }
-.ticket-list-progress { min-width: 150px; }
-.ticket-list-progress > div { display: flex; align-items: center; gap: 10px; }
-.ticket-list-progress progress {
-  width: 130px;
-  height: 9px;
-  border: 0;
-  border-radius: 999px;
-  overflow: hidden;
-  background: #e2e8f0;
-  accent-color: #2563eb;
-}
-.ticket-list-progress progress::-webkit-progress-bar { background: #e2e8f0; }
-.ticket-list-progress progress::-webkit-progress-value { background: #2563eb; border-radius: 999px; }
-.ticket-list-progress progress::-moz-progress-bar { background: #2563eb; border-radius: 999px; }
 .ticket-list-people { display: flex; align-items: center; gap: 10px; min-width: 170px; }
 .ticket-list-people > small { white-space: normal; }
 .ticket-ledger-panel > .panel-header-bar { flex-wrap: wrap; gap: 12px; }
@@ -5324,6 +5309,29 @@ html section.ticket-process-hero .ticket-detail-title { margin-bottom: 8px; colo
   box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
 }
 .profile-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-avatar-control { position: relative; flex-shrink: 0; }
+.profile-avatar-control input[hidden] { display: none; }
+.profile-photo-button {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 2px solid var(--surface, #fff);
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .2);
+  cursor: pointer;
+}
+.profile-photo-button:hover { background: #1d4ed8; }
+.profile-photo-button:focus-visible { outline: 3px solid #60a5fa; outline-offset: 3px; }
+.profile-photo-button:disabled { cursor: wait; opacity: .7; }
+.profile-photo-progress { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); color: var(--text-muted, #64748b); font-size: .7rem; white-space: nowrap; }
 .profile-hero-info h2 {
   font-size: 1.45rem;
   font-weight: 800;
@@ -16510,7 +16518,7 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
   .vehicle-type-overview-chart { border-left: 0; padding-left: 0; border-top: 1px solid var(--border, #e2e8f0); padding-top: 20px; }
 }
 
-/* Keep badges and capsule labels square throughout the application. */
+/* Keep badges and capsule labels consistently rounded throughout the application. */
 html :is(
   .status-badge, .status-pill, .ticket-status-pill, .ticket-stage-badge,
   .ticket-next-step-badge, .ticket-preview-badge, .ticket-role-tag,
@@ -16524,10 +16532,10 @@ html :is(
   .wizard-step-pill, .date-badge-pill,
   .dashboard-command-pills > *, .dashboard-live-chips > *
 ) {
-  border-radius: 0 !important;
+  border-radius: 6px !important;
 }
 .ticket-page :is(.status-badge, .ticket-stage-badge, .count-badge, .ticket-list-identity strong, .area-chart-tag, .ticket-preview-badge) {
-  border-radius: 0 !important;
+  border-radius: 6px !important;
 }
 html .ticket-page .status-badge {
   display: inline-flex;

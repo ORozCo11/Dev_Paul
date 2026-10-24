@@ -67,14 +67,9 @@ html .role-dashboard .focus-branded-heading select { background: #fff; border-co
 .focus-warning { display: block; color: #b45309; margin-top: 4px; }
 .focus-error { padding: 12px; border: 1px solid #fecaca; border-radius: 8px; color: #b91c1c; font-size: 14px; }
 .focus-error button { margin-left: 12px; }
-.fleet-context-details { padding: 14px; margin-bottom: 16px; border: 1px solid var(--border, #e2e8f0); border-radius: 10px; }
-.fleet-context-details > summary { cursor: pointer; font-size: 14px; font-weight: 600; color: var(--text-strong, #0f172a); }
-.fleet-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
-.fleet-context-grid > section { grid-column: auto; min-width: 0; }
 @media (max-width: 1100px) {
   .focus-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .focus-columns { grid-template-columns: minmax(0, 1fr); }
-  .fleet-context-grid { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 600px) {
   html .role-dashboard .focus-branded-heading,

@@ -14,7 +14,6 @@ import api from '../api/axios';
 import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import { AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge } from '../components/SuperAdminUI';
-import { formatDate } from '../utils/adminDate';
 import { geoJsonToPolygons } from '../utils/boundary';
 import { ActivityLogTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
@@ -44,25 +43,6 @@ const TAB_DESCRIPTIONS = {
   settings: 'Manage your Super Admin account settings and security.',
   support: 'Review and manage concerns submitted through the public Support Center.',
 };
-
-// Only the notification types a Super Admin can actually receive need an
-// entry here — everything else falls back to the title-sniffing guess below,
-// same as the main Workspace's bell.
-const NOTIFICATION_STYLE_BY_TYPE = {
-  pending_admin_approval: 'warning',
-};
-
-function legacyNotificationStyleFromTitle(title) {
-  if (/confirmed|approved|completed|verified|done/i.test(title)) return 'success';
-  if (/reopened|deferred|rejected|sent back/i.test(title)) return 'warning';
-  if (/required|assigned|logged|awaiting|pending/i.test(title)) return 'info';
-  if (/failed|error/i.test(title)) return 'error';
-  return 'info';
-}
-
-function getNotificationStyle(notification) {
-  return NOTIFICATION_STYLE_BY_TYPE[notification.type] ?? legacyNotificationStyleFromTitle(notification.title);
-}
 
 function UsersIcon() {
   return (
@@ -393,9 +373,6 @@ export default function SuperAdminWorkspace() {
   const loading = (requiredResources[activeTab] ?? []).some((key) => resourceLoading[key]);
   const loadError = (requiredResources[activeTab] ?? []).some((key) => resourceErrors[key]);
 
-  const [notifications, setNotifications] = useState([]);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const notificationsRef = useRef(null);
   const profileMenuRef = useRef(null);
 
 
@@ -440,47 +417,8 @@ export default function SuperAdminWorkspace() {
     };
   }, [loadAll]);
 
-  const loadNotifications = useCallback(async () => {
-    try {
-      const res = await api.get('/notifications');
-      setNotifications(res.data);
-    } catch { /* ignore — bell just stays empty until the next poll */ }
-  }, []);
-
-  const markNotificationAsRead = async (id) => {
-    try {
-      await api.put(`/notifications/${id}/read`);
-      await loadNotifications();
-    } catch { /* ignore */ }
-  };
-
-  const markAllNotificationsAsRead = async () => {
-    try {
-      await api.put('/notifications/read-all');
-      await loadNotifications();
-    } catch { /* ignore */ }
-  };
-
-  const deleteNotification = async (id) => {
-    try {
-      await api.delete(`/notifications/${id}`);
-      await loadNotifications();
-    } catch { /* ignore */ }
-  };
-
-  useEffect(() => {
-    api.get('/notifications').then(({ data }) => setNotifications(data)).catch(() => {});
-    const interval = setInterval(() => {
-      loadNotifications().catch(() => {});
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [loadNotifications]);
-
   useEffect(() => {
     function handleClickOutside(event) {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-        setShowNotifications(false);
-      }
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
         setShowProfileMenu(false);
       }
@@ -488,8 +426,6 @@ export default function SuperAdminWorkspace() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   // Computed once here and handed to both DashboardTab and UsersTab so the
   // "Total Users"/"Pending Registrations" counts on the dashboard can never
@@ -649,80 +585,6 @@ export default function SuperAdminWorkspace() {
         </div>
 
         <div className="topbar-right"><ThemeToggle /><EndImpersonationAction compact />
-          <div className="notifications-dropdown-container" ref={notificationsRef}>
-            <button
-              className="icon-btn notification-btn"
-              title="Notifications"
-              aria-label="Notifications"
-              aria-expanded={showNotifications}
-              type="button"
-              onClick={() => setShowNotifications((v) => !v)}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-              </svg>
-              {unreadCount > 0 && (
-                <span className="notification-indicator">{unreadCount}</span>
-              )}
-            </button>
-
-            {showNotifications && (
-              <div className="notifications-dropdown">
-                <div className="notifications-header">
-                  <h4>Notifications</h4>
-                  {unreadCount > 0 && (
-                    <button type="button" onClick={markAllNotificationsAsRead}>Mark all as read</button>
-                  )}
-                </div>
-                <div className="notifications-list">
-                  {notifications.length === 0 ? (
-                    <div className="notifications-empty">
-                      <span style={{ display: 'inline-flex', opacity: 0.6 }}><Icon name="bell" size={26} /></span>
-                      <span>No notifications yet.</span>
-                    </div>
-                  ) : (
-                    notifications.map((n) => {
-                      const notificationType = getNotificationStyle(n);
-                      return (
-                        <div
-                          key={n.notification_id}
-                          className={`notification-item notification-${notificationType} ${!n.read_at ? 'unread' : ''}`}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); e.currentTarget.click(); } }}
-                          onClick={async () => {
-                            await markNotificationAsRead(n.notification_id);
-                            if (n.type === 'pending_admin_approval') {
-                              navigateTab('pending');
-                            }
-                            setShowNotifications(false);
-                          }}
-                        >
-                          <div className="notification-content">
-                            <span className="notification-title">{n.title}</span>
-                            <span className="notification-msg">{n.message}</span>
-                            <span className="notification-time">{formatDate(n.created_at)}</span>
-                          </div>
-                          <div className="notification-actions" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              className="notification-close-btn"
-                              type="button"
-                              title="Delete notification"
-                              onClick={() => deleteNotification(n.notification_id)}
-                            >
-                              <Icon name="close" size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
           <div className="profile-menu-container" ref={profileMenuRef}>
             <ProfileMenu
               user={user}

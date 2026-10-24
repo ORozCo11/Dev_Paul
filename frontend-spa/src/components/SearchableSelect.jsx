@@ -20,7 +20,7 @@ function menuPosition(input) {
 }
 
 // Typing filters valid choices; IDs and permission-sensitive enums remain unchanged.
-export default function SearchableSelect({ children, value = '', defaultValue, onChange, onFocus, onBlur, onKeyDown, name, id, disabled, required, className = '', style, ...props }) {
+export default function SearchableSelect({ children, value = '', defaultValue, onChange, onFocus, onBlur, onKeyDown, name, id, disabled, required, className = '', menuClassName = '', style, ...props }) {
   const generatedId = useId();
   const inputId = id || generatedId;
   const listId = `${generatedId}-options`;
@@ -76,7 +76,7 @@ export default function SearchableSelect({ children, value = '', defaultValue, o
         onKeyDown?.(event);
       }} />
     {name && <input type="hidden" name={name} value={controlledValue ?? ''} />}
-    {open && createPortal(<div id={listId} role="listbox" className="searchable-select-menu" style={position} onMouseDown={(event) => event.preventDefault()} onWheel={(event) => event.stopPropagation()}>
+    {open && createPortal(<div id={listId} role="listbox" className={`searchable-select-menu${menuClassName ? ` ${menuClassName}` : ''}`} style={position} onMouseDown={(event) => event.preventDefault()} onWheel={(event) => event.stopPropagation()}>
       {matches.map((option) => <button key={option.value} id={`${listId}-${options.indexOf(option)}`} type="button" role="option" aria-selected={String(controlledValue ?? '') === option.value} disabled={option.disabled} className={enabled[active] === option ? 'is-highlighted' : ''} onClick={() => pick(option)}>{option.label}</button>)}
       {!matches.length && <div className="searchable-select-empty">No matching options</div>}
     </div>, document.body)}

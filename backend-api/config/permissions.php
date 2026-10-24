@@ -193,13 +193,11 @@ return [
     'repair.approve_cannibalized' => ['Admin'],
     'repair.reject_cannibalized' => ['Admin'],
 
-    // Catalogs (fault categories, maintenance types — same two rules today,
-    // deliberately collapsed from 6 checks into 3 abilities). Phase B4:
-    // create narrowed to Admin only — everyone else picks "Other" + a note
-    // instead of minting a new global catalog value.
-    'catalog.create' => ['Admin'],
-    'catalog.edit' => ['Admin'],
-    'catalog.delete' => ['Admin'],
+    // Shared dropdown catalogs.
+    // Operational users manage the shared issue and repair catalogs inline.
+    'catalog.create' => ['Admin', 'Custodian', 'Maintenance Personnel'],
+    'catalog.edit' => ['Admin', 'Custodian', 'Maintenance Personnel'],
+    'catalog.delete' => ['Admin', 'Custodian', 'Maintenance Personnel'],
 
     // Users (barangay-scoped, managed by that barangay's Admin)
     'user.view' => ['Admin'],

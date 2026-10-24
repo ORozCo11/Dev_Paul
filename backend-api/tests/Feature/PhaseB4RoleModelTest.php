@@ -469,22 +469,21 @@ class PhaseB4RoleModelTest extends TestCase
     }
 
     // =======================================================================
-    // Catalogs — Admin-only to create now (everyone else picks "Other" +
-    // a note in the UI, no backend catalog row is minted)
+    // Operational roles manage shared dropdown catalogs.
     // =======================================================================
 
     #[Test]
-    public function a_custodian_can_no_longer_create_a_fault_category(): void
+    public function a_custodian_can_create_a_fault_category(): void
     {
         Sanctum::actingAs($this->custodian, ['*']);
-        $this->postJson('/api/fault-categories', ['name' => 'New Fault ' . uniqid()])->assertForbidden();
+        $this->postJson('/api/fault-categories', ['name' => 'New Fault ' . uniqid()])->assertCreated();
     }
 
     #[Test]
-    public function maintenance_personnel_can_no_longer_create_a_maintenance_type(): void
+    public function maintenance_personnel_can_create_a_maintenance_type(): void
     {
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->postJson('/api/maintenance-types', ['name' => 'New Type ' . uniqid()])->assertForbidden();
+        $this->postJson('/api/maintenance-types', ['name' => 'New Type ' . uniqid()])->assertCreated();
     }
 
     #[Test]

@@ -31,7 +31,8 @@ class RegressionAuditFixesTest extends TestCase
         $mechanic = User::factory()->create(['role' => 'Maintenance Personnel']);
         Sanctum::actingAs($custodian);
         $vehicle = $this->vehicle();
-        $this->postJson('/api/maintenance-types', ['name' => 'Unauthorized Catalog'])->assertForbidden();
+        $this->postJson('/api/maintenance-types', ['name' => 'Explicit Catalog Entry'])->assertCreated();
+        $this->assertDatabaseHas('maintenance_types', ['name' => 'Explicit Catalog Entry']);
         $this->postJson('/api/maintenance-schedules', ['vehicle_id' => $vehicle->vehicle_id, 'maintenance_type' => 'Unauthorized Catalog', 'scheduled_date' => now()->addMonth()->toDateString(), 'assigned_to' => $mechanic->id])->assertCreated();
         $this->assertDatabaseMissing('maintenance_types', ['name' => 'Unauthorized Catalog']);
         MaintenanceType::create(['name' => 'Approved Name']);

@@ -24,78 +24,14 @@ import { AuthContext } from '../context/AuthContextObject';
 import { geoJsonToPolygons, isPointWithinBoundaryPolygons, isLocationPointAllowed } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 import { calendarDate } from '../utils/adminDate';
+import { groupMaintenanceByVehicle } from '../utils/maintenanceGroups';
+import { currentCondition } from '../utils/conditionMonitoring';
 
 const FormNoticeContext = createContext(null);
 // Lets shared table cells (VehicleCell, UserAvatarName) open the right detail
 // view for what was actually clicked — a vehicle cell opens the vehicle, a user
 // cell opens that user — instead of the whole row always going to the vehicle.
 const RowActionsContext = createContext(null);
-
-// Every value the backend actually stamps onto a Notification.type (see
-// notifyAdmins/notifyCustodians/notifyUser call sites in TicketController.php
-// and FleetController.php) mapped to the bell dropdown's visual category.
-// Driven off this reliable field instead of guessing from the title text.
-// Several keys below (inspection_*, work_order_assigned/reassigned,
-// repairs_approved, sub_issue_confirmed, ticket_ready_to_close,
-// work_order_reopened, sub_issue_deferred) are no longer sent by any live
-// code path — their features (inspection, per-sub-issue verify/confirm/
-// reassign/defer) were replaced by the one-mechanic-per-ticket workflow.
-// Kept here anyway, not pruned: a user's existing notification history may
-// still contain rows of these types, and removing the mapping would just
-// make old notifications fall back to a plain 'info' style instead of their
-// original color.
-const NOTIFICATION_STYLE_BY_TYPE = {
-  // success — a positive/resolved outcome
-  sub_issue_confirmed: 'success',
-  repairs_approved: 'success',
-  ticket_ready_to_close: 'success',
-  ticket_closed: 'success',
-  ticket_verified: 'success',
-  ticket_approved: 'success',
-  cannibalization_approved: 'success',
-  schedule_restored: 'success',
-
-  // warning — a rejection, rework, deferral, or reopened/recurring problem
-  repairs_rejected: 'warning',
-  work_order_reopened: 'warning',
-  sub_issue_deferred: 'warning',
-  ticket_reopened: 'warning',
-  ticket_declined: 'warning',
-  cannibalization_rejected: 'warning',
-  repair_reopened_for_verification: 'warning',
-  recurring_fault: 'warning',
-
-  // info — a neutral assignment/submission with no verdict yet
-  ticket_prediagnosed: 'info',
-  ticket_proposed: 'info',
-  inspection_assigned: 'info',
-  inspection_submitted: 'info',
-  work_order_assigned: 'info',
-  work_order_reassigned: 'info',
-  ticket_assigned: 'info',
-  ticket_reassigned: 'info',
-  repairs_completed: 'info',
-  cannibalization_pending: 'info',
-  maintenance_recorded: 'info',
-  maintenance_verification_withdrawn: 'info',
-  schedule_assigned: 'info',
-  maintenance_verification_needed: 'info',
-};
-
-// Backward-compat only: a notification row created before `type` existed (or
-// with a type this map hasn't caught up to yet) has no reliable field to key
-// off, so fall back to the old title-sniffing guess rather than mislabeling it.
-function legacyNotificationStyleFromTitle(title) {
-  if (/confirmed|approved|completed|verified|done/i.test(title)) return 'success';
-  if (/reopened|deferred|rejected|sent back/i.test(title)) return 'warning';
-  if (/required|assigned|logged|repairs completed/i.test(title)) return 'info';
-  if (/failed|error/i.test(title)) return 'error';
-  return 'info';
-}
-
-function getNotificationStyle(notification) {
-  return NOTIFICATION_STYLE_BY_TYPE[notification.type] ?? legacyNotificationStyleFromTitle(notification.title);
-}
 
 const roleRoutes = {
   Admin: '/admin',
@@ -886,7 +822,6 @@ function Workspace() {
     api.get('/registration-settings').then((res) => setRegistrationCode(res.data.staff_code)).catch(() => {});
   }, [user]);
   const [notifications, setNotifications] = useState([]);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState([]);
   const [filterCapacity, setFilterCapacity] = useState([]);
@@ -945,7 +880,6 @@ function Workspace() {
   const [locationMapSummary, setLocationMapSummary] = useState({ hubs: null, unassigned: null });
   const [locationsTab, setLocationsTab] = useState('map');
   const [selectedMapVehicleId, setSelectedMapVehicleId] = useState(null);
-  const notificationsRef = useRef(null);
   const profileMenuRef = useRef(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const hasVehicles = (lookups.vehicles ?? []).length > 0;
@@ -958,33 +892,6 @@ function Workspace() {
       console.error('Failed to load notifications:', error);
     }
   }, []);
-
-  const markNotificationAsRead = async (id) => {
-    try {
-      await api.put(`/notifications/${id}/read`);
-      await loadNotifications();
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-    }
-  };
-
-  const markAllNotificationsAsRead = async () => {
-    try {
-      await api.put('/notifications/read-all');
-      await loadNotifications();
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
-  };
-
-  const deleteNotification = async (id) => {
-    try {
-      await api.delete(`/notifications/${id}`);
-      await loadNotifications();
-    } catch (error) {
-      console.error('Failed to delete notification:', error);
-    }
-  };
 
   const loadLookups = useCallback(async () => {
     const response = await api.get('/lookups');
@@ -1126,9 +1033,6 @@ function Workspace() {
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-        setShowNotifications(false);
-      }
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
         setShowProfileMenu(false);
       }
@@ -1550,12 +1454,8 @@ function Workspace() {
     }
   }, [navigate, user.role]);
 
-  // Clears a ticket's "unread updates" badge (Maintenance Tickets card/table
-  // view) the moment it's opened directly from that list — without this,
-  // the badge only ever clears via the notification bell, so opening the
-  // ticket itself wouldn't acknowledge the updates you just saw on it.
-  // Best-effort: a failed mark-as-read just leaves the badge until the next
-  // notifications poll picks it up, not worth surfacing as an error.
+  // Acknowledge unread ticket updates when opening the ticket. Keep the
+  // notification data and polling that drive the ticket-list badges.
   const markTicketNotificationsRead = useCallback(async (ticketId) => {
     const toMark = notifications.filter((n) => !n.read_at && String(n.ticket_id) === String(ticketId));
     if (!toMark.length) return;
@@ -1885,7 +1785,7 @@ function Workspace() {
       // Location records nest the vehicle status under `.vehicle`, not on
       // the row itself (the row IS a location snapshot, not a vehicle).
       result = result.filter((row) => filterStatus.includes(row.vehicle?.status));
-    } else if (filterStatus.length) {
+    } else if (filterStatus.length && activeModule !== 'conditions') {
       result = result.filter((row) => {
         const statusVal = row.status ?? row.progress_status ?? row.final_status;
         return filterStatus.includes(statusVal);
@@ -2003,7 +1903,7 @@ function Workspace() {
 
       if (filterStatus.length) {
         result = result.filter((row) => {
-          return filterStatus.includes(row.condition_result);
+          return filterStatus.includes(currentCondition(row));
         });
       }
 
@@ -2043,6 +1943,12 @@ function Workspace() {
       const query = searchQuery.toLowerCase().trim();
       result = result.filter((row) => {
         const matchesField = (val) => val && String(val).toLowerCase().includes(query);
+
+        if (activeModule === 'conditions' && (
+          matchesField(currentCondition(row)) || matchesField(row.resulting_ticket?.status)
+          || matchesField(row.resulting_ticket?.ticket_title)
+          || (row.resulting_ticket && matchesField(ticketNumber(row.resulting_ticket)))
+        )) return true;
 
         if (
           matchesField(row.vehicle_name) ||
@@ -2189,14 +2095,19 @@ function Workspace() {
   }, [records.vehicles]);
 
   const conditionStats = useMemo(
-    () => countByValues(conditionRowsForStats, (r) => r.condition_result, ['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']),
+    () => countByValues(conditionRowsForStats, currentCondition, ['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']),
     [conditionRowsForStats]
   );
 
-  const maintenanceRecordStats = useMemo(
-    () => countByValues(records.maintenance ?? [], (r) => r.progress_status, ['Assigned', 'Under Repair', 'For Verification', 'Completed']),
-    [records.maintenance]
-  );
+  const maintenanceVehicleRows = useMemo(() => groupMaintenanceByVehicle(visibleRows), [visibleRows]);
+  const maintenanceRecordStats = useMemo(() => {
+    const vehicles = groupMaintenanceByVehicle(records.maintenance ?? []);
+    const counts = { total: vehicles.length };
+    for (const status of ['Assigned', 'Under Repair', 'For Verification', 'Completed']) {
+      counts[status] = vehicles.filter((vehicle) => vehicle.repair_records.some((repair) => repair.progress_status === status)).length;
+    }
+    return counts;
+  }, [records.maintenance]);
 
   const userStats = useMemo(
     () => countByValues(records.users ?? [], (r) => r.role, ['Admin', 'Custodian', 'Maintenance Personnel']),
@@ -2355,6 +2266,7 @@ function Workspace() {
         setPrefilledConditionVehicleId(row.vehicle_id);
         navigate(`${roleRoutes[user.role]}/conditions/new`);
       } : undefined,
+      openTicketProfile,
     ))();
   const conditionColumnDefsWithNote = useMemo(() => withNoteColumn(conditionColumnDefs, (r) => r.observations, { label: 'Observations' }), [conditionColumnDefs]);
   const conditionColumnChooser = useColumnChooser('vms_condition_columns', conditionColumnDefsWithNote);
@@ -2362,8 +2274,8 @@ function Workspace() {
   const issueColumnDefs = (() => issueColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}/edit`), handleCreateTicketFromIssue, setUserInfoTarget, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`), deleteRecord, user, openTicketProfile, setDismissIssueTarget))();
   const issueColumnChooser = useColumnChooser('vms_issue_columns', issueColumnDefs);
 
-  const maintenanceColumnDefs = (() => maintenanceColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}/edit`), updateRecord, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`), user))();
-  const maintenanceColumnDefsWithNote = useMemo(() => withNoteColumn(maintenanceColumnDefs, (r) => r.problem_reason, { label: 'Problem' }), [maintenanceColumnDefs]);
+  const maintenanceColumnDefs = maintenanceColumns((row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}?vehicle=1`));
+  const maintenanceColumnDefsWithNote = useMemo(() => withNoteColumn(maintenanceColumnDefs, (r) => r.repair_records.map((repair) => repair.problem_reason).filter(Boolean).join('; '), { label: 'Problems' }), [maintenanceColumnDefs]);
   const maintenanceColumnChooser = useColumnChooser('vms_maintenance_columns', maintenanceColumnDefsWithNote);
 
   const maintenanceStatusColumnDefs = useMemo(
@@ -2409,8 +2321,6 @@ function Workspace() {
     },
   ];
   const archiveColumnChooser = useColumnChooser('vms_ticket_archive_columns', archiveColumnDefs);
-
-  const unreadCount = notifications.filter((n) => !n.read_at).length;
 
   // On phones the menu button opens the sidebar as a slide-out drawer
   // instead of collapsing it to the icon rail.
@@ -2546,91 +2456,6 @@ function Workspace() {
           {/* The Return control now lives in the persistent banner below the
               topbar (Phase A5) — a single, more visible home for it instead
               of duplicating the button here too. */}
-          <div className="notifications-dropdown-container" ref={notificationsRef}>
-            <button
-              className="icon-btn notification-btn"
-              title="Notifications"
-              aria-label="Notifications"
-              aria-expanded={showNotifications}
-              type="button"
-              onClick={() => setShowNotifications((v) => !v)}
-            >
-              <Icon name="bell" size={20} />
-              {unreadCount > 0 && (
-                <span className="notification-indicator">{unreadCount}</span>
-              )}
-            </button>
-            {showNotifications && (
-              <div className="notifications-dropdown">
-                <div className="notifications-header">
-                  <h4>Notifications</h4>
-                  {unreadCount > 0 && (
-                    <button type="button" onClick={markAllNotificationsAsRead}>Mark all as read</button>
-                  )}
-                </div>
-                <div className="notifications-list">
-                  {notifications.length === 0 ? (
-                    <div className="notifications-empty">
-                      <span style={{ display: 'inline-flex', opacity: 0.6 }}><Icon name="bell" size={26} /></span>
-                      <span>No notifications yet.</span>
-                    </div>
-                  ) : (
-                    notifications.map((n) => {
-                      const notificationType = getNotificationStyle(n);
-                      return (
-                      <div
-                        key={n.notification_id}
-                        className={`notification-item notification-${notificationType} ${!n.read_at ? 'unread' : ''}`}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); e.currentTarget.click(); } }}
-                        onClick={async () => {
-                          await markNotificationAsRead(n.notification_id);
-                          // Production-readiness audit finding #10 — open the
-                          // exact record this notification is about, not just
-                          // mark it read and leave the user where they were.
-                          if (n.ticket_id) {
-                            openTicketProfile({ ticket_id: n.ticket_id });
-                          } else if (n.issue_report_id) {
-                            navigate(`${roleRoutes[user.role]}/issues/${n.issue_report_id}`);
-                          } else if (n.vehicle_id) {
-                            navigate(`${roleRoutes[user.role]}/vehicles/${n.vehicle_id}`);
-                          } else if (n.schedule_id) {
-                            // Not every role that can receive this (e.g. a
-                            // Maintenance Personnel assignee) holds
-                            // schedule.edit — land on the shared list instead
-                            // of a specific /edit page that could redirect
-                            // them away.
-                            returnToModule('schedules');
-                          }
-                          setShowNotifications(false);
-                        }}
-                      >
-                        <div className="notification-content">
-                          <span className="notification-title">{n.title}</span>
-                          <span className="notification-msg">{n.message}</span>
-                          <span className="notification-time">{formatDate(n.created_at)}</span>
-                      </div>
-                      <div className="notification-actions" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          className="notification-close-btn"
-                          type="button"
-                          title="Delete notification"
-                          onClick={() => deleteNotification(n.notification_id)}
-                        >
-                          <Icon name="close" size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    );
-                    })
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-
         <div className="profile-menu-container" ref={profileMenuRef}>
           <ProfileMenu
             user={user}
@@ -2909,6 +2734,8 @@ function Workspace() {
           ) : maintenanceProfileId ? (
             <MaintenanceRecordProfilePage key={maintenanceProfileId}
               maintenanceId={maintenanceProfileId}
+              groupByVehicle={new URLSearchParams(location.search).get('vehicle') === '1'}
+              onVerify={(r, payload) => updateRecord(`/maintenance-records/${r.maintenance_id}/verify`, payload, 'Verification submitted.')}
               canManage={hasRole(user, 'Admin')}
               onConfirm={(r) => updateRecord(`/maintenance-records/${r.maintenance_id}/confirm`, { confirmed: true }, 'Maintenance confirmed.')}
               onReopen={(r) => updateRecord(`/maintenance-records/${r.maintenance_id}/confirm`, { confirmed: false }, 'Maintenance reopened.')}
@@ -3316,15 +3143,6 @@ function Workspace() {
             />
           }
         >
-          {(hasRole(user, 'Admin') || hasRole(user, 'Custodian')) && dashboard && (
-            <details className="fleet-context-details">
-              <summary>Fleet readiness and capability details</summary>
-              <div className="fleet-context-grid">
-                <CriticalityWatchCard items={dashboard.criticality_watch ?? []} onNavigate={navigate} basePath={roleRoutes[user.role]} />
-                <CapabilityImpactCard items={dashboard.capability_impact ?? []} onNavigate={navigate} basePath={roleRoutes[user.role]} />
-              </div>
-            </details>
-          )}
           <div className="panel-header-bar">
             <h3>All Vehicles <span className="count-badge">{visibleRows.length}</span></h3>
             <LocalSearchInput
@@ -3872,10 +3690,10 @@ function Workspace() {
         <>
         <ModulePanel
           tabBar={maintenanceLedgerTabBar}
-          description="Directly log external, historical, or third-party vehicle maintenance records and expenses without running the full ticket workflow."
+          description="One row per vehicle. Open a vehicle to see its repaired sub-issues and other maintenance work."
           statCards={
             <ModuleStatCards
-              totalLabel="Total Records"
+              totalLabel="Total Vehicles"
               total={maintenanceRecordStats.total}
               cards={MAINTENANCE_RECORD_STAT_CARDS}
               counts={maintenanceRecordStats}
@@ -3925,7 +3743,7 @@ function Workspace() {
           }
         >
           <div className="panel-header-bar">
-            <h3>Maintenance Records <span className="count-badge">{visibleRows.length}</span></h3>
+            <h3>Maintenance Records <span className="count-badge">{maintenanceVehicleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {/* No general "+ Add" entry point here anymore — repair data
                   is now entered through Tickets; Maintenance Schedule
@@ -3942,9 +3760,9 @@ function Workspace() {
               columns={maintenanceColumnChooser.visibleColumns}
               onReorderColumn={maintenanceColumnChooser.reorderColumn}
               emptyMessage="No maintenance records yet. Completed maintenance work will appear here."
-              rows={visibleRows}
+              rows={maintenanceVehicleRows}
               compact
-              onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`)}
+              onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}?vehicle=1`)}
             />
         </ModulePanel>
         <FormModal open={!!editTarget?.__verify} title={`Verify Maintenance #${recordNumber(editTarget, 'maintenance_id')}`} onClose={() => setEditTarget(null)}>
@@ -5176,13 +4994,12 @@ function ProfileMenu({ user, open, setOpen, onLogout, onOpenSettings }) {
   );
 }
 
-function profileFields(existingPhotoUrl) {
+function profileFields() {
   return [
     { label: 'Full Name', name: 'name', required: true, type: 'text' },
     { label: 'Email', name: 'email', required: true, type: 'text', placeholder: 'name@barangay.gov' },
     { label: 'Phone', name: 'phone', type: 'tel', maxLength: 11, pattern: '09[0-9]{9}', placeholder: '09XXXXXXXXX', title: 'Phone must be 11 digits starting with 09' },
     { label: 'Address', name: 'address', type: 'text' },
-    { label: 'Profile Photo', name: 'photo', accept: 'image/*', type: 'file', existingUrl: existingPhotoUrl },
   ];
 }
 
@@ -5190,8 +5007,35 @@ function profileFields(existingPhotoUrl) {
  * an Admin uses on Update User) plus a separate password-change section, since
  * that one stays gated behind old-password verification. */
 function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
+  const photoInputRef = useRef(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const initials = user.name ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : 'U';
   const roles = (Array.isArray(user.roles) && user.roles.length) ? user.roles : [user.role].filter(Boolean);
+
+  const updatePhoto = async (event) => {
+    const photo = event.target.files?.[0];
+    event.target.value = '';
+    if (!photo || uploadingPhoto) return;
+    if (!photo.type.startsWith('image/')) {
+      setNotice({ type: 'error', text: 'Choose an image for your profile photo.' });
+      return;
+    }
+    if (photo.size > 4 * 1024 * 1024) {
+      setNotice({ type: 'error', text: 'Profile photos must be 4 MB or smaller.' });
+      return;
+    }
+    setUploadingPhoto(true);
+    setNotice(null);
+    try {
+      await sendPayload('put', '/profile', { photo });
+      await refreshUser();
+      setNotice({ type: 'success', text: 'Profile photo updated.' });
+    } catch (error) {
+      showError(error, setNotice);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const updateDetails = async (payload) => {
     setNotice(null);
@@ -5218,10 +5062,24 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
     <ModulePanel description="Your account details and password.">
       <div className="profile-page">
         <div className="profile-hero">
-          <div className="profile-hero-avatar">
-            {user.photo_url
-              ? <img src={resolvePhotoUrl(user.photo_url)} alt={user.name} />
-              : <span>{initials}</span>}
+          <div className="profile-avatar-control" aria-busy={uploadingPhoto}>
+            <div className="profile-hero-avatar">
+              {user.photo_url
+                ? <img src={resolvePhotoUrl(user.photo_url)} alt={user.name} />
+                : <span>{initials}</span>}
+            </div>
+            <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={updatePhoto} disabled={uploadingPhoto} aria-label="Choose profile photo" />
+            <button
+              className="profile-photo-button"
+              type="button"
+              aria-label={uploadingPhoto ? 'Uploading profile photo' : 'Change profile photo'}
+              title={uploadingPhoto ? 'Uploading profile photo...' : 'Change profile photo'}
+              disabled={uploadingPhoto}
+              onClick={() => photoInputRef.current?.click()}
+            >
+              <Icon name="camera" size={17} />
+            </button>
+            {uploadingPhoto && <span className="profile-photo-progress" role="status">Uploading...</span>}
           </div>
           <div className="profile-hero-info">
             <h2>{user.name}</h2>
@@ -5235,8 +5093,8 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
           <p className="muted profile-section-hint">Keep your contact information up to date.</p>
           <div className="form-grid-2col user-form-grid">
             <SmartForm
-              fields={profileFields(user.photo_url)}
-              initialValues={user}
+              fields={profileFields()}
+              initialValues={{ name: user.name, email: user.email, phone: user.phone, address: user.address }}
               key="profile-details"
               onCancel={onBack}
               onSubmit={updateDetails}
@@ -5506,36 +5364,15 @@ function SelectOrOtherField({ field, value, onChange }) {
   );
 }
 
-// Phase B4 — catalog.create (fault categories / maintenance types) is
-// Admin-only now. Everywhere a Custodian or Maintenance Personnel used to
-// get CreatableSelect's "+ Add New" affordance on one of these two
-// catalogs, this replaces it: a plain select with "Other" pinned as the
-// last option. Picking it reveals a free-text note below — `value` stays a
-// real catalog name, or the literal CATALOG_OTHER_VALUE sentinel; `note` is
-// kept separate, meant to be folded into whichever description/notes field
-// the parent form already sends to the backend (rather than trying to mint
-// a new catalog value, which only Admin can still do). Admin keeps the
-// original CreatableSelect wherever this replaces it — this component is
-// never shown to Admin.
+// User-managed catalogs also support a note when Other is selected.
 const CATALOG_OTHER_VALUE = 'Other';
 
-function CatalogOrOtherField({ value, onChange, note, onNoteChange, options = [], required = false, placeholder = 'Select an option', otherNoteLabel = 'Describe the issue/type' }) {
+function CatalogOrOtherField({ value, onChange, note, onNoteChange, options = [], required = false, placeholder = 'Select an option', otherNoteLabel = 'Describe the issue/type', catalogEndpoint = '/maintenance-types', newItemLabel = 'repair type' }) {
   const isOther = value === CATALOG_OTHER_VALUE;
   return (
     <>
-      <SearchableSelect
-        required={required}
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((option, i) => (
-          <option key={option?.value != null ? option.value : `opt-${i}`} value={option?.value ?? option ?? ''}>
-            {option?.label ?? option}
-          </option>
-        ))}
-        <option value={CATALOG_OTHER_VALUE}>Other</option>
-      </SearchableSelect>
+      <CreatableSelect required={required} value={value ?? ''} onChange={onChange}
+        options={options} placeholder={placeholder} catalogEndpoint={catalogEndpoint} newItemLabel={newItemLabel} />
       {isOther && (
         <input
           type="text"
@@ -5704,13 +5541,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
             .join('\n');
         }
       });
-      // Phase B4 — a 'catalog-or-other' field's typed note never has a
-      // backend column of its own (Custodian/Maintenance Personnel can no
-      // longer mint a new catalog value, so "Other" + a note stands in for
-      // it). Runs as its own pass, after the 'list' join above, so folding
-      // the note into another field this same form owns (e.g. a textarea
-      // that started as an array) appends to the already-joined string, not
-      // the raw array.
+      // Fold an optional Other note into the existing description field.
       fields.forEach((field) => {
         if (field.type !== 'catalog-or-other') return;
         const noteKey = `${field.name}__other_note`;
@@ -5863,6 +5694,8 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
           ) : null}
           {field.type === 'catalog-or-other' ? (
             <CatalogOrOtherField
+              catalogEndpoint="/fault-categories"
+              newItemLabel="issue type"
               value={values[field.name] ?? ''}
               onChange={(v) => {
                 const next = { ...values, [field.name]: v };
@@ -7594,12 +7427,6 @@ function conditionFields(lookups) {
 function issueFields(lookups, editTarget, role, onAddVehicle) {
   if (editTarget?.issue_report_id && role === 'Custodian') {
     return [
-      // Phase B4 — catalog.create (fault categories) is Admin-only now, so
-      // a Custodian no longer gets the "+ Add New" affordance here — "Other"
-      // + a note (folded into Remarks on submit, see SmartForm's handleSubmit)
-      // stands in for it instead. Remarks itself isn't its own visible field
-      // any more (it duplicated Issues Found) — otherNoteField still targets
-      // it so an "Other" note has somewhere to land.
       { label: 'Issue Type', name: 'issue_type', options: lookups.issue_types, required: true, type: 'catalog-or-other', otherNoteField: 'remarks', otherNoteLabel: 'Describe the issue/type' },
       // A list, not one paragraph — each row becomes its own line-item, so
       // when this report is later converted into a Pre-Diagnosed ticket,
@@ -7625,9 +7452,6 @@ function issueFields(lookups, editTarget, role, onAddVehicle) {
       // Custodian) — anyone else would just hit a permissions wall.
       action: onAddVehicle ? { label: '+ Add Vehicle', onClick: onAddVehicle } : undefined,
     },
-    // Phase B4 — Admin keeps the original "+ Add New" catalog affordance;
-    // anyone else (a Custodian filing a fresh report) gets "Other" + a note
-    // folded into Remarks instead, same as the edit-own path above.
     (role === 'Admin'
       ? { label: 'Issue Type', name: 'issue_type', options: lookups.issue_types, required: true, type: 'creatable-select', newItemLabel: 'issue type', catalogEndpoint: '/fault-categories' }
       : { label: 'Issue Type', name: 'issue_type', options: lookups.issue_types, required: true, type: 'catalog-or-other', otherNoteField: 'remarks', otherNoteLabel: 'Describe the issue/type' }),
@@ -8429,11 +8253,28 @@ function locationColumns(currentUser, onViewOnMap, onEdit) {
   ];
 }
 
-function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onAddCondition) {
+function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onAddCondition, onViewTicket) {
   const columns = [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'condition_check_id') ?? '-' },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { key: 'result', label: 'Result', className: 'cell-center', render: (row) => <StatusBadge value={row.condition_result} /> },
+    { key: 'result', label: 'Current Condition', className: 'cell-center', render: (row) => (
+      <div>
+        <StatusBadge value={currentCondition(row)} />
+        {row.resulting_ticket && row.condition_result !== currentCondition(row) && (
+          <small className="muted" style={{ display: 'block', marginTop: 4 }}>Recorded: {row.condition_result}</small>
+        )}
+      </div>
+    ) },
+    { key: 'ticket', label: 'Linked Ticket', render: (row) => row.resulting_ticket ? (
+      <div>
+        {onViewTicket ? (
+          <button type="button" className="cell-link" onClick={() => onViewTicket(row.resulting_ticket)}>
+            Ticket #{ticketNumber(row.resulting_ticket)}
+          </button>
+        ) : <span>Ticket #{ticketNumber(row.resulting_ticket)}</span>}
+        <div style={{ marginTop: 4 }}><TicketStatusBadge value={row.resulting_ticket.status} /></div>
+      </div>
+    ) : <span className="muted">-</span> },
     { key: 'checked_by', label: 'Checked By', className: 'cell-center', render: (row) => <UserAvatarName user={row.checked_by} /> },
     { key: 'date', label: 'Date', className: 'cell-center', render: (row) => <DateBadge value={row.created_at} /> },
     { key: 'time', label: 'Time', className: 'cell-center', render: (row) => formatTime(row.created_at) },
@@ -8464,16 +8305,11 @@ function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromConditio
           </div>
         ) : (
         <div className="row-actions condition-record-actions">
-          {/* #2 — Admin can turn a problem-finding condition check (Needs
-              Repair OR Needs Inspection — anything short of Good) into a
-              pre-diagnosed ticket in one click, instead of someone having to
-              redescribe the same problem in a separate Issue Report just to
-              get it in front of Admin. Reserved as its own slot (hidden, not
-              removed) even when this row doesn't qualify — otherwise
-              Edit/Delete shift left on every row that lacks it, and the
-              column stops lining up. */}
+          {row.resulting_ticket && onViewTicket && (
+            <button className="btn-view-action icon-btn" onClick={() => onViewTicket(row.resulting_ticket)} type="button" title="View linked ticket" aria-label="View linked ticket"><Icon name="ticket" size={14} /></button>
+          )}
           {(canDo(user, 'ticket.create') || canDo(user, 'ticket.propose')) && onCreateTicketFromCondition && (
-            row.condition_result !== 'Good' ? (
+            !row.resulting_ticket_id && !row.resulting_ticket && currentCondition(row) !== 'Good' ? (
               <button className="btn-confirm-action icon-btn" onClick={() => onCreateTicketFromCondition(row)} type="button" title={canDo(user, 'ticket.propose') ? 'Propose Ticket' : 'Create Ticket'} aria-label={canDo(user, 'ticket.propose') ? 'Propose Ticket' : 'Create Ticket'}><Icon name="ticket" size={14} /></button>
             ) : (
               <button
@@ -9116,84 +8952,19 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
   return columns;
 }
 
-function maintenanceColumns(role, setEditTarget, updateRecord, onViewRecord, user) {
-  const columns = [
-    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'maintenance_id') },
-    { key: 'vehicle', label: 'Vehicle', width: '15%', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { key: 'plate', label: 'Plate Number', width: '8%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
-    {
-      key: 'type',
-      label: 'Type',
-      width: '9%',
-      render: (row) => (
-        <div>
-          <div>{row.maintenance_type}</div>
-          {row.is_external && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-              <span className="badge" style={{ fontSize: '0.68rem', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd' }} title={row.external_vendor || 'External shop'}>External</span>
-              {row.receipt_url && (
-                <a href={resolvePhotoUrl(row.receipt_url)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0369a1', textDecoration: 'underline' }}>
-                  Receipt
-                </a>
-              )}
-            </div>
-          )}
-          {row.source_vehicle && (
-            <div style={{ marginTop: 2 }}>
-              <span className="badge" style={{ fontSize: '0.68rem', background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }} title={`${row.part_name ? `${row.part_name} c` : 'C'}annibalized from ${row.source_vehicle.vehicle_name}`}>
-                ⚙ {row.part_name ? `${row.part_name} ` : ''}from {row.source_vehicle.vehicle_name}
-              </span>
-            </div>
-          )}
-        </div>
-      ),
-    },
-    { key: 'source', label: 'Source', width: '9%', className: 'cell-center', render: (row) => <StatusBadge value={row.source} /> },
-    { key: 'personnel', label: 'Personnel', width: '10%', className: 'cell-center', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
-    { key: 'progress', label: 'Progress', width: '8%', className: 'cell-center', render: (row) => <StatusBadge value={row.progress_status} /> },
-    { key: 'verification', label: 'Verification', width: '8%', className: 'cell-center', render: (row) => row.verification_result ? <StatusBadge value={row.verification_result} /> : '-' },
-    { key: 'date_started', label: 'Date Started', width: '5%', className: 'cell-center', render: (row) => <DateBadge value={row.date_started} /> },
-    { key: 'date_completed', label: 'Date Completed', width: '5%', className: 'cell-center', render: (row) => <DateBadge value={row.date_completed} /> },
-    {
-      key: 'action',
-      label: 'Action',
-      width: '8%',
-      locked: true,
-      className: 'cell-center',
-      render: (row) => (
-        <div className="row-actions" style={{ flexWrap: 'wrap' }}>
-          {onViewRecord && (
-            <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View" aria-label="View"><Icon name="eye" size={14} /></button>
-          )}
-          {/* Phase B4 — record.edit narrowed to Admin only (Custodian is
-              read-only here now; Maintenance Personnel never reaches this
-              module at all — see modulesByRole). */}
-          {canDo(user, 'record.edit') && (
-            <button className="btn-edit-action icon-btn" onClick={() => setEditTarget(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
-          )}
-          {canDo(user, 'record.confirm') && row.verification_result === 'Passed' && row.progress_status !== 'Completed' ? (
-            <>
-              <button className="btn-confirm-action icon-btn" onClick={() => updateRecord(`/maintenance-records/${row.maintenance_id}/confirm`, { confirmed: true }, 'Maintenance confirmed.')} type="button" title="Confirm" aria-label="Confirm"><Icon name="checkCircle" size={14} /></button>
-              <button className="btn-reopen-action icon-btn" onClick={() => updateRecord(`/maintenance-records/${row.maintenance_id}/confirm`, { confirmed: false }, 'Maintenance reopened.')} type="button" title="Reopen" aria-label="Reopen"><Icon name="undo" size={14} /></button>
-            </>
-          ) : null}
-          {/* Unified into the one ledger every role sees — no more separate
-              "Needs Verification" tab/page. Same self-verification guard the
-              old maintenanceStatusColumns had: a Custodian who performed this
-              repair themselves can't be the one who verifies it. */}
-          {canDo(user, 'record.verify') && row.progress_status === 'For Verification' && (
-            String(row.maintenance_personnel_id) === String(user?.id) ? (
-              <span className="muted" title="You performed this repair — another Custodian needs to verify it.">Awaiting another Custodian</span>
-            ) : (
-              <button className="btn-edit-action icon-btn" onClick={() => setEditTarget({ ...row, __verify: true })} type="button" title="Verify" aria-label="Verify"><Icon name="checkCircle" size={14} /></button>
-            )
-          )}
-        </div>
-      ),
-    },
+function maintenanceColumns(onViewRecord) {
+  const distinct = (row, field) => [...new Set(row.repair_records.map((repair) => repair[field]).filter(Boolean))];
+  return [
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
+    { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'repairs', label: 'Repair Entries', className: 'cell-center', render: (row) => row.repair_records.length },
+    { key: 'type', label: 'Repair Types', render: (row) => distinct(row, 'maintenance_type').join(', ') || '-' },
+    { key: 'progress', label: 'Progress', render: (row) => <div className="ticket-preview-badges">{distinct(row, 'progress_status').map((status) => <StatusBadge key={status} value={status} />)}</div> },
+    { key: 'date_completed', label: 'Latest Completion', className: 'cell-center', render: (row) => <DateBadge value={row.repair_records.map((repair) => repair.date_completed).filter(Boolean).sort().at(-1)} /> },
+    { key: 'action', label: 'Action', locked: true, className: 'cell-center', render: (row) => (
+      <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View repairs" aria-label="View repairs"><Icon name="eye" size={14} /></button>
+    ) },
   ];
-
-  return columns;
 }
 
 const MAINTENANCE_PROGRESS_STAGES = ['Assigned', 'Under Repair', 'For Verification', 'Completed'];
@@ -9410,17 +9181,28 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
 // URL's :id, show a loader/not-found state, then hand the fetched record to
 // the read-rich detail view above. Re-fetches after Confirm/Reopen so the
 // progress trail reflects the new state without a manual refresh.
-function MaintenanceRecordProfilePage({ maintenanceId, onConfirm, onReopen, onDecisionClose, canManage }) {
+function MaintenanceRecordProfilePage({ maintenanceId, groupByVehicle = false, onConfirm, onReopen, onDecisionClose, onVerify, canManage }) {
+  const { user } = useContext(AuthContext);
+  const [verifying, setVerifying] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [vehicleRecords, setVehicleRecords] = useState([]);
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   const loadRecord = useCallback(() => {
-    api.get(`/maintenance-records/${maintenanceId}`)
-      .then((response) => { setRecord(response.data); setNotFound(false); })
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false));
-  }, [maintenanceId]);
+    return api.get(`/maintenance-records/${maintenanceId}`).then(async (response) => {
+      if (groupByVehicle) {
+        // Use the authorized ledger so a mechanic only sees their own work.
+        const ledger = await api.get('/maintenance-records');
+        const vehicleId = response.data.vehicle_id ?? response.data.vehicle?.vehicle_id;
+        setVehicleRecords(vehicleId == null ? [response.data] : ledger.data.filter((repair) => String(repair.vehicle_id ?? repair.vehicle?.vehicle_id) === String(vehicleId)));
+      }
+      setRecord(response.data);
+      setNotFound(false);
+    }).catch(() => setNotFound(true)).finally(() => setLoading(false));
+  }, [maintenanceId, groupByVehicle]);
 
   useEffect(() => { loadRecord(); }, [loadRecord]);
 
@@ -9428,6 +9210,43 @@ function MaintenanceRecordProfilePage({ maintenanceId, onConfirm, onReopen, onDe
 
   if (notFound || !record) {
     return <ModulePanel description="This maintenance record could not be found — it may have been deleted." />;
+  }
+
+  if (groupByVehicle) {
+    return (
+      <ModulePanel description="Maintenance work for this vehicle">
+        <div className="panel-header-bar">
+          <VehicleCell vehicle={record.vehicle} />
+          <span>{vehicleRecords.length} repair {vehicleRecords.length === 1 ? 'entry' : 'entries'}</span>
+        </div>
+        <FormModal open={Boolean(verifying)} title="Verify repair" onClose={() => setVerifying(null)}>
+          <SmartForm fields={verificationFields} onCancel={() => setVerifying(null)} onSubmit={async (payload) => {
+            await onVerify(verifying, payload);
+            setVerifying(null);
+            await loadRecord();
+          }} submitLabel="Submit Verification" title="" />
+        </FormModal>
+        {vehicleRecords.map((repair) => (
+          <details key={repair.maintenance_id} className="veh-card" open>
+            <summary className="veh-card-head">
+              <strong>{repair.problem_reason || repair.maintenance_type || 'Repair entry'}</strong>
+              <StatusBadge value={repair.progress_status} />
+            </summary>
+            {canDo(user, 'record.edit') && <button className="ghost-button" type="button" onClick={() => navigate(location.pathname.replace(/\/maintenance\/[^/]+$/, `/maintenance/${repair.maintenance_id}/edit`))}>Edit this repair</button>}
+            {onVerify && canDo(user, 'record.verify') && repair.progress_status === 'For Verification' && String(repair.maintenance_personnel_id) !== String(user?.id) && (
+              <button className="primary-button" type="button" onClick={() => setVerifying(repair)}>Verify this repair</button>
+            )}
+            <MaintenanceRecordDetail
+              record={repair}
+              canManage={canManage}
+              onConfirm={(r) => onConfirm(r).then(loadRecord)}
+              onReopen={(r) => onReopen(r).then(loadRecord)}
+              onDecisionClose={(r, payload) => onDecisionClose(r, payload).then(loadRecord)}
+            />
+          </details>
+        ))}
+      </ModulePanel>
+    );
   }
 
   return (
@@ -13128,8 +12947,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
                   <span className="muted">{[selectedVehicle.brand, selectedVehicle.model].filter(Boolean).join(' ') || 'Make and model not recorded'}</span>
                   <span className="muted">{selectedVehicle.current_location ?? 'No location on file'}</span>
                   <span className="ticket-preview-badges">
-                    {selectedVehicle.status && <span className="ticket-preview-badge">{selectedVehicle.status}</span>}
-                    {selectedVehicle.condition && <span className="ticket-preview-badge">{selectedVehicle.condition}</span>}
+                    {selectedVehicle.status && <StatusBadge value={selectedVehicle.status} />}
+                    {selectedVehicle.condition && <StatusBadge value={selectedVehicle.condition} />}
                   </span>
                 </div>
               </> : <div className="ticket-preview-empty-copy"><Icon name="vehicle" size={24} /><strong>Vehicle summary</strong><span>Select a vehicle to preview its details.</span></div>}
@@ -13172,28 +12991,6 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
 
         <div className="ticket-work-column">
         {reportLookupFailed && <p role="alert" className="notice warning">Existing issue reports could not be checked. Your draft is kept; reselect the vehicle to retry before submitting.</p>}
-        {!isExternal && (
-        <section className="veh-card veh-card-form ticket-issue-section">
-          <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
-          <div className="ticket-issue-fields">
-            {/* No Ticket Title field — it's automatic (vehicle + repair type),
-                and the Admin folds the ticket's own # into it on approval. */}
-            <label>
-              <span>Details <span className="required-asterisk">*</span></span>
-              <textarea required rows={3} value={liveValues.ticket_description ?? ''} onChange={(e) => setField('ticket_description', e.target.value)} />
-            </label>
-            <label className="ticket-priority-field">
-              <span>Priority <span className="required-asterisk">*</span></span>
-              <SearchableSelect required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
-                <option value="">Select an option</option>
-                {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-              </SearchableSelect>
-            </label>
-          </div>
-        </section>
-        )}
-
-
         {isExternal && (
         <section className="veh-card veh-card-form">
           <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>External Shop Details</h4></div>
@@ -13243,7 +13040,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
                 />
               </label>
               <label>
-                <span>Estimated Cost (PHP)</span>
+                <span>Estimated Cost (PHP) <small>(optional)</small></span>
                 <input type="number" min="0" placeholder="e.g. 5000" value={liveValues.external_estimated_cost ?? ''} onChange={(e) => setField('external_estimated_cost', e.target.value)} />
               </label>
               <label className="ticket-external-priority">
@@ -13280,6 +13077,28 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
           </div>
         </section>
         )}
+
+        {!isExternal && (
+        <section className="veh-card veh-card-form ticket-issue-section">
+          <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
+          <div className="ticket-issue-fields">
+            {/* No Ticket Title field — it's automatic (vehicle + repair type),
+                and the Admin folds the ticket's own # into it on approval. */}
+            <label>
+              <span>Details <span className="required-asterisk">*</span></span>
+              <textarea required rows={3} value={liveValues.ticket_description ?? ''} onChange={(e) => setField('ticket_description', e.target.value)} />
+            </label>
+            <label className="ticket-priority-field">
+              <span>Priority <span className="required-asterisk">*</span></span>
+              <SearchableSelect required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
+                <option value="">Select an option</option>
+                {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </SearchableSelect>
+            </label>
+          </div>
+        </section>
+        )}
+
 
         </div>
 
@@ -14579,10 +14398,6 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
   const [resultValue, setResultValue] = useState(ticket?.inspection_result ?? '');
   const [notes, setNotes] = useState(ticket?.inspection_notes ?? '');
   const [category, setCategory] = useState('');
-  // Phase B4 — catalog.create (maintenance types) is Admin-only now, and
-  // this Inspect page is Custodian-only (ticket.inspect), so the Category
-  // picker below no longer offers CreatableSelect's "+ Add New" — "Other"
-  // + this note stands in for it, folded into Inspection Notes on submit.
   const [categoryOtherNote, setCategoryOtherNote] = useState('');
   // Root causes are "added" one at a time (type on the left, Add commits it)
   // rather than every row being a permanently-editable input — the
@@ -15723,17 +15538,11 @@ function ticketTableColumns(unreadByTicket = {}, onViewTicket) {
       },
     },
     { key: 'vehicle_image', label: 'Vehicle Image', className: 'cell-center', render: (r) => <PhotoCell alt={r.vehicle?.vehicle_name ?? 'Vehicle'} url={r.vehicle?.photo_url} /> },
-    { key: 'progress', label: 'Sub-Issues', render: (r) => {
-      const total = r.progress?.total ?? r.sub_issues?.length ?? 0;
-      const done = r.progress?.done ?? (r.sub_issues ?? []).filter((s) => s.status === 'Done').length;
-      const percent = total > 0 ? Math.min(100, Math.max(0, Math.round(done / total * 100))) : 0;
-      return <div className="ticket-list-progress"><small className="muted">{done}/{total} sub-issues done</small><div><progress value={percent} max="100" aria-label="Sub-issues completed" /><small className="muted">{percent}%</small></div></div>;
-    } },
     { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <span><TicketStatusPill status={r.status} />{r.correction_requested_at && <small className="muted"> Corrections requested</small>}</span> },
     { key: 'personnel', label: 'Assigned To', render: (r) => <TicketPersonnelAvatars ticket={r} /> },
     { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <button type="button" className="cell-link" aria-label={`View ticket ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name="ticket" size={18} /></button> },
   ];
-  const order = ['ticket_id', 'created', 'vehicle_image', 'title', 'priority', 'status', 'personnel', 'progress', 'next_step', 'actions'];
+  const order = ['ticket_id', 'created', 'vehicle_image', 'title', 'priority', 'status', 'personnel', 'next_step', 'actions'];
   return order.map((key) => columns.find((column) => column.key === key));
 }
 
@@ -15974,13 +15783,10 @@ function CreatableSelect({
   // selects in the add-new modal, merged into the POST body.
   extraFields = [],
 }) {
-  // Only an Admin can remove a catalog entry — it's a shared list everyone
-  // adds to, so letting any role delete from it risks a Custodian or
-  // Mechanic wiping out something others rely on. The backend enforces
-  // this too; hiding the button for non-Admins just avoids a guaranteed
-  // 403 on click.
   const { user: currentUser } = useContext(AuthContext);
-  const canDeleteCatalogItems = hasRole(currentUser, 'Admin');
+  const abilityPrefix = ({ '/categories': 'vehicle_type', '/hubs': 'hub' })[catalogEndpoint] ?? 'catalog';
+  const canEditCatalogItems = canDo(currentUser, abilityPrefix + '.edit');
+  const canDeleteCatalogItems = canDo(currentUser, abilityPrefix + '.delete');
   const createAbility = ({
     '/categories': 'vehicle_type.create',
     '/hubs': 'hub.create',
@@ -15991,7 +15797,7 @@ function CreatableSelect({
   // row keyed by idField/nameField (e.g. vehicle categories) — either way,
   // normalized to one {id, name} shape everything below works with.
   const normalizeItem = useCallback((raw) => (
-    typeof raw === 'string' ? { id: null, name: raw } : { id: raw[idField] ?? null, name: raw[nameField] }
+    typeof raw === 'string' ? { id: null, name: raw } : { ...raw, id: raw[idField] ?? null, name: raw[nameField] }
   ), [idField, nameField]);
   const [open, setOpen] = useState(false);
   // Only holds what's being typed while the panel is open — closed, the
@@ -16043,6 +15849,27 @@ function CreatableSelect({
     return () => { cancelled = true; };
   }, [catalogEndpoint, normalizeItem]);
 
+  // Refresh sibling dropdowns after catalog changes.
+  useEffect(() => {
+    if (!catalogEndpoint) return;
+    const refresh = ({ detail }) => {
+      if (detail.endpoint !== catalogEndpoint) return;
+      setCatalogItems((items) => {
+        const remaining = items.filter((item) => item.id !== detail.item.id && item.name !== detail.previous?.name && item.name !== detail.item.name);
+        return (detail.deleted ? remaining : [...remaining, detail.item]).sort((a, b) => a.name.localeCompare(b.name));
+      });
+      const selected = valueIsId ? String(value) === String(detail.item.id) : value === (detail.previous?.name ?? detail.item.name);
+      if (selected && detail.deleted) onChange(valueIsId ? null : '');
+      else if (selected && detail.previous && !valueIsId) onChange(detail.item.name);
+    };
+    window.addEventListener('vms:catalog-change', refresh);
+    return () => window.removeEventListener('vms:catalog-change', refresh);
+  }, [catalogEndpoint, value, valueIsId, onChange]);
+
+  const announceChange = (item, previous = null, deleted = false) => {
+    window.dispatchEvent(new CustomEvent('vms:catalog-change', { detail: { endpoint: catalogEndpoint, item, previous, deleted } }));
+  };
+
   useEffect(() => {
     if (!addedMessage) return;
     const timer = setTimeout(() => setAddedMessage(null), 2600);
@@ -16089,15 +15916,11 @@ function CreatableSelect({
     setAddModalError(null);
     setOpen(false);
   };
-  // Renaming an existing entry — same little modal as add, pre-filled with
-  // its current name. Only offered where add/delete already are (a real
-  // catalogEndpoint, Admin), since it's the same permission story: a shared
-  // list everyone reads, only Admin should be able to change it out from
-  // under everyone else.
+  // Preserve additional fields when renaming a catalog entry.
   const openEditModal = (item) => {
     setEditTarget(item);
     setAddModalName(item.name);
-    setAddModalExtra(Object.fromEntries(extraFields.map((f) => [f.name, f.default ?? ''])));
+    setAddModalExtra(Object.fromEntries(extraFields.map((f) => [f.name, item[f.name] ?? f.default ?? ''])));
     setAddModalError(null);
     setOpen(false);
   };
@@ -16125,6 +15948,7 @@ function CreatableSelect({
       try {
         const res = await api.put(`${catalogEndpoint}/${editTarget.id}`, { [nameField]: val, ...addModalExtra });
         const updated = normalizeItem(res.data);
+        announceChange(updated, editTarget);
         setCatalogItems((items) => items
           .map((i) => (i.id === editTarget.id ? updated : i))
           .sort((a, b) => a.name.localeCompare(b.name)));
@@ -16158,6 +15982,7 @@ function CreatableSelect({
     try {
       const res = await api.post(catalogEndpoint, { [nameField]: val, ...addModalExtra });
       const created = normalizeItem(res.data);
+      announceChange(created);
       setCatalogItems((items) => {
         const withoutDupe = items.filter((i) => i.name.toLowerCase() !== created.name.toLowerCase());
         return [...withoutDupe, created].sort((a, b) => a.name.localeCompare(b.name));
@@ -16181,6 +16006,7 @@ function CreatableSelect({
     setDeleteBusy(true);
     try {
       await api.delete(`${catalogEndpoint}/${deleteTarget.id}`);
+      announceChange(deleteTarget, null, true);
       setCatalogItems((items) => items.filter((i) => i.id !== deleteTarget.id));
       const wasSelected = valueIsId ? String(value) === String(deleteTarget.id) : value === deleteTarget.name;
       if (wasSelected) onChange(valueIsId ? null : '');
@@ -16225,16 +16051,9 @@ function CreatableSelect({
                 <button type="button" className="creatable-select-option" onClick={() => pick(o)}>
                   {o.name}
                 </button>
-                {catalogEndpoint && canDeleteCatalogItems && o.id != null && (
+                {catalogEndpoint && (canEditCatalogItems || canDeleteCatalogItems) && o.id != null && (
                   <>
-                    {/* Simple name-only catalogs (Fault Category, Maintenance
-                        Type) only — a catalog with extraFields (e.g. Vehicle
-                        Type's Domain) isn't safe to rename here, since this
-                        list never carries those extra values to prefill the
-                        modal with; blindly submitting would reset them to
-                        whatever the field's bare default is. Those already
-                        have their own proper edit page elsewhere. */}
-                    {extraFields.length === 0 && (
+                    {canEditCatalogItems && (
                       <button
                         type="button"
                         className="creatable-select-option-edit"
@@ -16245,15 +16064,15 @@ function CreatableSelect({
                         <Icon name="edit" size={12} />
                       </button>
                     )}
-                    <button
+                    {canDeleteCatalogItems && <button
                       type="button"
                       className="creatable-select-option-delete"
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(o); setDeleteError(null); }}
                       title={`Remove ${o.name}`}
                       aria-label={`Remove ${o.name}`}
                     >
-                      <Icon name="close" size={12} />
-                    </button>
+                      <Icon name="trash" size={12} />
+                    </button>}
                   </>
                 )}
               </div>
@@ -16323,7 +16142,7 @@ function CreatableSelect({
             <div className="confirm-dialog-copy">
               <p className="eyebrow">Confirmation</p>
               <h3>Remove {newItemTitle}</h3>
-              <p>Remove "{deleteTarget.name}" from this list? It disappears for everyone — existing tickets/records that already used it keep showing it, but it won't be selectable anymore.</p>
+              <p>Remove "{deleteTarget.name}" from this list? It disappears for everyone — options used by saved records cannot be removed.</p>
               {deleteError && <p style={{ color: '#b91c1c', fontWeight: 600, marginTop: 8 }}>{deleteError}</p>}
             </div>
             <div className="confirm-dialog-actions">
@@ -16760,120 +16579,6 @@ function VehicleImportModal({ open, onClose, onImported }) {
     </FormModal>
   );
 }
-// Fleet Readiness & Criticality Watch — every operational vehicle that isn't
-// verified ready, Critical first. Shown on the lean (Custodian/Maintenance)
-// dashboard; Admin sees the same list inside Risk & Readiness Watch.
-function CriticalityWatchCard({ items, onNavigate, basePath }) {
-  const shown = items ?? [];
-
-  return (
-    <section className="panel col-span-7 dashboard-lean-panel">
-      <div className="panel-header-bar">
-        <h3><Icon name="alert" size={16} /> Readiness &amp; Criticality Watch</h3>
-        {items?.length > 0 && <span className="area-chart-tag">{items.length} not ready</span>}
-      </div>
-      {!items?.length ? (
-        <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> No readiness risks right now.</p>
-      ) : (
-        <>
-          <div className="risk-watch-col">
-            {shown.map((r) => (
-              <button
-                key={r.vehicle_id}
-                type="button"
-                className={`risk-watch-item risk-watch-item-clickable${r.criticality === 'Critical' ? ' is-critical' : ''}`}
-                onClick={() => onNavigate(`${basePath}/vehicles/${r.vehicle_id}`)}
-              >
-                <span className={`risk-watch-item-dot${r.criticality === 'Critical' ? ' is-critical' : ''}`} />
-                <div className="risk-watch-item-body">
-                  <span className="risk-watch-item-top">
-                    <span className="risk-watch-item-title">{r.vehicle_name}</span>
-                    <span className={`risk-watch-tag${r.criticality === 'Critical' ? ' is-critical' : ''}`}>{r.criticality.toUpperCase()}</span>
-                  </span>
-                  <span className="risk-watch-item-sub">{r.category ?? '—'} · {r.reason}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-          {items.length > shown.length && (
-            <p className="muted" style={{ margin: '8px 0 0', fontSize: '0.78rem' }}>+ {items.length - shown.length} more — open Vehicles to see them all.</p>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-// Fleet Capability & Readiness Impact — final feature pass (2026-10-10).
-// The per-vehicle Criticality Watch above, rolled up to "which emergency
-// capability is at risk?" per Vehicle Type. Entirely server-computed
-// (capability_impact on the dashboard response) — this component only
-// renders what it's given, it never recomputes readiness/criticality itself.
-const CAPABILITY_STATE_LABEL = { LIMITED: 'Limited', AT_RISK: 'At Risk', NO_COVERAGE: 'No Coverage' };
-
-function CapabilityImpactCard({ items, onNavigate, basePath }) {
-  return (
-    <section className="panel col-span-7 dashboard-lean-panel">
-      <div className="panel-header-bar">
-        <h3><Icon name="alert" size={16} /> Fleet Capability Impact</h3>
-        {items?.length > 0 && <span className="area-chart-tag">{items.length} type{items.length === 1 ? '' : 's'} affected</span>}
-      </div>
-      {!items?.length ? (
-        <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> No capability gaps right now.</p>
-      ) : (
-      <div className="risk-watch-col">
-        {items.map((row) => (
-          <div key={row.category} className={`risk-watch-item${row.criticality === 'Critical' ? ' is-critical' : ''}`} style={{ cursor: 'default', alignItems: 'flex-start' }}>
-            <span className={`risk-watch-item-dot${row.criticality === 'Critical' ? ' is-critical' : ''}`} />
-            <div className="risk-watch-item-body">
-              <span className="risk-watch-item-top">
-                <span className="risk-watch-item-title">{row.category}</span>
-                <span className={`risk-watch-tag${row.coverage_state === 'NO_COVERAGE' ? ' is-critical' : ''}`}>
-                  {CAPABILITY_STATE_LABEL[row.coverage_state] ?? row.coverage_state}
-                </span>
-              </span>
-              <span className="risk-watch-item-sub">
-                {row.ready}/{row.total} ready · {row.criticality} · {row.primary_reason ?? 'Based on current records.'}
-              </span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, alignItems: 'center' }}>
-                {row.affected_vehicles.slice(0, 4).map((v) => (
-                  <span key={v.vehicle_id} style={{ display: 'inline-flex', borderRadius: 0, overflow: 'hidden', border: '1px solid #cbd5e1' }}>
-                    <button
-                      type="button"
-                      className="btn-view-action"
-                      style={{ fontSize: '0.74rem', padding: '3px 9px', border: 'none', borderRadius: 0 }}
-                      onClick={() => onNavigate(`${basePath}/vehicles/${v.vehicle_id}`)}
-                    >
-                      {v.vehicle_name}
-                    </button>
-                    {v.active_ticket_id && (
-                      <button
-                        type="button"
-                        className="btn-view-action"
-                        title={`Open Ticket #${v.active_ticket_id}`}
-                        style={{ fontSize: '0.74rem', padding: '3px 9px', border: 'none', borderLeft: '1px solid #cbd5e1', borderRadius: 0, background: '#eff6ff' }}
-                        onClick={() => onNavigate(`${basePath}/tickets/${v.active_ticket_id}`)}
-                      >
-                        Ticket
-                      </button>
-                    )}
-                  </span>
-                ))}
-                {row.affected_vehicles.length > 4 && (
-                  <span className="muted" style={{ fontSize: '0.72rem' }}>+ {row.affected_vehicles.length - 4} more</span>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-      )}
-    </section>
-  );
-}
-
-
-
 function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport, onAdd, addLabel = "Add", onImport, columnChooser }) {
   return (
     <div className="local-search-bar">
