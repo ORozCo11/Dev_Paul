@@ -80,9 +80,8 @@ function AccountCascade({ user, rootToken }) {
 <div className="account-selector">      <SearchableSelect aria-label="Impersonation user" placeholder={loading ? 'Loading accounts...' : !selected.barangay ? 'Select a barangay first' : !barangayRows.length ? 'No accounts available' : 'Select an account'} menuClassName="account-user-menu" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
         {barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name}</option>)}
       </SearchableSelect></div>
-      <button className="account-impersonate-button" type="button" disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}>{busy ? 'Logging in...' : 'Impersonate'}</button>
+      <button className="account-impersonate-button" type="button" aria-busy={busy} disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}><span aria-live="polite">{busy ? 'Logging in...' : 'Impersonate'}</span></button>
     </div>
-    {busy && <span className="account-cascade-status" role="status">Logging in...</span>}
     {error && <span className="account-cascade-error" role="alert">{error} {!accounts.length && <button type="button" onClick={() => { setLoading(true); setError(''); setRetry((value) => value + 1); }}>Retry</button>}</span>}
   </div>;
 }
