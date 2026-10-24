@@ -407,3 +407,14 @@ Impersonation captures initiating identity/session/reason on activity entries. O
 - Super Admin registration-code lookup/regeneration is independent of boundary availability or pending review. Issuing a code neither approves an applicant nor verifies a boundary.
 
 Verification: 541 backend tests passed (2,736 assertions); concern-location migration up/down/up passed on fresh and existing database copies, preserving existing vehicle counts. Browser checks cover public concern submission, registration back/progress, personal-address help, consent-gated suggestions/manual entry, complete first-Admin submission, role switching and date controls across themes/screen sizes.
+
+
+### Ticket list and handover updates (2026-10-25)
+
+The ticket table heading is **Title**. Priority filters retain two independently reachable handles even when narrowed to one value. Ticket age is highlighted in amber, the header priority/stage badges have matching dimensions, and Overview shows vehicle availability/condition without repeating repair progress.
+
+The archive icon now **hides a ticket from the current user's main list**. Use **Hidden** to open or restore it. This preference is stored per account and does not hide the ticket from teammates, cancel/close work, change vehicle indicators, remove assignments, suppress notifications or exclude it from operational totals. Hidden-list rows obey the same search/status/date filters. Closed-ticket Archives remain separate. Apply `2026_10_25_000003_create_hidden_ticket_lists.php` after pulling; it adds only visibility preferences. Rolling it back removes preferences while preserving tickets and repair evidence.
+
+Mechanic reassignment creates a timeline entry for each affected work item, including its title, previous and new mechanic, reason, actor and time. Other work items and repair evidence remain intact. Reassignment-dialog Cancel and Submit buttons have matching rounded corners.
+
+Verification: 543 backend tests passed (2,765 assertions), 26 frontend tests passed, lint and production build passed. Browser checks covered repeated priority dragging/keyboard input, hide/details/restore, badge dimensions, timeline visibility and matching dialog corners. Visibility migration up/down/up passed on fresh and existing database copies with vehicles, tickets and sub-issues unchanged.
