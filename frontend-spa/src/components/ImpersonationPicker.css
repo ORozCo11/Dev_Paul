@@ -38,8 +38,7 @@
 @media(max-width:800px) { .account-cascade .searchable-select > input[role="combobox"] { height:40px; min-height:40px; } }
 
 
-.account-selector { display:flex; flex-direction:column; gap:2px; min-width:0; }
-.account-selector > span { color:#475569; font-size:10px; line-height:1.2; }
+.account-selector { display:flex; min-width:0; }
 .account-user-control { align-items:flex-end; }
 .account-cascade { align-items:flex-end; }
 @media(max-width:800px) { .account-user-control > .account-selector { flex:1; } .account-user-control .account-selector .searchable-select { width:100%; } }

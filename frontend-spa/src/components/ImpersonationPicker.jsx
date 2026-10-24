@@ -67,19 +67,19 @@ function AccountCascade({ user, rootToken }) {
     }
   };
   return <div className="account-cascade" aria-label="Impersonation account controls">
-<label className="account-selector"><span>Province</span>    <SearchableSelect aria-label="Impersonation province" placeholder={loading ? 'Loading provinces...' : 'Province'} value={selected.province} disabled={loading || busy} onChange={(event) => setSelection({ province: event.target.value, city: '', barangay: '', user: '' })}>
+<div className="account-selector">    <SearchableSelect aria-label="Impersonation province" placeholder={loading ? 'Loading provinces...' : 'Province'} value={selected.province} disabled={loading || busy} onChange={(event) => setSelection({ province: event.target.value, city: '', barangay: '', user: '' })}>
       {options(provinceAccounts, 'province_id', 'province_name', '').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-    </SearchableSelect></label>
-<label className="account-selector"><span>City</span>    <SearchableSelect aria-label="Impersonation city or municipality" placeholder="City / Municipality" value={selected.city} disabled={loading || busy || !selected.province} onChange={(event) => setSelection({ ...selected, city: event.target.value, barangay: '', user: '' })}>
+    </SearchableSelect></div>
+<div className="account-selector">    <SearchableSelect aria-label="Impersonation city or municipality" placeholder="City / Municipality" value={selected.city} disabled={loading || busy || !selected.province} onChange={(event) => setSelection({ ...selected, city: event.target.value, barangay: '', user: '' })}>
       {options(provinceRows, 'city_id', 'city_name', 'No city / municipality').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-    </SearchableSelect></label>
-<label className="account-selector"><span>Barangay</span>    <SearchableSelect aria-label="Impersonation barangay" placeholder="Barangay" value={selected.barangay} disabled={loading || busy || !selected.city} onChange={(event) => setSelection({ ...selected, barangay: event.target.value, user: '' })}>
+    </SearchableSelect></div>
+<div className="account-selector">    <SearchableSelect aria-label="Impersonation barangay" placeholder="Barangay" value={selected.barangay} disabled={loading || busy || !selected.city} onChange={(event) => setSelection({ ...selected, barangay: event.target.value, user: '' })}>
       {options(cityRows, 'barangay_id', 'barangay_name', 'No barangay').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-    </SearchableSelect></label>
+    </SearchableSelect></div>
     <div className="account-user-control">
-<label className="account-selector"><span>User</span>      <SearchableSelect aria-label="Impersonation user" placeholder={loading ? 'Loading accounts...' : !selected.barangay ? 'Select a barangay first' : !barangayRows.length ? 'No accounts available' : 'Select an account'} menuClassName="account-user-menu" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
+<div className="account-selector">      <SearchableSelect aria-label="Impersonation user" placeholder={loading ? 'Loading accounts...' : !selected.barangay ? 'Select a barangay first' : !barangayRows.length ? 'No accounts available' : 'Select an account'} menuClassName="account-user-menu" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
         {barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name}</option>)}
-      </SearchableSelect></label>
+      </SearchableSelect></div>
       <button className="account-impersonate-button" type="button" disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}>{busy ? 'Logging in...' : 'Impersonate'}</button>
     </div>
     {busy && <span className="account-cascade-status" role="status">Logging in...</span>}
