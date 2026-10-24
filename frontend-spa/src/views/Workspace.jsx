@@ -13270,7 +13270,6 @@ function TicketModule({
         <div className="panel-header-bar" style={{ marginBottom: '8px' }}>
           <h3>{showHidden ? 'Hidden Tickets' : 'All Tickets'} <span className="count-badge">{listTickets.length}</span></h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <button type="button" className="archive-btn" aria-pressed={showHidden} onClick={() => setShowHidden((current) => !current)}>{showHidden ? 'Back to tickets' : `Hidden (${hiddenCount})`}</button>
             {onViewArchives && (
               <button type="button" className="archive-btn" onClick={onViewArchives} title="Closed and deleted tickets">
                 <span className="archive-btn-icon"><Icon name="archive" size={14} /></span>
@@ -13304,6 +13303,11 @@ function TicketModule({
               />
             )
         }
+        {(showHidden || hiddenCount > 0) && (
+          <button type="button" className="cell-link" onClick={() => setShowHidden((current) => !current)}>
+            {showHidden ? 'Back to tickets' : `Manage tickets removed from my list (${hiddenCount})`}
+          </button>
+        )}
       </section>
     </div>
   );
