@@ -25,6 +25,7 @@ import { geoJsonToPolygons, isPointWithinBoundaryPolygons, isLocationPointAllowe
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 import { calendarDate } from '../utils/adminDate';
 import { groupMaintenanceByVehicle } from '../utils/maintenanceGroups';
+import { currentCondition } from '../utils/conditionMonitoring';
 
 const FormNoticeContext = createContext(null);
 // Lets shared table cells (VehicleCell, UserAvatarName) open the right detail
@@ -1884,7 +1885,7 @@ function Workspace() {
       // Location records nest the vehicle status under `.vehicle`, not on
       // the row itself (the row IS a location snapshot, not a vehicle).
       result = result.filter((row) => filterStatus.includes(row.vehicle?.status));
-    } else if (filterStatus.length) {
+    } else if (filterStatus.length && activeModule !== 'conditions') {
       result = result.filter((row) => {
         const statusVal = row.status ?? row.progress_status ?? row.final_status;
         return filterStatus.includes(statusVal);
@@ -2002,7 +2003,7 @@ function Workspace() {
 
       if (filterStatus.length) {
         result = result.filter((row) => {
-          return filterStatus.includes(row.condition_result);
+          return filterStatus.includes(currentCondition(row));
         });
       }
 
@@ -2042,6 +2043,12 @@ function Workspace() {
       const query = searchQuery.toLowerCase().trim();
       result = result.filter((row) => {
         const matchesField = (val) => val && String(val).toLowerCase().includes(query);
+
+        if (activeModule === 'conditions' && (
+          matchesField(currentCondition(row)) || matchesField(row.resulting_ticket?.status)
+          || matchesField(row.resulting_ticket?.ticket_title)
+          || (row.resulting_ticket && matchesField(ticketNumber(row.resulting_ticket)))
+        )) return true;
 
         if (
           matchesField(row.vehicle_name) ||
@@ -2188,7 +2195,7 @@ function Workspace() {
   }, [records.vehicles]);
 
   const conditionStats = useMemo(
-    () => countByValues(conditionRowsForStats, (r) => r.condition_result, ['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']),
+    () => countByValues(conditionRowsForStats, currentCondition, ['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']),
     [conditionRowsForStats]
   );
 
@@ -2359,6 +2366,7 @@ function Workspace() {
         setPrefilledConditionVehicleId(row.vehicle_id);
         navigate(`${roleRoutes[user.role]}/conditions/new`);
       } : undefined,
+      openTicketProfile,
     ))();
   const conditionColumnDefsWithNote = useMemo(() => withNoteColumn(conditionColumnDefs, (r) => r.observations, { label: 'Observations' }), [conditionColumnDefs]);
   const conditionColumnChooser = useColumnChooser('vms_condition_columns', conditionColumnDefsWithNote);
@@ -8441,11 +8449,28 @@ function locationColumns(currentUser, onViewOnMap, onEdit) {
   ];
 }
 
-function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onAddCondition) {
+function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromCondition, onSuggestScheduleFromCondition, onAddCondition, onViewTicket) {
   const columns = [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'condition_check_id') ?? '-' },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { key: 'result', label: 'Result', className: 'cell-center', render: (row) => <StatusBadge value={row.condition_result} /> },
+    { key: 'result', label: 'Current Condition', className: 'cell-center', render: (row) => (
+      <div>
+        <StatusBadge value={currentCondition(row)} />
+        {row.resulting_ticket && row.condition_result !== currentCondition(row) && (
+          <small className="muted" style={{ display: 'block', marginTop: 4 }}>Recorded: {row.condition_result}</small>
+        )}
+      </div>
+    ) },
+    { key: 'ticket', label: 'Linked Ticket', render: (row) => row.resulting_ticket ? (
+      <div>
+        {onViewTicket ? (
+          <button type="button" className="cell-link" onClick={() => onViewTicket(row.resulting_ticket)}>
+            Ticket #{ticketNumber(row.resulting_ticket)}
+          </button>
+        ) : <span>Ticket #{ticketNumber(row.resulting_ticket)}</span>}
+        <div style={{ marginTop: 4 }}><TicketStatusBadge value={row.resulting_ticket.status} /></div>
+      </div>
+    ) : <span className="muted">-</span> },
     { key: 'checked_by', label: 'Checked By', className: 'cell-center', render: (row) => <UserAvatarName user={row.checked_by} /> },
     { key: 'date', label: 'Date', className: 'cell-center', render: (row) => <DateBadge value={row.created_at} /> },
     { key: 'time', label: 'Time', className: 'cell-center', render: (row) => formatTime(row.created_at) },
@@ -8476,16 +8501,11 @@ function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromConditio
           </div>
         ) : (
         <div className="row-actions condition-record-actions">
-          {/* #2 — Admin can turn a problem-finding condition check (Needs
-              Repair OR Needs Inspection — anything short of Good) into a
-              pre-diagnosed ticket in one click, instead of someone having to
-              redescribe the same problem in a separate Issue Report just to
-              get it in front of Admin. Reserved as its own slot (hidden, not
-              removed) even when this row doesn't qualify — otherwise
-              Edit/Delete shift left on every row that lacks it, and the
-              column stops lining up. */}
+          {row.resulting_ticket && onViewTicket && (
+            <button className="btn-view-action icon-btn" onClick={() => onViewTicket(row.resulting_ticket)} type="button" title="View linked ticket" aria-label="View linked ticket"><Icon name="ticket" size={14} /></button>
+          )}
           {(canDo(user, 'ticket.create') || canDo(user, 'ticket.propose')) && onCreateTicketFromCondition && (
-            row.condition_result !== 'Good' ? (
+            !row.resulting_ticket_id && !row.resulting_ticket && currentCondition(row) !== 'Good' ? (
               <button className="btn-confirm-action icon-btn" onClick={() => onCreateTicketFromCondition(row)} type="button" title={canDo(user, 'ticket.propose') ? 'Propose Ticket' : 'Create Ticket'} aria-label={canDo(user, 'ticket.propose') ? 'Propose Ticket' : 'Create Ticket'}><Icon name="ticket" size={14} /></button>
             ) : (
               <button
