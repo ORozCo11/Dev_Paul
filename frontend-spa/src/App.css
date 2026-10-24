@@ -16615,3 +16615,6 @@ html .date-filter-input:focus-within { outline:2px solid #60a5fa; outline-offset
 html .date-filter-input > .date-filter-input-hidden { position:absolute; width:0; min-width:0; max-width:0; height:0; min-height:0; max-height:0; padding:0; border:0; opacity:0; pointer-events:none; }
 html .date-filter-input > .date-filter-input-icon { flex:0 0 32px; padding:0; box-sizing:border-box; }
 @media(max-width:767px) { html .date-filter-input > .date-filter-input-icon { flex-basis:44px; } }
+
+html[data-theme="dark"] .date-filter-input { background:var(--surface-2, #17191e); color:var(--text, #e2e8f0); border-color:var(--control-border, #475569); }
+html[data-theme="dark"] .date-filter-input-icon { color:#93c5fd; border-left-color:var(--control-border, #475569); }
