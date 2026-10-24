@@ -11628,11 +11628,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                     <StatusBadge value={ticket.vehicle?.status} />
                     <StatusBadge value={ticket.vehicle?.condition} />
                   </div>
-                  <div className="ticket-overview-progress ticket-overview-status-text" aria-label="Current repair progress">
-                    <span>Repair progress</span>
-                    <TicketStatusBadge value={ticket.status} />
-                    <TicketStageBadge ticket={ticket} variant="pill" />
-                  </div>
+
                 </div>
               </div>
             </section>
