@@ -3330,15 +3330,6 @@ function Workspace() {
             />
           }
         >
-          {(hasRole(user, 'Admin') || hasRole(user, 'Custodian')) && dashboard && (
-            <details className="fleet-context-details">
-              <summary>Fleet readiness and capability details</summary>
-              <div className="fleet-context-grid">
-                <CriticalityWatchCard items={dashboard.criticality_watch ?? []} onNavigate={navigate} basePath={roleRoutes[user.role]} />
-                <CapabilityImpactCard items={dashboard.capability_impact ?? []} onNavigate={navigate} basePath={roleRoutes[user.role]} />
-              </div>
-            </details>
-          )}
           <div className="panel-header-bar">
             <h3>All Vehicles <span className="count-badge">{visibleRows.length}</span></h3>
             <LocalSearchInput
@@ -16725,120 +16716,6 @@ function VehicleImportModal({ open, onClose, onImported }) {
     </FormModal>
   );
 }
-// Fleet Readiness & Criticality Watch — every operational vehicle that isn't
-// verified ready, Critical first. Shown on the lean (Custodian/Maintenance)
-// dashboard; Admin sees the same list inside Risk & Readiness Watch.
-function CriticalityWatchCard({ items, onNavigate, basePath }) {
-  const shown = items ?? [];
-
-  return (
-    <section className="panel col-span-7 dashboard-lean-panel">
-      <div className="panel-header-bar">
-        <h3><Icon name="alert" size={16} /> Readiness &amp; Criticality Watch</h3>
-        {items?.length > 0 && <span className="area-chart-tag">{items.length} not ready</span>}
-      </div>
-      {!items?.length ? (
-        <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> No readiness risks right now.</p>
-      ) : (
-        <>
-          <div className="risk-watch-col">
-            {shown.map((r) => (
-              <button
-                key={r.vehicle_id}
-                type="button"
-                className={`risk-watch-item risk-watch-item-clickable${r.criticality === 'Critical' ? ' is-critical' : ''}`}
-                onClick={() => onNavigate(`${basePath}/vehicles/${r.vehicle_id}`)}
-              >
-                <span className={`risk-watch-item-dot${r.criticality === 'Critical' ? ' is-critical' : ''}`} />
-                <div className="risk-watch-item-body">
-                  <span className="risk-watch-item-top">
-                    <span className="risk-watch-item-title">{r.vehicle_name}</span>
-                    <span className={`risk-watch-tag${r.criticality === 'Critical' ? ' is-critical' : ''}`}>{r.criticality.toUpperCase()}</span>
-                  </span>
-                  <span className="risk-watch-item-sub">{r.category ?? '—'} · {r.reason}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-          {items.length > shown.length && (
-            <p className="muted" style={{ margin: '8px 0 0', fontSize: '0.78rem' }}>+ {items.length - shown.length} more — open Vehicles to see them all.</p>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-// Fleet Capability & Readiness Impact — final feature pass (2026-10-10).
-// The per-vehicle Criticality Watch above, rolled up to "which emergency
-// capability is at risk?" per Vehicle Type. Entirely server-computed
-// (capability_impact on the dashboard response) — this component only
-// renders what it's given, it never recomputes readiness/criticality itself.
-const CAPABILITY_STATE_LABEL = { LIMITED: 'Limited', AT_RISK: 'At Risk', NO_COVERAGE: 'No Coverage' };
-
-function CapabilityImpactCard({ items, onNavigate, basePath }) {
-  return (
-    <section className="panel col-span-7 dashboard-lean-panel">
-      <div className="panel-header-bar">
-        <h3><Icon name="alert" size={16} /> Fleet Capability Impact</h3>
-        {items?.length > 0 && <span className="area-chart-tag">{items.length} type{items.length === 1 ? '' : 's'} affected</span>}
-      </div>
-      {!items?.length ? (
-        <p className="action-queue-clear"><Icon name="checkCircle" size={16} /> No capability gaps right now.</p>
-      ) : (
-      <div className="risk-watch-col">
-        {items.map((row) => (
-          <div key={row.category} className={`risk-watch-item${row.criticality === 'Critical' ? ' is-critical' : ''}`} style={{ cursor: 'default', alignItems: 'flex-start' }}>
-            <span className={`risk-watch-item-dot${row.criticality === 'Critical' ? ' is-critical' : ''}`} />
-            <div className="risk-watch-item-body">
-              <span className="risk-watch-item-top">
-                <span className="risk-watch-item-title">{row.category}</span>
-                <span className={`risk-watch-tag${row.coverage_state === 'NO_COVERAGE' ? ' is-critical' : ''}`}>
-                  {CAPABILITY_STATE_LABEL[row.coverage_state] ?? row.coverage_state}
-                </span>
-              </span>
-              <span className="risk-watch-item-sub">
-                {row.ready}/{row.total} ready · {row.criticality} · {row.primary_reason ?? 'Based on current records.'}
-              </span>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6, alignItems: 'center' }}>
-                {row.affected_vehicles.slice(0, 4).map((v) => (
-                  <span key={v.vehicle_id} style={{ display: 'inline-flex', borderRadius: 0, overflow: 'hidden', border: '1px solid #cbd5e1' }}>
-                    <button
-                      type="button"
-                      className="btn-view-action"
-                      style={{ fontSize: '0.74rem', padding: '3px 9px', border: 'none', borderRadius: 0 }}
-                      onClick={() => onNavigate(`${basePath}/vehicles/${v.vehicle_id}`)}
-                    >
-                      {v.vehicle_name}
-                    </button>
-                    {v.active_ticket_id && (
-                      <button
-                        type="button"
-                        className="btn-view-action"
-                        title={`Open Ticket #${v.active_ticket_id}`}
-                        style={{ fontSize: '0.74rem', padding: '3px 9px', border: 'none', borderLeft: '1px solid #cbd5e1', borderRadius: 0, background: '#eff6ff' }}
-                        onClick={() => onNavigate(`${basePath}/tickets/${v.active_ticket_id}`)}
-                      >
-                        Ticket
-                      </button>
-                    )}
-                  </span>
-                ))}
-                {row.affected_vehicles.length > 4 && (
-                  <span className="muted" style={{ fontSize: '0.72rem' }}>+ {row.affected_vehicles.length - 4} more</span>
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-      )}
-    </section>
-  );
-}
-
-
-
 function LocalSearchInput({ value, onChange, placeholder = "Search...", onExport, onAdd, addLabel = "Add", onImport, columnChooser }) {
   return (
     <div className="local-search-bar">
