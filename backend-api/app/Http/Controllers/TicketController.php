@@ -958,6 +958,7 @@ class TicketController extends Controller
             }
             foreach ($selected as $item) {
                 $previous = $item->assigned_mechanic_id;
+                $previousName = $previous ? (User::find($previous)?->name ?? 'Previous mechanic') : 'Unassigned';
                 $this->workEvent($item, $request, 'Reassigned', ['previous_mechanic_id' => $previous, 'new_mechanic_id' => $mechanic->id, 'reason' => $data['reassign_reason']]);
                 $item->update([
                     'assigned_mechanic_id' => $mechanic->id,
@@ -966,10 +967,10 @@ class TicketController extends Controller
                 ]);
                 $this->notifyUser($mechanic->id, 'Work Order Reassigned to You', "Ticket #{$ticket->display_number}: {$item->title}. Reason: {$data['reassign_reason']}", 'work_order_assigned', $ticket->ticket_id);
                 if ($previous) $this->notifyUser($previous, 'Work Order Reassigned', "Ticket #{$ticket->display_number}: {$item->title} was reassigned to {$mechanic->name}.", 'work_order_reassigned', $ticket->ticket_id);
+                $this->log($request, 'Ticket Mechanic Reassigned', "Ticket #{$ticket->display_number}: {$item->title} reassigned from {$previousName} to {$mechanic->name}. Reason: {$data['reassign_reason']}", $ticket->ticket_id);
             }
             $ids = $ticket->subIssues()->pluck('assigned_mechanic_id')->filter()->unique();
             $ticket->update(['assigned_mechanic_id' => $ids->count() === 1 ? $ids->first() : null]);
-            $this->log($request, 'Ticket Mechanic Reassigned', "Ticket #{$ticket->display_number}: work items {$selected->pluck('sub_issue_id')->implode(', ')} reassigned to {$mechanic->name}. Reason: {$data['reassign_reason']}", $ticket->ticket_id);
             return response()->json($ticket->fresh($this->eagerLoads()));
         });
     }

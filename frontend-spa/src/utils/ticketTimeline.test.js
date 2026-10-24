@@ -39,3 +39,11 @@ test('historical references display the local ticket number without changing oth
   ] });
   assert.equal(event.details, 'Ticket #2 created; see Ticket #150.');
 });
+
+test('reassignment timeline preserves work item, both mechanics, reason and accountable actor', () => {
+  const details = 'Ticket #1: Pump seal reassigned from Mechanic A to Mechanic B. Reason: Original mechanic is on leave.';
+  const [event] = ticketTimeline({ ticket_id: 1, activity: [{ log_id: 9, action: 'Ticket Mechanic Reassigned', details, created_at: '2026-10-25T03:00:00Z', user: { name: 'Admin' } }] });
+  assert.equal(event.details, details);
+  assert.equal(event.by.name, 'Admin');
+  assert.equal(event.label, 'Ticket Mechanic Reassigned');
+});

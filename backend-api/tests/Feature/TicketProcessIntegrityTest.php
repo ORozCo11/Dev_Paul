@@ -189,6 +189,22 @@ class TicketProcessIntegrityTest extends TestCase
         $this->assertSame(['Repair Submitted','Returned for Rework','Repair Submitted','Verification Approved'],array_column($events,'event'));
     }
 
+    public function test_reassignment_timeline_identifies_work_previous_new_mechanic_and_reason(): void
+    {
+        $t=$this->active('in_house',true);
+        $reason='Original mechanic is on leave; hand over unfinished brake repair.';
+        $this->putJson("/api/tickets/{$t->ticket_id}/assign-mechanic", ['assigned_mechanic_id'=>$this->other->id,'sub_issue_ids'=>[$t->subIssues[0]->sub_issue_id],'reassign_reason'=>$reason])->assertOk();
+        $activity=collect($this->getJson("/api/tickets/{$t->ticket_id}")->assertOk()->json('activity'))->where('action','Ticket Mechanic Reassigned')->sole();
+        $this->assertStringContainsString($t->subIssues[0]->title,$activity['details']);
+        $this->assertStringContainsString('from '.$this->mechanic->name.' to '.$this->other->name,$activity['details']);
+        $this->assertStringContainsString($reason,$activity['details']);
+        $this->assertSame($this->admin->id,$activity['user']['id']);
+        $this->assertNotEmpty($activity['created_at']);
+        $this->assertSame('Under Repair',$t->subIssues[0]->fresh()->status);
+        $this->assertSame($this->other->id,$t->subIssues[1]->fresh()->assigned_mechanic_id);
+        $this->assertContains($this->mechanic->id,$t->subIssues[0]->fresh()->prior_mechanic_ids);
+    }
+
     public function test_mechanic_cannot_switch_to_external_or_record_shop_logistics(): void
     {
         $t=$this->active();
