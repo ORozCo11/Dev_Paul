@@ -37,5 +37,9 @@
 .account-cascade .searchable-select > input[role="combobox"] { height:34px; min-height:34px; border:1px solid #cbd9ed; border-radius:6px; background:#fff; color:#1e3a5f; font:inherit; font-size:12px; padding:5px 26px 5px 8px; }
 @media(max-width:800px) { .account-cascade .searchable-select > input[role="combobox"] { height:40px; min-height:40px; } }
 
-.account-reason-input { width:180px; min-width:0; min-height:34px; padding:5px 8px; border:1px solid #cbd9ed; border-radius:6px; font:inherit; font-size:12px; }
-@media(max-width:800px) { .account-reason-input { grid-column:1 / -1; width:100%; min-height:40px; } }
+
+.account-selector { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.account-selector > span { color:#475569; font-size:10px; line-height:1.2; }
+.account-user-control { align-items:flex-end; }
+.account-cascade { align-items:flex-end; }
+@media(max-width:800px) { .account-user-control > .account-selector { flex:1; } .account-user-control .account-selector .searchable-select { width:100%; } }
