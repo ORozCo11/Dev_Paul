@@ -24,6 +24,7 @@ import { AuthContext } from '../context/AuthContextObject';
 import { geoJsonToPolygons, isPointWithinBoundaryPolygons, isLocationPointAllowed } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 import { calendarDate } from '../utils/adminDate';
+import { groupMaintenanceByVehicle } from '../utils/maintenanceGroups';
 
 const FormNoticeContext = createContext(null);
 // Lets shared table cells (VehicleCell, UserAvatarName) open the right detail
@@ -2191,10 +2192,15 @@ function Workspace() {
     [conditionRowsForStats]
   );
 
-  const maintenanceRecordStats = useMemo(
-    () => countByValues(records.maintenance ?? [], (r) => r.progress_status, ['Assigned', 'Under Repair', 'For Verification', 'Completed']),
-    [records.maintenance]
-  );
+  const maintenanceVehicleRows = useMemo(() => groupMaintenanceByVehicle(visibleRows), [visibleRows]);
+  const maintenanceRecordStats = useMemo(() => {
+    const vehicles = groupMaintenanceByVehicle(records.maintenance ?? []);
+    const counts = { total: vehicles.length };
+    for (const status of ['Assigned', 'Under Repair', 'For Verification', 'Completed']) {
+      counts[status] = vehicles.filter((vehicle) => vehicle.repair_records.some((repair) => repair.progress_status === status)).length;
+    }
+    return counts;
+  }, [records.maintenance]);
 
   const userStats = useMemo(
     () => countByValues(records.users ?? [], (r) => r.role, ['Admin', 'Custodian', 'Maintenance Personnel']),
@@ -2360,8 +2366,8 @@ function Workspace() {
   const issueColumnDefs = (() => issueColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}/edit`), handleCreateTicketFromIssue, setUserInfoTarget, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`), deleteRecord, user, openTicketProfile, setDismissIssueTarget))();
   const issueColumnChooser = useColumnChooser('vms_issue_columns', issueColumnDefs);
 
-  const maintenanceColumnDefs = (() => maintenanceColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}/edit`), updateRecord, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`), user))();
-  const maintenanceColumnDefsWithNote = useMemo(() => withNoteColumn(maintenanceColumnDefs, (r) => r.problem_reason, { label: 'Problem' }), [maintenanceColumnDefs]);
+  const maintenanceColumnDefs = maintenanceColumns((row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}?vehicle=1`));
+  const maintenanceColumnDefsWithNote = useMemo(() => withNoteColumn(maintenanceColumnDefs, (r) => r.repair_records.map((repair) => repair.problem_reason).filter(Boolean).join('; '), { label: 'Problems' }), [maintenanceColumnDefs]);
   const maintenanceColumnChooser = useColumnChooser('vms_maintenance_columns', maintenanceColumnDefsWithNote);
 
   const maintenanceStatusColumnDefs = useMemo(
@@ -2907,6 +2913,8 @@ function Workspace() {
           ) : maintenanceProfileId ? (
             <MaintenanceRecordProfilePage key={maintenanceProfileId}
               maintenanceId={maintenanceProfileId}
+              groupByVehicle={new URLSearchParams(location.search).get('vehicle') === '1'}
+              onVerify={(r, payload) => updateRecord(`/maintenance-records/${r.maintenance_id}/verify`, payload, 'Verification submitted.')}
               canManage={hasRole(user, 'Admin')}
               onConfirm={(r) => updateRecord(`/maintenance-records/${r.maintenance_id}/confirm`, { confirmed: true }, 'Maintenance confirmed.')}
               onReopen={(r) => updateRecord(`/maintenance-records/${r.maintenance_id}/confirm`, { confirmed: false }, 'Maintenance reopened.')}
@@ -3870,10 +3878,10 @@ function Workspace() {
         <>
         <ModulePanel
           tabBar={maintenanceLedgerTabBar}
-          description="Directly log external, historical, or third-party vehicle maintenance records and expenses without running the full ticket workflow."
+          description="One row per vehicle. Open a vehicle to see its repaired sub-issues and other maintenance work."
           statCards={
             <ModuleStatCards
-              totalLabel="Total Records"
+              totalLabel="Total Vehicles"
               total={maintenanceRecordStats.total}
               cards={MAINTENANCE_RECORD_STAT_CARDS}
               counts={maintenanceRecordStats}
@@ -3923,7 +3931,7 @@ function Workspace() {
           }
         >
           <div className="panel-header-bar">
-            <h3>Maintenance Records <span className="count-badge">{visibleRows.length}</span></h3>
+            <h3>Maintenance Records <span className="count-badge">{maintenanceVehicleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {/* No general "+ Add" entry point here anymore — repair data
                   is now entered through Tickets; Maintenance Schedule
@@ -3940,9 +3948,9 @@ function Workspace() {
               columns={maintenanceColumnChooser.visibleColumns}
               onReorderColumn={maintenanceColumnChooser.reorderColumn}
               emptyMessage="No maintenance records yet. Completed maintenance work will appear here."
-              rows={visibleRows}
+              rows={maintenanceVehicleRows}
               compact
-              onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`)}
+              onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}?vehicle=1`)}
             />
         </ModulePanel>
         <FormModal open={!!editTarget?.__verify} title={`Verify Maintenance #${recordNumber(editTarget, 'maintenance_id')}`} onClose={() => setEditTarget(null)}>
@@ -9080,84 +9088,19 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
   return columns;
 }
 
-function maintenanceColumns(role, setEditTarget, updateRecord, onViewRecord, user) {
-  const columns = [
-    { key: 'id', label: 'ID', width: '4%', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'maintenance_id') },
-    { key: 'vehicle', label: 'Vehicle', width: '15%', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { key: 'plate', label: 'Plate Number', width: '8%', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
-    {
-      key: 'type',
-      label: 'Type',
-      width: '9%',
-      render: (row) => (
-        <div>
-          <div>{row.maintenance_type}</div>
-          {row.is_external && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
-              <span className="badge" style={{ fontSize: '0.68rem', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd' }} title={row.external_vendor || 'External shop'}>External</span>
-              {row.receipt_url && (
-                <a href={resolvePhotoUrl(row.receipt_url)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0369a1', textDecoration: 'underline' }}>
-                  Receipt
-                </a>
-              )}
-            </div>
-          )}
-          {row.source_vehicle && (
-            <div style={{ marginTop: 2 }}>
-              <span className="badge" style={{ fontSize: '0.68rem', background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }} title={`${row.part_name ? `${row.part_name} c` : 'C'}annibalized from ${row.source_vehicle.vehicle_name}`}>
-                ⚙ {row.part_name ? `${row.part_name} ` : ''}from {row.source_vehicle.vehicle_name}
-              </span>
-            </div>
-          )}
-        </div>
-      ),
-    },
-    { key: 'source', label: 'Source', width: '9%', className: 'cell-center', render: (row) => <StatusBadge value={row.source} /> },
-    { key: 'personnel', label: 'Personnel', width: '10%', className: 'cell-center', render: (row) => <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? '-'} /> },
-    { key: 'progress', label: 'Progress', width: '8%', className: 'cell-center', render: (row) => <StatusBadge value={row.progress_status} /> },
-    { key: 'verification', label: 'Verification', width: '8%', className: 'cell-center', render: (row) => row.verification_result ? <StatusBadge value={row.verification_result} /> : '-' },
-    { key: 'date_started', label: 'Date Started', width: '5%', className: 'cell-center', render: (row) => <DateBadge value={row.date_started} /> },
-    { key: 'date_completed', label: 'Date Completed', width: '5%', className: 'cell-center', render: (row) => <DateBadge value={row.date_completed} /> },
-    {
-      key: 'action',
-      label: 'Action',
-      width: '8%',
-      locked: true,
-      className: 'cell-center',
-      render: (row) => (
-        <div className="row-actions" style={{ flexWrap: 'wrap' }}>
-          {onViewRecord && (
-            <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View" aria-label="View"><Icon name="eye" size={14} /></button>
-          )}
-          {/* Phase B4 — record.edit narrowed to Admin only (Custodian is
-              read-only here now; Maintenance Personnel never reaches this
-              module at all — see modulesByRole). */}
-          {canDo(user, 'record.edit') && (
-            <button className="btn-edit-action icon-btn" onClick={() => setEditTarget(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
-          )}
-          {canDo(user, 'record.confirm') && row.verification_result === 'Passed' && row.progress_status !== 'Completed' ? (
-            <>
-              <button className="btn-confirm-action icon-btn" onClick={() => updateRecord(`/maintenance-records/${row.maintenance_id}/confirm`, { confirmed: true }, 'Maintenance confirmed.')} type="button" title="Confirm" aria-label="Confirm"><Icon name="checkCircle" size={14} /></button>
-              <button className="btn-reopen-action icon-btn" onClick={() => updateRecord(`/maintenance-records/${row.maintenance_id}/confirm`, { confirmed: false }, 'Maintenance reopened.')} type="button" title="Reopen" aria-label="Reopen"><Icon name="undo" size={14} /></button>
-            </>
-          ) : null}
-          {/* Unified into the one ledger every role sees — no more separate
-              "Needs Verification" tab/page. Same self-verification guard the
-              old maintenanceStatusColumns had: a Custodian who performed this
-              repair themselves can't be the one who verifies it. */}
-          {canDo(user, 'record.verify') && row.progress_status === 'For Verification' && (
-            String(row.maintenance_personnel_id) === String(user?.id) ? (
-              <span className="muted" title="You performed this repair — another Custodian needs to verify it.">Awaiting another Custodian</span>
-            ) : (
-              <button className="btn-edit-action icon-btn" onClick={() => setEditTarget({ ...row, __verify: true })} type="button" title="Verify" aria-label="Verify"><Icon name="checkCircle" size={14} /></button>
-            )
-          )}
-        </div>
-      ),
-    },
+function maintenanceColumns(onViewRecord) {
+  const distinct = (row, field) => [...new Set(row.repair_records.map((repair) => repair[field]).filter(Boolean))];
+  return [
+    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
+    { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'repairs', label: 'Repair Entries', className: 'cell-center', render: (row) => row.repair_records.length },
+    { key: 'type', label: 'Repair Types', render: (row) => distinct(row, 'maintenance_type').join(', ') || '-' },
+    { key: 'progress', label: 'Progress', render: (row) => <div className="ticket-preview-badges">{distinct(row, 'progress_status').map((status) => <StatusBadge key={status} value={status} />)}</div> },
+    { key: 'date_completed', label: 'Latest Completion', className: 'cell-center', render: (row) => <DateBadge value={row.repair_records.map((repair) => repair.date_completed).filter(Boolean).sort().at(-1)} /> },
+    { key: 'action', label: 'Action', locked: true, className: 'cell-center', render: (row) => (
+      <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View repairs" aria-label="View repairs"><Icon name="eye" size={14} /></button>
+    ) },
   ];
-
-  return columns;
 }
 
 const MAINTENANCE_PROGRESS_STAGES = ['Assigned', 'Under Repair', 'For Verification', 'Completed'];
@@ -9374,17 +9317,28 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
 // URL's :id, show a loader/not-found state, then hand the fetched record to
 // the read-rich detail view above. Re-fetches after Confirm/Reopen so the
 // progress trail reflects the new state without a manual refresh.
-function MaintenanceRecordProfilePage({ maintenanceId, onConfirm, onReopen, onDecisionClose, canManage }) {
+function MaintenanceRecordProfilePage({ maintenanceId, groupByVehicle = false, onConfirm, onReopen, onDecisionClose, onVerify, canManage }) {
+  const { user } = useContext(AuthContext);
+  const [verifying, setVerifying] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [vehicleRecords, setVehicleRecords] = useState([]);
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   const loadRecord = useCallback(() => {
-    api.get(`/maintenance-records/${maintenanceId}`)
-      .then((response) => { setRecord(response.data); setNotFound(false); })
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false));
-  }, [maintenanceId]);
+    return api.get(`/maintenance-records/${maintenanceId}`).then(async (response) => {
+      if (groupByVehicle) {
+        // Use the authorized ledger so a mechanic only sees their own work.
+        const ledger = await api.get('/maintenance-records');
+        const vehicleId = response.data.vehicle_id ?? response.data.vehicle?.vehicle_id;
+        setVehicleRecords(vehicleId == null ? [response.data] : ledger.data.filter((repair) => String(repair.vehicle_id ?? repair.vehicle?.vehicle_id) === String(vehicleId)));
+      }
+      setRecord(response.data);
+      setNotFound(false);
+    }).catch(() => setNotFound(true)).finally(() => setLoading(false));
+  }, [maintenanceId, groupByVehicle]);
 
   useEffect(() => { loadRecord(); }, [loadRecord]);
 
@@ -9392,6 +9346,43 @@ function MaintenanceRecordProfilePage({ maintenanceId, onConfirm, onReopen, onDe
 
   if (notFound || !record) {
     return <ModulePanel description="This maintenance record could not be found — it may have been deleted." />;
+  }
+
+  if (groupByVehicle) {
+    return (
+      <ModulePanel description="Maintenance work for this vehicle">
+        <div className="panel-header-bar">
+          <VehicleCell vehicle={record.vehicle} />
+          <span>{vehicleRecords.length} repair {vehicleRecords.length === 1 ? 'entry' : 'entries'}</span>
+        </div>
+        <FormModal open={Boolean(verifying)} title="Verify repair" onClose={() => setVerifying(null)}>
+          <SmartForm fields={verificationFields} onCancel={() => setVerifying(null)} onSubmit={async (payload) => {
+            await onVerify(verifying, payload);
+            setVerifying(null);
+            await loadRecord();
+          }} submitLabel="Submit Verification" title="" />
+        </FormModal>
+        {vehicleRecords.map((repair) => (
+          <details key={repair.maintenance_id} className="veh-card" open>
+            <summary className="veh-card-head">
+              <strong>{repair.problem_reason || repair.maintenance_type || 'Repair entry'}</strong>
+              <StatusBadge value={repair.progress_status} />
+            </summary>
+            {canDo(user, 'record.edit') && <button className="ghost-button" type="button" onClick={() => navigate(location.pathname.replace(/\/maintenance\/[^/]+$/, `/maintenance/${repair.maintenance_id}/edit`))}>Edit this repair</button>}
+            {onVerify && canDo(user, 'record.verify') && repair.progress_status === 'For Verification' && String(repair.maintenance_personnel_id) !== String(user?.id) && (
+              <button className="primary-button" type="button" onClick={() => setVerifying(repair)}>Verify this repair</button>
+            )}
+            <MaintenanceRecordDetail
+              record={repair}
+              canManage={canManage}
+              onConfirm={(r) => onConfirm(r).then(loadRecord)}
+              onReopen={(r) => onReopen(r).then(loadRecord)}
+              onDecisionClose={(r, payload) => onDecisionClose(r, payload).then(loadRecord)}
+            />
+          </details>
+        ))}
+      </ModulePanel>
+    );
   }
 
   return (
