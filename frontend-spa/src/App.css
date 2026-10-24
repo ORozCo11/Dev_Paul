@@ -16510,7 +16510,7 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
   .vehicle-type-overview-chart { border-left: 0; padding-left: 0; border-top: 1px solid var(--border, #e2e8f0); padding-top: 20px; }
 }
 
-/* Keep badges and capsule labels square throughout the application. */
+/* Keep badges and capsule labels consistently rounded throughout the application. */
 html :is(
   .status-badge, .status-pill, .ticket-status-pill, .ticket-stage-badge,
   .ticket-next-step-badge, .ticket-preview-badge, .ticket-role-tag,
@@ -16524,10 +16524,10 @@ html :is(
   .wizard-step-pill, .date-badge-pill,
   .dashboard-command-pills > *, .dashboard-live-chips > *
 ) {
-  border-radius: 0 !important;
+  border-radius: 6px !important;
 }
 .ticket-page :is(.status-badge, .ticket-stage-badge, .count-badge, .ticket-list-identity strong, .area-chart-tag, .ticket-preview-badge) {
-  border-radius: 0 !important;
+  border-radius: 6px !important;
 }
 html .ticket-page .status-badge {
   display: inline-flex;
