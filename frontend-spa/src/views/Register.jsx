@@ -345,6 +345,7 @@ function Register() {
                 ? 'Registration submitted. A Super Admin must review and approve your account as this barangay\'s first Administrator before you can sign in.'
                 : 'Registration submitted. An administrator must approve your account before you can sign in.'}
             </p>
+            {isFirstForBarangay && <p className="register-step-help">The Super Admin receives an in-app notice and reviews Pending Approvals. They must confirm your appointment through a trusted barangay contact; a registration code alone does not prove authority. No email or SMS approval alert is sent. Coordinate with your barangay office, then try signing in after approval. If you cannot reach the platform administrator, <Link to="/support#contact">report an access concern</Link> with your barangay and contact details; do not submit your password or staff code.</p>}
             <Link className="primary-button auth-submit-btn" to="/login" style={{ display: 'flex', textDecoration: 'none' }}>
               Back to Login
             </Link>
@@ -545,7 +546,7 @@ function Register() {
             </label>
 
             </fieldset><fieldset className="register-fields" hidden={step !== 2} disabled={step !== 2}><legend className="sr-only">Account access</legend>
-            {isFirstForBarangay === true && <p className="notice success auth-field-full">First Administrator registration. Super Admin approval is required before sign-in.</p>}
+            {isFirstForBarangay === true && <p className="notice success auth-field-full">First Administrator registration: submission adds your application to the Super Admin approval queue and creates an in-app notification. Approval is required before sign-in; you do not need to keep this page open.</p>}
             {isFirstForBarangay !== true && (
               <label className="auth-field">
                 <span>I am a...</span>

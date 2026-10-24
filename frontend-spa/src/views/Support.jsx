@@ -9,6 +9,10 @@ import api from '../api/axios';
 
 const FAQ = [
   {
+    q: 'What happens after I register as the first barangay Admin?',
+    a: 'Your account stays inactive until a Super Admin approves it. Submission creates an in-app notification and a Pending Approvals entry; there is no email or SMS alert. You can leave the page. Coordinate with your barangay office so the platform administrator can verify your appointment through a trusted contact. The staff code alone does not prove authority. If you cannot reach them, report an access concern below with your barangay and contact details; never send passwords or registration codes. Support is a follow-up channel, not a replacement for approval.',
+  },
+  {
     q: 'How do I report a vehicle issue?',
     a: "As a Custodian, open Report Vehicle Issue to review issues and propose a maintenance ticket. Describe the problem and the planned repair. An Admin reviews the proposal and assigns the work. Maintenance Personnel can submit technical issue reports for a Custodian to review.",
   },
