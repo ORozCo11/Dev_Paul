@@ -14753,6 +14753,9 @@ function MechanicWorkOrderModule({
   // just the active ones — see loadModule), so a plain local boolean over
   // data already on hand is enough.
   const [showArchive, setShowArchive] = useState(false);
+  const [workOrderViewMode, setWorkOrderViewMode] = useState('table');
+  const workOrderColumns = useMemo(() => ticketTableColumns({}, onViewTicket), [onViewTicket]);
+  const workOrderColumnChooser = useColumnChooser('vms_work_order_list_columns', workOrderColumns);
 
   // Resolve the real ticket object for a ticket_id — both grouping helpers
   // below return a synthesized summary row, not what TicketCard needs.
@@ -14826,7 +14829,7 @@ function MechanicWorkOrderModule({
   );
 
   return (
-    <div className="module-grid">
+    <div className="module-grid mechanic-work-orders">
       <DismissibleHint description="Work Orders assigned to you. Execute vehicle repairs, log them, then submit the ticket for Custodian verification once every sub-issue is logged — check the Archive for your full history." />
 
       {!showArchive ? (
@@ -14866,15 +14869,20 @@ function MechanicWorkOrderModule({
                   <span className="archive-btn-icon"><Icon name="archive" size={14} /></span>
                   <span>Archive</span>
                 </button>
-                <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search work orders..." />
+                <ViewModeDropdown value={workOrderViewMode} onChange={setWorkOrderViewMode} />
+                <LocalSearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search work orders..." columnChooser={workOrderViewMode === 'table' ? workOrderColumnChooser : undefined} />
               </div>
             </div>
+            {workOrderViewMode === 'table' ? (
+              <PaginatedTable columns={workOrderColumnChooser.visibleColumns} onReorderColumn={workOrderColumnChooser.reorderColumn} rows={activeTicketCards} onRowClick={onViewTicket} emptyMessage={viewCopy.empty} />
+            ) : (
             <PaginatedCardGrid
               items={activeTicketCards}
               keyOf={(t) => t.ticket_id}
               emptyMessage={viewCopy.empty}
               renderItem={(t) => <TicketCard ticket={t} onClick={() => onViewTicket(t)} />}
             />
+            )}
           </section>
         </>
       ) : (
@@ -14890,7 +14898,8 @@ function MechanicWorkOrderModule({
                 <span className="archive-btn-icon"><Icon name="wrench" size={14} /></span>
                 <span>Back to Work Orders</span>
               </button>
-              <LocalSearchInput value={archiveSearch} onChange={setArchiveSearch} placeholder="Search vehicle, plate, or ticket..." />
+              <ViewModeDropdown value={workOrderViewMode} onChange={setWorkOrderViewMode} />
+                <LocalSearchInput value={archiveSearch} onChange={setArchiveSearch} placeholder="Search vehicle, plate, or ticket..." columnChooser={workOrderViewMode === 'table' ? workOrderColumnChooser : undefined} />
             </div>
           </div>
           <ModuleStatCards
@@ -14902,12 +14911,16 @@ function MechanicWorkOrderModule({
             onFilterChange={setArchiveBucketFilter}
           />
           <div className="operations-board-note"><Icon name="alert" size={14} /> Items requiring your action are shown first.</div>
+          {workOrderViewMode === 'table' ? (
+            <PaginatedTable columns={workOrderColumnChooser.visibleColumns} onReorderColumn={workOrderColumnChooser.reorderColumn} rows={archiveTicketCards} onRowClick={onViewTicket} emptyMessage="Nothing here yet — vehicles you repair will show up here with their current status." />
+          ) : (
           <PaginatedCardGrid
             items={archiveTicketCards}
             keyOf={(t) => t.ticket_id}
             emptyMessage="Nothing here yet — vehicles you repair will show up here with their current status."
             renderItem={(t) => <TicketCard ticket={t} onClick={() => onViewTicket(t)} />}
           />
+          )}
         </section>
       )}
 
