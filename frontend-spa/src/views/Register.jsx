@@ -1,3 +1,4 @@
+import AddressSuggestions from '../components/AddressSuggestions';
 import SearchableSelect from '../components/SearchableSelect';
 import LoadingOverlay from '../components/LoadingOverlay';
 import './Register.css';
@@ -527,6 +528,7 @@ function Register() {
               <div className="auth-input-wrapper auth-input-plain">
                 <input
                   autoComplete="street-address"
+                    list="registration-address-suggestions"
                   name="address"
                   {...fieldErrorProps('address')}
                   onChange={handleChange}
@@ -536,6 +538,8 @@ function Register() {
                   value={form.address}
                 />
               </div>
+              <AddressSuggestions barangayId={form.barangay_id} query={form.address} active={step === 1} />
+              <small>Suggestions are off until you opt in above. When enabled, typed text is sent to Photon / OpenStreetMap after a pause; you can always enter your address manually. Suggestions do not verify residence.</small>
               <small>Your personal contact address within the selected barangay, not the barangay or BDRMO office address. You may type it manually.</small>
               <RegistrationFieldError name="address" errors={fieldErrors} />
             </label>
