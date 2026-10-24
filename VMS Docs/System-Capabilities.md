@@ -425,3 +425,6 @@ Verification: 543 backend tests passed (2,765 assertions), 26 frontend tests pas
 Maintenance Records opens without a progress restriction and includes all records within the viewer's barangay, including records performed by other mechanics and external shops. The explicit `mine=1` API filter retains personal-history access. This read scope does not grant repair editing, verification or access to another barangay.
 
 Summary cards show **Total Maintenance Records**, **In-House Repair**, **Sent to External Shop** and **Maintenance Schedule**. Counts refer to repair records; the table groups matching records by vehicle. Source cards and the Sources dropdown filter the same categories. Scheduled work, including schedule-generated tickets, takes precedence over repair method so categories do not overlap; other external work counts under External Shop and remaining work under In-House Repair. Opening a grouped vehicle retains its individual repair records.
+
+
+My Work Orders now defaults to List View, reusing the Maintenance Tickets columns, column chooser, pagination and row/detail action. Card View remains selectable with smaller cards and vehicle photos, scoped to the mechanic's Work Orders and its Archive. Both views use the same assigned-ticket scope, search and status filters; reopening the module starts in List View.

@@ -16629,3 +16629,17 @@ html .ticket-detail-panel .ticket-process-kicker > .ticket-age-badge::before { c
 html .ticket-detail-panel .ticket-hero-badges > span { display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; width:140px; height:30px; padding:4px 10px; font-size:.74rem; line-height:1.2; border-radius:6px; }
 
 html .ticket-reassignment-modal .form-actions > button { border-radius:6px; }
+
+/* Compact cards are local to the mechanic's optional Work Orders card view. */
+.mechanic-work-orders .ticket-card-grid:has(> div > .ticket-reference-card) { grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),min(100%,320px))); gap:12px; }
+.mechanic-work-orders .ticket-card-grid > div > .ticket-reference-card { padding:12px; gap:10px; }
+.mechanic-work-orders .ticket-reference-id { padding:5px 8px; font-size:.8rem; }
+.mechanic-work-orders .ticket-reference-main { grid-template-columns:80px minmax(0,1fr); gap:10px; }
+.mechanic-work-orders .ticket-reference-info h4 { margin:0 0 6px; font-size:.9rem; }
+.mechanic-work-orders .ticket-reference-info p { margin-bottom:3px; font-size:.75rem; }
+.mechanic-work-orders .ticket-reference-progress { font-size:.75rem; }
+.mechanic-work-orders .ticket-reference-stage > div { min-height:30px; }
+.mechanic-work-orders .ticket-reference-bottom { gap:6px; }
+.mechanic-work-orders .ticket-reference-bottom .status-badge { padding:4px 8px; font-size:.68rem; }
+.mechanic-work-orders .ticket-reference-bottom .tpa-avatar { width:24px; height:24px; }
+.mechanic-work-orders .operations-board-head > div:last-child { flex-wrap:wrap; }
