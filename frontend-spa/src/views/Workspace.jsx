@@ -236,15 +236,17 @@ function defaultWorkflowStatuses(module, user) {
   return [];
 }
 
-function WorkflowStatusControls({ options, selected, onChange, defaults }) {
+function WorkflowStatusControls({ options, selected, onChange, defaults, showShortcuts = true }) {
   const allowed = options.map((option) => typeof option === 'object' ? option.value : option);
   const statuses = selected.filter((value) => allowed.includes(value));
   return <div className="workflow-status-controls" role="group" aria-label="Work status filters">
     <div className="filter-date-group"><span>Status</span>
       <MultiSelectDropdown placeholder="All statuses" options={options} selected={statuses} onChange={onChange} />
     </div>
-    <button type="button" className="ghost-button" onClick={() => onChange([...defaults])}>Ongoing only</button>
-    <button type="button" className="ghost-button" onClick={() => onChange([])}>All statuses</button>
+    {showShortcuts && <>
+      <button type="button" className="ghost-button" onClick={() => onChange([...defaults])}>Ongoing only</button>
+      <button type="button" className="ghost-button" onClick={() => onChange([])}>All statuses</button>
+    </>}
   </div>;
 }
 
@@ -14840,7 +14842,7 @@ function MechanicWorkOrderModule({
           />
           <section className="panel module-filter-panel">
             <FilterBar
-          statusControls={<WorkflowStatusControls options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Pending','Submitted']} />}
+          statusControls={<WorkflowStatusControls showShortcuts={false} options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Pending','Submitted']} />}
               categories={categories}
               vehicles={vehicles}
               filterCategory={filterCategory}
