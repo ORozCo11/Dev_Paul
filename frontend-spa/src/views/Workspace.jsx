@@ -13115,28 +13115,6 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
 
         <div className="ticket-work-column">
         {reportLookupFailed && <p role="alert" className="notice warning">Existing issue reports could not be checked. Your draft is kept; reselect the vehicle to retry before submitting.</p>}
-        {!isExternal && (
-        <section className="veh-card veh-card-form ticket-issue-section">
-          <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
-          <div className="ticket-issue-fields">
-            {/* No Ticket Title field — it's automatic (vehicle + repair type),
-                and the Admin folds the ticket's own # into it on approval. */}
-            <label>
-              <span>Details <span className="required-asterisk">*</span></span>
-              <textarea required rows={3} value={liveValues.ticket_description ?? ''} onChange={(e) => setField('ticket_description', e.target.value)} />
-            </label>
-            <label className="ticket-priority-field">
-              <span>Priority <span className="required-asterisk">*</span></span>
-              <SearchableSelect required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
-                <option value="">Select an option</option>
-                {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
-              </SearchableSelect>
-            </label>
-          </div>
-        </section>
-        )}
-
-
         {isExternal && (
         <section className="veh-card veh-card-form">
           <div className="veh-card-head"><Icon name="wrench" size={16} /><h4>External Shop Details</h4></div>
@@ -13186,7 +13164,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
                 />
               </label>
               <label>
-                <span>Estimated Cost (PHP)</span>
+                <span>Estimated Cost (PHP) <small>(optional)</small></span>
                 <input type="number" min="0" placeholder="e.g. 5000" value={liveValues.external_estimated_cost ?? ''} onChange={(e) => setField('external_estimated_cost', e.target.value)} />
               </label>
               <label className="ticket-external-priority">
@@ -13223,6 +13201,28 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
           </div>
         </section>
         )}
+
+        {!isExternal && (
+        <section className="veh-card veh-card-form ticket-issue-section">
+          <div className="veh-card-head"><Icon name="alert" size={16} /><h4>3. Describe the issue</h4></div>
+          <div className="ticket-issue-fields">
+            {/* No Ticket Title field — it's automatic (vehicle + repair type),
+                and the Admin folds the ticket's own # into it on approval. */}
+            <label>
+              <span>Details <span className="required-asterisk">*</span></span>
+              <textarea required rows={3} value={liveValues.ticket_description ?? ''} onChange={(e) => setField('ticket_description', e.target.value)} />
+            </label>
+            <label className="ticket-priority-field">
+              <span>Priority <span className="required-asterisk">*</span></span>
+              <SearchableSelect required value={liveValues.priority ?? ''} onChange={(e) => setField('priority', e.target.value)}>
+                <option value="">Select an option</option>
+                {priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+              </SearchableSelect>
+            </label>
+          </div>
+        </section>
+        )}
+
 
         </div>
 
