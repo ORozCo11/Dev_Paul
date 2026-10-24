@@ -539,11 +539,14 @@ function Register() {
                   value={form.address}
                 />
               </div>
-              <AddressSuggestions barangayId={form.barangay_id} query={form.address} active={step === 1} />
-              <small>Suggestions are off until you opt in above. When enabled, typed text is sent to Photon / OpenStreetMap after a pause; you can always enter your address manually. Suggestions do not verify residence.</small>
+
               <small>Your personal contact address within the selected barangay, not the barangay or BDRMO office address. You may type it manually.</small>
               <RegistrationFieldError name="address" errors={fieldErrors} />
             </label>
+            <div className="auth-field-full register-address-help">
+              <AddressSuggestions barangayId={form.barangay_id} query={form.address} active={step === 1} />
+              <small>Suggestions are off until you opt in above. When enabled, typed text is sent to Photon / OpenStreetMap after a pause; you can always enter your address manually. Suggestions do not verify residence.</small>
+            </div>
 
             </fieldset><fieldset className="register-fields" hidden={step !== 2} disabled={step !== 2}><legend className="sr-only">Account access</legend>
             {isFirstForBarangay === true && <p className="notice success auth-field-full">First Administrator registration: submission adds your application to the Super Admin approval queue and creates an in-app notification. Approval is required before sign-in; you do not need to keep this page open.</p>}

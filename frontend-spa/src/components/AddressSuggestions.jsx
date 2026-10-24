@@ -15,5 +15,5 @@ export default function AddressSuggestions({ barangayId, query, active }) {
     }, 700);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [enabled, active, barangayId, query, key]);
-  return <><span style={{ display: 'block' }}><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /> Allow address suggestions: send my typed address and selected location to Photon / OpenStreetMap.</span><datalist id="registration-address-suggestions">{enabled && active && result.key === key && result.rows.map((address) => <option key={address} value={address} />)}</datalist></>;
+  return <><label className="register-address-consent"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /> Allow address suggestions: send my typed address and selected location to Photon / OpenStreetMap.</label><datalist id="registration-address-suggestions">{enabled && active && result.key === key && result.rows.map((address) => <option key={address} value={address} />)}</datalist></>;
 }

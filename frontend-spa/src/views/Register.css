@@ -51,3 +51,7 @@ html .register-page .auth-split-hero-content p { color: #e2e8f0; font-size: 16px
 .register-progress .is-complete > span { background: #16a34a; border-color: #16a34a; color: white; }
 .register-back-arrow { display: grid; place-items: center; width: 40px; height: 40px; margin: 0 0 16px; border: 1px solid #cbd5e1; border-radius: 8px; background: transparent; color: #2563eb; cursor: pointer; }
 .register-back-arrow:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+
+.register-address-consent { display:flex; align-items:flex-start; gap:8px; font-size:12px; line-height:1.5; color:#475569; }
+.register-address-consent input[type="checkbox"] { flex:0 0 18px; width:18px; height:18px; min-height:18px; margin:0; }
+.register-address-help small { display:block; margin-top:6px; color:#64748b; line-height:1.5; }
