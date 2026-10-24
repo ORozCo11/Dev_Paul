@@ -11544,13 +11544,15 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
             <div className="ticket-process-kicker">
               <span>Ticket #{ticketNumber(ticket)}</span>
               {typeof daysOpen === 'number' && (
-                <span>{daysOpen === 0 ? 'Opened today' : `${daysOpen} day${daysOpen === 1 ? '' : 's'} open`}</span>
+                <span className="ticket-age-badge">{daysOpen === 0 ? 'Opened today' : `${daysOpen} day${daysOpen === 1 ? '' : 's'} open`}</span>
               )}
             </div>
             <h3 className="ticket-detail-title">{ticket.ticket_title}</h3>
             <div className="ticket-detail-meta">
-              <TicketStatusBadge value={ticket.priority} />
-              <TicketStageBadge ticket={ticket} variant="pill" />
+              <div className="ticket-hero-badges">
+                <TicketStatusBadge value={ticket.priority} />
+                <TicketStageBadge ticket={ticket} variant="pill" />
+              </div>
               {isAging && (
                 <span className="status-badge ticket-cancelled" title="This ticket has been open a long time; resolve or close it.">
                   <Icon name="alert" size={12} /> Aging: {daysOpen} days

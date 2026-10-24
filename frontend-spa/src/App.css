@@ -16625,3 +16625,8 @@ html .dual-range-track > .dual-range-input { min-width:0; min-height:18px; heigh
 html .dual-range-input:focus-visible { outline:2px solid #60a5fa; outline-offset:3px; }
 
 .ticket-list-actions { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+
+html .ticket-detail-panel .ticket-process-kicker > .ticket-age-badge { display:inline-flex; align-items:center; padding:4px 9px; border-radius:6px; background:#fef3c7; color:#92400e; font-weight:700; letter-spacing:normal; text-transform:none; }
+html .ticket-detail-panel .ticket-process-kicker > .ticket-age-badge::before { content:none; }
+.ticket-hero-badges { display:flex; flex-wrap:wrap; gap:6px; }
+html .ticket-detail-panel .ticket-hero-badges > span { display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; width:140px; height:30px; padding:4px 10px; font-size:.74rem; line-height:1.2; border-radius:6px; }
