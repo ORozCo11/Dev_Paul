@@ -11,6 +11,7 @@ Start with the overview, then open the detailed reference or the document needed
 | [Sample-Data.md](Sample-Data.md) | Team setup, demo accounts, five vehicles, sample work and verification results. |
 | [System-Audit-2026-10-24.md](System-Audit-2026-10-24.md) | Six open implementation findings, evidence and required retests. |
 | [Ticket-Process-Review-2026-10-24.md](Ticket-Process-Review-2026-10-24.md) | Ticket fields, repair/decision fixes, migration notes and verification evidence. |
+| [Claude-Browser-QA.md](Claude-Browser-QA.md) | Claude browser QA skill, full-system test catalogue, findings format and starter prompt. |
 | [QA-Run1-Fixes-2026-10-25.md](QA-Run1-Fixes-2026-10-25.md) | Disposition of all 37 browser-audit findings, safeguards, migration and retest evidence. |
 | [VMS-Evidence-and-Defense-Review-With-Examples.pptx](VMS-Evidence-and-Defense-Review-With-Examples.pptx) | Latest defense presentation, including examples and speaker notes. |
 | [System-Architecture.svg](System-Architecture.svg) | Component diagram. |
