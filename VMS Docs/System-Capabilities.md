@@ -385,7 +385,7 @@ Audit follow-up: see [System Audit ? 2026-10-23](../docs/archive/vms/System-Audi
 
 ## Work-list status defaults
 
-Operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders select Pending + Submitted; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records select unfinished progress states; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection, plus Ongoing only and All statuses shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.
+Most operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders open with all assigned statuses, including Completed; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records select unfinished progress states; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection. Work orders use the status dropdown without the Ongoing only and All statuses shortcut buttons; verification and schedules retain those shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.
 
 
 ## QA Run 1 follow-up - 25 October 2026

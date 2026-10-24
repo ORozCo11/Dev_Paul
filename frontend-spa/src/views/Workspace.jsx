@@ -228,7 +228,7 @@ function resolveModuleGroups(user) {
 
 function defaultWorkflowStatuses(module, user) {
   if (module === 'tickets' && hasRole(user, 'Admin')) return ['Pending Approval', 'Active'];
-  if (module === 'ticketWorkOrders') return ['Pending', 'Submitted'];
+  if (module === 'ticketWorkOrders') return [];
   if (module === 'ticketVerifications') return ['Active', 'Pending'];
   if (module === 'schedules') return ['Pending Approval', 'Scheduled'];
   if (['maintenance', 'maintenanceStatus'].includes(module)) return ['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification'];
@@ -14744,7 +14744,7 @@ function MechanicWorkOrderModule({
     Pending: { title: 'Pending Work Orders', note: 'Open a work order and record the repair — it goes to the Custodian once every repair is logged.', empty: 'No active work orders assigned to you.', icon: 'wrench' },
     Submitted: { title: 'Submitted Work Orders', note: 'Repairs you logged, waiting on the Custodian to verify them.', empty: 'Nothing is waiting on a Custodian right now.', icon: 'search' },
     Completed: { title: 'Completed Work Orders', note: 'Repairs the Custodian verified — these tickets are closed.', empty: 'No verified repairs yet.', icon: 'checkCircle' },
-    All: { title: 'Work Orders', note: 'Choose which statuses to include using the status filter.', empty: 'No work orders match the selected statuses.', icon: 'wrench' },
+    All: { title: 'Work Orders', note: 'All assigned work, including completed work. Use the status filter to narrow the list.', empty: 'No work orders match the current filters.', icon: 'wrench' },
   }[view];
   // Merge 2 — "Work Tracker" is no longer its own sidebar entry; it's this
   // Archive toggle over the same page, mirroring Admin's Maintenance Tickets
@@ -14763,7 +14763,7 @@ function MechanicWorkOrderModule({
     return map;
   }, [allTickets]);
 
-  // ---- Active work (unchanged scope: Pending vs Submitted, via `tickets`
+  // ---- Assigned work (all statuses by default, via `tickets`
   // which the parent already flattened/filtered to this mechanic's own
   // sub-issue rows) — one card per ticket/vehicle, same as before.
   const groupedTickets = useMemo(() => groupMechanicRowsByTicket(tickets), [tickets]);
@@ -14842,7 +14842,7 @@ function MechanicWorkOrderModule({
           />
           <section className="panel module-filter-panel">
             <FilterBar
-          statusControls={<WorkflowStatusControls showShortcuts={false} options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Pending','Submitted']} />}
+          statusControls={<WorkflowStatusControls showShortcuts={false} options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} />}
               categories={categories}
               vehicles={vehicles}
               filterCategory={filterCategory}
