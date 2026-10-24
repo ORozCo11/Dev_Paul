@@ -16618,3 +16618,8 @@ html .date-filter-input > .date-filter-input-icon { flex:0 0 32px; padding:0; bo
 
 html[data-theme="dark"] .date-filter-input { background:var(--surface-2, #17191e); color:var(--text, #e2e8f0); border-color:var(--control-border, #475569); }
 html[data-theme="dark"] .date-filter-input-icon { color:#93c5fd; border-left-color:var(--control-border, #475569); }
+
+/* Both priority handles must remain reachable when narrowed to one value. */
+html .dual-range-track { margin:22px 0; background:#cbd5e1; }
+html .dual-range-track > .dual-range-input { min-width:0; min-height:18px; height:18px; padding:0; border:0; border-radius:0; box-shadow:none; background:transparent !important; pointer-events:none; }
+html .dual-range-input:focus-visible { outline:2px solid #60a5fa; outline-offset:3px; }

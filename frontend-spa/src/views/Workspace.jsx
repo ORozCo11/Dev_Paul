@@ -4527,12 +4527,8 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           value={minIndex}
           aria-label="Minimum priority"
           aria-valuetext={labels[minIndex]}
-          // Stacked on top of the max thumb once they meet at the same stop
-          // (e.g. narrowing the filter down to "Medium" only) — otherwise,
-          // since it's first in the DOM, the max thumb always paints over it
-          // and permanently swallows the drag, leaving the min thumb stuck
-          // and the range impossible to widen back out.
-          style={{ zIndex: minIndex >= maxIndex ? 2 : 1 }}
+          // Separate coincident handles so either end can widen again.
+          style={{ zIndex: 1, top: minIndex === maxIndex ? 'calc(50% - 10px)' : '50%' }}
           onChange={(e) => onChange(Math.min(Number(e.target.value), maxIndex), maxIndex)}
         />
         <input
@@ -4544,7 +4540,7 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           value={maxIndex}
           aria-label="Maximum priority"
           aria-valuetext={labels[maxIndex]}
-          style={{ zIndex: minIndex >= maxIndex ? 1 : 2 }}
+          style={{ zIndex: 2, top: minIndex === maxIndex ? 'calc(50% + 10px)' : '50%' }}
           onChange={(e) => onChange(minIndex, Math.max(Number(e.target.value), minIndex))}
         />
       </div>
