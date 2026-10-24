@@ -16608,3 +16608,10 @@ html[data-theme="dark"] .ticket-reference-progress { color: var(--muted); }
 
 /* QA feedback stays in document flow so users can correct the form. */
 .qa-inline-error { display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 12px; border: 1px solid #ef4444; border-radius: 8px; color: var(--text); background: var(--surface, #fff); }
+
+/* Keep the text and single calendar button inside one date control. */
+html[data-theme] .date-filter-input > .date-filter-input-text { width:0; flex:1 1 0; min-width:0; max-width:100%; border:0; border-radius:0; box-sizing:border-box; background:transparent !important; color:inherit !important; }
+html .date-filter-input:focus-within { outline:2px solid #60a5fa; outline-offset:1px; }
+html .date-filter-input > .date-filter-input-hidden { position:absolute; width:0; min-width:0; max-width:0; height:0; min-height:0; max-height:0; padding:0; border:0; opacity:0; pointer-events:none; }
+html .date-filter-input > .date-filter-input-icon { flex:0 0 32px; padding:0; box-sizing:border-box; }
+@media(max-width:767px) { html .date-filter-input > .date-filter-input-icon { flex-basis:44px; } }

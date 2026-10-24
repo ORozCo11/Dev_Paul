@@ -15674,7 +15674,7 @@ function DateFilterInput({ value, onChange, placeholder = 'mm/dd/yyyy', id, aria
         type="text"
         id={id}
         aria-label={ariaLabel}
-        className="filter-select"
+        className="date-filter-input-text"
         placeholder={placeholder}
         value={text}
         onChange={(e) => setText(e.target.value)}
