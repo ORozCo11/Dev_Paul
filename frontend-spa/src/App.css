@@ -1508,8 +1508,7 @@
 }
 
 .ticket-list-identity,
-.ticket-list-title,
-.ticket-list-progress {
+.ticket-list-title {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -1526,20 +1525,6 @@
 }
 .ticket-list-title { min-width: 200px; max-width: 320px; }
 .ticket-list-title strong { white-space: normal; }
-.ticket-list-progress { min-width: 150px; }
-.ticket-list-progress > div { display: flex; align-items: center; gap: 10px; }
-.ticket-list-progress progress {
-  width: 130px;
-  height: 9px;
-  border: 0;
-  border-radius: 999px;
-  overflow: hidden;
-  background: #e2e8f0;
-  accent-color: #2563eb;
-}
-.ticket-list-progress progress::-webkit-progress-bar { background: #e2e8f0; }
-.ticket-list-progress progress::-webkit-progress-value { background: #2563eb; border-radius: 999px; }
-.ticket-list-progress progress::-moz-progress-bar { background: #2563eb; border-radius: 999px; }
 .ticket-list-people { display: flex; align-items: center; gap: 10px; min-width: 170px; }
 .ticket-list-people > small { white-space: normal; }
 .ticket-ledger-panel > .panel-header-bar { flex-wrap: wrap; gap: 12px; }

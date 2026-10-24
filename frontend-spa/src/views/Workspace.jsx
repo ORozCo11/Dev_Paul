@@ -15480,17 +15480,11 @@ function ticketTableColumns(unreadByTicket = {}, onViewTicket) {
       },
     },
     { key: 'vehicle_image', label: 'Vehicle Image', className: 'cell-center', render: (r) => <PhotoCell alt={r.vehicle?.vehicle_name ?? 'Vehicle'} url={r.vehicle?.photo_url} /> },
-    { key: 'progress', label: 'Sub-Issues', render: (r) => {
-      const total = r.progress?.total ?? r.sub_issues?.length ?? 0;
-      const done = r.progress?.done ?? (r.sub_issues ?? []).filter((s) => s.status === 'Done').length;
-      const percent = total > 0 ? Math.min(100, Math.max(0, Math.round(done / total * 100))) : 0;
-      return <div className="ticket-list-progress"><small className="muted">{done}/{total} sub-issues done</small><div><progress value={percent} max="100" aria-label="Sub-issues completed" /><small className="muted">{percent}%</small></div></div>;
-    } },
     { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <TicketStatusPill status={r.status} /> },
     { key: 'personnel', label: 'Assigned To', render: (r) => <TicketPersonnelAvatars ticket={r} /> },
     { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <button type="button" className="cell-link" aria-label={`View ticket ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name="ticket" size={18} /></button> },
   ];
-  const order = ['ticket_id', 'created', 'vehicle_image', 'title', 'priority', 'status', 'personnel', 'progress', 'next_step', 'actions'];
+  const order = ['ticket_id', 'created', 'vehicle_image', 'title', 'priority', 'status', 'personnel', 'next_step', 'actions'];
   return order.map((key) => columns.find((column) => column.key === key));
 }
 
