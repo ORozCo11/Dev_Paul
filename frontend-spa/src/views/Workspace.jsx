@@ -5182,13 +5182,12 @@ function ProfileMenu({ user, open, setOpen, onLogout, onOpenSettings }) {
   );
 }
 
-function profileFields(existingPhotoUrl) {
+function profileFields() {
   return [
     { label: 'Full Name', name: 'name', required: true, type: 'text' },
     { label: 'Email', name: 'email', required: true, type: 'text', placeholder: 'name@barangay.gov' },
     { label: 'Phone', name: 'phone', type: 'tel', maxLength: 11, pattern: '09[0-9]{9}', placeholder: '09XXXXXXXXX', title: 'Phone must be 11 digits starting with 09' },
     { label: 'Address', name: 'address', type: 'text' },
-    { label: 'Profile Photo', name: 'photo', accept: 'image/*', type: 'file', existingUrl: existingPhotoUrl },
   ];
 }
 
@@ -5196,8 +5195,35 @@ function profileFields(existingPhotoUrl) {
  * an Admin uses on Update User) plus a separate password-change section, since
  * that one stays gated behind old-password verification. */
 function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
+  const photoInputRef = useRef(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const initials = user.name ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase() : 'U';
   const roles = (Array.isArray(user.roles) && user.roles.length) ? user.roles : [user.role].filter(Boolean);
+
+  const updatePhoto = async (event) => {
+    const photo = event.target.files?.[0];
+    event.target.value = '';
+    if (!photo || uploadingPhoto) return;
+    if (!photo.type.startsWith('image/')) {
+      setNotice({ type: 'error', text: 'Choose an image for your profile photo.' });
+      return;
+    }
+    if (photo.size > 4 * 1024 * 1024) {
+      setNotice({ type: 'error', text: 'Profile photos must be 4 MB or smaller.' });
+      return;
+    }
+    setUploadingPhoto(true);
+    setNotice(null);
+    try {
+      await sendPayload('put', '/profile', { photo });
+      await refreshUser();
+      setNotice({ type: 'success', text: 'Profile photo updated.' });
+    } catch (error) {
+      showError(error, setNotice);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const updateDetails = async (payload) => {
     setNotice(null);
@@ -5224,10 +5250,24 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
     <ModulePanel description="Your account details and password.">
       <div className="profile-page">
         <div className="profile-hero">
-          <div className="profile-hero-avatar">
-            {user.photo_url
-              ? <img src={resolvePhotoUrl(user.photo_url)} alt={user.name} />
-              : <span>{initials}</span>}
+          <div className="profile-avatar-control" aria-busy={uploadingPhoto}>
+            <div className="profile-hero-avatar">
+              {user.photo_url
+                ? <img src={resolvePhotoUrl(user.photo_url)} alt={user.name} />
+                : <span>{initials}</span>}
+            </div>
+            <input ref={photoInputRef} type="file" accept="image/*" hidden onChange={updatePhoto} disabled={uploadingPhoto} aria-label="Choose profile photo" />
+            <button
+              className="profile-photo-button"
+              type="button"
+              aria-label={uploadingPhoto ? 'Uploading profile photo' : 'Change profile photo'}
+              title={uploadingPhoto ? 'Uploading profile photo...' : 'Change profile photo'}
+              disabled={uploadingPhoto}
+              onClick={() => photoInputRef.current?.click()}
+            >
+              <Icon name="camera" size={17} />
+            </button>
+            {uploadingPhoto && <span className="profile-photo-progress" role="status">Uploading...</span>}
           </div>
           <div className="profile-hero-info">
             <h2>{user.name}</h2>
@@ -5241,8 +5281,8 @@ function ProfilePage({ user, onBack, setNotice, refreshUser, onDirty }) {
           <p className="muted profile-section-hint">Keep your contact information up to date.</p>
           <div className="form-grid-2col user-form-grid">
             <SmartForm
-              fields={profileFields(user.photo_url)}
-              initialValues={user}
+              fields={profileFields()}
+              initialValues={{ name: user.name, email: user.email, phone: user.phone, address: user.address }}
               key="profile-details"
               onCancel={onBack}
               onSubmit={updateDetails}
