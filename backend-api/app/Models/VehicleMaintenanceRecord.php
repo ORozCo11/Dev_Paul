@@ -15,6 +15,7 @@ class VehicleMaintenanceRecord extends Model
     protected $primaryKey = 'maintenance_id';
 
     protected $fillable = [
+        'test_attested',
         'ticket_sub_issue_id',
         'vehicle_id',
         'source_vehicle_id',
@@ -45,6 +46,7 @@ class VehicleMaintenanceRecord extends Model
     ];
 
     protected $casts = [
+        'test_attested' => 'boolean',
         'is_external' => 'boolean',
         'warranty_until' => 'date',
         'verified_at' => 'datetime',

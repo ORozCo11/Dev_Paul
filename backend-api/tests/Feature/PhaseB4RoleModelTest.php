@@ -398,7 +398,7 @@ class PhaseB4RoleModelTest extends TestCase
     }
 
     #[Test]
-    public function a_custodian_can_edit_and_cancel_a_schedule_someone_else_created(): void
+    public function a_custodian_cannot_edit_another_creators_schedule(): void
     {
         $vehicle = $this->vehicle();
         $ownSchedule = VehicleMaintenanceSchedule::create([
@@ -421,8 +421,8 @@ class PhaseB4RoleModelTest extends TestCase
 
         $this->putJson("/api/maintenance-schedules/{$othersSchedule->schedule_id}", [
             'notes' => 'Updated by a different Custodian.',
-        ])->assertOk();
-        $this->assertSame('Updated by a different Custodian.', $othersSchedule->fresh()->notes);
+        ])->assertForbidden();
+        $this->assertNull($othersSchedule->fresh()->notes);
 
         $this->deleteJson("/api/maintenance-schedules/{$othersSchedule->schedule_id}")->assertOk();
         $this->assertSame('Cancelled', $othersSchedule->fresh()->status);

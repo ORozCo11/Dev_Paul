@@ -111,7 +111,7 @@ class MaintenanceRecordVerificationBypassTest extends TestCase
 
         Sanctum::actingAs($this->custodian, ['*']);
         $this->putJson("/api/maintenance-records/{$record->maintenance_id}/verify", [
-            'verification_result' => 'Passed',
+            'verification_result' => 'Passed', 'test_attested' => true,
         ])->assertOk();
 
         Sanctum::actingAs($this->admin, ['*']);

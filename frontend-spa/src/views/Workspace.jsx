@@ -1,3 +1,4 @@
+import { parseTimestamp, scheduleStage, scheduleIsOverdue, relatedRecordLabel } from '../utils/qaWorkflow';
 import ThemeToggle from '../components/ThemeToggle';
 import SearchableSelect from '../components/SearchableSelect';
 import ImpersonationPicker from '../components/ImpersonationPicker';
@@ -558,7 +559,7 @@ function Workspace() {
   // itself (instead of always modules[0]) means that fetch fires for the
   // right module on the very first render, so the page renders instead of
   // sitting blank until the user happens to click the matching sidebar item.
-  const [activeModule, setActiveModule] = useState(() => {
+  const [activeModule, setActiveModuleState] = useState(() => {
     // Maintenance Personnel no longer has a standalone 'workTracker' sidebar
     // entry (folded into 'ticketWorkOrders' own Archive toggle) — prefer that
     // key so a direct/bookmarked ticket link never seeds activeModule with a
@@ -576,8 +577,20 @@ function Workspace() {
     if (isNewLocationPage || editLocationVehicleId) return 'locations';
     if (logRepairsTicketId) return 'ticketWorkOrders';
     if (inspectTicketId) return 'ticketInspections';
-    return modules[0]?.[0] ?? 'dashboard';
+    return new URLSearchParams(location.search).get('module') || modules[0]?.[0] || 'dashboard';
   });
+  const setActiveModule = useCallback((key) => {
+    setActiveModuleState(key);
+    navigate(`${roleRoutes[user.role]}?module=${encodeURIComponent(key)}`);
+  }, [navigate, user.role]);
+  const moduleLocationKey = location.pathname + location.search;
+  const [previousModuleLocation, setPreviousModuleLocation] = useState(moduleLocationKey);
+  if (previousModuleLocation !== moduleLocationKey) {
+    setPreviousModuleLocation(moduleLocationKey);
+    if (location.pathname === roleRoutes[user.role]) {
+      setActiveModuleState(new URLSearchParams(location.search).get('module') || 'dashboard');
+    }
+  }
   // Custodian's merged "My Tasks" sidebar entry (Task 1 of the sidebar
   // consolidation) is a thin navigation wrapper, not a real module —
   // `activeModule` still ends up literally 'ticketInspections' /
@@ -599,7 +612,7 @@ function Workspace() {
     setMyTasksLastTab(key);
     setWorkTrackerViaMyTasks(true);
     setActiveModule(key);
-  }, []);
+  }, [setActiveModule]);
   // Same thin-wrapper pattern as My Tasks above, merging Custodian's
   // "Maintenance Status" (records awaiting their verification) and
   // "Maintenance Records" (the full ledger) — same underlying data
@@ -609,7 +622,7 @@ function Workspace() {
   const setMaintenanceLedgerTab = useCallback((key) => {
     setMaintenanceLedgerLastTab(key);
     setActiveModule(key);
-  }, []);
+  }, [setActiveModule]);
   // Any special page can be reached from places that never touch
   // setActiveModule — a notification click, a shared link opened in a new
   // tab, a direct URL/refresh — so `activeModule` itself can't be trusted
@@ -803,11 +816,12 @@ function Workspace() {
   // is what actually clears the flag after a successful save (submitting
   // navigates away on its own, outside guardedNavigate), and also covers
   // navigating directly from one edit form straight into another.
-  const routeStateKey = JSON.stringify([location.pathname]);
+  const routeStateKey = JSON.stringify([location.pathname, location.search]);
   const [previousRouteStateKey, setPreviousRouteStateKey] = useState(routeStateKey);
   if (previousRouteStateKey !== routeStateKey) {
     setPreviousRouteStateKey(routeStateKey);
     setHasUnsavedChanges(false);
+    setNotice(null);
 
   }
   // First-time approval only — a pending self-registration's role is a
@@ -1483,18 +1497,13 @@ function Workspace() {
       },
     }))();
 
-  // Regular sidebar modules never get their own URL — switching between them
-  // only flips `activeModule` in local state, so browser history never has a
-  // real entry for e.g. "/vehicles". That makes navigate(-1) unreliable after
-  // an Add/Edit page: it pops back to whatever real URL happened to precede
-  // it (usually just the bare dashboard route), not "the module the user was
-  // on". This is the deterministic replacement — go to the base route AND
-  // explicitly set the module, instead of trusting history.
+  // Module URLs preserve list context across reload and browser history.
   const returnToModule = useCallback((moduleKey, filter) => {
     if (filter !== undefined) setFilterStatus(filter);
-    navigate(roleRoutes[user.role]);
+    setHasUnsavedChanges(false);
+    setNotice(null);
     setActiveModule(moduleKey);
-  }, [navigate, user.role]);
+  }, [setActiveModule]);
 
   const handleCreateVehicle = async (payload) => {
     setNotice(null);
@@ -1558,7 +1567,7 @@ function Workspace() {
   // live (Scheduled); decline collects a reason, same propose/approve/decline
   // shape as a ticket proposal. Both work from Declined too (approve direct,
   // or decline again is a no-op since it's already there).
-  const approveSchedule = async (target) => {
+  const approveScheduleNow = async (target) => {
     setNotice(null);
     try {
       await api.put(`/maintenance-schedules/${target.schedule_id}/approve`);
@@ -1568,6 +1577,12 @@ function Workspace() {
       showError(error, setNotice);
     }
   };
+  const approveSchedule = (target) => setConfirmDialog({
+    title: 'Approve Maintenance Schedule',
+    message: `Approve ${target.maintenance_type} for ${target.vehicle?.vehicle_name ?? 'this vehicle'} on ${formatDate(target.scheduled_date)}?`,
+    confirmLabel: 'Approve Schedule',
+    onConfirm: () => approveScheduleNow(target),
+  });
   const declineSchedule = async (target, payload) => {
     setNotice(null);
     try {
@@ -1697,13 +1712,13 @@ function Workspace() {
   // Active tickets are included here too, not just the verification stage.
   const rawRows = useMemo(() => (activeModule === 'ticketWorkOrders'
     // Cancelled tickets aren't work orders — they'd sit in Total but in no bucket.
-    ? flattenSubIssueRows(records[activeModule], user.id).filter((r) => r.ticket_status !== 'Cancelled')
+    ? flattenSubIssueRows(records[activeModule], hasRole(user, 'Admin') ? null : user.id).filter((r) => ['Active', 'For Verification', 'Closed'].includes(r.ticket_status))
     : activeModule === 'ticketVerifications'
       ? (records[activeModule] ?? []).filter((t) => (
           String(t.assigned_custodian_id) === String(user.id)
           && ['Active', 'For Verification', 'Closed'].includes(t.status)
         ))
-      : records[activeModule] ?? []), [activeModule, records, user.id]);
+      : records[activeModule] ?? []), [activeModule, records, user]);
   const visibleRows = useMemo(() => {
     let result = rawRows;
 
@@ -1754,14 +1769,10 @@ function Workspace() {
       result = result.filter((row) => row.status !== 'Inactive');
     }
 
-    if (activeModule === 'schedules' && filterStatus.includes('MyAssigned')) {
-      result = result.filter((row) => row.status === 'Scheduled' && String(row.assigned_to) === String(user.id));
-    } else if (activeModule === 'schedules' && filterStatus.includes('AwaitingVerification')) {
-      result = result.filter((row) => (
-        row.status === 'Completed' && row.resulting_maintenance && row.resulting_maintenance.progress_status !== 'Completed'
-      ));
-    } else if (activeModule === 'schedules' && filterStatus.some((s) => SCHEDULE_URGENCY_KEYS.includes(s))) {
-      result = result.filter((row) => filterStatus.includes(scheduleUrgencyBucket(row)));
+    if (activeModule === 'schedules' && filterStatus.length) {
+      result = result.filter((row) => filterStatus.some((key) => key === 'MyAssigned'
+        ? row.status === 'Scheduled' && String(row.assigned_to) === String(user.id)
+        : SCHEDULE_URGENCY_KEYS.includes(key) ? key === scheduleUrgencyBucket(row) : key === scheduleStage(row)));
     } else if (activeModule === 'ticketInspections') {
       result = result.filter((row) => (
         filterStatus.includes('Inspected') ? row.status !== 'Open' : row.status === 'Open'
@@ -2041,7 +2052,7 @@ function Workspace() {
   );
 
   const scheduleStats = useMemo(() => {
-    const base = countByValues(records.schedules ?? [], (r) => r.status, ['Pending Approval', 'Declined', 'Scheduled', 'Completed', 'Cancelled']);
+    const base = countByValues(records.schedules ?? [], scheduleStage, ['Pending Approval', 'Declined', 'Scheduled', 'Completed', 'Cancelled']);
     // A schedule marked "Completed" only means the calendar task is done —
     // the record it produced might still be sitting unverified. Surface
     // that as its own count so it's findable instead of buried among
@@ -2100,14 +2111,7 @@ function Workspace() {
   );
 
   const maintenanceVehicleRows = useMemo(() => groupMaintenanceByVehicle(visibleRows), [visibleRows]);
-  const maintenanceRecordStats = useMemo(() => {
-    const vehicles = groupMaintenanceByVehicle(records.maintenance ?? []);
-    const counts = { total: vehicles.length };
-    for (const status of ['Assigned', 'Under Repair', 'For Verification', 'Completed']) {
-      counts[status] = vehicles.filter((vehicle) => vehicle.repair_records.some((repair) => repair.progress_status === status)).length;
-    }
-    return counts;
-  }, [records.maintenance]);
+  const maintenanceRecordStats = useMemo(() => countByValues(records.maintenance ?? [], (row) => row.progress_status, ['Assigned', 'Under Repair', 'For Verification', 'Completed']), [records.maintenance]);
 
   const userStats = useMemo(
     () => countByValues(records.users ?? [], (r) => r.role, ['Admin', 'Custodian', 'Maintenance Personnel']),
@@ -2126,11 +2130,11 @@ function Workspace() {
 
   const workOrderStats = useMemo(() => {
     const tickets = (records.ticketWorkOrders ?? []).filter((t) => (
-      t.status !== 'Cancelled' && (t.sub_issues ?? []).some((si) => si.assigned_mechanic_id === user.id)
+      ['Active', 'For Verification', 'Closed'].includes(t.status) && (t.sub_issues ?? []).some((si) => hasRole(user, 'Admin') || si.assigned_mechanic_id === user.id)
     ));
     const count = (status) => tickets.filter((t) => t.status === status).length;
     return { total: tickets.length, Pending: count('Active'), Submitted: count('For Verification'), Completed: count('Closed') };
-  }, [records.ticketWorkOrders, user.id]);
+  }, [records.ticketWorkOrders, user]);
 
   const verificationStats = useMemo(() => {
     // Mirrors rawRows' own scoping above — one row per ticket, restricted to
@@ -2418,9 +2422,6 @@ function Workspace() {
       // 'reportOrPropose' is a relabeled alias for the Issue Reports list.
       setActiveModule(key === 'reportOrPropose' ? 'issues' : key);
     }
-    if (isOnSpecialPage) {
-      navigate(roleRoutes[user.role]);
-    }
   });
 
   // The phone bottom bar shows up to four of the role's most-used modules.
@@ -2554,8 +2555,8 @@ function Workspace() {
           )}
 
         {notice && notice.lines ? (
-          <div className="toast-notice-overlay" onClick={() => setNotice(null)}>
-            <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
+          <div className="form-feedback" aria-live="polite">
+            <div className="qa-inline-error" role="alert">
               <Icon name="alert" size={17} className="toast-notice-icon" />
               <div className="toast-notice-lines">
                 {notice.lines.map((line, i) => <span key={i}>{line}</span>)}
@@ -2926,7 +2927,7 @@ function Workspace() {
             </p>
             <SmartForm
               fields={[
-                { label: 'Date Completed', name: 'date_completed', type: 'date' },
+                { label: 'Date Completed', name: 'date_completed', type: 'date', max: calendarDate() },
                 { label: 'Cost (optional)', name: 'maintenance_cost', type: 'number' },
                 // Sometimes a scheduled job turns out to need a
                 // third-party shop instead of in-house work.
@@ -3106,7 +3107,7 @@ function Workspace() {
           description={((hasRole(user, 'Custodian') && !hasRole(user, 'Admin')) ? 'View-only fleet information.' : 'Register, edit, and archive vehicle records.') + ' Status = fleet availability. Condition = physical state (does it need repair or inspection?). Click a row to see full vehicle details.'}
           statCards={
             <ModuleStatCards
-              totalLabel="Total Vehicles"
+              totalLabel="Total Repair Records"
               total={vehicleStats.total}
               cards={VEHICLE_STAT_CARDS}
               counts={vehicleStats}
@@ -3677,7 +3678,7 @@ function Workspace() {
           <PaginatedTable
             columns={issueColumnChooser.visibleColumns}
             onReorderColumn={issueColumnChooser.reorderColumn}
-            emptyMessage="No issues reported — the fleet has no open problems right now."
+            emptyMessage="No issue reports match the current filters. Clear the filters or choose All statuses."
             rows={visibleRows}
             onRowClick={(row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`)}
           />
@@ -3690,7 +3691,7 @@ function Workspace() {
         <>
         <ModulePanel
           tabBar={maintenanceLedgerTabBar}
-          description="One row per vehicle. Open a vehicle to see its repaired sub-issues and other maintenance work."
+          description="Counts show repair records. The list groups them by vehicle; open a vehicle to see every repair."
           statCards={
             <ModuleStatCards
               totalLabel="Total Vehicles"
@@ -3899,7 +3900,7 @@ function Workspace() {
           }
           filterBar={
             <FilterBar
-          statusControls={<WorkflowStatusControls options={['Pending Approval','Scheduled','Declined','Completed','Cancelled']} selected={filterStatus} onChange={setFilterStatus} defaults={defaultWorkflowStatuses('schedules', user)} />}
+          statusControls={<WorkflowStatusControls options={['Pending Approval','Scheduled','Declined','AwaitingVerification','Completed','Cancelled']} selected={filterStatus} onChange={setFilterStatus} defaults={defaultWorkflowStatuses('schedules', user)} />}
               categories={lookups.categories}
               vehicles={lookups.vehicles}
               filterCategory={filterCategory}
@@ -3922,7 +3923,7 @@ function Workspace() {
         >
           <div className="panel-header-bar schedule-panel-header">
             <div className="schedule-panel-heading">
-              <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p></div>
+              <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p>{hasRole(user, 'Admin') && <button className="ghost-button" type="button" onClick={() => setFilterStatus(['Declined'])}>Declined schedules ({scheduleStats.Declined ?? 0})</button>}</div>
             </div>
             <div className="schedule-panel-tools">
               <ViewModeDropdown value={scheduleViewMode} onChange={changeScheduleViewMode} />
@@ -5489,6 +5490,11 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const [fieldErrors, setFieldErrors] = useState({});
   const [validationLines, setValidationLines] = useState(null);
+  useEffect(() => {
+    if (!validationLines) return;
+    const timer = setTimeout(() => setValidationLines(null), 8000);
+    return () => clearTimeout(timer);
+  }, [validationLines]);
   const formRef = useRef(null);
 
   const handleChange = (event) => {
@@ -5502,7 +5508,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
     // onChange (see the field renderer below) — this generic handler only
     // ever sees single-file and non-file fields.
     const finalValue = type === 'file' ? files[0] : nextValue;
-    const next = { ...values, [name]: finalValue };
+    const next = { ...values, [name]: finalValue, ...(name === 'vehicle_domain' ? { category_id: '' } : {}) };
     setValues(next);
     if (fieldErrors[name]) setFieldErrors((current) => {
       const nextErrors = { ...current };
@@ -5562,8 +5568,8 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
   return (
     <form ref={formRef} className="smart-form" onSubmit={handleSubmit} noValidate autoComplete="off">
       {validationLines && (
-        <div className="toast-notice-overlay" onClick={() => setValidationLines(null)}>
-          <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
+        <div className="form-feedback" onClick={() => setValidationLines(null)}>
+          <div className="qa-inline-error" role="alert" onClick={(e) => e.stopPropagation()}>
             <Icon name="alert" size={17} className="toast-notice-icon" />
             <div className="toast-notice-lines">
               {validationLines.map((line, i) => <span key={i}>{line}</span>)}
@@ -5609,11 +5615,8 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
           {field.type === 'quantity' ? (
             <div className="quantity-field">
               <input
-                min="0"
-                onChange={(e) => setValues((current) => ({
-                  ...current,
-                  [field.name]: `${e.target.value} ${quantity.unit}`.trim(),
-                }))}
+                min="0.000001"
+                onChange={(e) => { const next = { ...values, [field.name]: `${e.target.value} ${quantity.unit}`.trim() }; setValues(next); onValuesChange?.(next); }}
                 placeholder={field.placeholder}
                 required={field.required}
                 step="any"
@@ -5621,10 +5624,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
                 value={quantity.amount}
               />
               <SearchableSelect
-                onChange={(e) => setValues((current) => ({
-                  ...current,
-                  [field.name]: `${quantity.amount} ${e.target.value}`.trim(),
-                }))}
+                onChange={(e) => { const next = { ...values, [field.name]: `${quantity.amount} ${e.target.value}`.trim() }; setValues(next); onValuesChange?.(next); }}
                 value={quantity.unit}
               >
                 {field.units.map((u) => <option key={u} value={u}>{u}</option>)}
@@ -5676,6 +5676,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
           ) : null}
           {field.type === 'creatable-select' ? (
             <CreatableSelect
+              optionDomain={field.optionDomain}
               value={values[field.name] ?? ''}
               onChange={(v) => {
                 const next = { ...values, [field.name]: v };
@@ -5844,7 +5845,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
             <input
               accept={field.accept}
               autoComplete="off"
-              maxLength={field.maxLength}
+              maxLength={field.maxLength} min={field.min} max={field.max}
               name={field.name}
               onChange={handleChange}
               pattern={field.pattern}
@@ -6058,7 +6059,7 @@ function LocationAddressMapForm({
       <form className="add-location-page" onSubmit={handleSubmit} noValidate>
         <div className="add-location-fields smart-form">
           {error && (
-            <div className="toast-notice toast-notice-validation error" role="alert">
+            <div className="qa-inline-error" role="alert">
               <Icon name="alert" size={17} className="toast-notice-icon" />
               <div className="toast-notice-lines"><span>{error}</span></div>
             </div>
@@ -6313,7 +6314,7 @@ function ReportPreview({ report }) {
   const uniqueValues = (key) => new Set(rows.map((row) => resolveRelationLabel(row[key]) ?? row[key]).filter((value) => value != null && value !== '')).size;
   const statusKey = rows.length ? ['status', 'condition', 'availability_status'].find((key) => rows.some((row) => row[key] != null)) : null;
   const statusCounts = statusKey ? [...new Set(rows.map((row) => row[statusKey]).filter(Boolean))].map((status) => ({ label: status, value: rows.filter((row) => row[statusKey] === status).length })) : [];
-  const costKey = rows.length ? ['cost', 'actual_cost', 'total_cost', 'amount'].find((key) => rows.some((row) => row[key] != null && Number.isFinite(Number(row[key])))) : null;
+  const costKey = rows.length ? ['maintenance_cost', 'cost', 'actual_cost', 'total_cost', 'amount'].find((key) => rows.some((row) => row[key] != null && Number.isFinite(Number(row[key])))) : null;
   const distinctVehicleKey = rows.length ? ['vehicle_id', 'vehicle'].find((key) => rows.some((row) => row[key] != null)) : null;
   const summaryMetrics = [{ label: 'Total records', value: rows.length.toLocaleString() }];
   if (report.report_type === 'Vehicle Inventory Report' || report.report_type === 'Vehicle Type Report') {
@@ -6448,7 +6449,8 @@ function vehicleCriticality(vehicle, lookups) {
 
 const verificationFields = [
   { label: 'Verification Result', name: 'verification_result', options: ['Passed', 'Failed'], required: true, type: 'select' },
-  { label: 'Verification Notes', name: 'verification_notes', type: 'textarea' },
+  { label: 'Verification Notes (required if Failed)', name: 'verification_notes', type: 'textarea' },
+  { label: 'I personally operated and tested this vehicle (required to pass)', name: 'test_attested', type: 'select', options: [{ value: '1', label: 'Yes, I personally tested it' }, { value: '0', label: 'Not attested' }] },
 ];
 
 const passwordFields = [
@@ -6532,6 +6534,7 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
   // already typed on this step. Re-synced from wizardData wherever `step`
   // actually changes (see setStep call sites below), not via an effect.
   const [domainFilter, setDomainFilter] = useState(wizardData.vehicle_domain ?? '');
+  const stepValues = useRef(wizardData);
 
   const domain = lookups.categories.find(
     (c) => String(c.category_id) === String(wizardData.category_id)
@@ -6559,12 +6562,13 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
             // NOTE: browsers compile `pattern` with the strict `v` flag, where `\s`
             // inside a character class is invalid — use a literal space instead.
             placeholder: 'e.g. ABC 1234', pattern: '^[A-Za-z]{2,6}[ \\-]?\\d{2,6}[A-Za-z]?$',
-            title: 'Enter a valid plate number, e.g. ABC 1234 or ABC-1234', uppercase: true, maxLength: 10,
+            title: 'Use letters and digits with optional spaces or dashes, e.g. INEM-112, FDR-303 or AMB-1101', uppercase: true, maxLength: 10,
           },
       {
         label: 'Vehicle Type',
         name: 'category_id',
         options: lookups.categories.filter((c) => c.domain === domainFilter),
+        optionDomain: domainFilter,
         required: true,
         type: 'creatable-select',
         newItemLabel: 'vehicle type',
@@ -6629,12 +6633,15 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
   // domainFilter always reflects whatever step 1 last had, whichever way
   // the user navigates back to it.
   const goToStep = (n) => {
-    setDomainFilter(wizardData.vehicle_domain ?? '');
+    const merged = { ...wizardData, ...stepValues.current };
+    setWizardData(merged);
+    setDomainFilter(merged.vehicle_domain ?? '');
     setStep(n);
   };
 
   const handleStepSubmit = async (values) => {
     const merged = { ...wizardData, ...values };
+    stepValues.current = merged;
     if (isLastStep) {
       const ok = await onSubmit(merged);
       if (ok !== false) clearNewVehicleDraft();
@@ -6681,7 +6688,7 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
           cancelLabel={step === 1 ? 'Cancel' : 'Back'}
           onCancel={step === 1 ? () => { clearNewVehicleDraft(); onBack(); } : () => goToStep(step - 1)}
           onSubmit={handleStepSubmit}
-          onValuesChange={(vals) => { setDomainFilter(vals.vehicle_domain ?? ''); onDirty?.(); }}
+          onValuesChange={(vals) => { stepValues.current = vals; setDomainFilter(vals.vehicle_domain ?? ''); onDirty?.(); }}
           submitLabel={isLastStep ? 'Add Vehicle' : 'Next'}
           title=""
         />
@@ -9311,7 +9318,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
       },
     },
     { key: 'date', label: 'Date', className: 'cell-center', render: (row) => <DateBadge value={row.scheduled_date} /> },
-    { key: 'time', label: 'Time', className: 'cell-center', render: (row) => row.scheduled_time ?? '-' },
+    { key: 'time', label: 'Time', className: 'cell-center', render: (row) => row.scheduled_time ? String(row.scheduled_time).slice(0, 5) : '-' },
     // "One-time" (plain text, no badge) needs the same explicit centering the
     // recurring branch gets for free from <StatusBadge> — otherwise it'd
     // sit flush left while every other row in this column is centered.
@@ -9396,12 +9403,7 @@ const RECURRENCE_LABEL = { 1: 'Monthly', 3: 'Every 3 months', 6: 'Every 6 months
 
 // #11 — a schedule is overdue when it's still 'Scheduled' but its date has
 // already passed (compared date-only, so "today" is never overdue).
-function isScheduleOverdue(row) {
-  if (row.status !== 'Scheduled' || !row.scheduled_date) return false;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const due = new Date(row.scheduled_date); due.setHours(0, 0, 0, 0);
-  return due < today;
-}
+function isScheduleOverdue(row) { return scheduleIsOverdue(row); }
 
 const SCHEDULE_URGENCY_KEYS = ['Overdue', 'Due1to3', 'Due4to7', 'Due8plus'];
 
@@ -9510,7 +9512,7 @@ function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onComp
       {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className={actionClass('is-info')} onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label={`View Maintenance Record #${recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}`}><Icon name="wrench" size={14} />{!iconOnly && <span>Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</span>}</button>}
       {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className={actionClass('is-success')} onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} />{!iconOnly && <span>Approve</span>}</button>}
       {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className={actionClass('is-danger')} onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} />{!iconOnly && <span>Decline</span>}</button>}
-      {(canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit')) && <button className={actionClass('')} onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} />{!iconOnly && <span>Edit</span>}</button>}
+      {(canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit') && String(row.created_by?.id ?? row.created_by) === String(currentUser.id)) && <button className={actionClass('')} onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} />{!iconOnly && <span>Edit</span>}</button>}
       {!schedulePlanLocked(row) && canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && <button className={actionClass('is-info')} onClick={() => onReassign(row)} type="button" title="Reassign" aria-label="Reassign"><Icon name="undo" size={14} />{!iconOnly && <span>Reassign</span>}</button>}
       {row.status === 'Cancelled'
         ? canManageSchedulePlan(row) && canDo(currentUser, 'schedule.restore') && onRestore && <button className={actionClass('is-success')} onClick={() => onRestore(row)} type="button" title="Restore" aria-label="Restore"><Icon name="undo" size={14} />{!iconOnly && <span>Restore</span>}</button>
@@ -9642,8 +9644,8 @@ function MaintenanceScheduleCard({ row, currentUser, onComplete, onEdit, onDelet
         {!schedulePlanLocked(row) && canDo(currentUser, 'schedule.reassign') && row.status === 'Scheduled' && onReassign && (
           <button className="sch-action is-warning" onClick={() => onReassign(row)} type="button"><Icon name="undo" size={14} /> Reassign</button>
         )}
-        {((canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit')) || canDo(currentUser, row.status === 'Cancelled' ? 'schedule.restore' : 'schedule.delete')) && <div className="sch-card-edit-cancel">
-          {(canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit')) && (
+        {((canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit') && String(row.created_by?.id ?? row.created_by) === String(currentUser.id)) || canDo(currentUser, row.status === 'Cancelled' ? 'schedule.restore' : 'schedule.delete')) && <div className="sch-card-edit-cancel">
+          {(canManageSchedulePlan(row) && canDo(currentUser, 'schedule.edit') && String(row.created_by?.id ?? row.created_by) === String(currentUser.id)) && (
             <button className="sch-action is-info" onClick={() => onEdit(row)} type="button"><Icon name="edit" size={14} /> Edit</button>
           )}
           {/* Same swap as the table: a cancelled schedule offers Restore, not a
@@ -9665,7 +9667,7 @@ const historyColumns = [
   { key: 'id', label: 'ID', locked: true, render: (row) => recordNumber(row, 'history_id') },
   { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', render: (row) => row.vehicle?.plate_number ?? '-' },
   { key: 'activity', label: 'Activity', render: (row) => row.activity_type },
-  { key: 'related_record', label: 'Related Record', render: (row) => row.related_record_id ?? '-' },
+  { key: 'related_record', label: 'Related Record', render: relatedRecordLabel },
   { key: 'updated_by', label: 'Updated By', render: (row) => <UserAvatarName user={row.updated_by} /> },
   { key: 'date', label: 'Date', render: (row) => <DateBadge value={row.created_at} /> },
   { key: 'time', label: 'Time', render: (row) => formatTime(row.created_at) },
@@ -9675,7 +9677,7 @@ const VEHICLE_HISTORY_EXPORT_COLUMNS = [
   { label: 'ID', value: (r) => recordNumber(r, 'history_id') },
   { label: 'Vehicle', value: (r) => (r.vehicle ? `${r.vehicle.vehicle_name} (${r.vehicle.plate_number})` : '') },
   { label: 'Activity', value: (r) => r.activity_type },
-  { label: 'Related Record', value: (r) => r.related_record_id ?? '' },
+  { label: 'Related Record', value: relatedRecordLabel },
   { label: 'Updated By', value: (r) => r.updated_by?.name ?? '' },
   { label: 'Description', value: (r) => r.description ?? '' },
   { label: 'Date', value: (r) => r.created_at },
@@ -9949,12 +9951,14 @@ function prettifyKey(key) {
 }
 
 function formatReportValue(key, value) {
-  if (value == null || value === '') return '—';
+  if (value == null || value === '') return /(cost|amount|expense|price)$/i.test(key) ? 'Not recorded' : '—';
+  if (Array.isArray(value)) return value.length ? value.join('; ') : '-';
   if (typeof value === 'object') return resolveRelationLabel(value) ?? JSON.stringify(value);
   if (/(date|_at)$/i.test(key) && !Number.isNaN(Date.parse(value))) return formatDate(value);
   if (/(cost|amount|expense|price)$/i.test(key) && Number.isFinite(Number(value))) {
     return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(Number(value));
   }
+  if (key.endsWith('_id')) return `${prettifyKey(key).replace(/ ID$/, '')} #${value}`;
   return String(value);
 }
 
@@ -9963,7 +9967,7 @@ function reportColumns(rows) {
     return [{ label: 'Result', render: () => 'No records' }];
   }
 
-  const sample = rows[0];
+  const sample = Object.assign({}, ...rows);
   // A loaded relation (e.g. `category`, `maintenance_personnel`) is an
   // object in the row — resolve it to a readable name instead of hiding it
   // outright, and hide its matching raw `<key>_id` column so the report
@@ -9977,7 +9981,9 @@ function reportColumns(rows) {
   }));
 
   const plainKeys = Object.keys(sample).filter((key) => !relationKeys.includes(key) && !hiddenKeys.has(key));
-  const plainColumns = plainKeys.slice(0, 8).map((key) => ({
+  const maintenanceKeys = new Set(['maintenance_id', 'issue_report_id', 'maintenance_type', 'problem_reason', 'action_taken', 'date_completed', 'progress_status', 'maintenance_cost', 'verified_at', 'data_quality_warnings']);
+  const displayKeys = sample.maintenance_id != null ? plainKeys.filter((key) => maintenanceKeys.has(key)) : plainKeys.filter((key) => !['custom_values', 'decision_history', 'work_history', 'attachment_files', 'external_cycles', 'readiness_invalidated_at'].includes(key));
+  const plainColumns = displayKeys.map((key) => ({
     label: prettifyKey(key),
     render: (row) => formatReportValue(key, row[key]),
   }));
@@ -10308,9 +10314,9 @@ function formatDate(value) {
   }
 
   return new Intl.DateTimeFormat('en-PH', {
-    dateStyle: 'medium',
+    timeZone: 'Asia/Manila', dateStyle: 'medium',
     timeStyle: value.includes?.('T') ? 'short' : undefined,
-  }).format(new Date(value));
+  }).format(parseTimestamp(value));
 }
 
 // Compact "table cell" version of a date: a colored month/day pill plus the
@@ -10322,7 +10328,7 @@ function DateBadge({ value }) {
     return '-';
   }
 
-  const date = new Date(value);
+  const date = parseTimestamp(value);
   if (Number.isNaN(date.getTime())) {
     return '-';
   }
@@ -10330,11 +10336,11 @@ function DateBadge({ value }) {
   return (
     <span className="date-badge">
       <span className="date-badge-pill">
-        <span className="date-badge-month">{date.toLocaleDateString('en-US', { month: 'short' })}</span>
-        <span className="date-badge-day">{date.toLocaleDateString('en-US', { day: '2-digit' })}</span>
+        <span className="date-badge-month">{date.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short' })}</span>
+        <span className="date-badge-day">{date.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', day: '2-digit' })}</span>
       </span>
       <span className="date-badge-meta">
-        <span>{date.getFullYear()}</span>
+        <span>{date.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', year: 'numeric' })}</span>
       </span>
     </span>
   );
@@ -10344,7 +10350,7 @@ function DateBadge({ value }) {
 // chunky red DateBadge tile reads as an alert. Dense tables keep the tile.
 function QuietDate({ value }) {
   if (!value) return <span className="muted">—</span>;
-  const date = new Date(value);
+  const date = parseTimestamp(value);
   if (Number.isNaN(date.getTime())) return <span className="muted">—</span>;
   return (
     <span className="quiet-date">
@@ -10360,12 +10366,12 @@ function formatTime(value) {
     return '-';
   }
 
-  const date = new Date(value);
+  const date = parseTimestamp(value);
   if (Number.isNaN(date.getTime())) {
     return '-';
   }
 
-  return new Intl.DateTimeFormat('en-PH', { timeStyle: 'short' }).format(date);
+  return new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', timeStyle: 'short' }).format(date);
 }
 
 // Mechanic repair logs are stored as plain text, one entry per submission in
@@ -10386,7 +10392,7 @@ function RepairLogEntries({ text, compact = false, limit = null }) {
     if (!match) {
       return { iso: null, message: chunk.trim() };
     }
-    return { iso: match[1].trim().replace(' ', 'T'), message: match[2].trim() };
+    return { iso: parseTimestamp(match[1].trim()).toISOString(), message: match[2].trim() };
   }).filter((entry) => entry.message || entry.iso);
 
   if (compact) {
@@ -10476,7 +10482,7 @@ const SCHEDULE_EXPORT_COLUMNS = [
   { label: 'Vehicle', value: (r) => (r.vehicle ? `${r.vehicle.vehicle_name} (${r.vehicle.plate_number})` : '') },
   { label: 'Type', value: (r) => r.maintenance_type },
   { label: 'Date', value: (r) => r.scheduled_date },
-  { label: 'Time', value: (r) => r.scheduled_time },
+  { label: 'Time', value: (r) => r.scheduled_time ? String(r.scheduled_time).slice(0, 5) : '' },
   { label: 'Location', value: (r) => r.service_location },
   { label: 'Status', value: (r) => r.status },
 ];
@@ -11853,6 +11859,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                       {si.verification_verdict && <TicketStatusBadge value={si.verification_verdict} />}
                     </div>
                   )}
+                  {si.verification_verdict === 'Rejected' && <div className="lr-alert lr-alert-warning" role="alert"><strong>Returned for rework</strong><p>{si.verification_notes || 'Review the failed work items before resubmitting.'}</p></div>}
                   {open && <RepairContextDetails si={si} />}
 
                   {onLogRepairs && canHandleExternal && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && (
@@ -12090,7 +12097,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
             {/* Once a ticket is Closed there's real, confirmed work on
                 record — Delete is only for genuine mistakes, not for
                 discarding finished repairs. */}
-            {canDo(user, 'ticket.delete') && !hasEvidence && ticket.status !== 'Closed' && ticket.status !== 'Pending Approval' && (
+            {canDo(user, 'ticket.delete') && !hasEvidence && ['Declined', 'Cancelled'].includes(ticket.status) && (
               <button className="danger-button ticket-detail-actions-danger" type="button" onClick={requestDelete}>Delete Ticket</button>
             )}
           </div>
@@ -12153,7 +12160,8 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
 
   if (notFound || !ticket) {
     return (
-      <ModulePanel description="This ticket could not be found — it may have been deleted or archived.">
+      <ModulePanel>
+        <div role="alert"><h3>Ticket unavailable</h3><p>You may not have permission to view this ticket, or it may have been deleted or archived.</p><button type="button" className="ghost-button" onClick={onBack}>Back to tickets</button></div>
       </ModulePanel>
     );
   }
@@ -12243,6 +12251,11 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
   };
   const [submitting, setSubmitting] = useState(false);
   const [validationLines, setValidationLines] = useState(null);
+  useEffect(() => {
+    if (!validationLines) return;
+    const timer = setTimeout(() => setValidationLines(null), 8000);
+    return () => clearTimeout(timer);
+  }, [validationLines]);
   const selectedVehicleId = liveValues.vehicle_id ?? null;
   const [openTicketsOnVehicle, setOpenTicketsOnVehicle] = useState([]);
   // Same reasoning as the open-tickets check above, for recurrence instead of
@@ -12439,8 +12452,8 @@ function NewTicketPage({ onBack, ticketLookups, prefilledTicketData, onCreateTic
           <p>Create a maintenance proposal for Admin review. Choose a repair method, select the vehicle, and describe the work needed.</p>
         </header>
         {validationLines && (
-          <div className="toast-notice-overlay" onClick={() => setValidationLines(null)}>
-            <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
+          <div className="form-feedback" onClick={() => setValidationLines(null)}>
+            <div className="qa-inline-error" role="alert" onClick={(e) => e.stopPropagation()}>
               <Icon name="alert" size={17} className="toast-notice-icon" />
               <div className="toast-notice-lines">
                 {validationLines.map((line, i) => <span key={i}>{line}</span>)}
@@ -12704,6 +12717,11 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
   const [partRows, setPartRows] = useDraftState(draftKeyBase + ':part-rows', () => [emptyPartRow]);
   const [submitting, setSubmitting] = useState(false);
   const [validationLines, setValidationLines] = useState(null);
+  useEffect(() => {
+    if (!validationLines) return;
+    const timer = setTimeout(() => setValidationLines(null), 8000);
+    return () => clearTimeout(timer);
+  }, [validationLines]);
 
   const clearProposeDraft = () => {
     clearDraftState(`${draftKeyBase}:values`);
@@ -12876,8 +12894,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
           <p>Create a maintenance proposal for Admin review. Choose a repair method, select the vehicle, and describe the work needed.</p>
         </header>
         {validationLines && (
-          <div className="toast-notice-overlay" onClick={() => setValidationLines(null)}>
-            <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
+          <div className="form-feedback" onClick={() => setValidationLines(null)}>
+            <div className="qa-inline-error" role="alert" onClick={(e) => e.stopPropagation()}>
               <Icon name="alert" size={17} className="toast-notice-icon" />
               <div className="toast-notice-lines">
                 {validationLines.map((line, i) => <span key={i}>{line}</span>)}
@@ -14274,6 +14292,7 @@ function TicketCard({ ticket, unreadCount = 0, onClick }) {
           <p>{ticket.vehicle?.plate_number ?? '—'}</p>
         </div>
       </div>
+      {(ticket.sub_issues ?? []).filter((item) => item.verification_verdict === 'Rejected').map((item) => <p key={item.sub_issue_id} className="lr-alert lr-alert-warning"><strong>Rework: {item.title}</strong> {item.verification_notes || 'Review the failed checks.'}</p>)}
       <div className="ticket-reference-progress">
         {progress?.done ?? 0}/{progress?.total ?? ticket.sub_issues?.length ?? 0} sub-issues done
       </div>
@@ -15769,7 +15788,7 @@ function MultiSelectDropdown({ placeholder = 'All', options = [], selected = [],
 // finds it waiting in the dropdown next time, everywhere it's offered.
 function CreatableSelect({
   value, onChange, options = [], placeholder = 'Select or type to add new', newItemLabel = 'option',
-  required = false, catalogEndpoint = null,
+  required = false, catalogEndpoint = null, optionDomain = null,
   // For a catalog whose API doesn't use plain {id, name} — e.g. vehicle
   // categories use {category_id, category_name} — read/write under these
   // keys instead, normalizing to {id, name} internally either way.
@@ -15893,7 +15912,8 @@ function CreatableSelect({
   const displayText = valueIsId ? (selectedItem?.name ?? '') : (value ?? '');
   const text = open ? draftText : displayText;
   const query = justOpened ? '' : text.trim().toLowerCase();
-  const filtered = query ? catalogItems.filter((o) => o.name.toLowerCase().includes(query)) : catalogItems;
+  const domainItems = optionDomain == null ? catalogItems : catalogItems.filter((item) => item.domain === optionDomain);
+  const filtered = query ? domainItems.filter((o) => o.name.toLowerCase().includes(query)) : domainItems;
   const hasExactMatch = catalogItems.some((o) => o.name.toLowerCase() === query);
   const canAddNew = canCreateCatalogItems && query.length > 0 && !hasExactMatch;
 
@@ -16032,7 +16052,7 @@ function CreatableSelect({
           if (e.key !== 'Enter' || !open) return;
           // Enter inside the list means "choose what I typed" — never "submit the form".
           e.preventDefault();
-          const exact = catalogItems.find((o) => o.name.toLowerCase() === query);
+          const exact = domainItems.find((o) => o.name.toLowerCase() === query);
           if (exact) pick(exact);
           else if (filtered.length === 1) pick(filtered[0]);
           else if (canAddNew) openAddModal(text.trim());
@@ -16089,8 +16109,8 @@ function CreatableSelect({
       <FormModal open={addModalName !== null} title={editTarget ? `Rename ${newItemTitle}` : `Add New ${newItemTitle}`} onClose={closeAddModal}>
         <form className="smart-form" onSubmit={saveAddModal} noValidate>
           {addModalError && (
-            <div className="toast-notice-overlay" onClick={() => setAddModalError(null)}>
-              <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
+            <div className="form-feedback" onClick={() => setAddModalError(null)}>
+              <div className="qa-inline-error" role="alert" onClick={(e) => e.stopPropagation()}>
                 <Icon name="alert" size={17} className="toast-notice-icon" />
                 <div className="toast-notice-lines"><span>{addModalError}</span></div>
                 <button type="button" className="toast-notice-close" onClick={() => setAddModalError(null)} aria-label="Dismiss">
@@ -16218,8 +16238,8 @@ function NewIssueModalField({ value, onChange, issueTypeOptions = [] }) {
       <FormModal open={open} title="Add New Issue" onClose={cancel}>
         <form className="smart-form new-issue-form" onSubmit={save} noValidate>
           {error && (
-            <div className="toast-notice-overlay" onClick={() => setError(null)}>
-              <div className="toast-notice toast-notice-validation error" role="alert" onClick={(e) => e.stopPropagation()}>
+            <div className="form-feedback" onClick={() => setError(null)}>
+              <div className="qa-inline-error" role="alert" onClick={(e) => e.stopPropagation()}>
                 <Icon name="alert" size={17} className="toast-notice-icon" />
                 <div className="toast-notice-lines"><span>{error}</span></div>
                 <button type="button" className="toast-notice-close" onClick={() => setError(null)} aria-label="Dismiss">

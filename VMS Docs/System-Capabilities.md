@@ -386,3 +386,12 @@ Audit follow-up: see [System Audit ? 2026-10-23](../docs/archive/vms/System-Audi
 ## Work-list status defaults
 
 Operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders select Pending + Submitted; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records select unfinished progress states; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection, plus Ongoing only and All statuses shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.
+
+
+## QA Run 1 follow-up - 25 October 2026
+
+See [the 37-finding implementation/retest record](QA-Run1-Fixes-2026-10-25.md) for corrections to the older behavior described above. Schedule editing is creator-only; completion dates cannot be in the future. Standalone verification requires a reason for failure and personal-test attestation to pass. Catalogue creation remains available to operational staff; edit/delete are Admin-only. Approved Active/For Verification tickets are cancelled with a reason, never deleted. Ticket titles use the actual first problem, and unchanged correction resubmissions are rejected.
+
+Repair closure and relevant physical changes invalidate older readiness evidence; a fresh readiness attestation is required after repair. Active maintenance blocks readiness confirmation. Availability, physical condition and readiness remain separate. Completed preventive work awaiting verification holds availability with Needs Inspection rather than automatically diagnosing a new defect; a newer Good observation is preserved when no active repair exists.
+
+Impersonation captures initiating identity/session/reason on activity entries. Ordinary barangay-role logins have no switcher. The dedicated impersonation@test.com account keeps its picker inside impersonated workspaces so it can switch repeatedly; other support sessions retain return-to-original-account. Deployed support remains read-only with a 30-minute impersonated token. Module URLs retain selection through a module query parameter, date/time presentation uses Asia/Manila, and reports retain cost fields and identify record types. Historical bad data and missing events are not silently rewritten or fabricated.

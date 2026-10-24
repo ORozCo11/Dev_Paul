@@ -589,7 +589,7 @@ class TicketController extends Controller
 
         $maintenanceTypes = array_column($data['sub_issues'], 'maintenance_type');
         $issueType = !empty($data['issue_report_id']) ? optional(VehicleIssueReport::find($data['issue_report_id']))->issue_type : null;
-        $issueSummary = collect($maintenanceTypes)->filter()->first() ?: ($issueType ?: ($data['sub_issues'][0]['title'] ?? 'Maintenance'));
+        $issueSummary = $data['sub_issues'][0]['title'] ?? $issueType ?? 'Maintenance';
         // Provisional (no number yet) — gets its MT-#### prefix once the row has an id.
         $data['ticket_title'] = "{$vehicle->vehicle_name} — {$issueSummary}";
 
@@ -658,7 +658,7 @@ class TicketController extends Controller
                     'issue_description' => $data['ticket_description'],
                     'severity_level'    => $severity,
                     'reported_by'       => $request->user()->id,
-                    'status'            => 'In Maintenance',
+                    'status'            => 'Under Review',
                     'remarks'           => 'Auto-created from a maintenance ticket proposal.',
                 ])->issue_report_id;
             }
@@ -706,7 +706,7 @@ class TicketController extends Controller
 
             if (!empty($data['issue_report_id'])) {
                 VehicleIssueReport::where('issue_report_id', $data['issue_report_id'])->update([
-                    'status' => 'In Maintenance',
+                    'status' => 'Under Review',
                 ]);
             }
 
@@ -719,6 +719,8 @@ class TicketController extends Controller
                 ]);
             }
 
+            if ($vehicle->condition === 'Good') $vehicle->update(['condition' => 'Needs Inspection']);
+            $this->history($vehicle, 'Ticket Proposed', 'Maintenance proposal submitted for Admin review.', 'maintenance_tickets', $ticket->ticket_id, $request);
             $this->log($request, 'Propose Ticket', "Ticket proposal \"{$data['ticket_title']}\" for {$vehicle->vehicle_name} submitted for Admin review.", $ticket->ticket_id);
 
             $this->notifyAdmins(
@@ -1010,7 +1012,7 @@ class TicketController extends Controller
                 $ticket->ticket_id
             );
 
-            $this->notifyRepairReadyForVerification($ticket);
+            $this->notifyRepairReadyForVerification($ticket, $request);
         });
 
         return response()->json($ticket->fresh($this->eagerLoads()));
@@ -1048,7 +1050,7 @@ class TicketController extends Controller
             "Ticket #{$ticket->display_number} ({$ticket->ticket_title}) — every repair logged; sent to the Custodian for verification.",
             $ticket->ticket_id
         );
-        $this->notifyRepairReadyForVerification($ticket);
+        $this->notifyRepairReadyForVerification($ticket, $request);
 
         return true;
     }
@@ -1056,8 +1058,9 @@ class TicketController extends Controller
     // One wording for "this ticket is now waiting on you", whichever path
     // got it there (automatic advance or the manual fallback button). Links
     // to the ticket, which is where the Custodian's Verify section lives.
-    private function notifyRepairReadyForVerification(MaintenanceTicket $ticket): void
+    private function notifyRepairReadyForVerification(MaintenanceTicket $ticket, Request $request): void
     {
+        $this->history($ticket->vehicle, 'Ready for Verification', 'All repair work is submitted for independent Custodian verification.', 'maintenance_tickets', $ticket->ticket_id, $request);
         $this->notifyUser(
             $ticket->assigned_custodian_id,
             'Repair Ready for Verification',
@@ -1195,7 +1198,9 @@ class TicketController extends Controller
             // occurrence. Same call the old closeTicket() always made.
             $this->completeLinkedSchedule($ticket, $request->user()->id);
 
+            $ticket->vehicle->update(['readiness_invalidated_at' => now()]);
             $this->recomputeVehicleStatus($ticket->vehicle_id, $request);
+            $this->history($ticket->vehicle, 'Ticket Closed', 'Repair independently verified and ticket closed. A fresh readiness check is required.', 'maintenance_tickets', $ticket->ticket_id, $request);
 
             $this->log(
                 $request,
@@ -1369,6 +1374,13 @@ class TicketController extends Controller
             $this->assertSourcesAvailable($ticket);
             $items = $ticket->subIssues;
             abort_unless(collect($data['sub_issues'])->pluck('sub_issue_id')->sort()->values()->all() === $items->pluck('sub_issue_id')->sort()->values()->all(), 422, 'Include each existing work item exactly once.');
+            $changed = $ticket->ticket_description !== $data['ticket_description'] || $ticket->priority !== $data['priority'];
+            foreach ($data['sub_issues'] as $row) {
+                $item = $items->firstWhere('sub_issue_id', $row['sub_issue_id']);
+                $changed = $changed || $item->title !== $row['title'] || ($item->maintenance_type ?? '') !== ($row['maintenance_type'] ?? '');
+                if ($item->repair_type === 'external') $changed = $changed || $item->external_work_scope !== ($data['external_work_scope'] ?? null) || $item->external_reason !== ($data['external_reason'] ?? null);
+            }
+            abort_unless($changed, 422, 'Make the requested correction before resubmitting this proposal.');
             $this->decisionEvent($ticket, $request, 'Proposal Resubmitted', ['previous_proposal' => $ticket->only(['ticket_description', 'priority', 'ticket_title', 'correction_reason']), 'previous_items' => $items->map->only(['sub_issue_id', 'title', 'maintenance_type', 'external_reason', 'external_work_scope'])->all()]);
             foreach ($data['sub_issues'] as $row) {
                 $item = $items->firstWhere('sub_issue_id', $row['sub_issue_id']);
@@ -1380,7 +1392,7 @@ class TicketController extends Controller
                 $item->update($patch);
             }
             $first = $ticket->subIssues()->orderBy('sub_issue_id')->first();
-            $summary = $first->maintenance_type ?: $first->title;
+            $summary = $first->title;
             $ticket->update(['ticket_description' => $data['ticket_description'], 'priority' => $data['priority'], 'ticket_title' => MaintenanceTicket::composeTitle($ticket->barangay_number ?? $ticket->ticket_id, $ticket->vehicle->vehicle_name, $summary), 'correction_requested_at' => null, 'correction_reason' => null]);
             $this->assertNoDuplicateProposal($ticket);
             $this->log($request, 'Resubmit Ticket Proposal', "Ticket #{$ticket->display_number} corrected by the assigned Custodian; awaiting fresh Admin review.", $ticket->ticket_id);
@@ -2144,7 +2156,7 @@ class TicketController extends Controller
             $subIssue->update([
                 'status'                    => 'For Inspection',
                 'verification_assigned_to'  => $ticket->assigned_custodian_id,
-                'repair_logs'               => $existingLogs . '[' . now()->format('Y-m-d H:i') . '] ' . $logText,
+                'repair_logs'               => $existingLogs . '[' . now()->toIso8601String() . '] ' . $logText,
                 'parts_used'                => $data['parts_used'] ?? $subIssue->parts_used,
                 'attachment_files'          => $attachmentFiles,
                 'attachment_url'            => $request->hasFile('photo')
@@ -2911,7 +2923,7 @@ class TicketController extends Controller
             $this->recomputeVehicleStatus($ticket->vehicle_id, $request);
             $this->log($request, 'Ticket Restored', "Ticket #{$ticket->display_number} restored to {$status}.", $ticket->ticket_id);
             $this->notifyTicketActors($ticket, 'Ticket Restored', "Ticket #{$ticket->display_number} was restored to {$status}. Previous work evidence is retained.", 'ticket_restored', $submitted ? $ticket->assigned_custodian_id : null);
-            if ($submitted) $this->notifyRepairReadyForVerification($ticket);
+            if ($submitted) $this->notifyRepairReadyForVerification($ticket, $request);
             return response()->json($ticket->fresh($this->eagerLoads()));
         });
     }
@@ -2922,6 +2934,7 @@ class TicketController extends Controller
         return DB::transaction(function () use ($request, $ticket) {
             $ticket = $this->lockTicket($ticket, $request);
             abort_if($ticket->status === 'Closed' || $ticket->closed_at, 422, 'A closed ticket is permanent and cannot be deleted.');
+            abort_if(in_array($ticket->status, ['Active', 'For Verification'], true), 422, 'Cancel an approved ticket with a reason; do not delete its decision trail.');
             abort_if($this->hasRepairEvidence($ticket), 422, 'This ticket has repair, parts, shop or cost evidence. Cancel it with a reason instead; its evidence must be retained.');
             $this->resetLinkedIssueReports($ticket, 'Pending');
             $vehicleId = $ticket->vehicle_id;
@@ -3055,7 +3068,7 @@ class TicketController extends Controller
         $previousStatus = $vehicle->status;
         \App\Services\VehicleOperationalState::refresh($vehicle);
         if ($vehicle->status !== $previousStatus) {
-            $this->history($vehicle, 'Ticket Updated', "{$vehicle->vehicle_name} moved to {$vehicle->status} after checking outstanding repair work.", 'vehicles', $vehicle->vehicle_id, $request);
+            $this->history($vehicle, 'Operational Status Updated', "{$vehicle->vehicle_name} moved to {$vehicle->status} after checking outstanding repair work.", 'vehicles', $vehicle->vehicle_id, $request);
         }
     }
 
@@ -3225,6 +3238,7 @@ class TicketController extends Controller
         $history = $ticket->decision_history ?? [];
         $history[] = ['event' => $event, 'user_id' => $request->user()->id, 'name' => $request->user()->name, 'at' => now()->toIso8601String(), 'details' => $details];
         $ticket->update(['decision_history' => $history, 'decision_revision' => $ticket->decision_revision + 1]);
+        if ($event !== 'Approved') $this->history($ticket->vehicle, $event, 'Ticket #' . $ticket->display_number . ': ' . $event, 'maintenance_tickets', $ticket->ticket_id, $request);
     }
 
     private function notifyTicketActors(MaintenanceTicket $ticket, string $title, string $message, string $type, ?int $except = null): void
@@ -3290,6 +3304,7 @@ class TicketController extends Controller
         $history = $item->work_history ?? [];
         $history[] = ['event' => $event, 'user_id' => $request->user()->id, 'name' => $request->user()->name, 'at' => now()->toIso8601String(), 'details' => $details];
         $item->update(['work_history' => $history]);
+        $this->history($item->ticket->vehicle, $event, 'Ticket #' . $item->ticket->display_number . ': ' . $item->title . ' - ' . $event, 'ticket_sub_issues', $item->sub_issue_id, $request);
     }
 
     private function log(Request $request, string $action, string $details, $affectedRecordId = null): void

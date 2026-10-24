@@ -196,8 +196,8 @@ return [
     // Shared dropdown catalogs.
     // Operational users manage the shared issue and repair catalogs inline.
     'catalog.create' => ['Admin', 'Custodian', 'Maintenance Personnel'],
-    'catalog.edit' => ['Admin', 'Custodian', 'Maintenance Personnel'],
-    'catalog.delete' => ['Admin', 'Custodian', 'Maintenance Personnel'],
+    'catalog.edit' => ['Admin'],
+    'catalog.delete' => ['Admin'],
 
     // Users (barangay-scoped, managed by that barangay's Admin)
     'user.view' => ['Admin'],

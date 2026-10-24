@@ -443,7 +443,7 @@ class TicketWorkflowTest extends TestCase
             'priority' => 'Medium',
             // Same Main Issue = same issue summary (here the maintenance type),
             // matched case-insensitively against the legacy 'Overheating' title.
-            'sub_issues' => [['title' => 'Still overheating', 'maintenance_type' => 'overheating']],
+            'sub_issues' => [['title' => 'overheating', 'maintenance_type' => 'overheating']],
         ])->assertUnprocessable();
     }
 
@@ -490,7 +490,7 @@ class TicketWorkflowTest extends TestCase
 
         // The issue moves out of Pending as soon as it's proposed, not only
         // once an Admin approves — same timing createTicket() used to have.
-        $this->assertSame('In Maintenance', $issue->fresh()->status);
+        $this->assertSame('Under Review', $issue->fresh()->status);
 
         // ...and the /issues listing exposes the link back to that ticket, so
         // the Issue Report detail page can show "Linked Ticket".
@@ -757,15 +757,15 @@ class TicketWorkflowTest extends TestCase
     }
 
     #[Test]
-    public function deleting_a_ticket_with_no_finished_sub_issues_leaves_no_archive_trace(): void
+    public function an_approved_ticket_cannot_be_deleted_before_repairs_either(): void
     {
         $vehicle = $this->vehicle();
         $ticket = $this->activeTicket($vehicle, ['Low coolant level']);
 
         Sanctum::actingAs($this->admin, ['*']);
-        $this->deleteJson("/api/tickets/{$ticket->ticket_id}")->assertOk();
+        $this->deleteJson("/api/tickets/{$ticket->ticket_id}")->assertUnprocessable();
 
-        $this->assertFalse(MaintenanceTicket::where('ticket_id', $ticket->ticket_id)->exists());
+        $this->assertTrue(MaintenanceTicket::where('ticket_id', $ticket->ticket_id)->exists());
         $this->assertFalse(TicketArchiveLog::where('ticket_id', $ticket->ticket_id)->exists());
     }
 
@@ -1162,7 +1162,7 @@ class TicketWorkflowTest extends TestCase
         $vehicle = $this->vehicle();
         $issue = $this->pendingIssue($vehicle);
         $ticketId = $this->propose($vehicle, ['issue_report_id' => $issue->issue_report_id])->assertCreated()->json('ticket_id');
-        $this->assertSame('In Maintenance', $issue->fresh()->status);
+        $this->assertSame('Under Review', $issue->fresh()->status);
 
         Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("/api/tickets/{$ticketId}/decline", ['decline_reason' => 'Not needed.'])->assertOk();

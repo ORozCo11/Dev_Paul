@@ -163,6 +163,7 @@ class ScheduleCompletionTest extends TestCase
     #[Test]
     public function completing_a_schedule_dated_jan_31_in_a_leap_year_lands_on_feb_29(): void
     {
+        $this->travelTo(\Carbon\Carbon::parse('2028-01-31 12:00:00', 'Asia/Manila'));
         // Same overflow scenario, but 2028 IS a leap year, so the correctly
         // clamped next occurrence is 2028-02-29, not 2028-03-02 (overflow)
         // and not 2028-02-28 (which would be wrong here too).
