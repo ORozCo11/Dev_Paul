@@ -331,6 +331,7 @@ function Register() {
       <main className="auth-split-page">
       {submitting && <LoadingOverlay />}
       <section className="auth-split-panel" aria-labelledby="register-title">
+        {!submitted && step > 0 && <button type="button" className="register-back-arrow" aria-label="Previous registration step" title="Back" disabled={submitting} onClick={() => { setStep((current) => current - 1); setError(''); }}><Icon name="arrowLeft" size={20} /></button>}
         <div className="auth-logo-header">
           <h1 id="register-title" className="auth-login-heading">Create your account</h1>
           <p className="register-intro">Join your barangay's vehicle management team.</p>
@@ -349,7 +350,7 @@ function Register() {
           </div>
         ) : (
           <form ref={formRef} className="auth-form auth-form-grid" autoComplete="off" onSubmit={handleSubmit} noValidate>
-            <ol className="register-progress" aria-label="Registration progress">{['Your details', 'Your barangay', 'Account access'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={step >= index ? 'is-current' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
+            <ol className="register-progress" aria-label="Registration progress">{['Your details', 'Your barangay', 'Account access'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={step > index ? 'is-complete' : step === index ? 'is-current' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
             <h2 className="register-step-title" ref={stepHeading} tabIndex={-1}>{['Tell us about yourself', 'Where are you based?', 'Secure your account'][step]}</h2>
             <p className="register-step-help">Step {step + 1} of 3 · {['Enter your name and contact information.', 'Choose your barangay and enter your street address.', 'Enter your registration code and choose a strong password.'][step]}</p>
             <fieldset className="register-fields" hidden={step !== 0} disabled={step !== 0}><legend className="sr-only">Personal details</legend>
@@ -622,7 +623,7 @@ function Register() {
 
             </fieldset>
             {error ? <p role="alert" className="notice error auth-field-full">{error}</p> : null}
-            <div className="register-actions">{step > 0 && <button type="button" className="ghost-button" disabled={submitting} onClick={() => { setStep((current) => current - 1); setError(''); }}>Back</button>}
+            <div className="register-actions">
 
             <button className="primary-button auth-submit-btn auth-field-full" disabled={submitting} type="submit">
               {submitting ? (

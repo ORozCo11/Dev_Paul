@@ -4,9 +4,9 @@
 .register-page .auth-login-heading { font-size: 28px; text-align: left; }
 .register-page .register-intro { color: #64748b; font-size: 14px; margin-top: 8px; }
 .register-page .auth-form-grid { display: block; }
-.register-progress { list-style: none; display: flex; gap: 16px; padding: 0; margin: 0 0 28px; }
-.register-progress li { display: flex; align-items: center; gap: 7px; color: #64748b; font-size: 12px; }
-.register-progress li > span { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border: 1px solid #cbd5e1; border-radius: 50%; }
+.register-progress { list-style: none; display: flex; justify-content: center; gap: 0; padding: 0; margin: 0 0 28px; }
+.register-progress li { position: relative; flex: 1; max-width: 200px; display: flex; flex-direction: column; text-align: center; align-items: center; gap: 7px; color: #64748b; font-size: 12px; }
+.register-progress li > span { display: grid; place-items: center; width: 28px; height: 28px; position: relative; z-index: 1; background: white; flex-shrink: 0; border: 1px solid #cbd5e1; border-radius: 50%; }
 .register-progress .is-current { color: #1d4ed8; font-weight: 600; }
 .register-progress .is-current > span { background: #2563eb; border-color: #2563eb; color: white; }
 .register-step-title { margin: 0; font-size: 21px; color: #0f172a; }
@@ -44,3 +44,10 @@ html .register-page .auth-split-hero-content p { color: #e2e8f0; font-size: 16px
 .register-boundary-preview p, .register-boundary-preview small { display:block; margin:0; padding:10px 12px; line-height:1.5; }
 .register-boundary-preview small { border-top:1px solid #d7e1ef; }
 .register-boundary-map { height:240px; background:#e2e8f0; }
+
+.register-progress li:not(:last-child)::after { content: ''; position: absolute; top: 14px; left: calc(50% + 14px); width: calc(100% - 28px); height: 2px; background: #cbd5e1; }
+.register-progress li.is-complete::after { background: #16a34a; }
+.register-progress .is-complete { color: #15803d; font-weight: 600; }
+.register-progress .is-complete > span { background: #16a34a; border-color: #16a34a; color: white; }
+.register-back-arrow { display: grid; place-items: center; width: 40px; height: 40px; margin: 0 0 16px; border: 1px solid #cbd5e1; border-radius: 8px; background: transparent; color: #2563eb; cursor: pointer; }
+.register-back-arrow:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
