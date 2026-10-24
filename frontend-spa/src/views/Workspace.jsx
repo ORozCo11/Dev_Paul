@@ -3154,7 +3154,6 @@ function Workspace() {
               onAdd={canRegisterVehicles(user) ? () => navigate(`${roleRoutes[user.role]}/vehicles/new`) : undefined}
               addLabel="Add Vehicle"
               onImport={canDo(user, 'vehicle.import') && canRegisterVehicles(user) ? () => setVehicleImportOpen(true) : undefined}
-              onExport={() => exportRowsToCsv('vehicles.csv', VEHICLE_EXPORT_COLUMNS, visibleRows)}
             />
           </div>
           <PaginatedTable columns={vehicleColumnChooser.visibleColumns} rows={visibleRows} onRowClick={openVehicleProfile} onReorderColumn={vehicleColumnChooser.reorderColumn} emptyMessage="No vehicles here yet — click the + button to register one." />
@@ -10450,20 +10449,6 @@ function exportRowsToCsv(filename, columns, rows) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
-
-const VEHICLE_EXPORT_COLUMNS = [
-  { label: 'ID', value: (r) => recordNumber(r, 'vehicle_id') },
-  { label: 'Vehicle Name', value: (r) => r.vehicle_name },
-  { label: 'Plate Number', value: (r) => r.plate_number },
-  { label: 'Type', value: (r) => r.category?.category_name ?? 'Unassigned' },
-  { label: 'Brand', value: (r) => r.brand },
-  { label: 'Model', value: (r) => r.model },
-  { label: 'Capacity', value: (r) => r.capacity },
-  { label: 'Location', value: (r) => r.current_location },
-  { label: 'Status', value: (r) => r.status },
-  { label: 'Condition', value: (r) => r.condition },
-  { label: 'Ready to Respond', value: (r) => READINESS_BADGE[r.readiness_state]?.label ?? '' },
-];
 
 const USER_EXPORT_COLUMNS = [
   { label: 'ID', value: (r) => recordNumber(r, 'id') },
