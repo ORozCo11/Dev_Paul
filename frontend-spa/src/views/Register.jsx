@@ -523,19 +523,20 @@ function Register() {
             )}
 
             <label className="auth-field auth-field-full">
-              <span>Street Address</span>
+              <span>Your address</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <input
                   autoComplete="street-address"
                   name="address"
                   {...fieldErrorProps('address')}
                   onChange={handleChange}
-                  placeholder="House no. / street / purok"
+                  placeholder="Your house no. / street / purok"
                   required
                   type="text"
                   value={form.address}
                 />
               </div>
+              <small>Your personal contact address within the selected barangay, not the barangay or BDRMO office address. You may type it manually.</small>
               <RegistrationFieldError name="address" errors={fieldErrors} />
             </label>
 
