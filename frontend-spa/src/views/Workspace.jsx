@@ -10725,6 +10725,8 @@ function groupWorkTrackerByTicket(rows) {
 function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onViewTicket, tabBar }) {
   const [activeFilter, setActiveFilter] = useState('');
   const [search, setSearch] = useState('');
+  const historyColumns = useMemo(() => ticketTableColumns({}, onViewTicket), [onViewTicket]);
+  const historyColumnChooser = useColumnChooser('vms_my_tasks_history_columns', historyColumns);
   // FilterBar (draft/apply) state — Category + Capacity + Status + My Role.
   const [filterCategory, setFilterCategory] = useState([]);
   const [filterCapacity, setFilterCapacity] = useState([]);
@@ -10770,16 +10772,13 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
   }, [allRows, activeFilter, filterCategory, filterCapacity, filterStatus, filterRole, filterOutcome, search]);
 
   const groupedTickets = useMemo(() => groupWorkTrackerByTicket(visibleRows), [visibleRows]);
-  // groupWorkTrackerByTicket's return is a synthesized summary row (one per
-  // ticket_id, built from flattened sub-issue rows) — not the real ticket
-  // object TicketCard needs (status/priority/created_at/progress). `tickets`
-  // here is already the full raw ticket list, so just look the real one up.
+  // Use the original tickets so the shared list retains status, priority and personnel.
   const ticketById = useMemo(() => {
     const map = new Map();
     (tickets ?? []).forEach((t) => map.set(t.ticket_id, t));
     return map;
   }, [tickets]);
-  const groupedTicketCards = useMemo(
+  const historyTickets = useMemo(
     () => groupedTickets.map((g) => ticketById.get(g.ticket_id)).filter(Boolean),
     [groupedTickets, ticketById]
   );
@@ -10829,6 +10828,7 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
           <LocalSearchInput
             value={search}
             onChange={setSearch}
+            columnChooser={historyColumnChooser}
             placeholder="Search vehicle, plate, or ticket..."
             onExport={() => exportRowsToCsv('work-tracker.csv', [
               { label: 'Ticket', value: (r) => `#${ticketNumber(r)} ${r.ticket_title}` },
@@ -10843,11 +10843,12 @@ function WorkTrackerModule({ tickets, user, categories = [], vehicles = [], onVi
           />
         </div>
         <div style={{ height: '16px' }} />
-        <PaginatedCardGrid
-          items={groupedTicketCards}
-          keyOf={(t) => t.ticket_id}
+        <PaginatedTable
+          columns={historyColumnChooser.visibleColumns}
+          onReorderColumn={historyColumnChooser.reorderColumn}
+          rows={historyTickets}
+          onRowClick={onViewTicket}
           emptyMessage="Nothing here yet — tickets you've worked on will show up here once they're done or deferred."
-          renderItem={(t) => <TicketCard ticket={t} onClick={() => onViewTicket(t)} />}
         />
       </section>
     </div>
