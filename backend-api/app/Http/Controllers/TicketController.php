@@ -111,7 +111,8 @@ class TicketController extends Controller
             });
         }
 
-        return $query->latest('ticket_id')->get();
+        $hidden = DB::table('hidden_ticket_lists')->where('user_id', $user->id)->pluck('ticket_id')->flip();
+        return $query->latest('ticket_id')->get()->each(fn ($ticket) => $ticket->setAttribute('hidden_from_list', $hidden->has($ticket->ticket_id)));
     }
 
     public function show(Request $request, MaintenanceTicket $ticket)
@@ -142,6 +143,17 @@ class TicketController extends Controller
             ->get(['log_id', 'user_id', 'role', 'action', 'details', 'created_at']));
 
         return $ticket;
+    }
+
+    public function listVisibility(Request $request, MaintenanceTicket $ticket)
+    {
+        $this->requireAbility($request, 'ticket.manage_list_visibility');
+        $this->show($request, $ticket); // Apply the same tenant/assignment access as ticket details.
+        $data = $request->validate(['hidden' => ['required', 'boolean']]);
+        $key = ['user_id' => $request->user()->id, 'ticket_id' => $ticket->ticket_id];
+        if ($data['hidden']) DB::table('hidden_ticket_lists')->insertOrIgnore($key);
+        else DB::table('hidden_ticket_lists')->where($key)->delete();
+        return response()->json(['hidden_from_list' => (bool) $data['hidden']]);
     }
 
     private function mechanicsWithWorkload(?int $barangayId)

@@ -143,6 +143,7 @@ return [
     // Tickets
     'ticket.view_open_for_vehicle' => ['Admin'],
     'ticket.view_archives' => ['Admin'],
+    'ticket.manage_list_visibility' => ['Admin', 'Custodian', 'Maintenance Personnel'],
     'ticket.check_recurrence' => ['Admin', 'Custodian'],
     // Nobody holds this any more — every ticket must originate as a
     // Custodian's proposal (ticket.propose) that Admin then reviews, edits,

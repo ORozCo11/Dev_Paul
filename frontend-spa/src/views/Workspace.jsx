@@ -4130,6 +4130,7 @@ function Workspace() {
           ticketLookups={ticketLookups}
           notifications={notifications}
           onViewTicket={openTicketProfile}
+          onChangeVisibility={(ticket, hidden) => ticketAction(`/tickets/${ticket.ticket_id}/list-visibility`, { hidden }, hidden ? 'Ticket hidden from your list. Repair tracking remains active.' : 'Ticket restored to your list.')}
           onViewIssue={(id) => navigate(`${roleRoutes[user.role]}/issues/${id}`)}
           onCreateNew={canDo(user, 'ticket.create') ? () => navigate(`${roleRoutes[user.role]}/tickets/new`) : undefined}
           onViewArchives={canDo(user, 'ticket.view_archives') ? () => setActiveModule('ticketArchives') : undefined}
@@ -13137,6 +13138,7 @@ function TicketModule({
   ticketLookups,
   notifications = [],
   onViewTicket,
+  onChangeVisibility,
   onCreateNew,
   onViewArchives,
   searchQuery,
@@ -13164,6 +13166,9 @@ function TicketModule({
   recentIssues,
 }) {
   const [ticketViewMode, setTicketViewMode] = useState('table');
+  const [showHidden, setShowHidden] = useState(false);
+  const listTickets = tickets.filter((ticket) => Boolean(ticket.hidden_from_list) === showHidden);
+  const hiddenCount = (allTickets ?? tickets).filter((ticket) => ticket.hidden_from_list).length;
 
   const changeTicketViewMode = (mode) => {
     setTicketViewMode(mode);
@@ -13208,7 +13213,7 @@ function TicketModule({
     return counts;
   }, [statSourceTickets]);
 
-  const ticketColumnDefs = useMemo(() => ticketTableColumns(unreadByTicket, onViewTicket), [unreadByTicket, onViewTicket]);
+  const ticketColumnDefs = useMemo(() => ticketTableColumns(unreadByTicket, onViewTicket, onChangeVisibility), [unreadByTicket, onViewTicket, onChangeVisibility]);
   const ticketColumnChooser = useColumnChooser('vms_ticket_list_columns_v3', ticketColumnDefs);
 
   return (
@@ -13281,8 +13286,9 @@ function TicketModule({
         )}
 
         <div className="panel-header-bar" style={{ marginBottom: '8px' }}>
-          <h3>All Tickets <span className="count-badge">{tickets.length}</span></h3>
+          <h3>{showHidden ? 'Hidden Tickets' : 'All Tickets'} <span className="count-badge">{listTickets.length}</span></h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button type="button" className="archive-btn" aria-pressed={showHidden} onClick={() => setShowHidden((current) => !current)}>{showHidden ? 'Back to tickets' : `Hidden (${hiddenCount})`}</button>
             {onViewArchives && (
               <button type="button" className="archive-btn" onClick={onViewArchives} title="Closed and deleted tickets">
                 <span className="archive-btn-icon"><Icon name="archive" size={14} /></span>
@@ -13301,17 +13307,17 @@ function TicketModule({
           </div>
         </div>
 
-        {tickets.length === 0
-          ? <p className="empty-state">No tickets yet. Create one to begin the workflow.</p>
+        {listTickets.length === 0
+          ? <p className="empty-state">No tickets match this view. Check your filters or switch between the ticket and hidden lists.</p>
           : ticketViewMode === 'table'
-            ? <PaginatedTable columns={ticketColumnChooser.visibleColumns} onReorderColumn={ticketColumnChooser.reorderColumn} rows={tickets} onRowClick={onViewTicket} />
+            ? <PaginatedTable columns={ticketColumnChooser.visibleColumns} onReorderColumn={ticketColumnChooser.reorderColumn} rows={listTickets} onRowClick={onViewTicket} />
             : (
               <PaginatedCardGrid
-                items={tickets}
+                items={listTickets}
                 keyOf={(t) => t.ticket_id}
-                emptyMessage="No tickets yet. Create one to begin the workflow."
+                emptyMessage="No tickets match this view. Check your filters or switch between the ticket and hidden lists."
                 renderItem={(t) => (
-                  <TicketCard ticket={t} unreadCount={unreadByTicket[t.ticket_id] ?? 0} onClick={() => onViewTicket(t)} />
+                  <div><TicketCard ticket={t} unreadCount={unreadByTicket[t.ticket_id] ?? 0} onClick={() => onViewTicket(t)} />{onChangeVisibility && <button type="button" className="ghost-button" onClick={() => onChangeVisibility(t, !t.hidden_from_list)}><Icon name={t.hidden_from_list ? 'undo' : 'archive'} size={14} />{t.hidden_from_list ? 'Restore to my list' : 'Hide from my list'}</button>}</div>
                 )}
               />
             )
@@ -15519,7 +15525,7 @@ function TicketsReadyToClosePanel({ tickets, onViewTicket, onCloseTicket }) {
   );
 }
 
-function ticketTableColumns(unreadByTicket = {}, onViewTicket) {
+function ticketTableColumns(unreadByTicket = {}, onViewTicket, onChangeVisibility) {
   const columns = [
     { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => <div className={`ticket-list-identity ${ticketStatusClass(r.status)}`}><strong>{ticketNumber(r)}</strong><small className="muted">{(r.updated_at ?? r.created_at) ? new Date(r.updated_at ?? r.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '-'}</small></div> },
     { key: 'created', label: 'Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
@@ -15555,7 +15561,7 @@ function ticketTableColumns(unreadByTicket = {}, onViewTicket) {
     { key: 'vehicle_image', label: 'Vehicle Image', className: 'cell-center', render: (r) => <PhotoCell alt={r.vehicle?.vehicle_name ?? 'Vehicle'} url={r.vehicle?.photo_url} /> },
     { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <span><TicketStatusPill status={r.status} />{r.correction_requested_at && <small className="muted"> Corrections requested</small>}</span> },
     { key: 'personnel', label: 'Assigned To', render: (r) => <TicketPersonnelAvatars ticket={r} /> },
-    { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <button type="button" className="cell-link" aria-label={`View ticket ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name="ticket" size={18} /></button> },
+    { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <span className="ticket-list-actions"><button type="button" className="cell-link" aria-label={`View ticket ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name="eye" size={16} /></button>{onChangeVisibility && <button type="button" className="cell-link" title={r.hidden_from_list ? 'Restore to my list' : 'Hide from my list; repair tracking continues'} aria-label={`${r.hidden_from_list ? 'Restore' : 'Hide'} ticket ${ticketNumber(r)} ${r.hidden_from_list ? 'to' : 'from'} my list`} onClick={(e) => { e.stopPropagation(); onChangeVisibility(r, !r.hidden_from_list); }}><Icon name={r.hidden_from_list ? 'undo' : 'archive'} size={16} /></button>}</span> },
   ];
   const order = ['ticket_id', 'created', 'vehicle_image', 'title', 'priority', 'status', 'personnel', 'next_step', 'actions'];
   return order.map((key) => columns.find((column) => column.key === key));

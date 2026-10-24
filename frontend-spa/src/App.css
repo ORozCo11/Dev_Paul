@@ -16623,3 +16623,5 @@ html[data-theme="dark"] .date-filter-input-icon { color:#93c5fd; border-left-col
 html .dual-range-track { margin:22px 0; background:#cbd5e1; }
 html .dual-range-track > .dual-range-input { min-width:0; min-height:18px; height:18px; padding:0; border:0; border-radius:0; box-shadow:none; background:transparent !important; pointer-events:none; }
 html .dual-range-input:focus-visible { outline:2px solid #60a5fa; outline-offset:3px; }
+
+.ticket-list-actions { display:inline-flex; align-items:center; justify-content:center; gap:8px; }

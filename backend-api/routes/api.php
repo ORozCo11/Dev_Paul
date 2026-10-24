@@ -231,6 +231,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
 
     // Lookups & listing
     Route::get('/tickets/lookups', [TicketController::class, 'lookups']);
+    Route::put('/tickets/{ticket}/list-visibility', [TicketController::class, 'listVisibility']);
     Route::get('/tickets', [TicketController::class, 'index']);
     Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
 
