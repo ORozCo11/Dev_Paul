@@ -1934,6 +1934,7 @@ class FleetController extends Controller
             'verifiedBy',
             'confirmedBy',
             'originatingSchedule',
+            'ticketSubIssue.ticket.originatingSchedule',
         ]);
 
         // The ledger includes all repair sources within the vehicle's barangay.
@@ -1970,7 +1971,7 @@ class FleetController extends Controller
 
     public function showMaintenanceRecord(Request $request, VehicleMaintenanceRecord $record)
     {
-        return $record->load(['vehicle.category', 'sourceVehicle', 'issueReport', 'maintenancePersonnel', 'verifiedBy', 'confirmedBy', 'originatingSchedule']);
+        return $record->load(['vehicle.category', 'sourceVehicle', 'issueReport', 'maintenancePersonnel', 'verifiedBy', 'confirmedBy', 'originatingSchedule', 'ticketSubIssue.ticket.originatingSchedule']);
     }
 
     public function storeMaintenanceRecord(Request $request)

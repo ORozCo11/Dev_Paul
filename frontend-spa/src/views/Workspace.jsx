@@ -25,7 +25,7 @@ import { AuthContext } from '../context/AuthContextObject';
 import { geoJsonToPolygons, isPointWithinBoundaryPolygons, isLocationPointAllowed } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 import { calendarDate } from '../utils/adminDate';
-import { groupMaintenanceByVehicle } from '../utils/maintenanceGroups';
+import { groupMaintenanceByVehicle, maintenanceSourceBucket } from '../utils/maintenanceGroups';
 import { currentCondition } from '../utils/conditionMonitoring';
 
 const FormNoticeContext = createContext(null);
@@ -1865,7 +1865,7 @@ function Workspace() {
         result = result.filter((row) => filterMaintType.includes(row.maintenance_type));
       }
       if (filterSource.length) {
-        result = result.filter((row) => filterSource.includes(row.source));
+        result = result.filter((row) => filterSource.includes(maintenanceSourceBucket(row)));
       }
     }
 
@@ -2113,7 +2113,7 @@ function Workspace() {
   );
 
   const maintenanceVehicleRows = useMemo(() => groupMaintenanceByVehicle(visibleRows), [visibleRows]);
-  const maintenanceRecordStats = useMemo(() => countByValues(records.maintenance ?? [], (row) => row.progress_status, ['Assigned', 'Under Repair', 'For Verification', 'Completed']), [records.maintenance]);
+  const maintenanceRecordStats = useMemo(() => countByValues(records.maintenance ?? [], maintenanceSourceBucket, ['In-House Repair', 'External Shop', 'Scheduled Maintenance']), [records.maintenance]);
 
   const userStats = useMemo(
     () => countByValues(records.users ?? [], (r) => r.role, ['Admin', 'Custodian', 'Maintenance Personnel']),
@@ -3692,15 +3692,15 @@ function Workspace() {
         <>
         <ModulePanel
           tabBar={maintenanceLedgerTabBar}
-          description="Counts show repair records. The list groups them by vehicle; open a vehicle to see every repair."
+          description="Counts show maintenance records by source. Scheduled work is counted under Maintenance Schedule, including schedule-generated tickets. The list groups records by vehicle; open one to see every repair."
           statCards={
             <ModuleStatCards
-              totalLabel="Total Vehicles"
+              totalLabel="Total Maintenance Records"
               total={maintenanceRecordStats.total}
               cards={MAINTENANCE_RECORD_STAT_CARDS}
               counts={maintenanceRecordStats}
-              activeFilter={filterStatus}
-              onFilterChange={setFilterStatus}
+              activeFilter={filterSource}
+              onFilterChange={setFilterSource}
             />
           }
           filterBar={
@@ -3730,7 +3730,7 @@ function Workspace() {
                 {
                   key: 'source',
                   label: 'Sources',
-                  options: ['Scheduled Maintenance', 'External Shop', 'From Issue Report', 'Field Repair'],
+                  options: ['In-House Repair', 'External Shop', 'Scheduled Maintenance'],
                   selected: filterSource,
                   setSelected: setFilterSource,
                 },
@@ -7868,10 +7868,9 @@ const CONDITION_STAT_CARDS = [
 ];
 
 const MAINTENANCE_RECORD_STAT_CARDS = [
-  { key: 'Assigned', label: 'Assigned', icon: 'clipboard', bg: '#e0f2fe', color: '#0284c7' },
-  { key: 'Under Repair', label: 'Under Repair', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
-  { key: 'For Verification', label: 'For Verification', icon: 'search', bg: '#ede9fe', color: '#7c3aed' },
-  { key: 'Completed', label: 'Completed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
+  { key: 'In-House Repair', label: 'In-House Repair', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
+  { key: 'External Shop', label: 'Sent to External Shop', icon: 'vehicle', bg: '#e0f2fe', color: '#0284c7' },
+  { key: 'Scheduled Maintenance', label: 'Maintenance Schedule', icon: 'calendar', bg: '#dcfce7', color: '#16a34a' },
 ];
 
 // 'Open' removed — no new ticket ever reaches that status (propose goes

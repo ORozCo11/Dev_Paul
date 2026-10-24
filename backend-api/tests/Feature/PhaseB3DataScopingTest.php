@@ -363,6 +363,23 @@ class PhaseB3DataScopingTest extends TestCase
     // =======================================================================
 
     #[Test]
+    public function maintenance_record_source_recognizes_direct_and_ticket_converted_schedules(): void
+    {
+        $vehicle=$this->vehicle();
+        $ticket=$this->ticket($vehicle);
+        $sub=$this->subIssue($ticket,$this->mechanic->id);
+        $converted=VehicleMaintenanceRecord::create(['vehicle_id'=>$vehicle->vehicle_id,'ticket_sub_issue_id'=>$sub->sub_issue_id,'maintenance_type'=>'Scheduled pump repair','problem_reason'=>'Scheduled ticket','progress_status'=>'Completed']);
+        $direct=VehicleMaintenanceRecord::create(['vehicle_id'=>$vehicle->vehicle_id,'maintenance_type'=>'Scheduled inspection','problem_reason'=>'Routine inspection','progress_status'=>'Completed','is_external'=>true]);
+        VehicleMaintenanceSchedule::create(['vehicle_id'=>$vehicle->vehicle_id,'maintenance_type'=>'Pump repair','scheduled_date'=>'2026-10-01','created_by'=>$this->admin->id,'resulting_ticket_id'=>$ticket->ticket_id]);
+        VehicleMaintenanceSchedule::create(['vehicle_id'=>$vehicle->vehicle_id,'maintenance_type'=>'Inspection','scheduled_date'=>'2026-10-01','created_by'=>$this->admin->id,'resulting_maintenance_id'=>$direct->maintenance_id]);
+        Sanctum::actingAs($this->mechanic,['*']);
+        $rows=collect($this->getJson('/api/maintenance-records')->assertOk()->json())->keyBy('maintenance_id');
+        $this->assertSame('Scheduled Maintenance',$rows[$converted->maintenance_id]['source']);
+        $this->assertSame('Scheduled Maintenance',$rows[$direct->maintenance_id]['source']);
+        $this->getJson('/api/maintenance-records/'.$converted->maintenance_id)->assertOk()->assertJsonPath('source','Scheduled Maintenance');
+    }
+
+    #[Test]
     public function maintenance_personnel_sees_barangay_ledger_with_optional_own_record_filter(): void
     {
         $vehicle = $this->vehicle();

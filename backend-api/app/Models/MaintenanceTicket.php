@@ -21,6 +21,11 @@ class MaintenanceTicket extends Model
         return sprintf('MT-%04d — %s — %s', $ticketId, $vehicleName, $summary);
     }
 
+    public function originatingSchedule()
+    {
+        return $this->hasOne(VehicleMaintenanceSchedule::class, 'resulting_ticket_id', 'ticket_id');
+    }
+
     protected $fillable = [
         'correction_reason',
         'correction_requested_at',

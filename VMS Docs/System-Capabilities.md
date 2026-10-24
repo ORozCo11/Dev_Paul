@@ -385,7 +385,7 @@ Audit follow-up: see [System Audit ? 2026-10-23](../docs/archive/vms/System-Audi
 
 ## Work-list status defaults
 
-Most operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders open with all assigned statuses, including Completed; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records select unfinished progress states; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection. Work orders use the status dropdown without the Ongoing only and All statuses shortcut buttons; verification and schedules retain those shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.
+Most operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders open with all assigned statuses, including Completed; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records include all progress states, including Completed; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection. Work orders use the status dropdown without the Ongoing only and All statuses shortcut buttons; verification and schedules retain those shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.
 
 
 ## QA Run 1 follow-up - 25 October 2026
@@ -418,3 +418,10 @@ The archive icon now **hides a ticket from the current user's main list**. Use *
 Mechanic reassignment creates a timeline entry for each affected work item, including its title, previous and new mechanic, reason, actor and time. Other work items and repair evidence remain intact. Reassignment-dialog Cancel and Submit buttons have matching rounded corners.
 
 Verification: 543 backend tests passed (2,765 assertions), 26 frontend tests passed, lint and production build passed. Browser checks covered repeated priority dragging/keyboard input, hide/details/restore, badge dimensions, timeline visibility and matching dialog corners. Visibility migration up/down/up passed on fresh and existing database copies with vehicles, tickets and sub-issues unchanged.
+
+
+### Unified maintenance ledger (2026-10-25)
+
+Maintenance Records opens without a progress restriction and includes all records within the viewer's barangay, including records performed by other mechanics and external shops. The explicit `mine=1` API filter retains personal-history access. This read scope does not grant repair editing, verification or access to another barangay.
+
+Summary cards show **Total Maintenance Records**, **In-House Repair**, **Sent to External Shop** and **Maintenance Schedule**. Counts refer to repair records; the table groups matching records by vehicle. Source cards and the Sources dropdown filter the same categories. Scheduled work, including schedule-generated tickets, takes precedence over repair method so categories do not overlap; other external work counts under External Shop and remaining work under In-House Repair. Opening a grouped vehicle retains its individual repair records.

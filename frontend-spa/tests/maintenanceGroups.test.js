@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupMaintenanceByVehicle } from '../src/utils/maintenanceGroups.js';
+import { groupMaintenanceByVehicle, maintenanceSourceBucket } from '../src/utils/maintenanceGroups.js';
 
 test('two repaired sub-issues share one vehicle row without losing either repair', () => {
   const repairs = [
@@ -37,4 +37,17 @@ test('normalizes vehicle identities and never merges records with unknown vehicl
   ]);
   assert.deepEqual(groups.map((g) => g.repair_records.length), [2, 1, 1]);
   assert.deepEqual(groupMaintenanceByVehicle(), []);
+});
+
+test('maintenance source totals are exclusive and retain separate records for the same vehicle', () => {
+  const records = [
+    { maintenance_id: 1, vehicle_id: 1, source: 'Field Repair' },
+    { maintenance_id: 2, vehicle_id: 1, source: 'From Issue Report' },
+    { maintenance_id: 3, vehicle_id: 2, is_external: true, source: 'External Shop' },
+    { maintenance_id: 4, vehicle_id: 3, is_external: true, source: 'Scheduled Maintenance' },
+    { maintenance_id: 5, vehicle_id: 3, originating_schedule: { schedule_id: 7 } },
+  ];
+  assert.deepEqual(records.map(maintenanceSourceBucket), ['In-House Repair', 'In-House Repair', 'External Shop', 'Scheduled Maintenance', 'Scheduled Maintenance']);
+  assert.equal(groupMaintenanceByVehicle(records).length, 3);
+  assert.equal(records.filter((record) => maintenanceSourceBucket(record) === 'In-House Repair').length, 2);
 });
