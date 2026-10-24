@@ -9327,7 +9327,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
       // explicitly instead.
       className: 'cell-center',
       render: (row) => (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span className="schedule-table-status">
           {/* TicketStatusBadge, not the plain StatusBadge — its colorMap
               already covers Pending Approval/Declined (shared with tickets);
               Scheduled/Completed/Cancelled fall back to the same plain
@@ -9376,7 +9376,7 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
       key: 'action',
       label: 'Action',
       locked: true,
-      className: 'cell-center',
+      className: 'cell-center schedule-action-cell',
       render: (row) => (
         <div className="schedule-table-actions">
           <MaintenanceScheduleActions

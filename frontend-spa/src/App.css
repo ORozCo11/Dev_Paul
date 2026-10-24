@@ -16645,3 +16645,20 @@ html .ticket-reassignment-modal .form-actions > button { border-radius:6px; }
 .mechanic-work-orders .operations-board-head > div:last-child { flex-wrap:wrap; }
 
 html[data-theme] :is(table, .table-shell) button.icon-btn.readiness-check-blocked { background:#fff7ed !important; border-color:#fdba74 !important; color:#9a3412 !important; }
+
+/* Keep schedule status labels and row actions aligned beneath their headings. */
+.schedule-table-status { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.schedule-action-cell { min-width: 92px; }
+.schedule-table-actions .sch-card-actions { display: inline-flex; flex-wrap: nowrap; width: max-content; vertical-align: middle; }
+.schedule-table-actions .sch-action.icon-btn { flex: 0 0 36px; width: 36px; height: 36px; padding: 0; }
+.schedule-panel-tools :is(.view-dropdown-btn, .local-search-input, .icon-add-btn, .export-btn) { height: 40px; min-height: 40px; box-sizing: border-box; }
+.schedule-panel-tools .icon-add-btn > svg { flex-shrink: 0; display: block; }
+@media (pointer: coarse) {
+  .schedule-table-actions .sch-action.icon-btn { flex-basis: 44px; width: 44px; height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .schedule-panel-tools { width: 100%; }
+  .schedule-panel-tools .local-search-bar { flex: 1 1 100%; width: 100%; flex-wrap: wrap; }
+  .schedule-panel-tools .local-search-container { flex: 1 1 140px; min-width: 0; width: auto; }
+}
