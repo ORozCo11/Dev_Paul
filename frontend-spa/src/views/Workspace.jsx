@@ -4621,7 +4621,7 @@ function useEscapeKey(active, onEscape) {
   }, [active, onEscape]);
 }
 
-function FormModal({ open, title, onClose, children, wide = false }) {
+function FormModal({ open, title, onClose, children, wide = false, className = '' }) {
   const notice = useContext(FormNoticeContext);
   const titleId = useId();
   useEscapeKey(open, onClose);
@@ -4630,7 +4630,7 @@ function FormModal({ open, title, onClose, children, wide = false }) {
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className={`modal-box${wide ? ' modal-box-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal-box${wide ? ' modal-box-wide' : ''} ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3 id={titleId}>{title}</h3>
           <button className="modal-close-btn" onClick={onClose} type="button" aria-label="Close"><Icon name="close" size={18} /></button>
@@ -11658,7 +11658,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
             )}
 
             {canDo(user, 'ticket.reassign_custodian') && onReassignCustodian && (
-              <FormModal open={reassigningCustodian} title="Reassign Custodian" onClose={() => setReassigningCustodian(false)}>
+              <FormModal className="ticket-reassignment-modal" open={reassigningCustodian} title="Reassign Custodian" onClose={() => setReassigningCustodian(false)}>
                 <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>
                   Hand this ticket to a different Custodian (e.g. the current one is on leave). Any repairs already awaiting verification move with it.
                 </p>
@@ -11697,7 +11697,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
             )}
 
             {canDo(user, 'ticket.assign_mechanic') && onAssignTicketMechanic && (
-              <FormModal open={reassigningMechanic} title="Reassign Mechanic" onClose={() => setReassigningMechanic(false)}>
+              <FormModal className="ticket-reassignment-modal" open={reassigningMechanic} title="Reassign Mechanic" onClose={() => setReassigningMechanic(false)}>
                 <p className="muted" style={{ marginBottom: 8, fontSize: '0.8rem' }}>
                   Choose one unfinished work item to hand over. Submitted repairs and other mechanics' work stay unchanged. Return a submitted repair for rework before reassigning it.
                 </p>
