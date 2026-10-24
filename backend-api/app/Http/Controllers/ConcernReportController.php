@@ -19,6 +19,8 @@ class ConcernReportController extends Controller
     {
         $data = $request->validate([
             'concern_type' => ['required', Rule::in(self::TYPES)],
+            'province_name' => ['nullable', 'string', 'max:255'],
+            'city_name' => ['nullable', 'string', 'max:255'],
             'barangay_name' => ['nullable', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:2000'],
             'reporter_name' => ['nullable', 'string', 'max:255'],
