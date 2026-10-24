@@ -1936,13 +1936,10 @@ class FleetController extends Controller
             'originatingSchedule',
         ]);
 
-        // Maintenance Personnel see their own repairs (their "Maintenance
-        // Records"/"Maintenance History" sidebar entries) rather than the
-        // whole barangay-wide ledger — a Custodian/Admin concern.
-        if ($user->hasRole('Maintenance Personnel') && !$user->hasAnyRole(['Admin', 'Custodian'])) {
+        // The ledger includes all repair sources within the vehicle's barangay.
+        // Personal history remains available through the explicit mine filter.
+        if ($request->boolean('mine')) {
             $query->where('maintenance_personnel_id', $user->id);
-        } elseif ($request->boolean('mine')) {
-            $query->where('maintenance_personnel_id', $request->user()->id);
         }
 
         if ($request->boolean('history')) {

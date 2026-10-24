@@ -359,12 +359,11 @@ class PhaseB3DataScopingTest extends TestCase
 
     // =======================================================================
     // GET /maintenance-records — Maintenance Personnel's "Maintenance
-    // Records"/"Maintenance History" sidebar entries are scoped to records
-    // THEY performed, not the whole barangay-wide ledger.
+    // Records" ledger includes all sources in their barangay; mine remains explicit.
     // =======================================================================
 
     #[Test]
-    public function maintenance_personnel_sees_only_their_own_maintenance_records(): void
+    public function maintenance_personnel_sees_barangay_ledger_with_optional_own_record_filter(): void
     {
         $vehicle = $this->vehicle();
         VehicleMaintenanceRecord::create([
@@ -381,9 +380,15 @@ class PhaseB3DataScopingTest extends TestCase
         ]);
 
         Sanctum::actingAs($this->mechanic, ['*']);
+        VehicleMaintenanceRecord::create(['vehicle_id'=>$vehicle->vehicle_id,'maintenance_type'=>'Shop Service','problem_reason'=>'Shop repair','is_external'=>true]);
         $response = $this->getJson('/api/maintenance-records')->assertOk();
-        $this->assertCount(1, $response->json());
-        $this->assertSame('Oil Change', $response->json()[0]['maintenance_type']);
+        $this->assertCount(3, $response->json());
+        $this->getJson('/api/maintenance-records?mine=1')->assertOk()->assertJsonCount(1)->assertJsonPath('0.maintenance_type','Oil Change');
+        $otherBarangay = Barangay::create(['name'=>'Other ledger barangay','city_id'=>$this->cityId]);
+        $otherVehicle = $this->vehicle();
+        $otherVehicle->update(['barangay_id'=>$otherBarangay->id]);
+        VehicleMaintenanceRecord::create(['vehicle_id'=>$otherVehicle->vehicle_id,'maintenance_type'=>'Private other barangay repair','problem_reason'=>'Outside tenant']);
+        $this->getJson('/api/maintenance-records')->assertOk()->assertJsonCount(3);
     }
 
     // =======================================================================

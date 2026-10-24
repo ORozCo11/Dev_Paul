@@ -231,7 +231,7 @@ function defaultWorkflowStatuses(module, user) {
   if (module === 'ticketWorkOrders') return [];
   if (module === 'ticketVerifications') return ['Active', 'Pending'];
   if (module === 'schedules') return ['Pending Approval', 'Scheduled'];
-  if (['maintenance', 'maintenanceStatus'].includes(module)) return ['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification'];
+  if (module === 'maintenanceStatus') return ['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification'];
   if (module === 'issues') return ['Pending', 'Under Review', 'In Maintenance'];
   return [];
 }
