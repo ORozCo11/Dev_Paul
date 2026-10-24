@@ -33,72 +33,6 @@ const FormNoticeContext = createContext(null);
 // cell opens that user — instead of the whole row always going to the vehicle.
 const RowActionsContext = createContext(null);
 
-// Every value the backend actually stamps onto a Notification.type (see
-// notifyAdmins/notifyCustodians/notifyUser call sites in TicketController.php
-// and FleetController.php) mapped to the bell dropdown's visual category.
-// Driven off this reliable field instead of guessing from the title text.
-// Several keys below (inspection_*, work_order_assigned/reassigned,
-// repairs_approved, sub_issue_confirmed, ticket_ready_to_close,
-// work_order_reopened, sub_issue_deferred) are no longer sent by any live
-// code path — their features (inspection, per-sub-issue verify/confirm/
-// reassign/defer) were replaced by the one-mechanic-per-ticket workflow.
-// Kept here anyway, not pruned: a user's existing notification history may
-// still contain rows of these types, and removing the mapping would just
-// make old notifications fall back to a plain 'info' style instead of their
-// original color.
-const NOTIFICATION_STYLE_BY_TYPE = {
-  // success — a positive/resolved outcome
-  sub_issue_confirmed: 'success',
-  repairs_approved: 'success',
-  ticket_ready_to_close: 'success',
-  ticket_closed: 'success',
-  ticket_verified: 'success',
-  ticket_approved: 'success',
-  cannibalization_approved: 'success',
-  schedule_restored: 'success',
-
-  // warning — a rejection, rework, deferral, or reopened/recurring problem
-  repairs_rejected: 'warning',
-  work_order_reopened: 'warning',
-  sub_issue_deferred: 'warning',
-  ticket_reopened: 'warning',
-  ticket_declined: 'warning',
-  cannibalization_rejected: 'warning',
-  repair_reopened_for_verification: 'warning',
-  recurring_fault: 'warning',
-
-  // info — a neutral assignment/submission with no verdict yet
-  ticket_prediagnosed: 'info',
-  ticket_proposed: 'info',
-  inspection_assigned: 'info',
-  inspection_submitted: 'info',
-  work_order_assigned: 'info',
-  work_order_reassigned: 'info',
-  ticket_assigned: 'info',
-  ticket_reassigned: 'info',
-  repairs_completed: 'info',
-  cannibalization_pending: 'info',
-  maintenance_recorded: 'info',
-  maintenance_verification_withdrawn: 'info',
-  schedule_assigned: 'info',
-  maintenance_verification_needed: 'info',
-};
-
-// Backward-compat only: a notification row created before `type` existed (or
-// with a type this map hasn't caught up to yet) has no reliable field to key
-// off, so fall back to the old title-sniffing guess rather than mislabeling it.
-function legacyNotificationStyleFromTitle(title) {
-  if (/confirmed|approved|completed|verified|done/i.test(title)) return 'success';
-  if (/reopened|deferred|rejected|sent back/i.test(title)) return 'warning';
-  if (/required|assigned|logged|repairs completed/i.test(title)) return 'info';
-  if (/failed|error/i.test(title)) return 'error';
-  return 'info';
-}
-
-function getNotificationStyle(notification) {
-  return NOTIFICATION_STYLE_BY_TYPE[notification.type] ?? legacyNotificationStyleFromTitle(notification.title);
-}
-
 const roleRoutes = {
   Admin: '/admin',
   Custodian: '/custodian',
@@ -888,7 +822,6 @@ function Workspace() {
     api.get('/registration-settings').then((res) => setRegistrationCode(res.data.staff_code)).catch(() => {});
   }, [user]);
   const [notifications, setNotifications] = useState([]);
-  const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState([]);
   const [filterCapacity, setFilterCapacity] = useState([]);
@@ -947,7 +880,6 @@ function Workspace() {
   const [locationMapSummary, setLocationMapSummary] = useState({ hubs: null, unassigned: null });
   const [locationsTab, setLocationsTab] = useState('map');
   const [selectedMapVehicleId, setSelectedMapVehicleId] = useState(null);
-  const notificationsRef = useRef(null);
   const profileMenuRef = useRef(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const hasVehicles = (lookups.vehicles ?? []).length > 0;
@@ -960,33 +892,6 @@ function Workspace() {
       console.error('Failed to load notifications:', error);
     }
   }, []);
-
-  const markNotificationAsRead = async (id) => {
-    try {
-      await api.put(`/notifications/${id}/read`);
-      await loadNotifications();
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-    }
-  };
-
-  const markAllNotificationsAsRead = async () => {
-    try {
-      await api.put('/notifications/read-all');
-      await loadNotifications();
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
-  };
-
-  const deleteNotification = async (id) => {
-    try {
-      await api.delete(`/notifications/${id}`);
-      await loadNotifications();
-    } catch (error) {
-      console.error('Failed to delete notification:', error);
-    }
-  };
 
   const loadLookups = useCallback(async () => {
     const response = await api.get('/lookups');
@@ -1128,9 +1033,6 @@ function Workspace() {
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
-        setShowNotifications(false);
-      }
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
         setShowProfileMenu(false);
       }
@@ -1550,12 +1452,8 @@ function Workspace() {
     }
   }, [navigate, user.role]);
 
-  // Clears a ticket's "unread updates" badge (Maintenance Tickets card/table
-  // view) the moment it's opened directly from that list — without this,
-  // the badge only ever clears via the notification bell, so opening the
-  // ticket itself wouldn't acknowledge the updates you just saw on it.
-  // Best-effort: a failed mark-as-read just leaves the badge until the next
-  // notifications poll picks it up, not worth surfacing as an error.
+  // Acknowledge unread ticket updates when opening the ticket. Keep the
+  // notification data and polling that drive the ticket-list badges.
   const markTicketNotificationsRead = useCallback(async (ticketId) => {
     const toMark = notifications.filter((n) => !n.read_at && String(n.ticket_id) === String(ticketId));
     if (!toMark.length) return;
@@ -2422,8 +2320,6 @@ function Workspace() {
   ];
   const archiveColumnChooser = useColumnChooser('vms_ticket_archive_columns', archiveColumnDefs);
 
-  const unreadCount = notifications.filter((n) => !n.read_at).length;
-
   // On phones the menu button opens the sidebar as a slide-out drawer
   // instead of collapsing it to the icon rail.
   const isPhoneWidth = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
@@ -2558,91 +2454,6 @@ function Workspace() {
           {/* The Return control now lives in the persistent banner below the
               topbar (Phase A5) — a single, more visible home for it instead
               of duplicating the button here too. */}
-          <div className="notifications-dropdown-container" ref={notificationsRef}>
-            <button
-              className="icon-btn notification-btn"
-              title="Notifications"
-              aria-label="Notifications"
-              aria-expanded={showNotifications}
-              type="button"
-              onClick={() => setShowNotifications((v) => !v)}
-            >
-              <Icon name="bell" size={20} />
-              {unreadCount > 0 && (
-                <span className="notification-indicator">{unreadCount}</span>
-              )}
-            </button>
-            {showNotifications && (
-              <div className="notifications-dropdown">
-                <div className="notifications-header">
-                  <h4>Notifications</h4>
-                  {unreadCount > 0 && (
-                    <button type="button" onClick={markAllNotificationsAsRead}>Mark all as read</button>
-                  )}
-                </div>
-                <div className="notifications-list">
-                  {notifications.length === 0 ? (
-                    <div className="notifications-empty">
-                      <span style={{ display: 'inline-flex', opacity: 0.6 }}><Icon name="bell" size={26} /></span>
-                      <span>No notifications yet.</span>
-                    </div>
-                  ) : (
-                    notifications.map((n) => {
-                      const notificationType = getNotificationStyle(n);
-                      return (
-                      <div
-                        key={n.notification_id}
-                        className={`notification-item notification-${notificationType} ${!n.read_at ? 'unread' : ''}`}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); e.currentTarget.click(); } }}
-                        onClick={async () => {
-                          await markNotificationAsRead(n.notification_id);
-                          // Production-readiness audit finding #10 — open the
-                          // exact record this notification is about, not just
-                          // mark it read and leave the user where they were.
-                          if (n.ticket_id) {
-                            openTicketProfile({ ticket_id: n.ticket_id });
-                          } else if (n.issue_report_id) {
-                            navigate(`${roleRoutes[user.role]}/issues/${n.issue_report_id}`);
-                          } else if (n.vehicle_id) {
-                            navigate(`${roleRoutes[user.role]}/vehicles/${n.vehicle_id}`);
-                          } else if (n.schedule_id) {
-                            // Not every role that can receive this (e.g. a
-                            // Maintenance Personnel assignee) holds
-                            // schedule.edit — land on the shared list instead
-                            // of a specific /edit page that could redirect
-                            // them away.
-                            returnToModule('schedules');
-                          }
-                          setShowNotifications(false);
-                        }}
-                      >
-                        <div className="notification-content">
-                          <span className="notification-title">{n.title}</span>
-                          <span className="notification-msg">{n.message}</span>
-                          <span className="notification-time">{formatDate(n.created_at)}</span>
-                      </div>
-                      <div className="notification-actions" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          className="notification-close-btn"
-                          type="button"
-                          title="Delete notification"
-                          onClick={() => deleteNotification(n.notification_id)}
-                        >
-                          <Icon name="close" size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    );
-                    })
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-
         <div className="profile-menu-container" ref={profileMenuRef}>
           <ProfileMenu
             user={user}
