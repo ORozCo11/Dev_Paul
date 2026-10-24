@@ -15534,7 +15534,7 @@ function ticketTableColumns(unreadByTicket = {}, onViewTicket) {
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     {
       key: 'title',
-      label: 'Ticket Title / Vehicle',
+      label: 'Title',
       render: (r) => {
         const unread = unreadByTicket[r.ticket_id] ?? 0;
         return (
