@@ -23,7 +23,7 @@ html .smart-form.ticket-create-form .ticket-method-tab.entry-mode-btn--external 
 html[data-theme] .smart-form.ticket-create-form .ticket-method-tab,
 html[data-theme] .smart-form.ticket-create-form .ticket-method-tab:hover { background: var(--entry-mode-color) !important; color: #fff !important; }
 html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="true"],
-html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="true"]:hover { box-shadow: 0 0 0 3px var(--ticket-section-bg), 0 0 0 5px var(--entry-mode-color) !important; }
+html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="true"]:hover { box-shadow: 0 0 0 3px var(--ticket-section-bg), 0 0 0 6px var(--entry-mode-color) !important; }
 html .ticket-create-form .ticket-vehicle-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 18px; }
 html .ticket-create-form .ticket-preview-card--lg { min-height: 90px; margin: 0; background: var(--surface-2, #f8fafc); box-shadow: none; }
 html .ticket-create-form .ticket-preview-photo--lg { width: 94px; height: 76px; flex-basis: 94px; }
@@ -79,7 +79,6 @@ html .ticket-create-form .ticket-method-hint { margin: 10px 0 0; font-size: .78r
 html .ticket-create-form .entry-mode-toggle { max-width: 620px; }
 html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="false"] { background: var(--ticket-section-bg) !important; color: var(--text-muted, #64748b) !important; border: 1px solid var(--ticket-section-border); box-shadow: none !important; }
 html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="false"] > svg { color: inherit; }
-html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="true"] { box-shadow: none !important; }
 html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="false"]:hover { background: var(--surface-2, #f1f5f9) !important; }
 html .ticket-create-form .ticket-external-grid { gap: 14px 18px; }
 html .ticket-create-form .ticket-external-grid label:last-child { grid-column: 1 / -1; max-width: 320px; }

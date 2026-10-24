@@ -12725,7 +12725,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
   // Using a part from another vehicle is NOT declared here: the mechanic
   // records the donor part when logging the repair (the Admin then approves
   // it). A proposal is just In-House or External.
-  const entryMode = ['in_house', 'external'].includes(liveValues.entry_mode) ? liveValues.entry_mode : null;
+  const entryMode = ['in_house', 'external'].includes(liveValues.entry_mode) ? liveValues.entry_mode : 'in_house';
   const pickerValue = entryMode;
   const isInHouse = entryMode === 'in_house';
   const isCannibalized = entryMode === 'cannibalized';
