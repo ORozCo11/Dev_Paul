@@ -513,7 +513,7 @@ class TicketWorkflowTest extends TestCase
         $this->postJson("/api/tickets/{$ticket->ticket_id}/sub-issues", ['title' => 'Another problem'])->assertForbidden();
         $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}", ['title' => 'Changed'])->assertForbidden();
         $this->deleteJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}")->assertForbidden();
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", [])->assertForbidden();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", ['closing_notes' => 'Work cancelled for this test scenario.'])->assertForbidden();
         Sanctum::actingAs($this->admin, ['*']);
         $response = $this->postJson("/api/tickets/{$ticket->ticket_id}/sub-issues", ['title' => 'Another problem'])->assertCreated();
         // The ticket already has one assigned mechanic by the time it's
@@ -681,7 +681,7 @@ class TicketWorkflowTest extends TestCase
         $ticket->subIssues->first()->update(['status' => 'Done']);
 
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", [])->assertUnprocessable();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", ['closing_notes' => 'Work cancelled for this test scenario.'])->assertUnprocessable();
 
         $this->assertSame('Active', $ticket->fresh()->status);
     }
@@ -746,7 +746,7 @@ class TicketWorkflowTest extends TestCase
 
         // ...it cannot be cancelled/uncancelled either — Closed is final.
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", [])->assertUnprocessable();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", ['closing_notes' => 'Work cancelled for this test scenario.'])->assertUnprocessable();
 
         // ...nor deleted — that would create a SECOND, reopenable "Deleted"
         // archive row alongside the permanent "Closed" one, defeating the
@@ -770,35 +770,39 @@ class TicketWorkflowTest extends TestCase
     }
 
     #[Test]
-    public function deleting_a_ticket_with_real_progress_is_archived_and_reopenable(): void
+    public function deleting_a_ticket_with_real_progress_is_rejected_and_evidence_retained(): void
     {
-        // One sub-issue already Done (simulated as pre-existing progress —
-        // see the note on cancellation above), the other still mid-flight.
         $vehicle = $this->vehicle();
         $ticket = $this->activeTicket($vehicle, ['Low coolant level', 'Faulty radiator']);
         $ticket->subIssues[0]->update(['status' => 'Done']);
-
         Sanctum::actingAs($this->admin, ['*']);
-        $this->deleteJson("/api/tickets/{$ticket->ticket_id}")->assertOk();
+        $this->deleteJson("/api/tickets/{$ticket->ticket_id}")->assertUnprocessable();
+        $this->assertNotNull($ticket->fresh());
+        $this->assertSame(2, $ticket->subIssues()->count());
+        $this->assertFalse(TicketArchiveLog::where('ticket_id', $ticket->ticket_id)->exists());
+        $this->assertSame('Under Maintenance', $vehicle->fresh()->status);
+    }
 
-        $this->assertFalse(MaintenanceTicket::where('ticket_id', $ticket->ticket_id)->exists());
-        $archive = TicketArchiveLog::where('ticket_id', $ticket->ticket_id)->first();
-        $this->assertNotNull($archive);
-        $this->assertSame('Deleted', $archive->final_status);
-
-        // Vehicle should be freed since nothing else is open on it.
-        $this->assertSame('Available', $vehicle->fresh()->status);
-
+    #[Test]
+    public function legacy_deleted_archives_can_still_recover_historical_work(): void
+    {
+        $vehicle = $this->vehicle();
+        $ticket = $this->activeTicket($vehicle, ['Low coolant level', 'Faulty radiator']);
+        $ticket->subIssues[0]->update(['status' => 'Done']);
+        $ticket->load('subIssues');
+        $archive = TicketArchiveLog::create([
+            'ticket_id' => $ticket->ticket_id, 'vehicle_id' => $vehicle->vehicle_id,
+            'ticket_title' => $ticket->ticket_title, 'vehicle_name' => $vehicle->vehicle_name,
+            'plate_number' => $vehicle->plate_number, 'final_status' => 'Deleted',
+            'full_ticket_snapshot' => $ticket->toArray(), 'archived_by' => $this->admin->id,
+            'archived_at' => now(),
+        ]);
+        $ticket->delete(); // Prepare an archive produced by the older application.
+        Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("/api/ticket-archives/{$archive->archive_id}/reopen", [])->assertCreated();
-
-        $reopened = MaintenanceTicket::where('ticket_title', $ticket->ticket_title)
-            ->where('vehicle_id', $vehicle->vehicle_id)
-            ->first();
-        $this->assertNotNull($reopened);
+        $reopened = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)->firstOrFail();
         $this->assertSame(2, $reopened->subIssues()->count());
         $this->assertSame(1, $reopened->subIssues()->where('status', 'Done')->count());
-        $this->assertFalse(TicketArchiveLog::where('archive_id', $archive->archive_id)->exists());
-        $this->assertSame('Under Maintenance', $vehicle->fresh()->status);
     }
 
     #[Test]
@@ -917,7 +921,7 @@ class TicketWorkflowTest extends TestCase
         // Cancel while both sub-issues are still mid-flight (neither Done
         // nor Deferred, so cancelTicket() allows it).
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", [])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", ['closing_notes' => 'Work cancelled for this test scenario.'])->assertOk();
         $this->assertSame('Cancelled', $ticket->fresh()->status);
 
         $subIssue = $ticket->subIssues->first();
@@ -1172,7 +1176,7 @@ class TicketWorkflowTest extends TestCase
         $ticketId = $this->propose($this->vehicle())->assertCreated()->json('ticket_id');
 
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticketId}/cancel", [])->assertStatus(422);
+        $this->putJson("/api/tickets/{$ticketId}/cancel", ['closing_notes' => 'Work cancelled for this test scenario.'])->assertStatus(422);
         $this->assertSame('Pending Approval', MaintenanceTicket::find($ticketId)->status);
     }
 
@@ -1199,7 +1203,7 @@ class TicketWorkflowTest extends TestCase
         $this->propose($vehicle, ['sub_issues' => [['title' => 'Radio']]])->assertCreated();
 
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$activeId}/cancel", [])->assertOk();
+        $this->putJson("/api/tickets/{$activeId}/cancel", ['closing_notes' => 'Work cancelled for this test scenario.'])->assertOk();
 
         $this->assertSame('Available', $vehicle->fresh()->status);
         $this->getJson('/api/dashboard')->assertOk();
@@ -1213,7 +1217,7 @@ class TicketWorkflowTest extends TestCase
         $ticket = $this->createTicket($vehicle); // Open, never touched
 
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", [])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", ['closing_notes' => 'Work cancelled for this test scenario.'])->assertOk();
 
         $this->assertSame('Needs Inspection', $vehicle->fresh()->condition);
     }

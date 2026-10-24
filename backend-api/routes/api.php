@@ -239,6 +239,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::put('/tickets/{ticket}/approve', [TicketController::class, 'approveTicket']);
     Route::put('/tickets/{ticket}/decline', [TicketController::class, 'declineTicket']);
     Route::put('/tickets/{ticket}/undecline', [TicketController::class, 'undeclineTicket']);
+    Route::put('/tickets/{ticket}/request-corrections', [TicketController::class, 'requestCorrections']);
+    Route::put('/tickets/{ticket}/resubmit', [TicketController::class, 'resubmitProposal']);
 
     // Ticket-level workflow. Sub-issues remain work-line details and audit
     // evidence, never separate user-facing work orders.

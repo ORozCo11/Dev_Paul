@@ -3530,7 +3530,7 @@ class FleetController extends Controller
             ->whereNotIn('progress_status', ['Completed'])
             ->pluck('vehicle_id')
             ->flip();
-        $latestIssues = VehicleIssueReport::with('maintenanceTicket:ticket_id,issue_report_id,status')->whereIn('vehicle_id', $vehicleIds)
+        $latestIssues = VehicleIssueReport::with('maintenanceTicket:maintenance_tickets.ticket_id,maintenance_tickets.issue_report_id,maintenance_tickets.status')->whereIn('vehicle_id', $vehicleIds)
             ->orderByDesc('issue_report_id')
             ->get()
             ->unique('vehicle_id')

@@ -49,9 +49,10 @@ class FleetScopeRemovalTest extends TestCase
     {
         $migration = $this->removal();
         foreach ($migration::REMOVED_TABLES as $table => $key) $this->assertFalse(Schema::hasTable($table));
-        $this->artisan('migrate:rollback', ['--step' => 1, '--force' => true])->assertSuccessful();
+        // Exercise this migration, independent of later feature migrations.
+        $migration->down();
         foreach ($migration::REMOVED_TABLES as $table => $key) $this->assertTrue(Schema::hasTable($table));
-        $this->artisan('migrate', ['--force' => true])->assertSuccessful();
+        $migration->up();
         foreach ($migration::REMOVED_TABLES as $table => $key) $this->assertFalse(Schema::hasTable($table));
     }
 

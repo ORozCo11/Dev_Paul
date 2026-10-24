@@ -48,7 +48,7 @@ The workflow end to end:
 
 1. **Report** — a Custodian or Maintenance Personnel files an Issue Report (a Maintenance Personnel account is notified-forward to the Custodian, since they still can't create the ticket themselves — see §3).
 2. **Propose** — the Custodian proposes a ticket (optionally linked to that report), entering **Pending Approval**.
-3. **Approve** — the Admin reviews, can edit ticket/sub-issue fields, and approves (the ticket becomes **Active**, assigning the mechanics for its in-house sub-issues) or declines (the proposal remains traceable as **Declined**).
+3. **Approve** — the Admin reviews, can edit ticket/sub-issue fields, and approves (the ticket becomes **Active**, assigning the mechanics for its in-house sub-issues) or final-declines with a reason (the proposal remains traceable as **Declined**). Admin can instead request corrections; the assigned Custodian edits and resubmits the same Pending Approval proposal for fresh review. Undecline only returns a declined proposal to review, without starting work.
 4. **Repair** — the assigned Maintenance Personnel logs work on the ticket's sub-issues. Admin handles external-shop sending, return and repeat rework cycles; previous handlers cannot verify that work. External costs and provider details are included in the unified ledger at closure.
 5. **Verify** — the assigned Custodian runs a functional test. A user must not verify their own repair — enforced server-side even for a dual-role (Custodian + Maintenance Personnel) account on the same sub-issue. Verification is Custodian-only, with no Admin fallback; if the assigned Custodian is unavailable, the ticket is reassigned to a different Custodian instead.
 6. **Decide** — the assigned Custodian uses the verification popup to Approve or Disapprove. Approval requires explicit personal-test attestation. Disapproval requires a reason and selects the failed items for rework; other submitted repairs stay submitted. The former Admin confirmation and decision-close flow is not the current closure path.
@@ -56,7 +56,7 @@ The workflow end to end:
 
 Extra signals layered on top: **recurrence detection** (the same fault reported again soon after a "fix" flags as a likely rework) and **aging** (a ticket open more than 30 days is flagged).
 
-Selected unfinished work can be reassigned without resetting submitted repairs. The schedule-conversion job checks each minute against Philippine date and service time; the deployment must run Laravel's scheduler. See [the ticket process review](Ticket-Process-Review-2026-10-24.md) for the fixes, migration and verification evidence.
+Selected unfinished work can be reassigned without resetting submitted repairs. Cancellation requires a reason and notifies responsible staff; restoration preserves submitted work and resumes verification when ready. Tickets with repair evidence cannot be permanently deleted. Decision history and fresh locked checks protect the process against stale actions and conflicting source ownership. The schedule-conversion job checks each minute against Philippine date and service time; the deployment must run Laravel's scheduler. See [the ticket process review](Ticket-Process-Review-2026-10-24.md) for the fixes, migration and verification evidence.
 
 ## 6. Other modules
 

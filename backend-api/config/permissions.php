@@ -154,6 +154,8 @@ return [
     'ticket.propose' => ['Custodian'],
     'ticket.approve' => ['Admin'],
     'ticket.decline' => ['Admin'],
+    'ticket.request_corrections' => ['Admin'],
+    'ticket.resubmit' => ['Custodian'],
     'ticket.inspect' => [],
     'ticket.reassign_custodian' => ['Admin'],
     'ticket.close' => [],

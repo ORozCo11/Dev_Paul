@@ -43,7 +43,8 @@ class VehicleIssueReport extends Model
 
     public function maintenanceTicket()
     {
-        return $this->hasOne(MaintenanceTicket::class, 'issue_report_id', 'issue_report_id');
+        return $this->hasOne(MaintenanceTicket::class, 'issue_report_id', 'issue_report_id')
+            ->ofMany(['ticket_id' => 'max'], fn ($query) => $query->whereNotIn('status', ['Declined', 'Cancelled']));
     }
 
     public function attachments()

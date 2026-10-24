@@ -178,7 +178,7 @@ No changes to dispatch, impersonation, registration, hubs or unrelated role gran
 
 ## Decision-path recheck — 24 October 2026
 
-Reviewed revision: `4e5e222`. This additional review focuses on proposal decisions and cancellation/deletion/restoration. The earlier TPR fixes remain in place; the findings below are additional and **open**. No application fixes were made during this recheck.
+Reviewed revision: `4e5e222`. This additional review focused on proposal decisions and cancellation/deletion/restoration. The findings below describe that revision and the original recheck; the subsequent decision-path implementation follow-up records their resolution.
 
 ### Current rules confirmed
 
@@ -245,3 +245,34 @@ Source: `Workspace.jsx:11661-11670`, `:12306`; `TicketController.php:2863-2880`,
 - Probe source is ignored local scratch: `tmp/ticket-decisions/TicketDecisionProbeTest.php`. Run from `backend-api`: `php vendor/phpunit/phpunit/phpunit ../tmp/ticket-decisions/TicketDecisionProbeTest.php --no-progress`.
 - SQLite in-memory test data only; no live accounts, vehicle records or remote services were modified. No new frontend source changes, browser session or full-suite run was needed for this review.
 - The recommended fix order is atomic decision guards and evidence retention, then safe restoration/source ownership, followed by correction/resubmission and cancellation notices.
+
+## Decision-path implementation follow-up — 24 October 2026
+
+TDR-01 through TDR-06 are addressed:
+
+| Finding | Implemented behavior |
+|---|---|
+| TDR-01 | Decision actions lock and reread vehicle, ticket and work-item state inside their transactions. Terminal work cannot be overwritten through stale model snapshots. Browser decisions carry `expected_revision`; conflicts return 409 and refresh the current record. Logs, notifications and decision history participate in the transaction. Legacy clients without a revision still receive fresh-state checks. |
+| TDR-02 | Permanent deletion is limited to untouched mistakes. Notes, dates, recorded cost including zero, files, donor parts, shop events and work history prevent deletion. Users cancel with a reason while retaining the live record and evidence. Older Deleted archives remain recoverable; this release no longer deletes tickets containing work evidence. |
+| TDR-03 | Restoration derives its state from preserved work: all submitted repairs return directly to For Verification, with one fresh Custodian verification notice. Unfinished work returns to Active; historical uninspected work remains Open. Retired vehicles and conflicting work prevent restoration. |
+| TDR-04 | Proposals, approval, undecline, restoration and historical archive recovery check current report reservations and duplicate work. Old-ticket status propagation cannot reset another current owner's report. Issue links follow the current non-declined/non-cancelled ticket. Resolved or otherwise non-open sources cannot be reclaimed. |
+| TDR-05 | Admin can Request Corrections with a reason. The proposal remains Pending Approval, visibly flagged and blocked from approval. Only the assigned Custodian may correct and resubmit the existing proposal for fresh review. Final decline is distinct and does not reserve the fault indefinitely; a new proposal is allowed, but reconsidering an older one must pass ownership/duplicate checks again. |
+| TDR-06 | Cancellation requires a reason, preserves it in decision history and notifies responsible staff. Restoration preserves the reason and records a separate history event. A vehicle still at an external shop must be marked returned before its ticket can be cancelled. |
+
+Corrections support the existing work-item titles/types, ticket details and priority, and external reason/scope. Vehicle, repair method and work-item identity are preserved; active or closed repair evidence cannot be rewritten through resubmission. Admin can still final-decline while corrections are pending. Closed work remains permanent, and Custodian independence remains required for repair verification.
+
+### Schema and rollout
+
+- New migration: `backend-api/database/migrations/2026_10_24_000002_add_ticket_decision_history.php`.
+- Adds nullable correction reason/time and decision history, plus a decision revision defaulting to zero. It introduces no new availability, condition or readiness status.
+- Run `php artisan migrate` from `backend-api` after pulling; refresh the frontend to load the new actions. No reseed or database reset is required.
+- Applied locally after a consistent SQLite backup at ignored `tmp/ticket-review/before-ticket-decisions.sqlite`; **5 vehicles before / 5 after**. Existing records do not receive fabricated historical decisions.
+- Upgrade/rollback was verified with existing vehicle and ticket data in isolated SQLite. Rolling back removes the new metadata columns, so preserve a database backup before rollback.
+
+### Final evidence
+
+- **522 backend tests / 2,621 assertions passed.** Includes 19 permanent decision-safety cases in `backend-api/tests/Feature/TicketDecisionSafetyTest.php`, the prior ticket-integrity coverage, and a historical archive recovery test.
+- Frontend lint/build and PHP syntax checks passed.
+- Seven new route-mocked browser checks passed: correction requests, same-ticket mobile resubmission, decline/undecline, cancellation/restoration, deletion visibility with evidence, stale-page conflict recovery, and final decline while awaiting corrections. The eight earlier ticket browser checks also passed. Screenshots were inspected; no browser runtime exceptions were recorded. The expected 409 response was exercised intentionally.
+- A migration regression test assumed the operations-removal migration would always be newest. It now exercises that specific migration's up/down cycle, independently of later feature migrations; no removed operations feature was restored to the application.
+- New decision tests exercise sequential APIs and retained stale controller-model snapshots. They do not claim a production PostgreSQL parallel-load test. Production scheduler/hosting acceptance, representative-user timing studies, and the six unrelated findings in the broader system audit remain separate work.

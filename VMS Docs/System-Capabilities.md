@@ -118,9 +118,9 @@ Three repair-path modes, chosen once per ticket and stamped onto every sub-issue
 - **Cannibalized** — requires a donor vehicle (different vehicle, same barangay, not retired) plus, per sub-issue, what's missing and what part is being pulled from the donor.
 - **External** — requires a reason from a fixed, objective-and-Admin-checkable list (warranty coverage; parts/service only at an authorized shop; needs specialized shop equipment; requires licensed/certified service; mechanic recommended it) and a work-scope description; optionally vendor, shop contact, who sent it, contact person, and estimated cost.
 
-Each sub-issue also carries a free-text maintenance-type (another growing catalog) and an optional **suggested mechanic** — informational only; it doesn't dispatch anything or notify anyone. The Admin picks the one mechanic for the whole ticket at approval (§5.2).
+Each sub-issue also carries a free-text maintenance-type (another growing catalog) and an optional **suggested mechanic** — informational only; it doesn't dispatch anything or notify anyone. The Admin assigns a mechanic to each in-house work item at approval (§5.2).
 
-**Duplicate-ticket prevention**: titles are normalized (an auto-added "[Issue #N]" prefix stripped, case/whitespace-insensitive) and checked against every other open ticket on the same vehicle, re-checked again under a row lock at the moment of creation so two concurrent proposals can't both slip through.
+**Duplicate-ticket prevention**: titles are normalized (an auto-added "[Issue #N]" prefix stripped, case/whitespace-insensitive) and checked against current proposals and live tickets on the same vehicle (final Declined, Cancelled and Closed tickets are excluded), re-checked again under a row lock at the moment of creation so two concurrent proposals can't both slip through.
 
 **Recurrence detection**: looks back 90 days on the same vehicle for a matching closed ticket or completed maintenance record (by maintenance type, then issue type, then title). A match stamps a recurrence count on the new ticket and sends all barangay Admins a "Recurring Fault Detected" notification naming the occurrence number and explicitly suggesting a deeper fix or a decommission review. A standalone check endpoint lets the UI show this *before* a proposal is even submitted.
 
@@ -128,9 +128,13 @@ Each sub-issue also carries a free-text maintenance-type (another growing catalo
 
 Can edit description, priority, assigned custodian, and per-sub-issue title/maintenance-type/suggested-mechanic before deciding.
 
-**On approve**: requires an assigned mechanic for each in-house sub-issue; a ticket-level `assigned_mechanic_id` can supply a fallback. Status becomes Active; the vehicle goes Needs Repair/Under Maintenance; every sub-issue goes Under Repair under its assigned mechanic; the proposing Custodian and the mechanic are notified. The ticket's title was already finalized at proposal time (§5.1) and is never touched here; duplicate and recurrence matching compare the issue part of it only. At least one sub-issue must exist, and the vehicle must not have gone Inactive/Decommissioned since the proposal was filed.
+**On approve**: requires an assigned mechanic for each in-house sub-issue; a ticket-level `assigned_mechanic_id` can supply a fallback. Status becomes Active; the vehicle goes Needs Repair/Under Maintenance; every sub-issue goes Under Repair under its assigned mechanic; the proposing Custodian and the mechanic are notified. The ticket's title was finalized at proposal or correction-resubmission time (§5.1) and is never touched here; duplicate and recurrence matching compare the issue part of it only. At least one sub-issue must exist, and the vehicle must not have gone Inactive/Decommissioned since the proposal was filed.
 
-**On decline**: requires a reason. The proposal is **not deleted** — it stays visible with a `Declined` status and the stored `decline_reason`, the proposing Custodian is notified, and any linked Issue Report resets back to Pending. A decline is reversible: Admin can **undecline** it (back to Pending Approval, Custodian notified) or approve it directly from Declined.
+**Request Corrections**: Admin gives a required reason. The proposal stays Pending Approval with a visible Corrections requested flag; approval is blocked. Only its assigned Custodian can edit the existing work-item titles/types, details, priority and external reason/scope, then resubmit the same ticket for fresh Admin review. Vehicle, repair method and work-item identity remain fixed. The original proposal and review reasons remain in decision history. Admin can final-decline the proposal while corrections are pending.
+
+**On decline**: requires a reason and preserves the proposal as Declined, notifies the Custodian and releases its report reservation if no other current ticket owns it. Decline is not a statement that the physical defect is fixed. A final decline does not block a new proposal for the same fault. **Undecline** returns it to Pending Approval, never directly to Active; Admin must approve separately. Reconsideration is refused if another live ticket owns the source or covers the same work, or the source is no longer open.
+
+**Decision integrity**: decision actions freshly lock the vehicle, ticket and work items before checking eligibility. Browser decisions include the reviewed revision; stale revisions return a conflict and refresh the record. Legacy API callers without a revision still receive fresh-state checks. Decision history records who acted, when and why. Issue-report links select the current non-declined/non-cancelled ticket rather than an older rejected proposal.
 
 ### 5.3 Assignment & repair
 
@@ -170,7 +174,9 @@ There is **no Admin confirm step** any more: the Custodian's approval closes the
 
 ### 5.6 Cancellation, deletion, archiving
 
-Cancel/Uncancel (Admin only) works at any stage before Closed or Cancelled, except a Pending Approval or Declined proposal (approve, decline or undecline it instead) and except a ticket where every sub-issue is already resolved (that's real completed work). Deleting a ticket that never had any completed work leaves no trace; deleting one that *did* have completed work archives a full recoverable snapshot first. A Closed ticket can never be deleted. An archived "Deleted" entry can be reopened as a brand-new live ticket (re-running the duplicate-ticket check); an archived "Closed" entry is permanently locked and can't be.
+Cancel/Uncancel is Admin-only. Cancellation requires a written reason, retains work evidence and notifies the assigned Custodian, mechanics and external handlers. It is available only for unfinished approved work, not Closed tickets or unapproved proposals. A vehicle still at an external shop must be recorded returned before cancellation. Restoring checks retirement, duplicate work and source ownership again. It restores fully submitted work directly to For Verification and sends one fresh Custodian task; otherwise it returns unfinished work to Active (historical uninspected tickets remain Open). Cancellation reasons remain in decision history after restoration.
+
+Permanent deletion is limited to untouched mistakes. Repair notes, recorded dates, parts, cost (including zero), attachments, donor-part records, shop events or work history block deletion; use cancellation instead. Closed work is permanently locked. Historical Deleted archives created by earlier versions remain recoverable under source/duplicate checks; Closed archives can never be reopened. These rules preserve availability, condition and verified readiness as separate indicators.
 
 ---
 
@@ -219,7 +225,10 @@ Has its own two-step verify/confirm flow, separate from tickets (Custodian verif
 | Admin approves / declines / undeclines a schedule | The booking Custodian (+ the assignee, on approval) |
 | Custodian proposes a ticket | Barangay Admins |
 | Admin approves a proposal | The proposing Custodian + the assigned mechanic |
-| Admin declines / undeclines a proposal | The proposing Custodian |
+| Admin declines / undeclines a proposal | The assigned Custodian |
+| Admin requests proposal corrections | The assigned Custodian |
+| Custodian resubmits corrections | Barangay Admins |
+| Admin cancels / restores a ticket | Assigned Custodian, mechanics and external handlers; fully submitted restoration sends the Custodian one verification task |
 | Admin reassigns the ticket's mechanic | The new mechanic + the previous one |
 | A ticket's Custodian is reassigned | The new Custodian (+ the previous one) |
 | Every repair on the ticket is logged → ticket moves to For Verification | The assigned Custodian, once ("Repair Ready for Verification", opens the ticket) |

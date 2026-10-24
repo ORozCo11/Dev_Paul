@@ -1404,11 +1404,13 @@ function Workspace() {
   const deleteTicket = async (ticket) => {
     setNotice(null);
     try {
-      await api.delete(`/tickets/${ticket.ticket_id}`);
+      await api.delete(`/tickets/${ticket.ticket_id}`, { data: { expected_revision: ticket.decision_revision ?? 0 } });
       setNotice({ type: 'success', text: 'Ticket deleted successfully.' });
       await refreshCurrent();
+      return true;
     } catch (error) {
       showError(error, setNotice);
+      return false;
     }
   };
 
@@ -11212,7 +11214,16 @@ function TicketStatusPill({ status, size = 'normal' }) {
 // anyone viewing it without ticket.approve (i.e. the proposing Custodian).
 // =========================================================================
 
-function TicketProposalReview({ user, ticket, lookups, onApprove, onDecline, onUndecline }) {
+function TicketProposalReview({ user, ticket, lookups, onApprove, onDecline, onUndecline, onRequestCorrections, onResubmit }) {
+  if (ticket.correction_requested_at) {
+    if (canDo(user, 'ticket.resubmit') && String(user.id) === String(ticket.assigned_custodian_id)) {
+      return <TicketCorrectionForm key={`${ticket.ticket_id}:${ticket.decision_revision}`} ticket={ticket} lookups={lookups} onSubmit={onResubmit} />;
+    }
+    return <TicketCorrectionsPending ticket={ticket} onDecline={canDo(user, 'ticket.decline') ? onDecline : null} />;
+  }
+  if (ticket.status === 'Declined' && canDo(user, 'ticket.approve')) {
+    return <TicketReconsiderForm ticket={ticket} onUndecline={onUndecline} />;
+  }
   if (!canDo(user, 'ticket.approve')) {
     if (ticket.status === 'Declined') {
       return (
@@ -11236,7 +11247,44 @@ function TicketProposalReview({ user, ticket, lookups, onApprove, onDecline, onU
 
   // Keyed by ticket id so a fresh mount (a different ticket) always starts
   // from that ticket's own values instead of whatever was last typed here.
-  return <TicketProposalReviewForm key={ticket.ticket_id} ticket={ticket} lookups={lookups} onApprove={onApprove} onDecline={onDecline} onUndecline={onUndecline} />;
+  return <TicketProposalReviewForm key={`${ticket.ticket_id}:${ticket.decision_revision}`} ticket={ticket} lookups={lookups} onApprove={onApprove} onDecline={onDecline} onUndecline={onUndecline} onRequestCorrections={onRequestCorrections} />;
+}
+
+function TicketCorrectionsPending({ ticket, onDecline }) {
+  const [declining, setDeclining] = useState(false);
+  return <section className="ticket-section"><h4>Corrections requested</h4><p className="notice warning">{ticket.correction_reason}</p><p>Waiting for {ticket.assigned_custodian?.name ?? 'the assigned Custodian'} to correct and resubmit. Approval is blocked until then.</p>{onDecline && (declining ? <SmartForm fields={[{ label: 'Decline reason', name: 'decline_reason', type: 'textarea', rows: 3, required: true }]} title="" onCancel={() => setDeclining(false)} onSubmit={onDecline} submitLabel="Decline Proposal" /> : <button type="button" className="danger-button" onClick={() => setDeclining(true)}>Decline Proposal</button>)}</section>;
+}
+
+function TicketReconsiderForm({ ticket, onUndecline }) {
+  const [busy, setBusy] = useState(false);
+  return <section className="ticket-section"><h4>Declined proposal</h4><p className="notice danger">{ticket.decline_reason}</p><p>Undecline returns this proposal for Admin review. It does not approve or start work. The original decline remains in decision history.</p><button type="button" className="ghost-button" disabled={busy} onClick={async () => { if (busy) return; setBusy(true); try { await onUndecline(); } finally { setBusy(false); } }}>{busy ? 'Reconsidering...' : 'Undecline'}</button></section>;
+}
+
+function TicketCorrectionForm({ ticket, lookups, onSubmit }) {
+  const [description, setDescription] = useState(ticket.ticket_description ?? '');
+  const [priority, setPriority] = useState(ticket.priority ?? 'Medium');
+  const [rows, setRows] = useState(() => (ticket.sub_issues ?? []).map((item) => ({ sub_issue_id: item.sub_issue_id, title: item.title, maintenance_type: item.maintenance_type ?? '' })));
+  const external = (ticket.sub_issues ?? []).find((item) => item.repair_type === 'external');
+  const [scope, setScope] = useState(external?.external_work_scope ?? '');
+  const [reason, setReason] = useState(external?.external_reason ?? '');
+  const [busy, setBusy] = useState(false);
+  return (
+    <section className="ticket-section smart-form">
+      <h4>Correct this proposal</h4>
+      <p className="notice warning">{ticket.correction_reason}</p>
+      <p>Update the same proposal. It will return to Admin review; no repair work starts until approved.</p>
+      <form onSubmit={async (event) => { event.preventDefault(); if (busy) return; setBusy(true); try { await onSubmit({ ticket_description: description, priority, sub_issues: rows.map((row) => ({ ...row, maintenance_type: row.maintenance_type || null })), ...(external ? { external_work_scope: scope, external_reason: reason } : {}) }); } finally { setBusy(false); } }}>
+        <label><span>Details *</span><textarea required rows={3} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
+        <label><span>Priority *</span><SearchableSelect required value={priority} onChange={(event) => setPriority(event.target.value)}>{(lookups.priorities ?? []).map((value) => <option key={value} value={value}>{value}</option>)}</SearchableSelect></label>
+        {rows.map((row, index) => <div className="proposal-subissue" key={row.sub_issue_id}>
+          <label><span>Work item {index + 1} *</span><input required maxLength={255} value={row.title} onChange={(event) => setRows((values) => values.map((value, i) => i === index ? { ...value, title: event.target.value } : value))} /></label>
+          <label><span>Repair Type (optional)</span><CreatableSelect value={row.maintenance_type} options={lookups.maintenance_types ?? []} catalogEndpoint="/maintenance-types" newItemLabel="repair type" onChange={(value) => setRows((values) => values.map((item, i) => i === index ? { ...item, maintenance_type: value } : item))} /></label>
+        </div>)}
+        {external && <><label><span>Reason for external work *</span><SearchableSelect required value={reason} onChange={(event) => setReason(event.target.value)}>{(lookups.external_reasons ?? []).map((value) => <option key={value} value={value}>{value}</option>)}</SearchableSelect></label><label><span>External work details *</span><textarea required rows={3} value={scope} onChange={(event) => setScope(event.target.value)} /></label></>}
+        <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Submitting...' : 'Resubmit for Admin Review'}</button>
+      </form>
+    </section>
+  );
 }
 
 // What a cannibalized / external-shop sub-issue actually involves — the
@@ -11277,7 +11325,7 @@ function RepairContextDetails({ si }) {
   );
 }
 
-function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUndecline }) {
+function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUndecline, onRequestCorrections }) {
   const isDeclined = ticket.status === 'Declined';
   // Pre-fill from whatever the Custodian suggested when adding sub-issues
   // (if any) — Admin can still change it before approving.
@@ -11293,6 +11341,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
     repair_type: si.repair_type,
   })));
   const [declining, setDeclining] = useState(false);
+  const [requestingCorrections, setRequestingCorrections] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [validationLine, setValidationLine] = useState(null);
   // An external-shop ticket goes to an outside shop: no in-house mechanic.
@@ -11424,7 +11473,9 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
 
       {validationLine && <p className="notice danger" style={{ margin: '0 0 12px' }}><Icon name="alert" size={14} /> {validationLine}</p>}
 
-      {declining ? (
+      {requestingCorrections ? (
+        <SmartForm fields={[{ label: 'What needs correcting?', name: 'correction_reason', type: 'textarea', required: true, rows: 3 }]} onCancel={() => setRequestingCorrections(false)} onSubmit={onRequestCorrections} submitLabel="Request Corrections" title="Return to Custodian" />
+      ) : declining ? (
         <div className="proposal-review-actions is-declining">
           <SmartForm
             fields={[{ label: 'Decline Reason', name: 'decline_reason', type: 'textarea', rows: 2, required: true, placeholder: 'Let the Custodian know why this was declined' }]}
@@ -11443,6 +11494,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
               : 'Edit anything above before approving or declining.'}
           </p>
           <div className="proposal-review-buttons">
+            {!isDeclined && onRequestCorrections && <button className="ghost-button proposal-decision-btn" type="button" disabled={submitting} onClick={() => setRequestingCorrections(true)}>Request Corrections</button>}
             {isDeclined ? (
               <button className="btn-sm ghost-button" type="button" onClick={onUndecline} disabled={submitting}>
                 <Icon name="undo" size={14} /> Undecline
@@ -11588,12 +11640,14 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
 // TICKET DETAIL PANEL — shown when admin clicks a ticket row
 // =========================================================================
 
-function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechanic, onReassignCustodian, onReopenDone, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onApproveCannibalization, onRejectCannibalization, onApproveProposal, onDeclineProposal, onUndeclineProposal, onClose, asPage = false }) {
+function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechanic, onReassignCustodian, onReopenDone, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onApproveCannibalization, onRejectCannibalization, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false }) {
   // Cannibalization approval — tracks which sub-issue's reject form is
   // open; Approve has no form of its own (it needs no input beyond the
   // click itself), so it doesn't need a tracked id.
   const [reviewingCannibalizationId, setReviewingCannibalizationId] = useState(null);
   const [approvingCannibalId, setApprovingCannibalId] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [reassigningCustodian, setReassigningCustodian] = useState(false);
   const [reassigningMechanic, setReassigningMechanic] = useState(false);
   const [editingDoneId, setEditingDoneId] = useState(null);
@@ -11609,6 +11663,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
   if (!ticket) return null;
 
   const subIssues = ticket.sub_issues ?? [];
+  const hasEvidence = subIssues.some((item) => ['For Inspection', 'For Confirmation', 'Done', 'Deferred'].includes(item.status) || item.repair_logs || item.parts_used || item.repair_started_at || item.repair_completed_at || item.part_installed_at || item.maintenance_cost != null || item.attachment_url || item.attachment_files?.length || item.external_sent_at || item.external_returned_at || item.external_cycles?.length || item.work_history?.length || item.donor_parts?.length);
   const progress = ticket.progress ?? {
     done: subIssues.filter((s) => s.status === 'Done').length,
     deferred: subIssues.filter((s) => s.status === 'Deferred').length,
@@ -11658,15 +11713,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
     });
   };
 
-  const requestCancel = () => {
-    onRequestConfirmation({
-      title: 'Cancel Ticket',
-      message: `Are you sure you want to cancel Ticket #${ticketNumber(ticket)}? Work on it stops here — it can be uncancelled later if needed.`,
-      confirmLabel: 'Cancel Ticket',
-      variant: 'primary',
-      onConfirm: () => onCancel(ticket),
-    });
-  };
+  const requestCancel = () => setCancelling(true);
 
   const panel = (
       <div className={`ticket-detail-panel${asPage ? ' is-page' : ''}`} onClick={asPage ? undefined : (e) => e.stopPropagation()}>
@@ -11889,6 +11936,8 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
               onApprove={(payload) => onApproveProposal(ticket, payload)}
               onDecline={(payload) => onDeclineProposal(ticket, payload)}
               onUndecline={() => onUndeclineProposal(ticket)}
+              onRequestCorrections={(payload) => onRequestCorrections(ticket, payload)}
+              onResubmit={(payload) => onResubmitProposal(ticket, payload)}
             />
           )}
           {ticket.status !== 'Open' && ticket.status !== 'Pending Approval' && ticket.status !== 'Declined' && (
@@ -12202,9 +12251,15 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
               ticket in one step. There is no separate close/decision-close
               action anymore — if work genuinely can't be finished, cancel
               the ticket instead (below). */}
+          <FormModal open={cancelling} title="Cancel Ticket" onClose={() => setCancelling(false)}>
+            <p>Work stops, but repair evidence is retained. Cancellation does not mean the defect was repaired.</p>
+            <SmartForm fields={[{ label: 'Cancellation reason', name: 'closing_notes', type: 'textarea', rows: 3, required: true }]} title="" submitLabel="Cancel Ticket" onCancel={() => setCancelling(false)} onSubmit={(payload) => onCancel(ticket, payload).then((ok) => { if (ok !== false) setCancelling(false); return ok; })} />
+          </FormModal>
+          {hasEvidence && ticket.status !== 'Closed' && <p className="muted">Repair evidence is retained. An Admin can cancel this ticket with a reason.</p>}
+          {!!ticket.decision_history?.length && <details className="ticket-decision-history"><summary>Decision history</summary><ul>{ticket.decision_history.map((event, index) => <li key={index}><strong>{event.event}</strong> - {event.name} - {formatDate(event.at)}{event.details?.reason ? `: ${event.details.reason}` : ''}{event.details?.cancellation_reason ? `: ${event.details.cancellation_reason}` : ''}</li>)}</ul></details>}
           <div className="ticket-detail-actions-row">
             {canDo(user, 'ticket.uncancel') && ticket.status === 'Cancelled' && onUncancel && (
-              <button className="primary-button" type="button" onClick={() => onUncancel(ticket)}>Restore Ticket</button>
+              <button className="primary-button" type="button" disabled={restoring} onClick={async () => { if (restoring) return; setRestoring(true); try { await onUncancel(ticket); } finally { setRestoring(false); } }}>{restoring ? 'Restoring...' : 'Restore Ticket'}</button>
             )}
             {/* A Pending Approval or Declined proposal isn't a live ticket
                 yet — Approve/Decline/Undecline in the Review Proposal block
@@ -12216,7 +12271,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
             {/* Once a ticket is Closed there's real, confirmed work on
                 record — Delete is only for genuine mistakes, not for
                 discarding finished repairs. */}
-            {canDo(user, 'ticket.delete') && ticket.status !== 'Closed' && ticket.status !== 'Pending Approval' && (
+            {canDo(user, 'ticket.delete') && !hasEvidence && ticket.status !== 'Closed' && ticket.status !== 'Pending Approval' && (
               <button className="danger-button ticket-detail-actions-danger" type="button" onClick={requestDelete}>Delete Ticket</button>
             )}
           </div>
@@ -12303,15 +12358,17 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
       onRejectCannibalization={(t, subIssue, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues/${subIssue.sub_issue_id}/reject-cannibalization`, payload, 'Cannibalized repair rejected.').then(afterAction)}
       onViewIssue={(id) => navigate(`${roleRoutes[user.role]}/issues/${id}`)}
       onLogRepairs={(t, si) => navigate(`${roleRoutes[user.role]}/work-orders/${t.ticket_id}/${si.sub_issue_id}/log-repairs`)}
-      onCancel={(t) => sendTicketAction(`/tickets/${t.ticket_id}/cancel`, {}, 'Ticket cancelled.').then(afterAction)}
-      onUncancel={(t) => sendTicketAction(`/tickets/${t.ticket_id}/uncancel`, {}, 'Ticket restored.').then(afterAction)}
-      onDelete={(t) => onDeleteTicket(t).then(onBack)}
-      onApproveProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/approve`, payload, 'Ticket proposal approved.').then(afterAction)}
+      onCancel={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/cancel`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Ticket cancelled.').then(afterAction)}
+      onUncancel={(t) => sendTicketAction(`/tickets/${t.ticket_id}/uncancel`, { expected_revision: t.decision_revision ?? 0 }, 'Ticket restored.').then(afterAction)}
+      onDelete={(t) => onDeleteTicket(t).then((ok) => { if (ok !== false) onBack(); else afterAction(false); return ok; })}
+      onApproveProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/approve`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Ticket proposal approved.').then(afterAction)}
       // Declining no longer deletes the ticket — it becomes a visible,
       // reversible Declined status, so this stays on the page and refreshes
       // in place, same as every other action here.
-      onDeclineProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/decline`, payload, 'Ticket proposal declined.').then(afterAction)}
-      onUndeclineProposal={(t) => sendTicketAction(`/tickets/${t.ticket_id}/undecline`, {}, 'Proposal restored to Pending Approval.').then(afterAction)}
+      onDeclineProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/decline`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Ticket proposal declined.').then(afterAction)}
+      onUndeclineProposal={(t) => sendTicketAction(`/tickets/${t.ticket_id}/undecline`, { expected_revision: t.decision_revision ?? 0 }, 'Proposal restored to Pending Approval.').then(afterAction)}
+      onRequestCorrections={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/request-corrections`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Corrections requested from the Custodian.').then(afterAction)}
+      onResubmitProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/resubmit`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Corrected proposal submitted for Admin review.').then(afterAction)}
       onRequestConfirmation={onRequestConfirmation}
       onClose={onBack}
     />
@@ -14256,6 +14313,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
 // from the ticket + its sub-issues, so that's visible at a glance instead of
 // hiding behind a generic unread-notification counter.
 function ticketWorkflowStage(ticket) {
+  if (ticket.correction_requested_at) return { label: 'Corrections requested', tone: 'waiting' };
   // 'Open' only ever appears on historical tickets created before the
   // one-mechanic-per-ticket redesign (new tickets go straight from
   // proposal to Pending Approval to Active) — kept so old data still
@@ -15671,7 +15729,7 @@ function ticketTableColumns(unreadByTicket = {}, onViewTicket) {
       const percent = total > 0 ? Math.min(100, Math.max(0, Math.round(done / total * 100))) : 0;
       return <div className="ticket-list-progress"><small className="muted">{done}/{total} sub-issues done</small><div><progress value={percent} max="100" aria-label="Sub-issues completed" /><small className="muted">{percent}%</small></div></div>;
     } },
-    { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <TicketStatusPill status={r.status} /> },
+    { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <span><TicketStatusPill status={r.status} />{r.correction_requested_at && <small className="muted"> Corrections requested</small>}</span> },
     { key: 'personnel', label: 'Assigned To', render: (r) => <TicketPersonnelAvatars ticket={r} /> },
     { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <button type="button" className="cell-link" aria-label={`View ticket ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name="ticket" size={18} /></button> },
   ];
