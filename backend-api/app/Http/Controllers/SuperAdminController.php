@@ -665,8 +665,6 @@ class SuperAdminController extends Controller
     public function registrationCode(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.view_registration_code', 'Only a Super Admin can perform this action.');
-        abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
-            'A live boundary outline is required before issuing a registration code. Confirm or discard any pending replacement first. An imported reference outline does not have to be marked reviewed.');
 
         $setting = RegistrationSetting::for($barangay->id);
 
@@ -676,8 +674,6 @@ class SuperAdminController extends Controller
     public function regenerateRegistrationCode(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.regenerate_registration_code', 'Only a Super Admin can perform this action.');
-        abort_if($barangay->boundary === null || $barangay->pending_boundary !== null, 422,
-            'A live boundary outline is required before issuing a registration code. Confirm or discard any pending replacement first. An imported reference outline does not have to be marked reviewed.');
 
         $setting = RegistrationSetting::regenerateFor($barangay->id);
         $this->log($request, 'Edit', "Regenerated the staff registration code for {$barangay->name}.");

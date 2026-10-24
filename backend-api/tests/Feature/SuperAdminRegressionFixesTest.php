@@ -112,15 +112,24 @@ class SuperAdminRegressionFixesTest extends TestCase
         $this->getJson('/api/superadmin/activity-log?paginate=1&page=0')->assertUnprocessable();
     }
 
-    public function test_imported_outline_code_policy_distinguishes_pending_replacement(): void
+    public function test_registration_codes_do_not_depend_on_boundary_review(): void
     {
         $geometry = ['type' => 'Polygon', 'coordinates' => [[[123, 10], [124, 10], [124, 11], [123, 10]]]];
         $this->barangay->update(['boundary' => $geometry, 'boundary_status' => 'needs_review', 'boundary_source' => 'namria_hdx_reference_2025']);
         $url = "/api/superadmin/barangays/{$this->barangay->id}/registration-code";
         $this->getJson($url)->assertOk();
         $this->barangay->update(['pending_boundary' => $geometry]);
-        $this->getJson($url)->assertUnprocessable();
-        $this->postJson($url.'/regenerate')->assertUnprocessable();
+        $this->getJson($url)->assertOk();
+        $this->postJson($url.'/regenerate')->assertOk();
+        $this->assertSame($geometry, $this->barangay->fresh()->pending_boundary);
+        $this->barangay->update(['boundary' => null, 'pending_boundary' => null]);
+        $this->getJson($url)->assertOk();
+        $this->postJson($url.'/regenerate')->assertOk();
+        $this->assertNull($this->barangay->fresh()->boundary);
+        $custodian = $this->user(['Custodian']);
+        \Laravel\Sanctum\Sanctum::actingAs($custodian, ['*']);
+        $this->getJson($url)->assertForbidden();
+        $this->postJson($url.'/regenerate')->assertForbidden();
     }
 
     public function test_activity_search_preserves_literal_case_insensitive_substring_behavior(): void
