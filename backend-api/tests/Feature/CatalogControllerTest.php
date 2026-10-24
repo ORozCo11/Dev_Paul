@@ -29,6 +29,22 @@ class CatalogControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    #[Test]
+    public function operational_roles_can_manage_dropdown_catalogs(): void
+    {
+        foreach (['Custodian', 'Maintenance Personnel'] as $role) {
+            Sanctum::actingAs(User::factory()->create(['role' => $role]), ['*']);
+            foreach (['fault-categories', 'maintenance-types', 'reported-persons'] as $endpoint) {
+                $name = 'Dropdown ' . uniqid();
+                $created = $this->postJson('/api/' . $endpoint, ['name' => $name])->assertCreated();
+                $id = $created->json('id');
+                $this->putJson('/api/' . $endpoint . '/' . $id, ['name' => $name . ' renamed'])
+                    ->assertOk()->assertJsonPath('name', $name . ' renamed');
+                $this->deleteJson('/api/' . $endpoint . '/' . $id)->assertNoContent();
+            }
+        }
+    }
+
     private function vehicle(?int $barangayId = null): Vehicle
     {
         $category = VehicleCategory::create([

@@ -5504,36 +5504,15 @@ function SelectOrOtherField({ field, value, onChange }) {
   );
 }
 
-// Phase B4 — catalog.create (fault categories / maintenance types) is
-// Admin-only now. Everywhere a Custodian or Maintenance Personnel used to
-// get CreatableSelect's "+ Add New" affordance on one of these two
-// catalogs, this replaces it: a plain select with "Other" pinned as the
-// last option. Picking it reveals a free-text note below — `value` stays a
-// real catalog name, or the literal CATALOG_OTHER_VALUE sentinel; `note` is
-// kept separate, meant to be folded into whichever description/notes field
-// the parent form already sends to the backend (rather than trying to mint
-// a new catalog value, which only Admin can still do). Admin keeps the
-// original CreatableSelect wherever this replaces it — this component is
-// never shown to Admin.
+// User-managed catalogs also support a note when Other is selected.
 const CATALOG_OTHER_VALUE = 'Other';
 
-function CatalogOrOtherField({ value, onChange, note, onNoteChange, options = [], required = false, placeholder = 'Select an option', otherNoteLabel = 'Describe the issue/type' }) {
+function CatalogOrOtherField({ value, onChange, note, onNoteChange, options = [], required = false, placeholder = 'Select an option', otherNoteLabel = 'Describe the issue/type', catalogEndpoint = '/maintenance-types', newItemLabel = 'repair type' }) {
   const isOther = value === CATALOG_OTHER_VALUE;
   return (
     <>
-      <SearchableSelect
-        required={required}
-        value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">{placeholder}</option>
-        {options.map((option, i) => (
-          <option key={option?.value != null ? option.value : `opt-${i}`} value={option?.value ?? option ?? ''}>
-            {option?.label ?? option}
-          </option>
-        ))}
-        <option value={CATALOG_OTHER_VALUE}>Other</option>
-      </SearchableSelect>
+      <CreatableSelect required={required} value={value ?? ''} onChange={onChange}
+        options={options} placeholder={placeholder} catalogEndpoint={catalogEndpoint} newItemLabel={newItemLabel} />
       {isOther && (
         <input
           type="text"
@@ -5702,13 +5681,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
             .join('\n');
         }
       });
-      // Phase B4 — a 'catalog-or-other' field's typed note never has a
-      // backend column of its own (Custodian/Maintenance Personnel can no
-      // longer mint a new catalog value, so "Other" + a note stands in for
-      // it). Runs as its own pass, after the 'list' join above, so folding
-      // the note into another field this same form owns (e.g. a textarea
-      // that started as an array) appends to the already-joined string, not
-      // the raw array.
+      // Fold an optional Other note into the existing description field.
       fields.forEach((field) => {
         if (field.type !== 'catalog-or-other') return;
         const noteKey = `${field.name}__other_note`;
@@ -5861,6 +5834,8 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
           ) : null}
           {field.type === 'catalog-or-other' ? (
             <CatalogOrOtherField
+              catalogEndpoint="/fault-categories"
+              newItemLabel="issue type"
               value={values[field.name] ?? ''}
               onChange={(v) => {
                 const next = { ...values, [field.name]: v };
@@ -7592,12 +7567,6 @@ function conditionFields(lookups) {
 function issueFields(lookups, editTarget, role, onAddVehicle) {
   if (editTarget?.issue_report_id && role === 'Custodian') {
     return [
-      // Phase B4 — catalog.create (fault categories) is Admin-only now, so
-      // a Custodian no longer gets the "+ Add New" affordance here — "Other"
-      // + a note (folded into Remarks on submit, see SmartForm's handleSubmit)
-      // stands in for it instead. Remarks itself isn't its own visible field
-      // any more (it duplicated Issues Found) — otherNoteField still targets
-      // it so an "Other" note has somewhere to land.
       { label: 'Issue Type', name: 'issue_type', options: lookups.issue_types, required: true, type: 'catalog-or-other', otherNoteField: 'remarks', otherNoteLabel: 'Describe the issue/type' },
       // A list, not one paragraph — each row becomes its own line-item, so
       // when this report is later converted into a Pre-Diagnosed ticket,
@@ -7623,9 +7592,6 @@ function issueFields(lookups, editTarget, role, onAddVehicle) {
       // Custodian) — anyone else would just hit a permissions wall.
       action: onAddVehicle ? { label: '+ Add Vehicle', onClick: onAddVehicle } : undefined,
     },
-    // Phase B4 — Admin keeps the original "+ Add New" catalog affordance;
-    // anyone else (a Custodian filing a fresh report) gets "Other" + a note
-    // folded into Remarks instead, same as the edit-own path above.
     (role === 'Admin'
       ? { label: 'Issue Type', name: 'issue_type', options: lookups.issue_types, required: true, type: 'creatable-select', newItemLabel: 'issue type', catalogEndpoint: '/fault-categories' }
       : { label: 'Issue Type', name: 'issue_type', options: lookups.issue_types, required: true, type: 'catalog-or-other', otherNoteField: 'remarks', otherNoteLabel: 'Describe the issue/type' }),
@@ -14521,10 +14487,6 @@ function InspectTicketPage({ ticket, onBack, onSubmit, ticketLookups, onDirty })
   const [resultValue, setResultValue] = useState(ticket?.inspection_result ?? '');
   const [notes, setNotes] = useState(ticket?.inspection_notes ?? '');
   const [category, setCategory] = useState('');
-  // Phase B4 — catalog.create (maintenance types) is Admin-only now, and
-  // this Inspect page is Custodian-only (ticket.inspect), so the Category
-  // picker below no longer offers CreatableSelect's "+ Add New" — "Other"
-  // + this note stands in for it, folded into Inspection Notes on submit.
   const [categoryOtherNote, setCategoryOtherNote] = useState('');
   // Root causes are "added" one at a time (type on the left, Add commits it)
   // rather than every row being a permanently-editable input — the
@@ -15916,13 +15878,10 @@ function CreatableSelect({
   // selects in the add-new modal, merged into the POST body.
   extraFields = [],
 }) {
-  // Only an Admin can remove a catalog entry — it's a shared list everyone
-  // adds to, so letting any role delete from it risks a Custodian or
-  // Mechanic wiping out something others rely on. The backend enforces
-  // this too; hiding the button for non-Admins just avoids a guaranteed
-  // 403 on click.
   const { user: currentUser } = useContext(AuthContext);
-  const canDeleteCatalogItems = hasRole(currentUser, 'Admin');
+  const abilityPrefix = ({ '/categories': 'vehicle_type', '/hubs': 'hub' })[catalogEndpoint] ?? 'catalog';
+  const canEditCatalogItems = canDo(currentUser, abilityPrefix + '.edit');
+  const canDeleteCatalogItems = canDo(currentUser, abilityPrefix + '.delete');
   const createAbility = ({
     '/categories': 'vehicle_type.create',
     '/hubs': 'hub.create',
@@ -15933,7 +15892,7 @@ function CreatableSelect({
   // row keyed by idField/nameField (e.g. vehicle categories) — either way,
   // normalized to one {id, name} shape everything below works with.
   const normalizeItem = useCallback((raw) => (
-    typeof raw === 'string' ? { id: null, name: raw } : { id: raw[idField] ?? null, name: raw[nameField] }
+    typeof raw === 'string' ? { id: null, name: raw } : { ...raw, id: raw[idField] ?? null, name: raw[nameField] }
   ), [idField, nameField]);
   const [open, setOpen] = useState(false);
   // Only holds what's being typed while the panel is open — closed, the
@@ -15985,6 +15944,27 @@ function CreatableSelect({
     return () => { cancelled = true; };
   }, [catalogEndpoint, normalizeItem]);
 
+  // Refresh sibling dropdowns after catalog changes.
+  useEffect(() => {
+    if (!catalogEndpoint) return;
+    const refresh = ({ detail }) => {
+      if (detail.endpoint !== catalogEndpoint) return;
+      setCatalogItems((items) => {
+        const remaining = items.filter((item) => item.id !== detail.item.id && item.name !== detail.previous?.name && item.name !== detail.item.name);
+        return (detail.deleted ? remaining : [...remaining, detail.item]).sort((a, b) => a.name.localeCompare(b.name));
+      });
+      const selected = valueIsId ? String(value) === String(detail.item.id) : value === (detail.previous?.name ?? detail.item.name);
+      if (selected && detail.deleted) onChange(valueIsId ? null : '');
+      else if (selected && detail.previous && !valueIsId) onChange(detail.item.name);
+    };
+    window.addEventListener('vms:catalog-change', refresh);
+    return () => window.removeEventListener('vms:catalog-change', refresh);
+  }, [catalogEndpoint, value, valueIsId, onChange]);
+
+  const announceChange = (item, previous = null, deleted = false) => {
+    window.dispatchEvent(new CustomEvent('vms:catalog-change', { detail: { endpoint: catalogEndpoint, item, previous, deleted } }));
+  };
+
   useEffect(() => {
     if (!addedMessage) return;
     const timer = setTimeout(() => setAddedMessage(null), 2600);
@@ -16031,15 +16011,11 @@ function CreatableSelect({
     setAddModalError(null);
     setOpen(false);
   };
-  // Renaming an existing entry — same little modal as add, pre-filled with
-  // its current name. Only offered where add/delete already are (a real
-  // catalogEndpoint, Admin), since it's the same permission story: a shared
-  // list everyone reads, only Admin should be able to change it out from
-  // under everyone else.
+  // Preserve additional fields when renaming a catalog entry.
   const openEditModal = (item) => {
     setEditTarget(item);
     setAddModalName(item.name);
-    setAddModalExtra(Object.fromEntries(extraFields.map((f) => [f.name, f.default ?? ''])));
+    setAddModalExtra(Object.fromEntries(extraFields.map((f) => [f.name, item[f.name] ?? f.default ?? ''])));
     setAddModalError(null);
     setOpen(false);
   };
@@ -16067,6 +16043,7 @@ function CreatableSelect({
       try {
         const res = await api.put(`${catalogEndpoint}/${editTarget.id}`, { [nameField]: val, ...addModalExtra });
         const updated = normalizeItem(res.data);
+        announceChange(updated, editTarget);
         setCatalogItems((items) => items
           .map((i) => (i.id === editTarget.id ? updated : i))
           .sort((a, b) => a.name.localeCompare(b.name)));
@@ -16100,6 +16077,7 @@ function CreatableSelect({
     try {
       const res = await api.post(catalogEndpoint, { [nameField]: val, ...addModalExtra });
       const created = normalizeItem(res.data);
+      announceChange(created);
       setCatalogItems((items) => {
         const withoutDupe = items.filter((i) => i.name.toLowerCase() !== created.name.toLowerCase());
         return [...withoutDupe, created].sort((a, b) => a.name.localeCompare(b.name));
@@ -16123,6 +16101,7 @@ function CreatableSelect({
     setDeleteBusy(true);
     try {
       await api.delete(`${catalogEndpoint}/${deleteTarget.id}`);
+      announceChange(deleteTarget, null, true);
       setCatalogItems((items) => items.filter((i) => i.id !== deleteTarget.id));
       const wasSelected = valueIsId ? String(value) === String(deleteTarget.id) : value === deleteTarget.name;
       if (wasSelected) onChange(valueIsId ? null : '');
@@ -16167,16 +16146,9 @@ function CreatableSelect({
                 <button type="button" className="creatable-select-option" onClick={() => pick(o)}>
                   {o.name}
                 </button>
-                {catalogEndpoint && canDeleteCatalogItems && o.id != null && (
+                {catalogEndpoint && (canEditCatalogItems || canDeleteCatalogItems) && o.id != null && (
                   <>
-                    {/* Simple name-only catalogs (Fault Category, Maintenance
-                        Type) only — a catalog with extraFields (e.g. Vehicle
-                        Type's Domain) isn't safe to rename here, since this
-                        list never carries those extra values to prefill the
-                        modal with; blindly submitting would reset them to
-                        whatever the field's bare default is. Those already
-                        have their own proper edit page elsewhere. */}
-                    {extraFields.length === 0 && (
+                    {canEditCatalogItems && (
                       <button
                         type="button"
                         className="creatable-select-option-edit"
@@ -16187,15 +16159,15 @@ function CreatableSelect({
                         <Icon name="edit" size={12} />
                       </button>
                     )}
-                    <button
+                    {canDeleteCatalogItems && <button
                       type="button"
                       className="creatable-select-option-delete"
                       onClick={(e) => { e.stopPropagation(); setDeleteTarget(o); setDeleteError(null); }}
                       title={`Remove ${o.name}`}
                       aria-label={`Remove ${o.name}`}
                     >
-                      <Icon name="close" size={12} />
-                    </button>
+                      <Icon name="trash" size={12} />
+                    </button>}
                   </>
                 )}
               </div>
@@ -16265,7 +16237,7 @@ function CreatableSelect({
             <div className="confirm-dialog-copy">
               <p className="eyebrow">Confirmation</p>
               <h3>Remove {newItemTitle}</h3>
-              <p>Remove "{deleteTarget.name}" from this list? It disappears for everyone — existing tickets/records that already used it keep showing it, but it won't be selectable anymore.</p>
+              <p>Remove "{deleteTarget.name}" from this list? It disappears for everyone — options used by saved records cannot be removed.</p>
               {deleteError && <p style={{ color: '#b91c1c', fontWeight: 600, marginTop: 8 }}>{deleteError}</p>}
             </div>
             <div className="confirm-dialog-actions">
