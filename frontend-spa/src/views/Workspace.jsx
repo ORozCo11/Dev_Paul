@@ -13037,8 +13037,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
                   <span className="muted">{[selectedVehicle.brand, selectedVehicle.model].filter(Boolean).join(' ') || 'Make and model not recorded'}</span>
                   <span className="muted">{selectedVehicle.current_location ?? 'No location on file'}</span>
                   <span className="ticket-preview-badges">
-                    {selectedVehicle.status && <span className="ticket-preview-badge">{selectedVehicle.status}</span>}
-                    {selectedVehicle.condition && <span className="ticket-preview-badge">{selectedVehicle.condition}</span>}
+                    {selectedVehicle.status && <StatusBadge value={selectedVehicle.status} />}
+                    {selectedVehicle.condition && <StatusBadge value={selectedVehicle.condition} />}
                   </span>
                 </div>
               </> : <div className="ticket-preview-empty-copy"><Icon name="vehicle" size={24} /><strong>Vehicle summary</strong><span>Select a vehicle to preview its details.</span></div>}
