@@ -982,6 +982,8 @@ class FleetController extends Controller
             $vehicle->readiness_last_checked = $latest?->checked_at;
 
             $openTickets = $openTicketsByVehicle->get($vehicle->vehicle_id) ?? collect();
+            $vehicle->readiness_block_reason = $this->readinessBlockReason($vehicle, $openTickets->contains(fn ($ticket) => in_array($ticket->status, ['Active', 'For Verification'], true)));
+            $vehicle->can_confirm_readiness = $vehicle->readiness_block_reason === null;
             $vehicle->open_ticket_id = optional($openTickets->first())->ticket_id;
             $vehicle->open_ticket_number = optional($openTickets->first())->display_number;
             $vehicle->awaiting_closure = $vehicle->status !== 'Available'
@@ -1177,15 +1179,22 @@ class FleetController extends Controller
         });
     }
 
+    private function readinessBlockReason(Vehicle $vehicle, bool $hasActiveTicket): ?string
+    {
+        if ($vehicle->status === 'Under Maintenance' || $hasActiveTicket) {
+            return 'Readiness cannot be confirmed while maintenance is ongoing. Finish the maintenance work and have the assigned Custodian independently verify the repairs so all active tickets are closed or the maintenance record is verified. Then personally check and operate the vehicle before confirming readiness.';
+        }
+        if (in_array($vehicle->status, ['Inactive', 'Decommissioned'], true)) {
+            return 'This vehicle is out of the fleet and cannot be readiness-checked.';
+        }
+        return null;
+    }
+
     private function storeReadinessCheckLocked(Request $request, Vehicle $vehicle)
     {
         $this->requireAbility($request, 'vehicle.readiness_check');
-        abort_if($vehicle->status === 'Under Maintenance' || MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)->whereIn('status', ['Active', 'For Verification'])->exists(), 422, 'Finish and independently verify the maintenance before recording readiness.');
-        abort_if(
-            in_array($vehicle->status, ['Inactive', 'Decommissioned'], true),
-            422,
-            'This vehicle is out of the fleet and cannot be readiness-checked.'
-        );
+        $blockedReason = $this->readinessBlockReason($vehicle, MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)->whereIn('status', ['Active', 'For Verification'])->exists());
+        abort_if($blockedReason !== null, 422, $blockedReason);
 
         // Simplified per product direction: the readiness check is a plain
         // attestation ("I confirm I personally checked and operated this
@@ -1295,9 +1304,13 @@ class FleetController extends Controller
         $activeTicket = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)
             ->whereNotIn('status', ['Closed', 'Cancelled'])
             ->orderByDesc('ticket_id')
-            ->first(['ticket_id', 'barangay_number', 'ticket_title']);
+            ->get(['ticket_id', 'barangay_number', 'ticket_title', 'status']);
+        $blockedReason = $this->readinessBlockReason($vehicle, $activeTicket->contains(fn ($ticket) => in_array($ticket->status, ['Active', 'For Verification'], true)));
+        $activeTicket = $activeTicket->first();
 
         return response()->json([
+            'can_confirm_readiness' => $blockedReason === null,
+            'readiness_block_reason' => $blockedReason,
             'state'              => $this->responseReadinessState($vehicle, $latest),
             'last_checked'       => $latest?->checked_at,
             'latest_checklist'   => $latest?->checklist,

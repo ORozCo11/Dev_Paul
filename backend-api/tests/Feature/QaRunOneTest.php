@@ -105,6 +105,28 @@ class QaRunOneTest extends TestCase
         $this->deleteJson("/api/tickets/{$ticket->ticket_id}")->assertUnprocessable();
         $this->assertDatabaseHas('maintenance_tickets', ['ticket_id' => $ticket->ticket_id, 'status' => 'Active']);
     }
+    public function test_readiness_eligibility_blocks_maintenance_and_stale_available_status_without_saving(): void
+    {
+        $ticket=$this->proposal();
+        Sanctum::actingAs($this->custodian);
+        foreach (['Active','For Verification'] as $status) {
+            $ticket->update(['status'=>$status]);
+            $this->vehicle->update(['status'=>'Available']);
+            $response=$this->getJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness")->assertOk()->assertJsonPath('can_confirm_readiness',false);
+            $this->assertStringContainsString('assigned Custodian independently verify',$response->json('readiness_block_reason'));
+            $this->getJson('/api/vehicles')->assertOk()->assertJsonPath('0.can_confirm_readiness',false);
+            $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness-check",['confirmed'=>true])->assertUnprocessable();
+        }
+        $ticket->update(['status'=>'Closed']);
+        $this->vehicle->update(['status'=>'Under Maintenance']);
+        $this->getJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness")->assertOk()->assertJsonPath('can_confirm_readiness',false);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness-check",['confirmed'=>true])->assertUnprocessable();
+        $this->assertDatabaseCount('vehicle_readiness_checks',0);
+        $this->vehicle->update(['status'=>'Available','condition'=>'Good']);
+        $this->getJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness")->assertOk()->assertJsonPath('can_confirm_readiness',true);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness-check",['confirmed'=>true])->assertCreated()->assertJsonPath('state','ready');
+    }
+
     public function test_repair_closure_does_not_reuse_a_pre_repair_readiness_pass(): void
     {
         $this->travelTo(now()->startOfSecond());

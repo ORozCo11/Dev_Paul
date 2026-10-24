@@ -428,3 +428,8 @@ Summary cards show **Total Maintenance Records**, **In-House Repair**, **Sent to
 
 
 My Work Orders now defaults to List View, reusing the Maintenance Tickets columns, column chooser, pagination and row/detail action. Card View remains selectable with smaller cards and vehicle photos, scoped to the mechanic's Work Orders and its Archive. Both views use the same assigned-ticket scope, search and status filters; reopening the module starts in List View.
+
+
+Readiness confirmation now checks current server eligibility when its dialog opens. Ongoing maintenance or an Active/For Verification ticket disables the attestation and Confirm Ready action, and explains the required maintenance completion, independent Custodian verification and fresh vehicle operation check. Vehicle list actions show a warning color for known blocked vehicles. If eligibility cannot be loaded, confirmation stays disabled until the user closes and retries. The save endpoint rechecks the same rule inside its vehicle-lock transaction, including when an older screen still says Available; a rejected request creates no readiness check.
+
+Readiness validation verification: 545 backend tests passed; frontend lint/build and browser checks passed. Coverage includes Under Maintenance, Active/For Verification tickets despite an Available vehicle status, zero checks saved on rejection, eligibility-service failure, and successful confirmation once eligible.

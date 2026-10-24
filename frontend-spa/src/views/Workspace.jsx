@@ -8103,7 +8103,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
             (row.status === 'Inactive' || row.status === 'Decommissioned') ? (
               <span className="icon-btn-spacer" aria-hidden="true" />
             ) : (
-              <button className="btn-confirm-action icon-btn" onClick={() => onReadinessCheck(row)} type="button" title="Record Readiness Check" aria-label="Record Readiness Check"><Icon name="checkCircle" size={14} /></button>
+              <button className={`icon-btn ${row.can_confirm_readiness === false ? 'readiness-check-blocked' : 'btn-confirm-action'}`} onClick={() => onReadinessCheck(row)} type="button" title={row.readiness_block_reason || 'Record Readiness Check'} aria-label="Record Readiness Check"><Icon name={row.can_confirm_readiness === false ? 'alert' : 'checkCircle'} size={14} /></button>
             )
           )}
           {(row.status === 'Inactive' || row.status === 'Decommissioned') ? (
@@ -13327,12 +13327,22 @@ const READINESS_BADGE = {
 // Simplified per product direction: a plain confirmation, not a checklist —
 // if something's actually wrong, the Custodian proposes a maintenance
 // ticket instead of confirming readiness.
-function ReadinessCheckForm({ onCancel, onSubmit }) {
+function ReadinessCheckForm({ vehicle, onCancel, onSubmit }) {
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [eligibility, setEligibility] = useState(null);
+  useEffect(() => {
+    let current = true;
+    api.get(`/vehicles/${vehicle.vehicle_id}/readiness`)
+      .then(({ data }) => { if (current) setEligibility(data); })
+      .catch(() => { if (current) setEligibility({ can_confirm_readiness: false, readiness_block_reason: 'Could not check readiness eligibility. Close this dialog and try again before confirming readiness.' }); });
+    return () => { current = false; };
+  }, [vehicle.vehicle_id]);
+  const blocked = !eligibility || eligibility.can_confirm_readiness !== true;
+
 
   const submit = async () => {
-    if (!confirmed || submitting) return;
+    if (blocked || !confirmed || submitting) return;
     setSubmitting(true);
     try {
       await onSubmit({ confirmed: true });
@@ -13343,13 +13353,15 @@ function ReadinessCheckForm({ onCancel, onSubmit }) {
 
   return (
     <div>
+      {!eligibility && <p role="status">Checking readiness eligibility...</p>}
+      {eligibility?.can_confirm_readiness === false && <p className="notice warning" role="alert">{eligibility.readiness_block_reason || 'Readiness cannot be confirmed until maintenance is completed and independently verified.'}</p>}
       <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.88rem', cursor: 'pointer' }}>
-        <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} style={{ marginTop: 3 }} />
+        <input type="checkbox" disabled={blocked || submitting} checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} style={{ marginTop: 3 }} />
         <span>I confirm I <strong>personally checked and operated</strong> this vehicle and it is ready to respond.</span>
       </label>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
         <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
-        <button type="button" className="primary-button" onClick={submit} disabled={!confirmed || submitting}>
+        <button type="button" className="primary-button" onClick={submit} disabled={blocked || !confirmed || submitting}>
           {submitting ? 'Saving…' : 'Confirm Ready'}
         </button>
       </div>
