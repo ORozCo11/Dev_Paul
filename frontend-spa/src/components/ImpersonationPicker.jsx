@@ -74,9 +74,9 @@ function AccountCascade({ user, rootToken }) {
       <option value="">Barangay</option>{options(cityRows, 'barangay_id', 'barangay_name', 'No barangay').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
     </SearchableSelect>
     <div className="account-user-control">
-      <SearchableSelect aria-label="Impersonation user" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
+      <SearchableSelect aria-label="Impersonation user" menuClassName="account-user-menu" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
         {!barangayRows.length && <option value="" disabled>{loading ? 'Loading accounts...' : selected.barangay ? 'No accounts available' : 'Select a barangay first'}</option>}
-        {barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name} - {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}
+        {barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name}</option>)}
       </SearchableSelect>
       <button className="account-impersonate-button" type="button" disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}>{busy ? 'Logging in...' : 'Impersonate'}</button>
     </div>
