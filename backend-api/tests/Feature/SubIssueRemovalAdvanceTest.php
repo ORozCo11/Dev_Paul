@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 /**
  * A ticket moves to For Verification on its own once every sub-issue has its
- * repair logged — but only logRepairs() checked for that. When the Custodian
+ * repair logged — but only logRepairs() checked for that. When the Admin
  * removed the one sub-issue still waiting on the mechanic, every remaining
  * line was already logged, yet the ticket sat Active and the Custodian was
  * never told it was ready to verify.
@@ -54,6 +54,10 @@ class SubIssueRemovalAdvanceTest extends TestCase
         $this->assertSame('Active', MaintenanceTicket::findOrFail($ticketId)->status);
 
         Sanctum::actingAs($custodian, ['*']);
+        $this->deleteJson("/api/tickets/{$ticketId}/sub-issues/{$leftover->sub_issue_id}")->assertForbidden();
+        $this->assertSame('Active', MaintenanceTicket::findOrFail($ticketId)->status);
+
+        Sanctum::actingAs($admin, ['*']);
         $this->deleteJson("/api/tickets/{$ticketId}/sub-issues/{$leftover->sub_issue_id}")->assertOk();
 
         $this->assertSame('For Verification', MaintenanceTicket::findOrFail($ticketId)->status);

@@ -117,11 +117,10 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const [provinceFilter, setProvinceFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
   const [boundaryFilter, setBoundaryFilter] = useState('');
-  const [detailSection, setDetailSection] = useState('overview');
   const navigate = useNavigate();
   const detailRoute = useMatch('/superadmin/barangays/:barangayId');
   const managingId = detailRoute?.params.barangayId;
-  const setManagingId = (id) => navigate(id == null ? '/superadmin/barangays' : `/superadmin/barangays/${id}`);
+  const setManagingId = (id, section = 'overview') => navigate(id == null ? '/superadmin/barangays' : `/superadmin/barangays/${id}#barangay-${section}`);
   const [pickedUserId, setPickedUserId] = useState('');
   const [reviewingBoundary, setReviewingBoundary] = useState(null);
   const [retryingId, setRetryingId] = useState(null);
@@ -137,11 +136,11 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const clearFilters = () => { setActiveFilter('all'); setSearch(''); setProvinceFilter(''); setCityFilter(''); setBoundaryFilter(''); };
   const hasFilters = activeFilter !== 'all' || search || provinceFilter || cityFilter || boundaryFilter;
   const columns = [
-    { label: 'Barangay', render: (b) => <button type="button" className="sa-text-button sa-barangay-link" onClick={() => { setManagingId(b.id); setPickedUserId(''); setDetailSection('overview'); }} aria-label={`Manage ${b.name}`}><strong>{b.name}</strong><span>{b.psgc_code ? `PSGC ${b.psgc_code}` : 'Local record'}</span></button> },
+    { label: 'Barangay', render: (b) => <button type="button" className="sa-text-button sa-barangay-link" onClick={() => { setManagingId(b.id); setPickedUserId(''); }} aria-label={`Manage ${b.name}`}><strong>{b.name}</strong><span>{b.psgc_code ? `PSGC ${b.psgc_code}` : 'Local record'}</span></button> },
     { label: 'City / Province', render: (b) => <div className="sa-stacked"><strong>{b.city_name || 'Not specified'}</strong><span>{b.province_name || 'Not specified'}</span></div> },
     { label: 'Administration', render: (b) => <div className="sa-stacked"><StatusBadge value={b.has_active_admin ? 'Active Administrator' : 'Without Administrator'} />{b.sole_active_admin && <span className="sa-warning"><Icon name="alert" size={12} />Only one active Administrator</span>}<span>{b.staff_count} {b.staff_count === 1 ? 'staff member' : 'staff members'}</span></div> },
     { label: 'Boundary Status', render: (b) => <StatusBadge value={boundaryStatus(b)} /> },
-    { label: 'Actions', render: (b) => <div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => { setManagingId(b.id); setPickedUserId(''); setDetailSection(b.has_active_admin ? 'overview' : 'administrators'); }}>{b.has_active_admin ? 'Manage barangay' : 'Assign administrator'}</button>{b.boundary_status === 'needs_review' && <button type="button" className="sa-text-button" onClick={() => { setManagingId(b.id); setDetailSection('boundary'); }}>Review boundary</button>}</div> },
+    { label: 'Actions', render: (b) => <div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => { setManagingId(b.id, b.has_active_admin ? 'overview' : 'administrators'); setPickedUserId(''); }}>{b.has_active_admin ? 'Manage barangay' : 'Assign administrator'}</button>{b.boundary_status === 'needs_review' && <button type="button" className="sa-text-button" onClick={() => { setManagingId(b.id, 'boundary'); }}>Review boundary</button>}</div> },
   ];
   return <div className="superadmin-tab">
     {showAddForm && <AddBarangayForm existingBarangayIds={barangays.map((barangay) => String(barangay.id))} onAdded={(created) => { onAddedBarangay(created); onCloseAdd(); }} onCancel={onCloseAdd} />}

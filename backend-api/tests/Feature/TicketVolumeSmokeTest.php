@@ -206,7 +206,7 @@ class TicketVolumeSmokeTest extends TestCase
             $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
 
             Sanctum::actingAs($ticket->assignedCustodian, ['*']);
-            $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['test_attested' => true])->assertOk();
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
         }
 
         $this->assertSame($count, MaintenanceTicket::where('status', 'Closed')->count());

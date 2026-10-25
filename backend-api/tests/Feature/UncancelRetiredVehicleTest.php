@@ -60,7 +60,7 @@ class UncancelRetiredVehicleTest extends TestCase
     public function a_cancelled_ticket_cannot_be_restored_once_its_vehicle_is_retired(): void
     {
         $ticket = $this->activeTicket('Coolant leak');
-        $this->putJson("/api/tickets/{$ticket}/cancel")->assertOk();
+        $this->putJson("/api/tickets/{$ticket}/cancel", ['closing_notes' => 'Reviewed cancellation for restoration test.'])->assertOk();
         $this->vehicle->update(['status' => 'Decommissioned']);
 
         $this->putJson("/api/tickets/{$ticket}/uncancel")->assertUnprocessable();

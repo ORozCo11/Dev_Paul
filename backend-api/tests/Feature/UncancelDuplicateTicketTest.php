@@ -60,7 +60,7 @@ class UncancelDuplicateTicketTest extends TestCase
     public function a_cancelled_ticket_cannot_be_restored_over_a_newer_open_ticket_for_the_same_issue(): void
     {
         $original = $this->activeTicket('Coolant leak');
-        $this->putJson("/api/tickets/{$original}/cancel")->assertOk();
+        $this->putJson("/api/tickets/{$original}/cancel", ['closing_notes' => 'Reviewed cancellation for restoration test.'])->assertOk();
 
         $replacement = $this->activeTicket('Coolant leak');
 
@@ -73,7 +73,7 @@ class UncancelDuplicateTicketTest extends TestCase
     public function a_cancelled_ticket_with_no_newer_duplicate_can_still_be_restored(): void
     {
         $original = $this->activeTicket('Coolant leak');
-        $this->putJson("/api/tickets/{$original}/cancel")->assertOk();
+        $this->putJson("/api/tickets/{$original}/cancel", ['closing_notes' => 'Reviewed cancellation for restoration test.'])->assertOk();
 
         $this->putJson("/api/tickets/{$original}/uncancel")->assertOk();
         $this->assertSame('Active', MaintenanceTicket::findOrFail($original)->status);
