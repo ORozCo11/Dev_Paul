@@ -1844,8 +1844,13 @@ class TicketController extends Controller
         abort_unless(in_array($subIssue->status, ['Open', 'Under Repair'], true), 422, 'Only a sub-issue that has not had repairs logged yet can be removed.');
         abort_if(TicketSubIssue::where('ticket_id', $ticket->ticket_id)->count() <= 1, 422, 'A ticket needs at least one sub-issue. Cancel the ticket instead.');
 
-        $this->log($request, 'Sub-issue Removed', "Ticket #{$ticket->display_number} — removed sub-issue \"{$subIssue->title}\".", $ticket->ticket_id);
-        $subIssue->delete();
+        DB::transaction(function () use ($request, $ticket, $subIssue) {
+            $this->log($request, 'Sub-issue Removed', "Ticket #{$ticket->display_number} — removed sub-issue \"{$subIssue->title}\".", $ticket->ticket_id);
+            $subIssue->delete();
+            // Removing the one line still waiting on the mechanic can leave
+            // every remaining repair logged — same hand-off logRepairs() makes.
+            $this->advanceToVerificationIfReady($ticket, $request);
+        });
 
         return response()->json(['message' => 'Sub-issue removed.']);
     }
