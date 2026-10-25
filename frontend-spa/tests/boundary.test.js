@@ -23,6 +23,7 @@ test('separate islands are accepted without filling the sea between them', () =>
 test('invalid and missing geometry never admit a location', () => {
   assert.deepEqual(geoJsonToPolygons(null), []);
   assert.deepEqual(geoJsonToPolygons({ type: 'Polygon', coordinates: [square(0, 10), null] }), []);
+  assert.deepEqual(geoJsonToPolygons({ type: 'Polygon', coordinates: [square(200, 201)] }), []);
   assert.equal(isPointWithinBoundaryPolygons({ lat: NaN, lng: 1 }, [[square(0, 10)]]), false);
 });
 

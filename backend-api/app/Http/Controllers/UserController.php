@@ -112,6 +112,8 @@ class UserController extends Controller
         $data = $this->normalizeRoles($request, $data);
         $data['password'] = Hash::make($data['password']);
         $data['is_active'] = true;
+        // Created by an Admin directly, so already approved — without this
+        // stamp the account reads as a pending registration everywhere.
         $data['approved_at'] = now();
         // Always the creating Admin's own barangay — never client-supplied,
         // so an Admin can't plant a user into a barangay they don't manage.
