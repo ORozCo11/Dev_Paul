@@ -17,7 +17,6 @@ import { AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchI
 import { geoJsonToPolygons } from '../utils/boundary';
 import { ActivityLogTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
-import { impersonationRootToken } from '../utils/impersonation';
 import SupportCenterTab from './SupportCenterTab';
 
 
@@ -33,15 +32,6 @@ const TABS = [
   ['users', 'Users'], ['codes', 'Registration Codes'], ['activity', 'Activity Log'],
   ['support', 'Support Center'],
 ];
-
-// Sidebar sections group related modules; every key above appears once.
-const NAV_GROUPS = [
-  ['Overview', ['dashboard']],
-  ['Barangays', ['barangays', 'codes']],
-  ['Accounts', ['pending', 'users']],
-  ['Monitoring', ['activity', 'support']],
-];
-const TAB_LABELS = Object.fromEntries(TABS);
 
 const TAB_DESCRIPTIONS = {
   dashboard: 'Manage barangays, user accounts, and platform administration.',
@@ -71,7 +61,7 @@ const TAB_ICONS = {
   pending: <Icon name="clipboard" size={18} className="nav-icon" />,
   users: <UsersIcon />,
   codes: <Icon name="key" size={18} className="nav-icon" />,
-  activity: <Icon name="list" size={18} className="nav-icon" />,
+  activity: <Icon name="clipboard" size={18} className="nav-icon" />,
   settings: <Icon name="key" size={18} className="nav-icon" />,
   support: <Icon name="mail" size={18} className="nav-icon" />,
 };
@@ -120,7 +110,7 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const navigate = useNavigate();
   const detailRoute = useMatch('/superadmin/barangays/:barangayId');
   const managingId = detailRoute?.params.barangayId;
-  const setManagingId = (id, section = 'overview') => navigate(id == null ? '/superadmin/barangays' : `/superadmin/barangays/${id}#barangay-${section}`);
+  const setManagingId = (id) => navigate(id == null ? '/superadmin/barangays' : `/superadmin/barangays/${id}`);
   const [pickedUserId, setPickedUserId] = useState('');
   const [reviewingBoundary, setReviewingBoundary] = useState(null);
   const [retryingId, setRetryingId] = useState(null);
@@ -133,33 +123,30 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const managing = barangays.find((b) => String(b.id) === managingId);
   const candidates = managing ? users.filter((account) => account.barangay_id === managing.id) : [];
   const retryBoundary = async (b) => { setRetryingId(b.id); try { await onRetryBoundary(b); } finally { setRetryingId(null); } };
-  const clearFilters = () => { setActiveFilter('all'); setSearch(''); setProvinceFilter(''); setCityFilter(''); setBoundaryFilter(''); };
-  const hasFilters = activeFilter !== 'all' || search || provinceFilter || cityFilter || boundaryFilter;
   const columns = [
-    { label: 'Barangay', render: (b) => <button type="button" className="sa-text-button sa-barangay-link" onClick={() => { setManagingId(b.id); setPickedUserId(''); }} aria-label={`Manage ${b.name}`}><strong>{b.name}</strong><span>{b.psgc_code ? `PSGC ${b.psgc_code}` : 'Local record'}</span></button> },
+    { label: 'Barangay', render: (b) => <strong>{b.name}</strong> },
     { label: 'City / Province', render: (b) => <div className="sa-stacked"><strong>{b.city_name || 'Not specified'}</strong><span>{b.province_name || 'Not specified'}</span></div> },
-    { label: 'Administration', render: (b) => <div className="sa-stacked"><StatusBadge value={b.has_active_admin ? 'Active Administrator' : 'Without Administrator'} />{b.sole_active_admin && <span className="sa-warning"><Icon name="alert" size={12} />Only one active Administrator</span>}<span>{b.staff_count} {b.staff_count === 1 ? 'staff member' : 'staff members'}</span></div> },
+    { label: 'Staff Count', key: 'staff_count' },
+    { label: 'Administrator Status', render: (b) => <div className="sa-stacked"><StatusBadge value={b.has_active_admin ? 'Active Admin' : 'No Active Admin'} />{b.sole_active_admin && <span className="sa-warning"><Icon name="alert" size={12} />Only one active Admin</span>}</div> },
     { label: 'Boundary Status', render: (b) => <StatusBadge value={boundaryStatus(b)} /> },
-    { label: 'Actions', render: (b) => <div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => { setManagingId(b.id, b.has_active_admin ? 'overview' : 'administrators'); setPickedUserId(''); }}>{b.has_active_admin ? 'Manage barangay' : 'Assign administrator'}</button>{b.boundary_status === 'needs_review' && <button type="button" className="sa-text-button" onClick={() => { setManagingId(b.id, 'boundary'); }}>Review boundary</button>}</div> },
+    { label: 'Actions', render: (b) => <button type="button" className="ghost-button" onClick={() => { setManagingId(b.id); setPickedUserId(''); }}>View / Manage</button> },
   ];
   return <div className="superadmin-tab">
-    {showAddForm && <AddBarangayForm existingBarangayIds={barangays.map((barangay) => String(barangay.id))} onAdded={(created) => { onAddedBarangay(created); onCloseAdd(); }} onCancel={onCloseAdd} />}
-    {!managingId && <AdminManagementCard summary={<div className="sa-management-summary"><div className="sa-segments" aria-label="Barangay status navigation">{[['all', 'All Barangays', barangays.length], ['active', 'With Active Administrator', barangays.length - orphaned.length], ['orphaned', 'Without Administrator', orphaned.length], ['boundary_review', 'Needs Boundary Review', pending.length]].map(([key, label, count]) => <button key={key} type="button" aria-pressed={activeFilter === key} onClick={() => setActiveFilter(key)}>{label}<span>{count}</span></button>)}</div><p aria-live="polite">Showing <strong>{filtered.length}</strong> of <strong>{barangays.length}</strong> barangays.</p></div>} toolbar={<>
+    {showAddForm && <AddBarangayForm existingBarangayIds={barangays.map((b) => String(b.id))} onAdded={(created) => { onAddedBarangay(created); onCloseAdd(); }} onCancel={onCloseAdd} />}
+    {!managingId && <AdminManagementCard summary={<div className="sa-segments">{[['all', 'All Barangays', barangays.length], ['active', 'Active Admin', barangays.length - orphaned.length], ['orphaned', 'Orphaned', orphaned.length], ['boundary_review', 'Needs Boundary Review', pending.length]].map(([key, label, count]) => <button key={key} type="button" aria-pressed={activeFilter === key} onClick={() => setActiveFilter(key)}>{label}<span>{count}</span></button>)}</div>} toolbar={<>
       <LocalSearchInput value={search} onChange={setSearch} placeholder="Search barangay, city, or province..." />
       <AdminFilterField label="Province"><SearchableSelect aria-label="Filter by province" value={provinceFilter} onChange={(event) => { setProvinceFilter(event.target.value); setCityFilter(''); }}><option value="">All Provinces</option>{provinceOptions.map((province) => <option key={province}>{province}</option>)}</SearchableSelect></AdminFilterField>
       <AdminFilterField label="City"><SearchableSelect aria-label="Filter by city" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}><option value="">All Cities</option>{cities.map((city) => <option key={city}>{city}</option>)}</SearchableSelect></AdminFilterField>
       <AdminFilterField label="Boundary status"><SearchableSelect aria-label="Boundary status" value={boundaryFilter} onChange={(event) => setBoundaryFilter(event.target.value)}><option value="">All Boundaries</option>{['Reviewed', 'Needs Review', 'Not Found'].map((status) => <option key={status}>{status}</option>)}</SearchableSelect></AdminFilterField>
-      {hasFilters && <button type="button" className="ghost-button sa-clear-filters" onClick={clearFilters}>Clear filters</button>}
     </>}><PaginatedTable rows={filtered} columns={columns} emptyIcon="pin" emptyMessage="No barangays found" emptyDescription="Try another search or adjust the location and status filters." /></AdminManagementCard>}
     {managingId && !managing && <p role="alert">Barangay not found. <button type="button" className="ghost-button" onClick={() => setManagingId(null)}>Back to Barangays</button></p>}
     {managing && <section className="sa-management-card sa-barangay-page">
       <header className="sa-barangay-page-header"><button type="button" className="ghost-button" onClick={() => setManagingId(null)}><Icon name="arrowLeft" size={15} />Back to Barangays</button><h2>{managing.name}</h2><p>{[managing.city_name, managing.province_name].filter(Boolean).join(', ')}</p></header>
-      <nav className="sa-detail-tabs" aria-label={`${managing.name} management sections`}><a href="#barangay-overview">Overview</a><a href="#barangay-administrators">Administrators &amp; Staff</a><a href="#barangay-boundary">Boundary Management</a></nav>
       <div className="sa-barangay-page-grid">
-      <dl id="barangay-overview" className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Administrator' : 'Without Administrator'} /></dd><dt>Boundary status</dt><dd><StatusBadge value={boundaryStatus(managing)} /></dd><dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
+      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd><dt>Boundary status</dt><dd><StatusBadge value={boundaryStatus(managing)} /></dd><dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
       <section className="sa-detail-section"><h3>Registration code</h3><p>View or regenerate this barangay's staff registration code.</p><button type="button" className="ghost-button" onClick={() => onRegistrationCode(managing)}><Icon name="key" size={15} />Manage Registration Code</button></section>
-      <section id="barangay-boundary" className="sa-detail-section"><h3>Boundary management</h3><button type="button" className="ghost-button" onClick={() => { setReviewingBoundary(managing); }}>Review or replace boundary</button>{managing.boundary_status === 'needs_review' ? <><p>{managing.pending_boundary ? 'A candidate outline is waiting for review.' : 'The current outline is an unverified reference.'} Review it against an LGU-approved boundary map or survey.</p><button type="button" className="primary-button" onClick={() => { setReviewingBoundary(managing); }}>Review boundary</button></> : managing.boundary_status === 'verified' ? <p>A boundary reviewed against an uploaded source document is on file. This is an administrator review, not a legal certification.</p> : <><p>No matching boundary is on file. Retry the supported lookup.</p><button type="button" className="ghost-button" disabled={retryingId === managing.id} onClick={() => retryBoundary(managing)}>{retryingId === managing.id ? 'Checking…' : 'Retry Boundary Lookup'}</button></>}</section>
-      {!managing.has_active_admin && <section id="barangay-administrators" className="sa-detail-section"><h3>Administrators &amp; Staff</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Administrator while keeping their current roles and assigned responsibilities. An inactive account will also be approved and activated.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Assign Administrator', message: `Promote ${target.name} to Administrator for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Administrator', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Administrator</button></>}</section>}
+      <section className="sa-detail-section"><h3>Boundary configuration</h3><button type="button" className="ghost-button" onClick={() => { setReviewingBoundary(managing); }}>Review / Replace Boundary</button>{managing.boundary_status === 'needs_review' ? <><p>{managing.pending_boundary ? 'A candidate outline is waiting for review.' : 'The current outline is an unverified reference.'} Review it against an LGU-approved boundary map or survey.</p><button type="button" className="primary-button" onClick={() => { setReviewingBoundary(managing); }}>Review Boundary</button></> : managing.boundary_status === 'verified' ? <p>A boundary reviewed against an uploaded source document is on file. This is an administrator review, not a legal certification.</p> : <><p>No matching boundary is on file. Retry the supported lookup.</p><button type="button" className="ghost-button" disabled={retryingId === managing.id} onClick={() => retryBoundary(managing)}>{retryingId === managing.id ? 'Checking…' : 'Retry Boundary Lookup'}</button></>}</section>
+      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities. An inactive account will also be approved and activated.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
       </div>
     </section>}
     {reviewingBoundary && <BoundaryReviewModal onSaved={onBoundarySaved} barangay={reviewingBoundary} onClose={() => setReviewingBoundary(null)} onConfirm={async () => { if (await onConfirmBoundary(reviewingBoundary)) setReviewingBoundary(null); }} onDiscard={async () => { if (await onDiscardBoundary(reviewingBoundary)) setReviewingBoundary(null); }} />}
@@ -230,14 +217,13 @@ function AddBarangayForm({ existingBarangayIds, onAdded, onCancel }) {
   };
 
   return (
-    <form className="location-form-panel superadmin-panel-spaced sa-add-barangay-form" onSubmit={submit}>
+    <form className="location-form-panel superadmin-panel-spaced" onSubmit={submit}>
       <h3>Add Barangay</h3>
       <p className="muted superadmin-muted-block">
         Adds the barangay to platform management. Staff registration codes are managed independently of map boundary review. Issuing a code does not verify a boundary or approve an applicant.
       </p>
       {error && <p className="muted" style={{ color: '#dc2626' }}>{error}</p>}
       {[provinceLookup, cityLookup, barangayLookup].filter((lookup) => lookup.error).map((lookup) => <p key={lookup.error} className="notice error" role="alert">{lookup.error} <button type="button" className="ghost-button" onClick={lookup.retry}>Retry lookup</button></p>)}
-      <p className="sa-required-note"><span aria-hidden="true">*</span> Required fields</p>
       <div className="superadmin-inline-row">
         <SearchableSelect aria-label="New barangay province" value={provinceId} disabled={provinceLookup.loading || Boolean(provinceLookup.error)} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} required>
           <option value="">{provinceLookup.loading ? 'Loading provinces…' : 'Province'}</option>
@@ -341,7 +327,6 @@ export default function SuperAdminWorkspace() {
   const [barangayFilter, setBarangayFilter] = useState('all');
   const [codeBarangay, setCodeBarangay] = useState(null);
   const [showAddBarangay, setShowAddBarangay] = useState(false);
-  const openPath = (path) => { navigate(path); setMobileNavOpen(false); setShowAddBarangay(false); window.scrollTo({ top: 0, behavior: 'instant' }); };
   const navigateTab = (tab, filter) => { navigate(`/superadmin/${tab}`); setMobileNavOpen(false); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
   // Always starts expanded — a collapsed sidebar should only ever be a
   // deliberate, in-session choice (the toggle button), never the default a
@@ -364,9 +349,6 @@ export default function SuperAdminWorkspace() {
     setIsSidebarCollapsed((v) => !v);
   };
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  // Phone widths fold the impersonation controls behind one button so the
-  // header stays short; wider screens always show them.
-  const [impersonationOpen, setImpersonationOpen] = useState(false);
   const [notice, setNotice] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -389,7 +371,7 @@ export default function SuperAdminWorkspace() {
   const [resourceLoading, setResourceLoading] = useState({ barangays: true, users: true, pending: true });
   const [resourceErrors, setResourceErrors] = useState({});
   const loadVersion = useRef(0);
-  const requiredResources = { dashboard: ['barangays', 'pending'], barangays: ['barangays', 'users'], pending: ['pending', 'barangays'], users: ['users'] };
+  const requiredResources = { dashboard: ['barangays', 'pending'], barangays: ['barangays', 'users'], pending: ['pending', 'barangays'], users: ['users'], codes: ['barangays'] };
   const loading = (requiredResources[activeTab] ?? []).some((key) => resourceLoading[key]);
   const loadError = (requiredResources[activeTab] ?? []).some((key) => resourceErrors[key]);
 
@@ -453,11 +435,6 @@ export default function SuperAdminWorkspace() {
   // "Total Users"/"Pending Registrations" counts on the dashboard can never
   // drift from the "All Users" tab's own count badge — both read the same
   // Super-Admin-excluded list instead of each filtering independently.
-  const orphanedCount = barangays.filter((b) => !b.has_active_admin).length;
-  const boundaryCount = barangays.filter((b) => b.boundary_status === 'needs_review').length;
-  const attentionParts = [[pendingApprovals.length, 'account approval'], [orphanedCount, 'barangay without an Administrator', 'barangays without an Administrator'], [boundaryCount, 'boundary review']]
-    .filter(([count]) => count > 0).map(([count, one, many]) => `${count} ${count === 1 ? one : many ?? `${one}s`}`);
-  const attentionSummary = attentionParts.length ? `Needs your attention: ${attentionParts.join(', ')}.` : 'Everything is up to date. No requests are waiting for review.';
   const visibleUsers = useMemo(() => users.filter((u) => u.role !== 'Super Admin'), [users]);
 
   const promoteToAdmin = async (target) => {
@@ -598,7 +575,6 @@ export default function SuperAdminWorkspace() {
           <div className="topbar-brand-cluster">
             <button
               aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-controls="superadmin-sidebar"
               className="sidebar-toggle-btn"
               onClick={toggleSidebar}
               title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -609,11 +585,7 @@ export default function SuperAdminWorkspace() {
             <VMSLogo variant="blue" size={24} className="topbar-gear-icon" />
             <span className="vms-wordmark vms-wordmark-sm">vms</span>
           </div>
-          {impersonationRootToken(user) && <div className={`sa-impersonation-zone${impersonationOpen ? ' is-open' : ''}`} role="group" aria-labelledby="sa-impersonation-label">
-            <button type="button" className="sa-impersonation-toggle" aria-expanded={impersonationOpen} aria-controls="sa-impersonation-controls" onClick={() => setImpersonationOpen((open) => !open)}><Icon name="eye" size={15} />Impersonate<Icon name="chevronDown" size={14} /></button>
-            <span className="sa-impersonation-label" id="sa-impersonation-label"><Icon name="eye" size={15} /><span>Impersonate account</span></span>
-            <div id="sa-impersonation-controls" className="sa-impersonation-controls"><ImpersonationPicker user={user} /></div>
-          </div>}
+          <ImpersonationPicker user={user} />
         </div>
 
         <div className="topbar-right"><ThemeToggle /><EndImpersonationAction compact />
@@ -632,21 +604,19 @@ export default function SuperAdminWorkspace() {
       <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="superadmin-sidebar">
           <nav className="module-nav" aria-label="Super Admin modules">
-            {NAV_GROUPS.map(([group, keys]) => <div key={group} className="module-nav-group sa-nav-group" role="group" aria-labelledby={`sa-nav-${group}`}>
-              <span className="sa-nav-heading" id={`sa-nav-${group}`}>{group}</span>
-              {keys.map((key) => <button key={key} type="button" aria-label={key === 'pending' && pendingApprovals.length ? `${TAB_LABELS[key]}, ${pendingApprovals.length} waiting` : TAB_LABELS[key]} aria-current={key === activeTab ? 'page' : undefined} className={key === activeTab ? 'active' : ''} onClick={() => navigateTab(key)} title={TAB_LABELS[key]}>
-                {TAB_ICONS[key]}<span>{TAB_LABELS[key]}</span>{key === 'pending' && pendingApprovals.length > 0 && <span className="module-nav-badge" aria-hidden="true">{pendingApprovals.length}</span>}
-              </button>)}
-            </div>)}
+            {TABS.map(([key, label]) => <button key={key} type="button" aria-label={label} aria-current={key === activeTab ? 'page' : undefined} className={key === activeTab ? 'active' : ''} onClick={() => navigateTab(key)} title={label}>
+              {TAB_ICONS[key]}<span>{label}</span>{key === 'pending' && pendingApprovals.length > 0 && <span className="module-nav-badge">{pendingApprovals.length}</span>}
+            </button>)}
+
           </nav>
         </aside>
         {mobileNavOpen && <div className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />}
 
         <section className="content-area">
-          <div className="page-heading-row">
+          <div className={`page-heading-row${activeTab === 'dashboard' ? ' focus-branded-heading' : ''}`}>
             <div className="page-heading-text">
               <h1>{!validRoute ? 'Page not found' : TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h1>
-              <p>{!validRoute ? 'This Super Admin page does not exist.' : activeTab === 'dashboard' && !loading && !loadError ? attentionSummary : TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
+              <p>{!validRoute ? 'This Super Admin page does not exist.' : TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
             </div>
             {activeTab === 'barangays' && !location.pathname.split('/')[3] && <button type="button" className="primary-button" onClick={() => setShowAddBarangay(!showAddBarangay)}><Icon name={showAddBarangay ? 'close' : 'plus'} size={16} />{showAddBarangay ? 'Cancel' : 'Add Barangay'}</button>}
           </div>
@@ -671,7 +641,7 @@ export default function SuperAdminWorkspace() {
             ) : loadError ? (
               <div className="sa-management-card"><p className="sa-load-error" role="alert">Data for this page could not be loaded. <button type="button" className="ghost-button" onClick={() => loadAll()}>Retry</button></p></div>
             ) : activeTab === 'dashboard' ? (
-              <PlatformOverview barangays={barangays} approvals={pendingApprovals} onNavigate={navigateTab} onOpen={openPath} />
+              <PlatformOverview barangays={barangays} approvals={pendingApprovals} onNavigate={navigateTab} />
             ) : activeTab === 'barangays' ? (
               <BarangayManagementTab
                 onBoundarySaved={() => loadAll()}
@@ -700,7 +670,7 @@ export default function SuperAdminWorkspace() {
             ) : activeTab === 'users' ? (
               <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onApprove={approvePending} onReject={rejectPending} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'codes' ? (
-              <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} onChanged={refreshInBackground} />
+              <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} barangays={barangays} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} onChanged={refreshInBackground} />
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
             ) : activeTab === 'support' ? (
