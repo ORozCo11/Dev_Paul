@@ -72,7 +72,7 @@ class SuperAdminController extends Controller
             ->where(function ($query) {
                 $query->whereNull('psgc_code')->orWhereNotNull('provisioned_at')->orWhereHas('users')->orWhereHas('registrationSetting');
             })
-            ->select(['id', 'name', 'psgc_code', 'city_id', 'boundary_status', 'boundary_source', 'boundary_verified_by', 'pending_boundary', 'pending_boundary_source'])
+            ->select(['id', 'name', 'psgc_code', 'city_id', 'boundary_status', 'boundary_source', 'boundary_verified_by', 'pending_boundary', 'pending_boundary_source', 'updated_at'])
             ->selectRaw('CASE WHEN boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
             ->withCount([
                 'users',
@@ -119,6 +119,8 @@ class SuperAdminController extends Controller
                         : ($b->boundary_present ? (BarangayGeography::isReviewedState($b->boundary_status, $b->boundary_source, $b->boundary_verified_by) ? 'verified' : 'needs_review') : $b->boundary_status),
                     'pending_boundary' => $b->pending_boundary,
                     'pending_boundary_source' => $b->pending_boundary_source,
+                    // Dates the overview's "Review candidate boundary" items.
+                    'updated_at' => $b->updated_at,
                 ];
             });
     }
