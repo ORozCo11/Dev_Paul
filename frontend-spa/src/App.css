@@ -16407,6 +16407,13 @@ html:root :is(.notice, .toast-notice, .location-density-notice):is(.error, .dang
   background: var(--notice-bg); border: 1px solid var(--notice-border); color: var(--notice-text);
 }
 html:root .toast-notice:is(.error, .danger, .success, .warning, .info) { box-shadow: 0 3px 9px #0f172a18; }
+
+/* Advanced list filters stay out of the way until deliberately opened. */
+.module-filter-toggle { display:inline-flex; align-items:center; gap:7px; padding:8px 11px; border:1px solid var(--border, #dbe4ef); border-radius:7px; background:var(--surface-2, #f8fafc); color:var(--text-strong, #0f172a); font:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+.module-filter-toggle svg { transition:transform .18s ease; }
+.module-filter-toggle.is-open svg { transform:rotate(180deg); }
+.module-filter-panel:has(.module-filter-toggle) { padding:14px 18px; }
+.module-filter-panel .module-filter-toggle + .filter-bar-container { margin-top:14px; }
 @media (max-width: 620px) {
   .module-grid, .module-grid > *, .module-grid .panel,
   .panel-header-bar, .schedule-panel-tools, .location-density-toolbar { min-width: 0; max-width: 100%; }
