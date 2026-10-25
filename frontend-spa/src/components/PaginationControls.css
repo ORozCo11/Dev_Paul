@@ -1,0 +1,72 @@
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 16px;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 0.85rem;
+  color: var(--text, #334155);
+}
+.table-pagination-pages,
+.table-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.table-pagination-size { gap: 8px; }
+.table-pagination-size .muted { margin-right: 2px; font-size: 0.82rem; }
+.pagination-ellipsis {
+  padding: 0 4px;
+  color: var(--text-muted, #94a3b8);
+}
+/* Numbered page / page-size buttons — plain text until picked, then a solid
+   blue circle, matching the reference pager instead of the old boxy
+   Prev/Next + <select> footer. */
+.pagination-page,
+.pagination-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text, #334155);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pagination-page:hover:not(.active),
+.pagination-arrow:hover:not(:disabled) {
+  background: var(--surface-2, #f1f5f9);
+}
+.pagination-page.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+.pagination-arrow {
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--text-muted, #64748b);
+}
+.pagination-arrow:disabled { opacity: 0.35; cursor: not-allowed; }
+
+
+/* Shared rules outrank workspace-specific generic button styling. */
+html:root[data-theme] .table-pagination button { border: 0; border-radius: 999px; background: transparent; color: var(--text, #334155); box-shadow: none; min-width: 28px; height: 28px; padding: 0 6px; }
+html:root[data-theme] .table-pagination button.active { background: #2563eb; color: #fff; }
+html:root[data-theme] .table-pagination button:hover:not(:disabled):not(.active) { background: var(--surface-2, #f1f5f9); }
+html:root[data-theme] .table-pagination button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.table-pagination-pages { flex-wrap: wrap; }
+.table-pagination-size { margin-left: auto; white-space: nowrap; }
+@media (max-width: 767px), (pointer: coarse) {
+  html:root[data-theme] .table-pagination button { min-width: 44px; height: 44px; }
+  .table-pagination { gap: 8px; }
+  .table-pagination-size { flex-wrap: wrap; }
+}

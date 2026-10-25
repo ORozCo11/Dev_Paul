@@ -1,3 +1,4 @@
+import PaginationControls from '../components/PaginationControls';
 import { parseTimestamp, scheduleStage, scheduleIsOverdue, relatedRecordLabel } from '../utils/qaWorkflow';
 import ThemeToggle from '../components/ThemeToggle';
 import SearchableSelect from '../components/SearchableSelect';
@@ -9896,45 +9897,6 @@ function usePagination(count, { pageSizeOptions, initialPageSize }) {
 // side of the current one, always keeping page 1 and the last page visible
 // with a single-ellipsis gap between, since jumping straight to the last of
 // hundreds of pages is common (e.g. "578" in the activity log).
-function paginationPageList(current, total) {
-  const delta = 2;
-  const pages = [];
-  for (let i = 1; i <= total; i += 1) {
-    if (i === 1 || i === total || (i >= current - delta && i <= current + delta)) pages.push(i);
-  }
-  const withGaps = [];
-  let prev;
-  pages.forEach((p) => {
-    if (prev != null && p - prev > 1) withGaps.push('…');
-    withGaps.push(p);
-    prev = p;
-  });
-  return withGaps;
-}
-
-function PaginationControls({ page, setPage, pageSize, setPageSize, pageSizeOptions, totalPages, showPageSize = true }) {
-  if (totalPages <= 1 && (!showPageSize || pageSizeOptions.length <= 1)) return null;
-  const pageList = paginationPageList(page, totalPages);
-  return (
-    <div className="table-pagination">
-      <div className="table-pagination-pages">
-        <button type="button" className="pagination-arrow" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} aria-label="Previous page">‹</button>
-        {pageList.map((p, i) => (
-          p === '…'
-            ? <span key={`gap-${i}`} className="pagination-ellipsis">…</span>
-            : <button key={p} type="button" className={`pagination-page${p === page ? ' active' : ''}`} onClick={() => setPage(p)}>{p}</button>
-        ))}
-        <button type="button" className="pagination-arrow" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} aria-label="Next page">›</button>
-      </div>
-      {showPageSize && <div className="table-pagination-size">
-        <span className="muted">Page size:</span>
-        {pageSizeOptions.map((n) => (
-          <button key={n} type="button" className={`pagination-page${n === pageSize ? ' active' : ''}`} onClick={() => setPageSize(n)}>{n}</button>
-        ))}
-      </div>}
-    </div>
-  );
-}
 
 function PaginatedTable({ columns, rows, onRowClick, onReorderColumn, emptyMessage, compact = false, pageSizeOptions = [10, 25, 50, 100], initialPageSize = 25, renderSubRow }) {
   const { page, setPage, pageSize, setPageSize, totalPages, start, end } = usePagination(rows?.length ?? 0, { pageSizeOptions, initialPageSize });

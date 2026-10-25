@@ -1,4 +1,4 @@
-import SearchableSelect from './SearchableSelect';
+import PaginationControls from './PaginationControls';
 import { cloneElement, Fragment, useEffect, useId, useRef, useState } from 'react';
 import Icon from './Icon';
 import ConfirmDialog from './ConfirmDialog';
@@ -47,7 +47,7 @@ export function LocalSearchInput({ value, onChange, placeholder = 'Search...' })
   return <div className="sa-search"><Icon name="search" size={17} /><input type="search" aria-label={placeholder} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />{value && <button type="button" aria-label="Clear search" onClick={() => onChange('')}><Icon name="close" size={14} /></button>}</div>;
 }
 
-export function PaginatedTable({ columns, rows, emptyMessage = 'No matching records', emptyDescription = 'Try another search or adjust the filters.', emptyIcon, groupBy, rowClassName, initialPageSize = 10, pageSizeOptions = [10, 25, 50, 100], pagination, onPageChange, onPageSizeChange }) {
+export function PaginatedTable({ columns, rows, emptyMessage = 'No matching records', emptyDescription = 'Try another search or adjust the filters.', emptyIcon, groupBy, rowClassName, initialPageSize = 25, pageSizeOptions = [10, 25, 50, 100], pagination, onPageChange, onPageSizeChange }) {
   const rowsKey = rows.map((row, index) => row.id ?? row.log_id ?? index).join(',');
   const [paging, setPaging] = useState({ page: 1, size: initialPageSize, rowsKey });
   // Notification polling and theme changes must not reset a table's page.
@@ -60,18 +60,16 @@ export function PaginatedTable({ columns, rows, emptyMessage = 'No matching reco
   const start = (page - 1) * size;
   const visible = pagination ? rows : rows.slice(start, start + size);
   const changePage = (next) => pagination ? onPageChange(next) : setPaging({ ...paging, page: next });
-  const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter((n) => n === 1 || n === totalPages || Math.abs(n - page) <= 1);
+
   return <>
     <div className="table-shell sa-table"><table><thead><tr>{columns.map((column) => <th scope="col" className={column.className} key={column.label}>{column.label}</th>)}</tr></thead>
       <tbody>{visible.map((row, index) => <Fragment key={row.id ?? row.log_id ?? index}>
         {groupBy && (index === 0 || groupBy(row) !== groupBy(visible[index - 1])) && <tr className="sa-group-row"><th scope="rowgroup" colSpan={columns.length}><Icon name="pin" size={14} />{groupBy(row)}</th></tr>}
         <tr className={rowClassName?.(row)}>{columns.map((column) => <td className={column.className} data-label={column.label} key={column.label}>{column.render ? column.render(row) : (row[column.key] ?? '\u2014')}</td>)}</tr>
       </Fragment>)}</tbody></table></div>
-    <div className="sa-pagination"><span>Showing {start + 1}–{Math.min(start + size, total)} of {total}</span><div className="sa-page-buttons">
-      <button type="button" disabled={page === 1} aria-label="Previous page" onClick={() => changePage(page - 1)}><Icon name="arrowLeft" size={16} /></button>
-      {pages.map((n, index) => <Fragment key={n}>{index > 0 && n - pages[index - 1] > 1 && <span>…</span>}<button type="button" aria-label={`Page ${n}`} aria-current={page === n ? 'page' : undefined} onClick={() => changePage(n)}>{n}</button></Fragment>)}
-      <button type="button" disabled={page === totalPages} aria-label="Next page" onClick={() => changePage(page + 1)}><Icon name="chevronRight" size={16} /></button>
-    </div><label>Rows per page<SearchableSelect value={size} onChange={(event) => pagination ? onPageSizeChange(Number(event.target.value)) : setPaging({ ...paging, size: Number(event.target.value), page: 1 })}>{pageSizeOptions.map((size) => <option key={size}>{size}</option>)}</SearchableSelect></label></div>
+    <PaginationControls page={page} totalPages={totalPages} pageSize={size} pageSizeOptions={pageSizeOptions}
+      setPage={(next) => changePage(typeof next === 'function' ? next(page) : next)}
+      setPageSize={(next) => pagination ? onPageSizeChange(next) : setPaging({ ...paging, size: next, page: 1 })} />
   </>;
 }
 

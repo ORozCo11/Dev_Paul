@@ -42,7 +42,7 @@ export function PlatformOverview({ barangays, approvals, onNavigate }) {
 export function PendingApprovalsTab({ approvals, barangays, onApprove, onReject, onRequestConfirmation }) {
   const [search, setSearch] = useState('');
   const [barangay, setBarangay] = useState('');
-  const [paging, setPaging] = useState({ page: 1, size: 10 });
+  const [paging, setPaging] = useState({ page: 1, size: 25 });
   const [searchParams, setSearchParams] = useSearchParams();
   const applicationId = searchParams.get('application');
   const reviewing = approvals.find((account) => String(account.id) === applicationId);

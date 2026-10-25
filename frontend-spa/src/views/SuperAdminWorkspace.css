@@ -131,12 +131,6 @@ html:root[data-theme] .superadmin-shell .status-badge { display:inline-flex; wid
 html:root[data-theme] .superadmin-shell .status-badge:is(.active,.active-admin,.verified,.resolved,.activate,.approve) { background:#f0fdf4; color:#15803d; border-color:#dcfce7; }
 html:root[data-theme] .superadmin-shell .status-badge:is(.pending-approval,.awaiting-code,.code-sent,.initial-administrator,.needs-review,.no-active-admin,.open) { background:#fffbeb; color:#a16207; border-color:#fef3c7; }
 html:root[data-theme] .superadmin-shell .status-badge:is(.deactivated,.deleted,.not-found,.delete,.deactivate) { background:#fef2f2; color:#b91c1c; border-color:#fee2e2; }
-.superadmin-shell .sa-pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:15px 20px; border-top:1px solid var(--sa-border); color:var(--sa-muted); font-size:12px; }
-.superadmin-shell .sa-page-buttons { display:flex; align-items:center; gap:4px; }
-.superadmin-shell .sa-page-buttons button { display:grid; place-items:center; min-width:32px; height:32px; padding:4px; border:1px solid var(--sa-border); border-radius:6px; background:var(--sa-surface); color:var(--sa-text); font:inherit; cursor:pointer; }
-.superadmin-shell .sa-page-buttons button[aria-current="page"] { background:#2563eb; color:white; border-color:#2563eb; }
-.superadmin-shell .sa-pagination label { display:flex; align-items:center; gap:8px; }
-html:root[data-theme] .superadmin-shell .sa-pagination select { width:70px; min-height:34px; padding:6px 23px 6px 9px; font-size:12px; }
 .superadmin-shell .sa-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:9px; padding:36px 24px; text-align:center; }
 .superadmin-shell .sa-empty-icon { display:grid; place-items:center; width:44px; height:44px; border-radius:50%; background:var(--sa-subtle); color:#2563eb; }
 .superadmin-shell .sa-empty strong { font-size:16px; font-weight:600; }
@@ -223,10 +217,6 @@ html:root[data-theme] .superadmin-shell:has(.sidebar-collapsed) .workspace-foote
  html:root[data-theme] .superadmin-shell .sa-table .sa-group-row { padding:0; }
  html:root[data-theme] .superadmin-shell .sa-table .sa-group-row th { display:block; padding:10px 16px; }
  .superadmin-shell .sa-identity { min-width:0; }
- .superadmin-shell .sa-pagination { padding:16px; justify-content:flex-start; }
- .superadmin-shell .sa-pagination > span { flex:1 1 100%; }
- .superadmin-shell .sa-page-buttons { flex-wrap:wrap; }
- .superadmin-shell .sa-pagination label { margin-left:auto; }
  .superadmin-shell .sa-date-cell { max-width:none; }
  .superadmin-shell .sa-drawer > header, .superadmin-shell .sa-drawer-body { padding:20px; }
  .superadmin-shell .sa-detail-list { grid-template-columns:110px minmax(0,1fr); }
@@ -239,7 +229,6 @@ html:root[data-theme] .superadmin-shell:has(.sidebar-collapsed) .workspace-foote
  .superadmin-shell .sa-toolbar .sa-segments { flex:1 1 100%; }
  .superadmin-shell .workspace-footer-actions { align-items:flex-start; }
  .superadmin-shell .workspace-footer-buttons { flex-wrap:wrap; }
- .superadmin-shell .sa-pagination label { margin-left:0; }
 }
 
 .superadmin-shell .sa-load-error { padding: 24px; font-size: 14px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
