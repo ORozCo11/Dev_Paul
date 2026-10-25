@@ -33,10 +33,10 @@ export default function RepairFileCabinet({ files, savedFiles = [], onChange, on
       <header className="repair-file-cabinet-header">
         <h4><Icon name="archive" size={16} />Files</h4>
         <div className="row-actions">
-          <button type="button" className="lr-icon-btn" title="Preview selected file" aria-label="Preview selected file" disabled={selected.length !== 1} onClick={() => previewFile(files[selected[0]])}><Icon name="eye" size={15} /></button>
-          <button type="button" className="lr-icon-btn" title="Add files" aria-label="Add files" onClick={() => input.current.click()}><Icon name="plus" size={15} /></button>
-          <button type="button" className="lr-icon-btn" title="Rename selected file" aria-label="Rename selected file" disabled={selected.length !== 1} onClick={rename}><Icon name="edit" size={15} /></button>
-          <button type="button" className="lr-icon-btn" title="Remove selected files" aria-label="Remove selected files" disabled={!selected.length} onClick={() => { onChange(files.filter((_, i) => !selected.includes(i))); setSelected([]); }}><Icon name="trash" size={15} /></button>
+          <button type="button" className="lr-icon-btn btn-view-action" title="Preview selected file" aria-label="Preview selected file" disabled={selected.length !== 1} onClick={() => previewFile(files[selected[0]])}><Icon name="eye" size={15} /></button>
+          <button type="button" className="lr-icon-btn btn-confirm-action" title="Add files" aria-label="Add files" onClick={() => input.current.click()}><Icon name="plus" size={15} /></button>
+          <button type="button" className="lr-icon-btn btn-edit-action" title="Rename selected file" aria-label="Rename selected file" disabled={selected.length !== 1} onClick={rename}><Icon name="edit" size={15} /></button>
+          <button type="button" className="lr-icon-btn btn-delete-action" title="Remove selected files" aria-label="Remove selected files" disabled={!selected.length} onClick={() => { onChange(files.filter((_, i) => !selected.includes(i))); setSelected([]); }}><Icon name="trash" size={15} /></button>
         </div>
       </header>
       <ul className="repair-file-list">

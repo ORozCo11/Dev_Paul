@@ -41,9 +41,9 @@ export default function FileCabinet({ files = [], existingFiles = [], onChange, 
     <div className="file-cabinet-toolbar">
       <strong>{title}</strong>
       <div className="file-cabinet-tools">
-        <button type="button" aria-label={expanded ? 'Collapse files' : 'Expand files'} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><Icon name="columns" size={15} /></button>
-        <button type="button" aria-label={multiple ? 'Add files' : 'Choose or replace file'} onClick={() => inputRef.current?.click()}><Icon name="plus" size={15} /></button>
-        <button type="button" aria-label="Remove selected files" disabled={!removable} onClick={removeSelected}><Icon name="trash" size={15} /></button>
+        <button type="button" className="icon-btn btn-view-action" aria-label={expanded ? 'Collapse files' : 'Expand files'} aria-expanded={expanded} onClick={() => setExpanded(!expanded)}><Icon name="columns" size={15} /></button>
+        <button type="button" className="icon-btn btn-confirm-action" aria-label={multiple ? 'Add files' : 'Choose or replace file'} onClick={() => inputRef.current?.click()}><Icon name="plus" size={15} /></button>
+        <button type="button" className="icon-btn btn-delete-action" aria-label="Remove selected files" disabled={!removable} onClick={removeSelected}><Icon name="trash" size={15} /></button>
       </div>
     </div>
     <div className="file-cabinet-list">

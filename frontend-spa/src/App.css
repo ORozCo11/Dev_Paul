@@ -16662,7 +16662,7 @@ html .ticket-reassignment-modal .form-actions > button { border-radius:6px; }
 .mechanic-work-orders .ticket-reference-bottom .tpa-avatar { width:24px; height:24px; }
 .mechanic-work-orders .operations-board-head > div:last-child { flex-wrap:wrap; }
 
-html[data-theme] :is(table, .table-shell) button.icon-btn.readiness-check-blocked { background:#fff7ed !important; border-color:#fdba74 !important; color:#9a3412 !important; }
+html[data-theme] :is(table, .table-shell) button.icon-btn.readiness-check-blocked { background:#b45309 !important; border-color:#b45309 !important; color:#fff !important; }
 
 /* Keep schedule status labels and row actions aligned beneath their headings. */
 .schedule-table-status { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
@@ -16682,3 +16682,66 @@ html[data-theme] :is(table, .table-shell) button.icon-btn.readiness-check-blocke
 }
 
 html .ticket-detail-panel.is-page .ticket-process-hero.ticket-process-hero--simple { grid-template-columns: minmax(0, 1fr); }
+
+/* One action-icon treatment across fleet tables, detail forms and file tools.
+   Text links and navigation controls keep their existing presentation. */
+html:root[data-theme] button:is(.icon-btn:where(:not(.theme-toggle-btn):not(.ticket-process-close)), .file-card-icon-btn, .lr-icon-btn, .row-actions-trigger) {
+  --action-bg: #2563eb;
+  --action-hover: #1d4ed8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  gap: 0;
+  flex-shrink: 0;
+  border: 1px solid var(--action-bg);
+  border-radius: 8px;
+  background: var(--action-bg);
+  color: #fff !important;
+  box-shadow: none;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+html:root[data-theme] button:is(.icon-btn, .file-card-icon-btn, .lr-icon-btn):is(.btn-view-action, .is-info) {
+  --action-bg: #0284c7;
+  --action-hover: #0369a1;
+}
+html:root[data-theme] button:is(.icon-btn, .file-card-icon-btn, .lr-icon-btn):is(.btn-confirm-action, .is-success) {
+  --action-bg: #16a34a;
+  --action-hover: #15803d;
+}
+html:root[data-theme] button:is(.icon-btn, .file-card-icon-btn, .lr-icon-btn):is(.btn-delete-action, .is-danger) {
+  --action-bg: #dc2626;
+  --action-hover: #b91c1c;
+}
+html:root[data-theme] button:is(.icon-btn, .file-card-icon-btn, .lr-icon-btn):is(.btn-archive-action, .btn-reopen-action, .is-warning) {
+  --action-bg: #b45309;
+  --action-hover: #92400e;
+}
+html:root[data-theme] button:is(.icon-btn:where(:not(.theme-toggle-btn):not(.ticket-process-close)), .file-card-icon-btn, .lr-icon-btn, .row-actions-trigger):hover:not(:disabled) {
+  background: var(--action-hover);
+  border-color: var(--action-hover);
+  color: #fff !important;
+  text-decoration: none;
+}
+html:root[data-theme] button:is(.icon-btn, .file-card-icon-btn, .lr-icon-btn, .row-actions-trigger):focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 3px;
+}
+html:root[data-theme] button:is(.icon-btn, .file-card-icon-btn, .lr-icon-btn, .row-actions-trigger):disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+@media (pointer: coarse), (max-width: 767px) {
+  html:root[data-theme] button:is(.icon-btn:where(:not(.theme-toggle-btn):not(.ticket-process-close)), .file-card-icon-btn, .lr-icon-btn, .row-actions-trigger) {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
