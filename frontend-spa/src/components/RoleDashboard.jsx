@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import api from '../api/axios';
 import Icon from './Icon';
 import { DonutChart, HorizontalBarChart } from './charts';
+import { didRepairWorkOn } from '../utils/ticketVerification';
 
 const roleCopy = {
   Admin: ['Administrator Dashboard', 'Review pending decisions and monitor fleet maintenance.'],
@@ -69,7 +70,7 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const mySchedules = schedules.filter((s) => sameId(s.assigned_to, user.id) && s.status === 'Scheduled' && !s.resulting_ticket_id);
   const overdueSchedules = schedules.filter(isScheduleOverdue);
   const myOverdue = mySchedules.filter(isScheduleOverdue);
-  const verifications = tickets.filter((t) => t.status === 'For Verification' && sameId(t.assigned_custodian_id, user.id));
+  const verifications = tickets.filter((t) => t.status === 'For Verification' && sameId(t.assigned_custodian_id, user.id) && !didRepairWorkOn(t, user.id));
   const readiness = data.readiness ?? [];
   const watch = data.readiness_watch ?? [];
   const openIssues = issues.filter((i) => ['Pending', 'Under Review'].includes(i.status) && !i.maintenance_ticket);

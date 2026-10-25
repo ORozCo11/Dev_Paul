@@ -27,6 +27,7 @@ import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 import { calendarDate } from '../utils/adminDate';
 import { groupMaintenanceByVehicle, maintenanceSourceBucket } from '../utils/maintenanceGroups';
 import { currentCondition } from '../utils/conditionMonitoring';
+import { didRepairWorkOn } from '../utils/ticketVerification';
 
 const FormNoticeContext = createContext(null);
 // Lets shared table cells (VehicleCell, UserAvatarName) open the right detail
@@ -4458,7 +4459,7 @@ function Workspace() {
             tabBar={myTasksTabBar}
             user={user}
             tickets={visibleRows}
-            readyToCloseTickets={visibleRows.filter((t) => t.status === 'For Verification')}
+            readyToCloseTickets={visibleRows.filter((t) => t.status === 'For Verification' && String(t.assigned_custodian_id) === String(user.id) && !didRepairWorkOn(t, user.id))}
             editTarget={editTarget}
             setEditTarget={setEditTarget}
             onVerify={(ticket, payload) => ticketAction(`/tickets/${ticket.ticket_id}/verify`, payload, verifyOutcomeMessage(payload))}
@@ -11538,7 +11539,10 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
   // since it isn't at For Inspection yet either.
   const allLogged = subIssues.length > 0 && subIssues.every((s) => s.status === 'For Inspection');
   const canSubmitForVerification = ticket.status === 'Active' && isAssignedMechanic && allLogged && canDo(user, 'ticket.submit_for_verification');
-  const canVerifyTicket = ticket.status === 'For Verification' && isAssignedCustodian && canDo(user, 'ticket.verify');
+  const awaitingMyVerification = ticket.status === 'For Verification' && isAssignedCustodian && canDo(user, 'ticket.verify');
+  // The server refuses a verification from anyone who repaired this ticket.
+  const repairedByMe = didRepairWorkOn(ticket, userId);
+  const canVerifyTicket = awaitingMyVerification && !repairedByMe;
   // External-shop ticket: where the vehicle actually is right now.
   const isExternalTicket = subIssues.length > 0 && subIssues.every((s) => s.repair_type === 'external');
   const extSubs = subIssues.filter((s) => s.repair_type === 'external');
@@ -12079,6 +12083,12 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
 
           {/* The Custodian's verification for the whole ticket: the vehicle-type
               popup, then Approve (closes it) or Disapprove with a reason. */}
+          {awaitingMyVerification && repairedByMe && (
+            <section className="ticket-section">
+              <h4><Icon name="checkCircle" size={14} /> Verify Repair</h4>
+              <p className="muted">You did repair work on this ticket, so a different Custodian has to verify it. Ask an Admin to reassign the Custodian.</p>
+            </section>
+          )}
           {canVerifyTicket && (
             <section className="ticket-section">
               <h4><Icon name="checkCircle" size={14} /> Verify Repair</h4>
