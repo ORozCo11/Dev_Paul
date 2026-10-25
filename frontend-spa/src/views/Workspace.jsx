@@ -4077,7 +4077,6 @@ function Workspace() {
                 onExport={() => exportRowsToCsv('vehicle-history.csv', VEHICLE_HISTORY_EXPORT_COLUMNS, visibleRows)}
                 columnChooser={historyViewMode === 'card' ? undefined : vehicleHistoryColumnChooser}
               />
-              <button className="ghost-button" onClick={() => window.print()} type="button">Print</button>
             </div>
           </div>
           {historyViewMode === 'card' ? (
