@@ -16752,3 +16752,27 @@ html .maintenance-record-source .status-badge { max-width: 100%; white-space: no
 html .maintenance-record-source .in-house-repair { background: #dcfce7; border-color: #86efac; color: #166534; }
 html .maintenance-record-source .sent-to-external-shop { background: #e0f2fe; border-color: #7dd3fc; color: #075985; }
 html .maintenance-record-source .maintenance-schedule { background: #ede9fe; border-color: #c4b5fd; color: #5b21b6; }
+
+/* Public header burger: hidden on wide screens; on phones the nav and
+   account buttons fold into a panel under the logo row. */
+.auth-page-burger { display: none; }
+@media (max-width: 767px) {
+  .auth-page-header-inner { flex-wrap: wrap; gap: 0; padding: 14px 16px; }
+  .auth-page-header-brand .vms-wordmark { font-size: 2.2rem; }
+  .auth-page-burger {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; margin-left: auto; padding: 0;
+    border: 1.5px solid rgba(255, 255, 255, 0.6); border-radius: 8px;
+    background: transparent; color: #ffffff; cursor: pointer;
+  }
+  .auth-page-burger:hover, .auth-page-burger[aria-expanded="true"] { background: rgba(255, 255, 255, 0.14); border-color: #ffffff; }
+  .auth-page-header-right { display: none; }
+  .auth-page-header-right.is-open {
+    display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 10px;
+    width: 100%; margin: 14px 0 0; padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.25);
+  }
+  .auth-page-header-right.is-open .auth-page-nav { flex-direction: column; align-items: stretch; gap: 0; }
+  html .auth-page-header-right.is-open .auth-page-nav a { display: flex; width: 100%; padding: 0 4px; font-size: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+  .auth-page-header-right.is-open :is(.auth-page-header-register-btn, .auth-page-header-login-btn) { width: 100%; height: 44px; }
+}
