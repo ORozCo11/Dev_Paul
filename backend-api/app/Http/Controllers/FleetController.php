@@ -58,7 +58,9 @@ class FleetController extends Controller
         $barangayId = $request->user()->barangay_id;
         return response()->json([
             'categories' => VehicleCategory::with('fields')->orderBy('category_name')->get(),
-            'vehicles' => Vehicle::with('category')->orderBy('vehicle_name')->get(),
+            'vehicles' => Vehicle::with('category')->withExists([
+                'tickets as has_open_maintenance_ticket' => fn ($query) => $query->whereNotIn('status', ['Closed', 'Cancelled', 'Declined']),
+            ])->orderBy('vehicle_name')->get(),
             'issue_reports' => VehicleIssueReport::with('vehicle')
                 ->whereNot('status', 'Resolved')
                 ->latest('issue_report_id')
@@ -1395,7 +1397,13 @@ class FleetController extends Controller
         ]);
 
         $condition = DB::transaction(function () use ($data, $request) {
-            $vehicle = Vehicle::findOrFail($data['vehicle_id']);
+            $vehicle = Vehicle::whereKey($data['vehicle_id'])->lockForUpdate()->firstOrFail();
+            abort_if(
+                MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)
+                    ->whereNotIn('status', ['Closed', 'Cancelled', 'Declined'])->exists(),
+                422,
+                'This vehicle has an open maintenance ticket. Close the ticket before recording another condition check.'
+            );
             $condition = VehicleConditionCheck::create($data + ['checked_by' => $request->user()->id]);
 
             // A vehicle already retired (Inactive/Decommissioned) must stay
