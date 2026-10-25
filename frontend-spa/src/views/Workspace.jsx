@@ -2107,7 +2107,7 @@ function Workspace() {
   }, [records.vehicles]);
 
   const conditionStats = useMemo(
-    () => countByValues(conditionRowsForStats, currentCondition, ['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']),
+    () => countByValues(conditionRowsForStats, currentCondition, ['Good', 'Needs Repair', 'Not Checked']),
     [conditionRowsForStats]
   );
 
@@ -3496,7 +3496,7 @@ function Workspace() {
                 <span>Condition</span>
                 <MultiSelectDropdown
                   placeholder="All Conditions"
-                  options={['Good', 'Needs Inspection', 'Needs Repair', 'Not Checked']}
+                  options={['Good', 'Needs Repair', 'Not Checked']}
                   selected={condDraft.status}
                   onChange={(vals) => setCondDraft((d) => ({ ...d, status: vals }))}
                 />
@@ -7859,7 +7859,6 @@ const VEHICLE_STAT_CARDS = [
 
 const CONDITION_STAT_CARDS = [
   { key: 'Good', label: 'Good', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
-  { key: 'Needs Inspection', label: 'Needs Inspection', icon: 'search', bg: '#e0f2fe', color: '#0284c7' },
   { key: 'Needs Repair', label: 'Needs Repair', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
   { key: 'Not Checked', label: 'Not Checked', icon: 'eyeOff', bg: '#f1f5f9', color: '#64748b' },
 ];
@@ -8261,7 +8260,7 @@ function conditionColumns(user, onEdit, deleteRecord, onCreateTicketFromConditio
     { key: 'result', label: 'Current Condition', className: 'cell-center', render: (row) => (
       <div>
         <StatusBadge value={currentCondition(row)} />
-        {row.resulting_ticket && row.condition_result !== currentCondition(row) && (
+        {row.resulting_ticket && ['Good', 'Needs Repair'].includes(row.condition_result) && row.condition_result !== currentCondition(row) && (
           <small className="muted" style={{ display: 'block', marginTop: 4 }}>Recorded: {row.condition_result}</small>
         )}
       </div>
