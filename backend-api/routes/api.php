@@ -34,6 +34,8 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10
 
 // Self-registration — rate-limited to blunt scripted account-creation spam.
 Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+// A first Administrator's sign-in plus the staff code a Super Admin emailed them.
+Route::post('/activate-account', [AuthController::class, 'activateWithStaffCode'])->middleware('throttle:10,1');
 // Read-only lookup used interactively while filling the registration form —
 // no credentials involved, but still throttled so it can't be used to
 // cheaply enumerate which barangays already have an Admin.
@@ -169,6 +171,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::put('/superadmin/users/{user}/deactivate', [SuperAdminController::class, 'deactivateUser']);
     Route::delete('/superadmin/users/{user}/reject', [SuperAdminController::class, 'rejectUser']);
     Route::put('/superadmin/users/{user}/role', [SuperAdminController::class, 'updateUserRole']);
+    Route::post('/superadmin/users/{user}/send-staff-code', [SuperAdminController::class, 'sendStaffCode'])->middleware('throttle:10,1');
+    Route::post('/superadmin/users/{user}/email', [SuperAdminController::class, 'emailUser'])->middleware('throttle:10,1');
     Route::get('/superadmin/barangays/{barangay}/registration-code', [SuperAdminController::class, 'registrationCode']);
     Route::post('/superadmin/barangays/{barangay}/registration-code/regenerate', [SuperAdminController::class, 'regenerateRegistrationCode'])->middleware('throttle:10,1');
     Route::post('/superadmin/barangays/{barangay}/boundary/refresh', [SuperAdminController::class, 'refreshBarangayBoundary']);

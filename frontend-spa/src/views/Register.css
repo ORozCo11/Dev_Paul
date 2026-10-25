@@ -11,6 +11,9 @@
 .register-progress .is-current > span { background: #2563eb; border-color: #2563eb; color: white; }
 .register-step-title { margin: 0; font-size: 21px; color: #0f172a; }
 .register-step-help { color: #64748b; font-size: 13px; margin: 8px 0 22px; }
+.register-success { text-align: center; }
+.register-success-title { margin: 4px 0 8px; font-size: 22px; font-weight: 800; color: var(--text-strong, #0f172a); }
+.register-success-text { margin: 0 0 6px; font-size: 15px; line-height: 1.5; color: var(--text, #334155); }
 .register-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 0; padding: 0; border: 0; min-width: 0; }
 .register-fields[hidden] { display: none; }
 .register-page .auth-field { min-width: 0; }

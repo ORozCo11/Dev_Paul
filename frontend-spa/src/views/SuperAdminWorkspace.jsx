@@ -13,7 +13,7 @@ import BoundaryReviewModal from '../components/BoundaryReviewModal';
 import api from '../api/axios';
 import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
-import { AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge } from '../components/SuperAdminUI';
+import { AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge, SuccessCelebration } from '../components/SuperAdminUI';
 import { geoJsonToPolygons } from '../utils/boundary';
 import { ActivityLogTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
@@ -122,6 +122,7 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const filtered = barangays.filter((b) => (activeFilter === 'all' || activeFilter === 'active' && b.has_active_admin || activeFilter === 'orphaned' && !b.has_active_admin || activeFilter === 'boundary_review' && b.boundary_status === 'needs_review') && (!provinceFilter || b.province_name === provinceFilter) && (!cityFilter || b.city_name === cityFilter) && (!boundaryFilter || boundaryStatus(b) === boundaryFilter) && [b.name, b.city_name, b.province_name].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const managing = barangays.find((b) => String(b.id) === managingId);
   const candidates = managing ? users.filter((account) => account.barangay_id === managing.id) : [];
+  const waitingAdmins = candidates.filter((account) => account.awaiting_staff_code);
   const retryBoundary = async (b) => { setRetryingId(b.id); try { await onRetryBoundary(b); } finally { setRetryingId(null); } };
   const columns = [
     { label: 'Barangay', render: (b) => <strong>{b.name}</strong> },
@@ -143,7 +144,7 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
     {managing && <section className="sa-management-card sa-barangay-page">
       <header className="sa-barangay-page-header"><button type="button" className="ghost-button" onClick={() => setManagingId(null)}><Icon name="arrowLeft" size={15} />Back to Barangays</button><h2>{managing.name}</h2><p>{[managing.city_name, managing.province_name].filter(Boolean).join(', ')}</p></header>
       <div className="sa-barangay-page-grid">
-      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd><dt>Boundary status</dt><dd><StatusBadge value={boundaryStatus(managing)} /></dd><dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
+      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd>{waitingAdmins.length > 0 && <><dt>Admin awaiting code</dt><dd className="sa-waiting-admin">{waitingAdmins.map((account) => <span key={account.id}><button type="button" className="sa-text-button" onClick={() => navigate(`/superadmin/users?user=${account.id}`)}>{account.name}</button> <StatusBadge value={!account.approved_at ? 'Pending Approval' : account.staff_code_sent_at ? 'Code Sent' : 'Awaiting Code'} /></span>)}</dd></>}<dt>Boundary status</dt><dd><StatusBadge value={boundaryStatus(managing)} /></dd><dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
       <section className="sa-detail-section"><h3>Registration code</h3><p>View or regenerate this barangay's staff registration code.</p><button type="button" className="ghost-button" onClick={() => onRegistrationCode(managing)}><Icon name="key" size={15} />Manage Registration Code</button></section>
       <section className="sa-detail-section"><h3>Boundary configuration</h3><button type="button" className="ghost-button" onClick={() => { setReviewingBoundary(managing); }}>Review / Replace Boundary</button>{managing.boundary_status === 'needs_review' ? <><p>{managing.pending_boundary ? 'A candidate outline is waiting for review.' : 'The current outline is an unverified reference.'} Review it against an LGU-approved boundary map or survey.</p><button type="button" className="primary-button" onClick={() => { setReviewingBoundary(managing); }}>Review Boundary</button></> : managing.boundary_status === 'verified' ? <p>A boundary reviewed against an uploaded source document is on file. This is an administrator review, not a legal certification.</p> : <><p>No matching boundary is on file. Retry the supported lookup.</p><button type="button" className="ghost-button" disabled={retryingId === managing.id} onClick={() => retryBoundary(managing)}>{retryingId === managing.id ? 'Checking…' : 'Retry Boundary Lookup'}</button></>}</section>
       {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities. An inactive account will also be approved and activated.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
@@ -350,6 +351,8 @@ export default function SuperAdminWorkspace() {
   };
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [celebration, setCelebration] = useState(null);
+  const endCelebration = useCallback(() => setCelebration(null), []);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const handleConfirmDialog = async () => {
@@ -534,8 +537,8 @@ export default function SuperAdminWorkspace() {
 
   const approvePending = async (approval) => {
     try {
-      await api.put(`/superadmin/users/${approval.id}/activate`);
-      setNotice({ type: 'success', text: `${approval.name} is approved and can now sign in.` });
+      const { data } = await api.put(`/superadmin/users/${approval.id}/activate`);
+      setCelebration({ title: 'Approved', detail: data.message });
       await loadAll();
       return true;
     } catch (error) {
@@ -552,6 +555,29 @@ export default function SuperAdminWorkspace() {
       return true;
     } catch (error) {
       setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not reject this account.' });
+      return false;
+    }
+  };
+
+  const sendStaffCode = async (target) => {
+    try {
+      const { data } = await api.post(`/superadmin/users/${target.id}/send-staff-code`);
+      setCelebration({ title: 'Email Sent', detail: data.message });
+      await loadAll();
+      return true;
+    } catch (error) {
+      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not send the registration code.' });
+      return false;
+    }
+  };
+
+  const sendEmail = async (target, draft) => {
+    try {
+      const { data } = await api.post(`/superadmin/users/${target.id}/email`, draft);
+      setCelebration({ title: 'Email Sent', detail: data.message });
+      return true;
+    } catch (error) {
+      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not send that email.' });
       return false;
     }
   };
@@ -668,7 +694,7 @@ export default function SuperAdminWorkspace() {
                 onRequestConfirmation={setConfirmDialog}
               />
             ) : activeTab === 'users' ? (
-              <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onApprove={approvePending} onReject={rejectPending} onRequestConfirmation={setConfirmDialog} />
+              <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onApprove={approvePending} onReject={rejectPending} onSendStaffCode={sendStaffCode} onSendEmail={sendEmail} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'codes' ? (
               <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} barangays={barangays} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} onChanged={refreshInBackground} />
             ) : activeTab === 'activity' ? (
@@ -683,6 +709,7 @@ export default function SuperAdminWorkspace() {
       </main>
 
       <WorkspaceFooter />
+      <SuccessCelebration celebration={celebration} onDone={endCelebration} />
       <AdminConfirmDialog
         busy={confirmBusy}
         dialog={confirmDialog}

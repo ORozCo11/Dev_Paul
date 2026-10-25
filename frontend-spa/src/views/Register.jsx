@@ -11,6 +11,7 @@ import Icon from '../components/Icon';
 import Aurora from '../components/Aurora';
 import AuthHeader from '../components/AuthHeader';
 import AuthFooter from '../components/AuthFooter';
+import SuccessCheck from '../components/SuccessCheck';
 import { AuthContext } from '../context/AuthContextObject';
 import { BOUNDARY_REFERENCE_ATTRIBUTION, geoJsonToPolygons } from '../utils/boundary';
 
@@ -85,7 +86,7 @@ function validateStep(values, step, isFirstForBarangay) {
     if (!values.address.trim()) errors.address = 'Street address is required.';
   } else {
     if (!isFirstForBarangay && !values.requested_role) errors.requested_role = 'Select your role.';
-    if (!values.staff_code.trim()) errors.staff_code = 'Enter the staff registration code from your barangay office.';
+    if (!isFirstForBarangay && !values.staff_code.trim()) errors.staff_code = 'Enter the staff registration code from your barangay office.';
     if (!values.password) errors.password = 'Password is required.';
     else if (values.password.length < 8) errors.password = 'Use at least 8 characters.';
     if (!values.password_confirmation) errors.password_confirmation = 'Confirm your password.';
@@ -339,13 +340,15 @@ function Register() {
         </div>
 
         {submitted ? (
-          <div>
-            <p className="notice success">
+          <div className="register-success" role="status">
+            <SuccessCheck />
+            <h2 className="register-success-title">You're registered!</h2>
+            <p className="register-success-text">
               {isFirstForBarangay
-                ? 'Registration submitted. A Super Admin must review and approve your account as this barangay\'s first Administrator before you can sign in.'
-                : 'Registration submitted. An administrator must approve your account before you can sign in.'}
+                ? 'Watch your email for your Staff Registration Code. We just sent you a welcome email.'
+                : 'Your barangay\'s Admin will review your account. You can sign in once it is approved.'}
             </p>
-            {isFirstForBarangay && <p className="register-step-help">The Super Admin receives an in-app notice and reviews Pending Approvals. They must confirm your appointment through a trusted barangay contact; a registration code alone does not prove authority. No email or SMS approval alert is sent. Coordinate with your barangay office, then try signing in after approval. If you cannot reach the platform administrator, <Link to="/support#contact">report an access concern</Link> with your barangay and contact details; do not submit your password or staff code.</p>}
+            {isFirstForBarangay && <p className="register-step-help">The Super Admin will confirm your appointment with your barangay office, then email you your Staff Registration Code. Sign in and paste that code into the window that appears to activate your account. The code expires 7 days after it is sent. If you do not hear back, <Link to="/support#contact">report an access concern</Link> with your barangay and contact details; do not submit your password.</p>}
             <Link className="primary-button auth-submit-btn" to="/login" style={{ display: 'flex', textDecoration: 'none' }}>
               Back to Login
             </Link>
@@ -354,7 +357,7 @@ function Register() {
           <form ref={formRef} className="auth-form auth-form-grid" autoComplete="off" onSubmit={handleSubmit} noValidate>
             <ol className="register-progress" aria-label="Registration progress">{['Your details', 'Your barangay', 'Account access'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={step > index ? 'is-complete' : step === index ? 'is-current' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
             <h2 className="register-step-title" ref={stepHeading} tabIndex={-1}>{['Tell us about yourself', 'Where are you based?', 'Secure your account'][step]}</h2>
-            <p className="register-step-help">Step {step + 1} of 3 · {['Enter your name and contact information.', 'Choose your barangay and enter your street address.', 'Enter your registration code and choose a strong password.'][step]}</p>
+            <p className="register-step-help">Step {step + 1} of 3 · {['Enter your name and contact information.', 'Choose your barangay and enter your street address.', isFirstForBarangay === true ? 'Choose a strong password.' : 'Enter your registration code and choose a strong password.'][step]}</p>
             <fieldset className="register-fields" hidden={step !== 0} disabled={step !== 0}><legend className="sr-only">Personal details</legend>
             <label className="auth-field">
               <span>First Name</span>
@@ -549,7 +552,7 @@ function Register() {
             </div>
 
             </fieldset><fieldset className="register-fields" hidden={step !== 2} disabled={step !== 2}><legend className="sr-only">Account access</legend>
-            {isFirstForBarangay === true && <p className="notice success auth-field-full">First Administrator registration: submission adds your application to the Super Admin approval queue and creates an in-app notification. Approval is required before sign-in; you do not need to keep this page open.</p>}
+            {isFirstForBarangay === true && <p className="notice success auth-field-full">You are registering as this barangay's first Administrator, so no staff registration code is needed yet. After you submit, the Super Admin will email you a code to activate your account.</p>}
             {isFirstForBarangay !== true && (
               <label className="auth-field">
                 <span>I am a...</span>
@@ -570,22 +573,24 @@ function Register() {
               </label>
             )}
 
-            <label className="auth-field">
-              <span>Staff Registration Code</span>
-              <div className="auth-input-wrapper auth-input-plain">
-                <input
-                  autoComplete="off"
-                  name="staff_code"
-                  {...fieldErrorProps('staff_code')}
-                  onChange={handleChange}
-                  placeholder="Given to you by your barangay office"
-                  required
-                  type="text"
-                  value={form.staff_code}
-                />
-              </div>
-              <RegistrationFieldError name="staff_code" errors={fieldErrors} />
-            </label>
+            {isFirstForBarangay !== true && (
+              <label className="auth-field">
+                <span>Staff Registration Code</span>
+                <div className="auth-input-wrapper auth-input-plain">
+                  <input
+                    autoComplete="off"
+                    name="staff_code"
+                    {...fieldErrorProps('staff_code')}
+                    onChange={handleChange}
+                    placeholder="Given to you by your barangay office"
+                    required
+                    type="text"
+                    value={form.staff_code}
+                  />
+                </div>
+                <RegistrationFieldError name="staff_code" errors={fieldErrors} />
+              </label>
+            )}
 
             <label className="auth-field">
               <span>Password</span>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\AuthorizesAbilities;
 use App\Http\Controllers\Concerns\GuardsLastAdmin;
 use App\Http\Controllers\Concerns\GuardsOpenWorkOnDeactivation;
+use App\Mail\AccountMail;
 use App\Models\ActivityLog;
 use App\Models\Barangay;
 use App\Models\ConcernReport;
@@ -14,6 +15,7 @@ use App\Services\BarangayGeography;
 use App\Services\PsgcRegions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 
 /**
@@ -655,6 +657,9 @@ class SuperAdminController extends Controller
             'roles' => $u->roles,
             'is_active' => $u->is_active,
             'approved_at' => $u->approved_at,
+            'awaiting_staff_code' => $u->awaiting_staff_code,
+            'staff_code_sent_at' => $u->staff_code_sent_at,
+            'staff_code_expires_at' => $u->staffCodeExpiresAt(),
             'barangay_id' => $u->barangay_id,
             'barangay_name' => $u->barangay?->name,
             'city_name' => $u->barangay?->city?->name,
@@ -666,10 +671,85 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'user.activate_platform', 'Only a Super Admin can perform this action.');
 
+        // A first Administrator only ever becomes active by entering their
+        // emailed staff code (AuthController::activateWithStaffCode). Approving
+        // one records the review and nothing more — activating here is what
+        // let approved first Admins sign in without ever entering the code.
+        if ($user->awaiting_staff_code) {
+            $user->update(['approved_at' => $user->approved_at ?? now()]);
+            $this->log($request, 'Approve', "Approved {$user->name} ({$user->email}) as first Administrator; awaiting their staff registration code.");
+
+            return response()->json(['message' => "{$user->name} is approved. Email their staff registration code from Users; they must enter it to activate their account."]);
+        }
+
         $user->update(['is_active' => true, 'approved_at' => $user->approved_at ?? now()]);
         $this->log($request, 'Activate', "Activated {$user->name} ({$user->email}).");
 
-        return response()->json(['message' => 'User activated.']);
+        return response()->json(['message' => "{$user->name} is approved and can now sign in."]);
+    }
+
+    /**
+     * Emails a waiting first Administrator their barangay's staff code.
+     * Sending again restarts the User::STAFF_CODE_VALID_DAYS window. The
+     * send happens before anything is saved, so a mail failure leaves the
+     * account exactly as it was.
+     */
+    public function sendStaffCode(Request $request, User $user)
+    {
+        $this->requireAbility($request, 'user.email_platform', 'Only a Super Admin can perform this action.');
+        abort_unless($user->awaiting_staff_code && !$user->is_active, 422, 'This account is not waiting for a staff registration code.');
+
+        $barangay = $user->barangay;
+        $code = RegistrationSetting::for($user->barangay_id)->staff_code;
+        $sentAt = now();
+        $this->sendMail($user, new AccountMail($user, "Your VMS Staff Registration Code for Barangay {$barangay?->name}", 'staff-code', [
+            'code' => $code,
+            'expiresAt' => $sentAt->copy()->addDays(User::STAFF_CODE_VALID_DAYS),
+        ]));
+
+        // Sending the code is the Super Admin's review too; the account still waits for the code.
+        $user->update(['staff_code_sent_at' => $sentAt, 'approved_at' => $user->approved_at ?? $sentAt]);
+        if ($barangay) $this->markProvisioned($barangay);
+        $this->log($request, 'Edit', "Emailed the staff registration code to {$user->name} ({$user->email}).");
+
+        return response()->json(['message' => "Staff registration code sent to {$user->email}.", 'staff_code_sent_at' => $sentAt, 'staff_code_expires_at' => $user->staffCodeExpiresAt()]);
+    }
+
+    /**
+     * A message from the Super Admin to any account, optionally carrying
+     * the current staff code of the account's barangay — read here, never
+     * taken from the request.
+     */
+    public function emailUser(Request $request, User $user)
+    {
+        $this->requireAbility($request, 'user.email_platform', 'Only a Super Admin can perform this action.');
+        $data = $request->validate([
+            'subject' => ['required', 'string', 'max:150'],
+            'message' => ['required', 'string', 'max:5000'],
+            'include_staff_code' => ['sometimes', 'boolean'],
+        ]);
+        $withCode = $request->boolean('include_staff_code');
+        $mailData = ['body' => $data['message']];
+        if ($withCode) {
+            abort_unless($user->barangay_id, 422, 'This account is not assigned to a barangay, so it has no staff registration code.');
+            $mailData['code'] = RegistrationSetting::for($user->barangay_id)->staff_code;
+        }
+
+        $this->sendMail($user, new AccountMail($user, $data['subject'], 'message', $mailData));
+        $this->log($request, 'Edit', "Emailed {$user->name} ({$user->email}): {$data['subject']}"
+            .($withCode ? ". Included the staff registration code for {$user->barangay?->name}." : ''));
+
+        return response()->json(['message' => "Email sent to {$user->email}."]);
+    }
+
+    private function sendMail(User $user, AccountMail $mail): void
+    {
+        try {
+            Mail::to($user->email)->send($mail);
+        } catch (\Throwable $e) {
+            report($e);
+            abort(502, 'The email could not be sent. Check the mail settings and try again.');
+        }
     }
 
     public function deactivateUser(Request $request, User $user)
@@ -697,7 +777,8 @@ class SuperAdminController extends Controller
     public function rejectUser(Request $request, User $user)
     {
         $this->requireAbility($request, 'user.reject', 'Only a Super Admin can perform this action.');
-        abort_if($user->is_active || $user->approved_at !== null, 422, 'This account is active or was already approved at some point — deactivate it instead of rejecting.');
+        // An approved first Admin who never entered their code was never live, so it can still be rejected.
+        abort_if($user->is_active || ($user->approved_at !== null && !$user->awaiting_staff_code), 422, 'This account is active or was already approved at some point — deactivate it instead of rejecting.');
 
         $name = $user->name;
         $email = $user->email;

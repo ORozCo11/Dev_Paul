@@ -58,7 +58,7 @@ export function PendingApprovalsTab({ approvals, barangays, onApprove, onReject,
     reviewHeadingRef.current?.focus();
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [applicationId]);
-  const requestApprove = (account) => onRequestConfirmation({ title: 'Approve Registration', message: firstAdmin(account, barangays) ? `${account.name} will become ${account.barangay_name ?? 'this barangay'}'s first Admin — this activates a brand-new barangay account.` : `Approve ${account.name}'s registration for ${account.barangay_name ?? 'their barangay'} as ${account.role}?`, confirmLabel: 'Approve', variant: 'primary', onConfirm: async () => { const success = await onApprove(account); if (success) setReviewing(null); } });
+  const requestApprove = (account) => onRequestConfirmation({ title: 'Approve Registration', message: firstAdmin(account, barangays) ? `Approve ${account.name} as ${account.barangay_name ?? 'this barangay'}'s first Admin? Their account stays locked until they enter the staff registration code you email them from Users.` : `Approve ${account.name}'s registration for ${account.barangay_name ?? 'their barangay'} as ${account.role}?`, confirmLabel: 'Approve', variant: 'primary', onConfirm: async () => { const success = await onApprove(account); if (success) setReviewing(null); } });
   const requestReject = (account) => onRequestConfirmation({ title: 'Reject Registration', message: `Reject ${account.name}'s registration for ${account.barangay_name ?? 'their barangay'}? Their account is permanently deleted — this cannot be undone.`, confirmLabel: 'Reject & Delete', variant: 'danger', onConfirm: async () => { const success = await onReject(account); if (success) setReviewing(null); } });
   const matching = approvals.filter((account) => (!barangay || String(account.barangay_id) === barangay) && [account.name, account.email, account.role, location(account)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   // Keep barangay groups together; groups awaiting their initial Admin lead.
@@ -93,14 +93,95 @@ export function PendingApprovalsTab({ approvals, barangays, onApprove, onReject,
   </AdminManagementCard></div>;
 }
 
-export function UsersTab({ users, onChangeRole, onToggleActive, onApprove, onReject, onRequestConfirmation }) {
-  const [search, setSearch] = useState('');
+const STAFF_CODE_VALID_DAYS = 7;
+
+function StaffCodeEmail({ account, onSend, onClose }) {
+  const [code, setCode] = useState({ value: null, error: null });
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    let current = true;
+    api.get(`/superadmin/barangays/${account.barangay_id}/registration-code`)
+      .then(({ data }) => { if (current) setCode({ value: data.staff_code, error: null }); })
+      .catch((error) => { if (current) setCode({ value: null, error: error.response?.data?.message ?? 'Could not load this barangay\'s registration code.' }); });
+    return () => { current = false; };
+  }, [account.barangay_id]);
+  const firstName = account.name.trim().split(/\s+/)[0];
+  const place = `Barangay ${location(account)}`;
+  const [expires] = useState(() => formatDate(new Date(Date.now() + STAFF_CODE_VALID_DAYS * 86400000)));
+  const send = async () => { setSending(true); if (await onSend(account)) onClose(); else setSending(false); };
+  return <AdminActionDrawer centered title="Send staff registration code" description="Confirm this person's appointment with their barangay office before sending. The code gives Administrator access." onClose={onClose}
+    footer={<div className="sa-row-actions"><button type="button" className="ghost-button" onClick={onClose}>Cancel</button><button type="button" className="primary-button" disabled={!code.value || sending} onClick={send}><Icon name="mail" size={16} />{sending ? 'Sending…' : account.staff_code_sent_at ? 'Resend Code' : 'Send Code'}</button></div>}>
+    <div className="sa-email-form">
+      {account.staff_code_sent_at && <p className="notice">Last sent {formatDate(account.staff_code_sent_at)}. Sending again restarts the {STAFF_CODE_VALID_DAYS}-day window.</p>}
+      <dl className="sa-email-meta"><dt>To</dt><dd>{account.email}</dd><dt>Subject</dt><dd>Your VMS Staff Registration Code for Barangay {account.barangay_name}</dd></dl>
+      {code.error ? <p className="notice error" role="alert">{code.error}</p> : <div className="sa-email-preview" aria-label="Email preview">
+        <p>Hi {firstName},</p>
+        <p>Your appointment as the Administrator for <strong>{place}</strong> has been confirmed. Here is your Staff Registration Code:</p>
+        {code.value ? <CopyableCode code={code.value} /> : <code>Loading…</code>}
+        <p><strong>This code expires on {expires} ({STAFF_CODE_VALID_DAYS} days from today).</strong></p>
+        <p><strong>To activate your account:</strong></p>
+        <ol><li>Go to the VMS sign-in page and sign in with your email and password.</li><li>When the "Enter your registration code" window appears, paste the code above.</li><li>Click <strong>Activate</strong>. You will then have full access as your barangay's Administrator.</li></ol>
+        <p><strong>Keep this code private.</strong> It gives Administrator access to your barangay. VMS staff will never ask you for it.</p>
+        <p>If the code expires before you use it, your registration will be cancelled and you will need to register again.</p>
+        <p>VMS Support Center</p>
+      </div>}
+    </div>
+  </AdminActionDrawer>;
+}
+
+function CopyableCode({ code }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => { try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { setCopied(false); } };
+  return <div className="sa-code-chip"><code>{code}</code><button type="button" className="ghost-button sa-icon-button" aria-label="Copy code" title={copied ? 'Copied' : 'Copy code'} onClick={copy}><Icon name={copied ? 'checkCircle' : 'clipboard'} size={17} /></button></div>;
+}
+
+const codeTemplate = (account) => ({
+  subject: 'Your barangay staff registration code is now available',
+  message: `Good day! The staff registration code for Barangay ${location(account)} is now available.\n\nShare it only with authorized staff of your barangay. They enter it on the VMS registration form to create their accounts, and you approve each one before they can sign in.\n\nYour staff registration code is shown below. Keep it private.`,
+});
+
+function MessageEmail({ account, onSend, onClose, onRequestConfirmation }) {
+  const [draft, setDraft] = useState({ subject: '', message: '' });
+  const [code, setCode] = useState(null);
+  const [sending, setSending] = useState(false);
+  const [codeError, setCodeError] = useState('');
+  const generate = () => onRequestConfirmation({ title: 'Generate Staff Registration Code', message: `Generate a new staff registration code for Barangay ${account.barangay_name}? The barangay's current code stops working immediately.`, confirmLabel: 'Generate', variant: 'primary', onConfirm: async () => {
+    setCodeError('');
+    try {
+      const { data } = await api.post(`/superadmin/barangays/${account.barangay_id}/registration-code/regenerate`);
+      setCode(data.staff_code);
+      setDraft(codeTemplate(account));
+    } catch (error) { setCodeError(error.response?.data?.message ?? 'Could not generate a code.'); }
+  } });
+  const send = async (event) => { event.preventDefault(); setSending(true); if (await onSend(account, { ...draft, include_staff_code: Boolean(code) })) onClose(); else setSending(false); };
+  return <AdminActionDrawer centered title="Send email" description="Write a message to this account. It is sent from the VMS Support Center address." onClose={onClose}>
+    <form className="sa-email-form" onSubmit={send}>
+      <dl className="sa-email-meta"><dt>To</dt><dd>{account.name} &lt;{account.email}&gt;</dd>{account.barangay_id && <><dt>Barangay</dt><dd>{location(account)}</dd></>}</dl>
+      {account.barangay_id && <div className="sa-code-row">
+        {code ? <><span>Staff registration code (added below the message)</span><CopyableCode code={code} /><button type="button" className="sa-text-button" onClick={() => setCode(null)}>Don't include the code</button></>
+          : <><span>Send this barangay a new staff registration code.</span><button type="button" className="ghost-button" onClick={generate}><Icon name="key" size={16} />Generate code</button></>}
+        {codeError && <p className="notice error" role="alert">{codeError}</p>}
+      </div>}
+      <label>Subject<input required maxLength={150} value={draft.subject} onChange={(event) => setDraft({ ...draft, subject: event.target.value })} /></label>
+      <label>Message<textarea required maxLength={5000} value={draft.message} onChange={(event) => setDraft({ ...draft, message: event.target.value })} /></label>
+      <div className="sa-row-actions"><button type="button" className="ghost-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button" disabled={sending || !draft.subject.trim() || !draft.message.trim()}><Icon name="mail" size={16} />{sending ? 'Sending…' : 'Send Email'}</button></div>
+    </form>
+  </AdminActionDrawer>;
+}
+
+export function UsersTab({ users, onChangeRole, onToggleActive, onApprove, onReject, onSendStaffCode, onSendEmail, onRequestConfirmation }) {
+  // Barangay Management links here with ?user=<id> to land on one account.
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => users.find((account) => String(account.id) === searchParams.get('user'))?.email ?? '');
   const [barangay, setBarangay] = useState('');
   const [role, setRole] = useState('');
   const [status, setStatus] = useState('');
   const [editing, setEditing] = useState(null);
   const [nextRole, setNextRole] = useState('');
-  const accountStatus = (account) => !account.approved_at ? 'Pending Approval' : account.is_active ? 'Active' : 'Deactivated';
+  const [emailing, setEmailing] = useState(null);
+  // A first Admin goes Pending Approval → Awaiting Code → Code Sent, and only turns Active by entering the code.
+  const accountStatus = (account) => !account.approved_at ? 'Pending Approval' : account.awaiting_staff_code ? (account.staff_code_sent_at ? 'Code Sent' : 'Awaiting Code') : account.is_active ? 'Active' : 'Deactivated';
+  const waitingForCode = (account) => account.awaiting_staff_code && account.approved_at;
   const requestStateChange = (account) => {
     const pending = !account.approved_at;
     const activate = pending || !account.is_active;
@@ -116,11 +197,22 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onApprove, onRej
     { label: 'Barangay', render: (account) => <div className="sa-stacked"><strong>{account.barangay_name || 'Unassigned'}</strong><span>{[account.city_name, account.province_name].filter(Boolean).join(', ')}</span></div> },
     { label: 'Role', render: (account) => effectiveRoles(account).join(', ') },
     { label: 'Account Status', render: (account) => <StatusBadge value={accountStatus(account)} /> },
-    { label: 'Actions', render: (account) => <div className="sa-row-actions"><button className="ghost-button" type="button" onClick={() => { setEditing(account); setNextRole(account.role); }}>Edit Role</button><button type="button" className={`ghost-button${account.approved_at && account.is_active ? ' sa-destructive' : ''}`} onClick={() => requestStateChange(account)}>{!account.approved_at ? 'Approve' : account.is_active ? 'Deactivate' : 'Activate'}</button>{!account.approved_at && <button className="ghost-button sa-destructive" type="button" onClick={() => onRequestConfirmation({ title: 'Reject Registration', message: `Permanently delete ${account.name}'s pending registration? This cannot be undone.`, confirmLabel: 'Reject & Delete', variant: 'danger', onConfirm: () => onReject(account) })}>Reject</button>}</div> },
+    { label: 'Actions', render: (account) => {
+      const stateLabel = !account.approved_at ? 'Approve' : account.is_active ? 'Deactivate' : 'Activate';
+      return <div className="sa-row-actions">
+        <button className="ghost-button sa-icon-button" type="button" aria-label={`Edit role for ${account.name}`} title="Edit role" onClick={() => { setEditing(account); setNextRole(account.role); }}><Icon name="edit" size={17} /></button>
+        {/* Once approved, a first Administrator activates only with the emailed code. */}
+        {!waitingForCode(account) && <button type="button" className={`ghost-button sa-icon-button${stateLabel === 'Deactivate' ? ' sa-destructive' : ''}`} aria-label={`${stateLabel} ${account.name}`} title={stateLabel} onClick={() => requestStateChange(account)}><Icon name={stateLabel === 'Deactivate' ? 'ban' : 'checkCircle'} size={17} /></button>}
+        {(!account.approved_at || waitingForCode(account)) && <button className="ghost-button sa-icon-button sa-destructive" type="button" aria-label={`Reject ${account.name}`} title="Reject registration" onClick={() => onRequestConfirmation({ title: 'Reject Registration', message: `Permanently delete ${account.name}'s pending registration? This cannot be undone.`, confirmLabel: 'Reject & Delete', variant: 'danger', onConfirm: () => onReject(account) })}><Icon name="trash" size={17} /></button>}
+        <button className={`ghost-button sa-icon-button${account.awaiting_staff_code ? ' sa-attention' : ''}`} type="button" aria-label={account.awaiting_staff_code ? `Send staff registration code to ${account.name}` : `Email ${account.name}`} title={account.awaiting_staff_code ? 'Send staff registration code' : 'Send email'} onClick={() => setEmailing(account)}><Icon name="mail" size={17} /></button>
+      </div>;
+    } },
   ];
-  return <div className="superadmin-tab"><AdminManagementCard toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search user or email..." /><AdminFilterField label="Barangay"><SearchableSelect value={barangay} onChange={(event) => setBarangay(event.target.value)}><option value="">All Barangays</option>{[...new Map(users.map((account) => [String(account.barangay_id), location(account)])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Role"><SearchableSelect value={role} onChange={(event) => setRole(event.target.value)}><option value="">All Roles</option>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Account status"><SearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option>{['Active', 'Deactivated', 'Pending Approval'].map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField></>}>
-    <PaginatedTable rows={visible} columns={columns} emptyMessage="No matching users" emptyDescription="Try another user name or adjust the account filters." />
-  </AdminManagementCard>{editing && <AdminActionDrawer title="Edit account role" description="Review this account's access before saving." onClose={() => setEditing(null)}><AdminIdentity name={editing.name} email={editing.email} /><form className="sa-role-form" onSubmit={requestRoleChange}><p>Current roles: <strong>{effectiveRoles(editing).join(', ')}</strong></p><AdminFilterField label="New role"><SearchableSelect value={nextRole} onChange={(event) => setNextRole(event.target.value)}>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><p className="muted">Saving replaces the account's current roles. Last-Administrator and account restrictions still apply.</p><div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => setEditing(null)}>Cancel</button><button type="submit" className="primary-button" disabled={nextRole === editing.role && effectiveRoles(editing).length === 1}>Save Role</button></div></form></AdminActionDrawer>}</div>;
+  return <div className="superadmin-tab"><AdminManagementCard toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search user or email..." /><AdminFilterField label="Barangay"><SearchableSelect value={barangay} onChange={(event) => setBarangay(event.target.value)}><option value="">All Barangays</option>{[...new Map(users.map((account) => [String(account.barangay_id), location(account)])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Role"><SearchableSelect value={role} onChange={(event) => setRole(event.target.value)}><option value="">All Roles</option>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Account status"><SearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option>{['Active', 'Deactivated', 'Pending Approval', 'Awaiting Code', 'Code Sent'].map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField></>}>
+    <PaginatedTable rows={visible} columns={columns} rowClassName={(account) => account.awaiting_staff_code ? 'sa-row-waiting' : undefined} emptyMessage="No matching users" emptyDescription="Try another user name or adjust the account filters." />
+  </AdminManagementCard>{emailing && (emailing.awaiting_staff_code
+    ? <StaffCodeEmail account={emailing} onSend={onSendStaffCode} onClose={() => setEmailing(null)} />
+    : <MessageEmail account={emailing} onSend={onSendEmail} onClose={() => setEmailing(null)} onRequestConfirmation={onRequestConfirmation} />)}{editing && <AdminActionDrawer title="Edit account role" description="Review this account's access before saving." onClose={() => setEditing(null)}><AdminIdentity name={editing.name} email={editing.email} /><form className="sa-role-form" onSubmit={requestRoleChange}><p>Current roles: <strong>{effectiveRoles(editing).join(', ')}</strong></p><AdminFilterField label="New role"><SearchableSelect value={nextRole} onChange={(event) => setNextRole(event.target.value)}>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><p className="muted">Saving replaces the account's current roles. Last-Administrator and account restrictions still apply.</p><div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => setEditing(null)}>Cancel</button><button type="submit" className="primary-button" disabled={nextRole === editing.role && effectiveRoles(editing).length === 1}>Save Role</button></div></form></AdminActionDrawer>}</div>;
 }
 
 export function RegistrationCodesTab({ barangays, initialBarangay, onRequestConfirmation, setNotice, onChanged }) {
