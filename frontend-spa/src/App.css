@@ -16682,7 +16682,9 @@ html[data-theme] :is(table, .table-shell) button.icon-btn.readiness-check-blocke
 /* Keep schedule status labels and row actions aligned beneath their headings. */
 .schedule-table-status { display: inline-flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 .schedule-action-cell { min-width: 92px; }
+.schedule-table-actions { display: flex; justify-content: flex-end; }
 .schedule-table-actions .sch-card-actions { display: inline-flex; flex-wrap: nowrap; width: max-content; vertical-align: middle; }
+.my-ticket-panel-tools { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; min-width: 0; }
 .schedule-table-actions .sch-action.icon-btn { flex: 0 0 36px; width: 36px; height: 36px; padding: 0; }
 .schedule-panel-tools :is(.view-dropdown-btn, .local-search-input, .icon-add-btn, .export-btn) { height: 40px; min-height: 40px; box-sizing: border-box; }
 .schedule-panel-tools .icon-add-btn > svg { flex-shrink: 0; display: block; }
