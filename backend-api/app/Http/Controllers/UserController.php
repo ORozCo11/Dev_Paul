@@ -107,6 +107,8 @@ class UserController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
+        ], [
+            'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
         ]);
 
         $data = $this->normalizeRoles($request, $data);
@@ -147,6 +149,8 @@ class UserController extends Controller
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:4096'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
+        ], [
+            'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
         ]);
 
         $data = $this->normalizeRoles($request, $data);
