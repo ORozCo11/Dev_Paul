@@ -4,13 +4,13 @@ Baseline: revision `37b25ba`, branch `test/ticket-maintenance-workflow-audit`.
 
 ## Result and limits
 
-The complete backend regression suite passed: **545 tests, 2,795 assertions**. The baseline frontend suite passed **27 tests**; ESLint also passed. No application defect was observed in the completed real API/browser ticket journey. This is regression evidence, not full production acceptance.
+The baseline backend regression suite passed: **545 tests, 2,795 assertions**. After all V2 branches were integrated, the final combined suite passed **612 tests, 5,765 assertions**, including 50- and 100-ticket lifecycle cases. The baseline frontend suite passed **27 tests**; the final updated suite passed **28 tests**. ESLint and the production build passed. No application defect was observed in the completed real API/browser ticket journey. This is regression evidence, not full production acceptance.
 
 The browser journey used a new SQLite database at `tmp/workflow-audit/journey.sqlite`, five generated test users, five test vehicles and a separate API server on port 8002. The frontend was served on port 5173; every API request in these browser contexts was redirected to the disposable server. No production or existing development fleet data was used for these mutations. Test credentials and tokens are confined to the ignored `tmp` directory.
 
 The initial server encountered a sandbox write restriction; restarting the disposable server with approved access resolved it. A first journey helper attempted a vehicle-detail URL that the API does not define; the helper was corrected to use the vehicles list. Neither issue is classified as an application workflow defect.
 
-The expanded live external-shop, schedule and restoration command **did not execute**: automatic approval review could not complete because the account usage limit was reached. Those workflows have passing backend test coverage, but a fresh real-browser journey for each is still pending. Deployment, hosted PostgreSQL concurrency, external storage, email delivery and an unattended production scheduler were not tested.
+The expanded live test command was initially blocked by an approval-review usage limit. After approval became available, the external-shop, schedule, maintenance-record and restoration journeys passed against the real disposable API, including a real scheduler conversion. These additional journeys used HTTP API actions; they do not represent a browser pass for every external-shop and schedule form. Deployment, hosted PostgreSQL concurrency, external storage, email delivery and an unattended production scheduler were not tested.
 
 ## Completed real API/browser journey
 
@@ -59,7 +59,20 @@ The existing system audit remains the reference for unresolved findings. A passi
 
 ## Follow-up Condition Monitoring request
 
-The user clarified that **Needs Inspection** should be removed from its table/filter. The prepared frontend change removes that display/filter/summary category, retains confirmed Good/Needs Repair outcomes, and uses the recorded outcome while a linked ticket has an inconclusive inspection hold. Legacy inconclusive records retain their stored value and display Not Checked when no confirmed outcome exists. Backend vehicle holds and readiness validation are unchanged. Six focused condition-display tests and the full updated 28-test frontend suite passed; browser/build verification and separate branch delivery remain pending approval availability.
+The user clarified that **Needs Inspection** should be removed from its table/filter. The verified frontend change removes that display/filter/summary category, retains confirmed Good/Needs Repair outcomes, and uses the recorded outcome while a linked ticket has an inconclusive inspection hold. Legacy inconclusive records retain their stored value and display Not Checked when no confirmed outcome exists. Backend vehicle holds and readiness validation are unchanged. Six focused condition-display tests and the full updated 28-test frontend suite passed. Browser, lint and production-build checks also passed. The separate branch `ui/condition-monitoring-results` was pushed and integrated into `dev-paul`.
+
+## Additional merged-system verification
+
+After integrating the V2 branches into `dev-paul`, the real browser ticket journey was repeated successfully, including stale revision rejection and premature readiness rejection. The following additional journeys passed through the real API:
+
+- External dispatch and return gates, prohibited mechanic dispatch, cancellation rejection while at the shop, two repair cycles, and one ledger record with cumulative invoice cost of 1,500.
+- Schedule proposal, decline with a reason, undecline, approval, assigned-mechanic-only completion, duplicate-completion rejection and creation of the next recurring occurrence.
+- Maintenance-record failed verification, authorized Admin repair updates, personal-test attestation, duplicate-verdict rejection, Admin reopening and final confirmation. A mechanic's record-edit attempt was correctly rejected with 403; the journey was continued with the documented Admin role.
+- Ticket cancellation reason, restoration to active work, rejection of deletion of active work, and restoration of a cancelled schedule to Pending Approval.
+- Actual `schedules:convert-due-to-tickets` execution against the isolated database, idempotent second execution, prevention of parallel standalone completion, approval/repair/verification of the generated ticket, and preservation of Scheduled Maintenance source and a genuine zero cost.
+- Generation of notifications and completed-ticket archives.
+
+Evidence: `tmp/workflow-audit/extra-results.json`, `journey-results.json`, and the corresponding scripts. Super Admin overview and barangay management also rendered without runtime exceptions after integration fixes. See [the integration record](Branch-Integration-2026-10-25.md) for final combined regression results.
 
 ## Reproduction
 
