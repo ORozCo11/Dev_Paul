@@ -445,9 +445,30 @@ const moduleIcons = {
   ),
 };
 
+// Sidebar and page-heading icons share the Solar Linear catalogue used by the
+// rest of the application, keeping this navigation flat and outline-only.
+const moduleIconNames = {
+  dashboard: 'grid', vehicles: 'vehicle', categories: 'list', locations: 'pin',
+  conditions: 'checkCircle', issues: 'alert', maintenance: 'wrench',
+  maintenanceStatus: 'checkCircle', maintenanceLedger: 'wrench', schedules: 'calendar',
+  tickets: 'ticket', ticketArchives: 'archive', reportOrPropose: 'alert',
+  myTasks: 'clipboard', ticketPropose: 'document', ticketInspections: 'search',
+  ticketVerifications: 'checkCircle', ticketWorkOrders: 'wrench', workTracker: 'columns',
+  histories: 'undo', reports: 'document', logs: 'document', users: 'users',
+};
+
+function renderModuleIcon(key) {
+  const iconName = moduleIconNames[key];
+  return iconName
+    ? <Icon name={iconName} size={20} className="nav-icon" />
+    : (moduleIcons[key] ?? null);
+}
+
 function Workspace() {
   const navigate = useNavigate();
   const location = useLocation();
+  const topbarRef = useRef(null);
+  const workspaceRef = useRef(null);
   const vehicleUrlMatch = location.pathname.match(/\/vehicles\/(new|\d+)$/);
   const vehicleProfileId = vehicleUrlMatch && vehicleUrlMatch[1] !== 'new' ? vehicleUrlMatch[1] : null;
   const isNewVehiclePage = vehicleUrlMatch?.[1] === 'new';
@@ -518,6 +539,22 @@ function Workspace() {
     || (editLocationVehicleId && 'Update Location')
     || null;
   const { user, logout, refreshUser } = useContext(AuthContext);
+  // The top bar can become taller when its location selectors wrap. Keep the
+  // fixed sidebar aligned to that measured edge instead of the 64px fallback.
+  useLayoutEffect(() => {
+    const topbar = topbarRef.current;
+    const workspace = workspaceRef.current;
+    if (!topbar || !workspace) return undefined;
+
+    const syncTopbarHeight = () => {
+      workspace.style.setProperty('--topbar-height', `${Math.ceil(topbar.getBoundingClientRect().height)}px`);
+    };
+
+    const observer = new ResizeObserver(syncTopbarHeight);
+    observer.observe(topbar);
+    syncTopbarHeight();
+    return () => observer.disconnect();
+  }, []);
   // Phase B2 — UX-only redirect for every full-page create/edit route: the
   // backend independently (and exhaustively) enforces each of these
   // abilities on the actual endpoint, so this just keeps someone without the
@@ -2447,7 +2484,7 @@ function Workspace() {
     <FormNoticeContext.Provider value={notice}>
     <RowActionsContext.Provider value={rowActions}>
       <a className="skip-link" href="#main-content">Skip to content</a>
-      <header className="topbar">
+      <header className="topbar" ref={topbarRef}>
         <div className="topbar-left">
           <div className="topbar-brand-cluster">
             <button
@@ -2482,7 +2519,7 @@ function Workspace() {
       </div>
       </header>
 
-      <main className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
+      <main ref={workspaceRef} className={`workspace${isSidebarCollapsed ? ' sidebar-collapsed' : ''}${mobileNavOpen ? ' mobile-nav-open' : ''}`}>
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="workspace-sidebar">
           {/* Phone-only: map-boundary pickers move here from the top bar. */}
 
@@ -2499,7 +2536,7 @@ function Workspace() {
                     title={isSidebarCollapsed ? label : undefined}
                     type="button"
                   >
-                    {moduleIcons[key]}
+                    {renderModuleIcon(key)}
                     <span>{label}</span>
                     {badgeCount > 0 && <span className="module-nav-badge">{badgeCount}</span>}
                   </button>
@@ -2551,7 +2588,7 @@ function Workspace() {
               redundantly above it, so it's skipped for that one page only. */}
           {(activeModule !== 'dashboard' || isOnSpecialPage) && (
             <div className="page-heading-row">
-              <span className="page-heading-icon">{moduleIcons[breadcrumbModule]}</span>
+              <span className="page-heading-icon">{renderModuleIcon(breadcrumbModule)}</span>
               <div className="page-heading-text">
                 {subPageTitle && !isProfilePage && (
                   <p className="breadcrumb-path">{moduleLabel(modules, breadcrumbModule)} »</p>
