@@ -36,3 +36,12 @@ The production build reports a large bundle warning. No hosted deployment, Postg
 ## Deployment note
 
 This merge includes `2026_10_22_000001_backfill_approved_at_for_admin_created_users.php` in addition to the QA safeguard, concern-location and personal hidden-list migrations already delivered by the task branches. Apply pending migrations through the normal deployment process. This integration did not run migrations against the existing development or production fleet database; only the disposable QA database was migrated for the API journeys.
+
+
+## Super Admin presentation correction
+
+After integration, the user requested restoring the Super Admin portal that was present before the older redesign branches were merged. The presentation baseline is revision `37b25ba` (25 October): the branded overview heading, three summary cards, administrative action list, coverage donut, flat sidebar, visible table filters, barangay management pages and nationwide Province / City / Barangay registration-code selector.
+
+This correction only changes the Super Admin frontend and removes the stylesheet for the superseded registration-code table. Backend changes from the integrated branches remain: registered-barangay scoping, nationwide search endpoints, literal user search, Admin-created account approval fixes, review dates, code audit logging, regeneration throttling and version checks. The restored selector does not require a boundary to view or issue a code. It now sends the displayed code's version when regenerating, reloads on a stale-version conflict, and refreshes platform data after code provisioning. The duplicate-barangay guard is retained.
+
+Validation: 84 relevant backend tests passed (455 assertions); targeted frontend ESLint and production build passed. Browser checks use isolated fixtures and cover both themes, restored overview/navigation, management filters, code copy/regeneration and concurrent-version recovery, nationwide cascade, application deep links/approval, user search and role drawer, activity/support pages, duplicate prevention and mobile layout. Original logo assets, fleet workflow changes and the removed impersonation banner are preserved.
