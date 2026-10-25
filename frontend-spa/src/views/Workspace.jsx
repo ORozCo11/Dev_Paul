@@ -4479,6 +4479,8 @@ function Workspace() {
             onViewVehicle={openVehicleProfile}
             onViewTicket={openTicketProfile}
             stats={verificationStats}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
             activeFilter={filterStatus}
             onFilterChange={setFilterStatus}
           />
@@ -14695,10 +14697,19 @@ function CustodianVerificationModule({
   onViewVehicle,
   onViewTicket,
   stats,
+  searchQuery,
+  setSearchQuery,
   activeFilter,
   onFilterChange,
   tabBar
 }) {
+  const [ticketViewMode, setTicketViewMode] = useState('table');
+  const viewTicket = useCallback((ticket) => {
+    if (onViewTicket) onViewTicket(ticket);
+    else if (ticket.vehicle) onViewVehicle?.(ticket.vehicle);
+  }, [onViewTicket, onViewVehicle]);
+  const ticketColumns = useMemo(() => ticketTableColumns({}, viewTicket), [viewTicket]);
+  const ticketColumnChooser = useColumnChooser('vms_my_ticket_list_columns', ticketColumns);
   const panelTitle = activeFilter.length !== 1 ? 'My Tickets' : activeFilter.includes('Active')
     ? 'Active Tickets'
     : activeFilter.includes('Verified')
@@ -14753,20 +14764,35 @@ function CustodianVerificationModule({
       </section>
       {tabBar}
       <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
-      <section className="panel">
+      <section className="panel ticket-ledger-panel">
         <div className="panel-header-bar">
           <h3>{panelTitle} <span className="count-badge">{tickets.length}</span></h3>
+          <div className="my-ticket-panel-tools">
+            <ViewModeDropdown value={ticketViewMode} onChange={setTicketViewMode} />
+            <LocalSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search tickets, vehicle, or assignee..."
+              columnChooser={ticketViewMode === 'table' ? ticketColumnChooser : undefined}
+            />
+          </div>
         </div>
-        <div style={{ height: '16px' }} />
-        {/* Every stat tab (Total / Active / To Verify / Verified) reads as
-            ticket cards — same view as My Tickets — never a table. Opening a
-            card shows the full ticket, where Verify Repair lives. */}
-        <PaginatedCardGrid
-          items={tickets}
-          keyOf={(t) => t.ticket_id}
-          emptyMessage={emptyStateText}
-          renderItem={(t) => <TicketCard ticket={t} onClick={() => (onViewTicket ? onViewTicket(t) : (t.vehicle && onViewVehicle(t.vehicle)))} />}
-        />
+        {ticketViewMode === 'table' ? (
+          <PaginatedTable
+            columns={ticketColumnChooser.visibleColumns}
+            onReorderColumn={ticketColumnChooser.reorderColumn}
+            rows={tickets}
+            onRowClick={viewTicket}
+            emptyMessage={emptyStateText}
+          />
+        ) : (
+          <PaginatedCardGrid
+            items={tickets}
+            keyOf={(t) => t.ticket_id}
+            emptyMessage={emptyStateText}
+            renderItem={(t) => <TicketCard ticket={t} onClick={() => viewTicket(t)} />}
+          />
+        )}
       </section>
       {/* The Custodian's one plain attestation for the whole ticket — no
           checklist, no notes, no reject path (see verifyTicket()). Reuses
