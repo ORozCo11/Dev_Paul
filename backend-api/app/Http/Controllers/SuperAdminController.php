@@ -939,7 +939,8 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'concern_report.view', 'Only a Super Admin can perform this action.');
 
-        return ConcernReport::with('resolvedBy')->latest('id')->get();
+        // Deleted reports are included (with deleted_at) for Concern History.
+        return ConcernReport::withTrashed()->with('resolvedBy')->latest('id')->get();
     }
 
     public function resolveConcernReport(Request $request, ConcernReport $concernReport)
@@ -967,19 +968,31 @@ class SuperAdminController extends Controller
     }
 
     /**
-     * Permanently removes a concern report — the only way to clear out
-     * obvious spam, since resolve/reopen only ever toggle status and never
-     * delete. Submission is already rate-limited (see /concern-reports in
-     * routes/api.php); this is the cleanup side of that.
+     * Moves a concern report to Concern History — the way to clear out
+     * obvious spam. It is a soft delete, so a report deleted by mistake can
+     * be restored (restoreConcernReport). Submission is already rate-limited
+     * (see /concern-reports in routes/api.php); this is the cleanup side.
      */
     public function destroyConcernReport(Request $request, ConcernReport $concernReport)
     {
         $this->requireAbility($request, 'concern_report.delete', 'Only a Super Admin can perform this action.');
 
-        $id = $concernReport->id;
         $concernReport->delete();
-        $this->log($request, 'Delete', "Deleted concern report #{$id}.");
+        $this->log($request, 'Delete', "Deleted concern report #{$concernReport->id} (recoverable from Concern History).");
 
-        return response()->json(['message' => 'Concern report deleted.']);
+        return $concernReport->fresh('resolvedBy');
+    }
+
+    /** Brings a deleted concern report back to the open concerns. */
+    public function restoreConcernReport(Request $request, int $concernReport)
+    {
+        $this->requireAbility($request, 'concern_report.reopen', 'Only a Super Admin can perform this action.');
+
+        $report = ConcernReport::onlyTrashed()->findOrFail($concernReport);
+        $report->restore();
+        $report->update(['status' => 'Open', 'resolved_by' => null, 'resolved_at' => null]);
+        $this->log($request, 'Edit', "Restored deleted concern report #{$report->id} to open concerns.");
+
+        return $report->fresh('resolvedBy');
     }
 }

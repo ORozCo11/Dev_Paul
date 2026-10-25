@@ -118,6 +118,7 @@ class SuperAdminControllerTest extends TestCase
         $this->putJson("/api/superadmin/concern-reports/{$report->id}/resolve")->assertForbidden();
         $this->putJson("/api/superadmin/concern-reports/{$report->id}/reopen")->assertForbidden();
         $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertForbidden();
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/restore")->assertForbidden();
         $this->assertDatabaseHas('concern_reports', ['id' => $report->id]);
     }
 
@@ -140,8 +141,13 @@ class SuperAdminControllerTest extends TestCase
         $this->assertDatabaseHas('concern_reports', ['id' => $report->id, 'status' => 'Open']);
         $this->assertNull($report->fresh()->resolved_by);
         $this->assertNull($report->fresh()->resolved_at);
-        $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertOk();
-        $this->assertDatabaseMissing('concern_reports', ['id' => $report->id]);
+        $this->deleteJson("/api/superadmin/concern-reports/{$report->id}")->assertOk()->assertJsonPath('id', $report->id);
+        // Deleted reports stay in Concern History and can be restored as open.
+        $this->assertSoftDeleted('concern_reports', ['id' => $report->id]);
+        $this->getJson('/api/superadmin/concern-reports')->assertOk()->assertJsonFragment(['id' => $report->id]);
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/restore")->assertOk()->assertJsonPath('status', 'Open')->assertJsonPath('deleted_at', null);
+        $this->assertNotSoftDeleted('concern_reports', ['id' => $report->id]);
+        $this->putJson("/api/superadmin/concern-reports/{$report->id}/restore")->assertNotFound();
     }
 
     #[Test]
