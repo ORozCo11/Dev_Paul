@@ -1,0 +1,26 @@
+digraph UseCase {graph [bgcolor="white", fontname="Arial", fontsize=24, fontcolor="#0f172a", pad=0.45, nodesep=0.4, ranksep=1.0, labelloc=t, labeljust=l];
+node [fontname="Arial", fontsize=13, color="#94a3b8", fontcolor="#0f172a", penwidth=1.1];
+edge [fontname="Arial", fontsize=10, color="#64748b", fontcolor="#475569", penwidth=1.1]; graph [rankdir=LR, splines=polyline, nodesep=0.32, ranksep=1.1, label="02B  USE-CASE DIAGRAM | Onboarding and platform support\nMerged SMTP activation and Support Center | revision 352fd0e"];
+ applicant [shape=box, style="rounded,filled", fillcolor="#f1f5f9", color="#94a3b8", label="<<actor>>\nApplicant / visitor"];
+sa [shape=box, style="rounded,filled", fillcolor="#f1f5f9", color="#94a3b8", label="<<actor>>\nSuper Admin"];
+email [shape=box, style="rounded,filled", fillcolor="#f1f5f9", color="#94a3b8", label="<<actor>>\nEmail service"];
+ subgraph cluster_system {label="Barangay Vehicle Management System"; fontsize=18; color="#93c5fd"; style="rounded"; margin=24;
+ register [shape=ellipse, style=filled, fillcolor="#eff6ff", color="#93c5fd", margin="0.18,0.12", label="Register first barangay Admin\nwithout a staff code"];
+send [shape=ellipse, style=filled, fillcolor="#eff6ff", color="#93c5fd", margin="0.18,0.12", label="Review appointment and\nemail activation code"];
+activate [shape=ellipse, style=filled, fillcolor="#eff6ff", color="#93c5fd", margin="0.18,0.12", label="Activate with credentials\nand emailed code"];
+staff [shape=ellipse, style=filled, fillcolor="#eff6ff", color="#93c5fd", margin="0.18,0.12", label="Register later staff\nwith barangay code"];
+manage [shape=ellipse, style=filled, fillcolor="#eff6ff", color="#93c5fd", margin="0.18,0.12", label="Manage platform users,\nbarangays and codes"];
+concern [shape=ellipse, style=filled, fillcolor="#eff6ff", color="#93c5fd", margin="0.18,0.12", label="Submit public concern"];
+resolve [shape=ellipse, style=filled, fillcolor="#eff6ff", color="#93c5fd", margin="0.18,0.12", label="Review / resolve concerns;\nview Concern History"];
+audit [shape=ellipse, style=filled, fillcolor="#eff6ff", color="#93c5fd", margin="0.18,0.12", label="Review platform audit\nand boundary references"];
+ }
+ applicant -> register [dir=none];
+sa -> send [dir=none];
+email -> send [dir=none];
+applicant -> activate [dir=none];
+applicant -> staff [dir=none];
+sa -> manage [dir=none];
+applicant -> concern [dir=none];
+sa -> resolve [dir=none];
+sa -> audit [dir=none];
+ }

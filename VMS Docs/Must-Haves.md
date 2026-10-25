@@ -1,14 +1,18 @@
 # Barangay VMS — Must-Haves and Requirement Alignment
 
-Reviewed: 24 October 2026 against code revision `0027023`. Baseline: the supplied **VMS_MUST-HAVES.docx** (Vehicle Management System, Group 4). The baseline is retained as requirements evidence; the implementation notes below distinguish its wording from the current role and permission model.
+Reviewed **25 October 2026** against integrated revision `130fe38` on `dev-paul`. See [current revision notes](Current-Revision-2026-10-25.md) for current behavior, audit disposition and verification limits. The supplied academic baseline remains unchanged.
 
 Status key: **Implemented** means an identifiable code path exists; it does not claim deployment acceptance. **Verify in deployment** means credentials, storage, or an end-to-end acceptance check is still needed. **Open finding** means a confirmed defect prevents acceptance of the affected control. **Role alignment** means the capability exists but the responsible role differs from the supplied baseline and should be reviewed with the adviser.
 
-## Current scope and audit status - 24 October 2026
+## Current scope and audit status - 25 October 2026
 
 This is a fleet **readiness and maintenance** system. Operational dispatch, a Dispatched availability state, trip tracking, Usage Log views and temporary-release workflows are outside the baseline and have been removed. Admin handling of an external-shop repair remains a maintenance workflow. Availability (Available / Under Maintenance / Inactive / Decommissioned), physical condition and verified readiness remain separate indicators.
 
-The latest audit confirmed **six open implementation findings**: private-file authorization, issue-detail visibility, cross-barangay catalog writes, readiness invalidation after parts removal, CSV formula handling and future completion dates. Two documentation contradictions have been aligned with current code: vehicle registration is a standard Custodian duty; the ticket list currently includes percentage progress. These documentation edits do **not** fix the six implementation findings or certify deployment readiness. See [the 24 October audit](System-Audit-2026-10-24.md) and section 8 for acceptance criteria.
+The 24 October audit recorded six findings at `0027023`. Later integrated code rejects future completion dates. Other findings retain their specific acceptance retests rather than being automatically closed by integration. See [current revision notes](Current-Revision-2026-10-25.md) and section 8.
+
+## Working references for ERD and use-case revision
+
+Use [Requirements-Traceability.md](Requirements-Traceability.md) for stable UC-01 through UC-18 identifiers, actor assignments, entity links and acceptance rules. Edit [ERD.md](ERD.md) and [Use-Case-Diagram.md](Use-Case-Diagram.md) alongside this requirements source. The SVGs are current overview diagrams; PDFs and slides remain older exports. Requirements marked role alignment still need adviser agreement.
 
 ## 1. Platform requirements from the supplied document
 
@@ -59,7 +63,7 @@ Additional current responsibilities: propose maintenance tickets, record conditi
 | View reported vehicle issues | Open finding | Own-report lists and assigned-ticket access exist, but direct issue-detail access bypasses the list restriction (AUD-24-02). |
 | Add maintenance records | Implemented with scope | Record repair work on assigned sub-issues and use permitted maintenance-record actions. |
 | Update repair progress/completion | Implemented with scope | Assigned work logs and submission; a mechanic cannot independently verify or close their own repair. |
-| Manage maintenance schedules | Role alignment | View and perform assigned scheduled work. Booking/editing is Custodian-owned; approval/reassignment is Admin-owned. Completion currently accepts a future date and moves recurrence into that future (AUD-24-06). |
+| Manage maintenance schedules | Role alignment | View and perform assigned scheduled work. Booking/editing is Custodian-owned; approval/reassignment is Admin-owned. Current completion validation rejects future Philippine dates; AUD-24-06 retains target-environment acceptance checks. |
 | Add repair actions and remarks | Implemented | Repair log, parts, evidence, donor-part records and supporting notes. The current repair-log UI does not ask for Start/Completion dates. |
 | Monitor upcoming maintenance | Implemented | Personal upcoming/overdue schedule KPIs and assigned-work queue. |
 | View maintenance history | Implemented | Work tracker, completed repair history and permitted maintenance records. |
@@ -76,14 +80,14 @@ Additional current responsibilities: propose maintenance tickets, record conditi
 - [ ] Close the issue-detail ownership, private-file signing and shared-catalog scope findings before treating access control as accepted (AUD-24-01/02/03).
 - [ ] Invalidate stale readiness evidence after a parts-removal event (AUD-24-04).
 - [x] Last-Admin and open-work deactivation guards remain enforced.
-- [x] Impersonation uses the existing authorized candidate list and reason requirement; production tokens expire after 30 minutes and writes are restricted server-side. Local development has explicit expiry/write exceptions.
-- [x] The account menu identifies the current user and role and offers End Impersonation during support sessions. Ending calls the existing logout endpoint for token revocation and audit logging before restoring the original session.
+- [x] The dedicated switcher uses authorized account candidates and an automatically recorded access description; production tokens expire after 30 minutes and writes are restricted server-side. Local development has explicit expiry/write exceptions.
+- [x] The account menu identifies the current user and role. Ordinary support sessions offer End Impersonation; the dedicated switcher retains its account picker. Ending calls the existing logout endpoint for token revocation and audit logging before restoring the original session.
 - [x] Registration retains first-Administrator versus ordinary staff approval routing, registration-code checks, and inactive-until-approved behavior.
 
 ## 6. UI requirements delivered in this revision
 
 - [x] Three focused fleet dashboards with real data, scoped assignments, task links and useful empty states.
-- [x] Super Admin overview with four platform KPIs, an administrative queue and one account-status chart.
+- [x] Restored Super Admin overview with three summary cards, administrative actions and a coverage chart.
 - [x] Flat Super Admin navigation and a dedicated Barangay Management screen; existing recovery, boundary review, registration codes and account controls remain accessible.
 - [x] Province → City/Municipality → Barangay → Staff impersonation cascade, using barangay IDs to distinguish duplicate names.
 - [x] Search/filter improvements for users, barangays, concerns and platform activity.
@@ -93,7 +97,7 @@ Additional current responsibilities: propose maintenance tickets, record conditi
 
 ## 7. Acceptance checks and remaining work
 
-**Current verification record:** on revision `0027023`, the recorded full suite passed **480 backend tests (2,245 assertions)**; frontend lint, production build and targeted desktop/mobile merge checks passed. The 24 October investigation then reproduced the observed behavior with **six isolated API tests (36 assertions)** and a direct CSV-generation probe. Those investigation tests passed because they asserted the defective behavior; they are not evidence that the defects were fixed. No application fixes were made in this documentation update.
+**Historical verification record (24 October):** on revision `0027023`, the recorded full suite passed **480 backend tests (2,245 assertions)**; frontend lint, production build and targeted desktop/mobile merge checks passed. The 24 October investigation then reproduced the observed behavior with **six isolated API tests (36 assertions)** and a direct CSV-generation probe. Those investigation tests passed because they asserted the defective behavior; they are not evidence that the defects were fixed. No application fixes were made in this documentation update.
 
 **Acceptance remains open:** resolve AUD-24-01 through AUD-24-06, retain regression tests that reject the bypasses, repeat affected workflows, and perform target-deployment storage/recovery acceptance. SQLite removal-migration up/down/reapplication was verified on fresh and populated databases; other database engines were not exercised for that migration.
 
@@ -141,8 +145,8 @@ Second Super Admin recheck, 21 October 2026: **111 API/browser scenarios, 433 ba
 | AUD-24-03 | High - open | Separate platform-wide catalog authority from barangay administration, or isolate tenant-owned catalogs. Renaming a shared value must not silently rewrite another barangay's completed records or inherited vehicle criticality. |
 | AUD-24-04 | High - open | Parts removal must invalidate readiness evidence recorded before that physical change. Require a fresh check without conflating availability, condition and readiness. |
 | AUD-24-05 | Medium - open | Export untrusted CSV cells as spreadsheet-safe text, including formula-leading characters and control characters. Test vehicle, user, report, schedule, history and work-tracker exports. |
-| AUD-24-06 | Medium - open | Reject schedule completion dates later than the current accepted date. Invalid completion requests must not complete a schedule, create a ledger record or move its recurrence. |
+| AUD-24-06 | Implemented; acceptance retest required | Reject schedule completion dates later than the current accepted date. Invalid completion requests must not complete a schedule, create a ledger record or move its recurrence. |
 | AUD-24-07 | Low - documentation aligned | Current registration/import eligibility is Admin or Custodian; the legacy per-account registration flag is not an access gate. Baseline role changes still require adviser acceptance. |
 | AUD-24-08 | Low - documentation aligned | Current ticket cards show completion counts and stages; the ticket list also includes a progress bar and percentage. The old card progress ring is removed. Recording current behavior does not approve a new baseline requirement. |
 
-The updated PDF is generated from this Markdown reference. The original supplied baseline and earlier generated DOCX remain historical artifacts; neither is evidence that the new audit findings are resolved.
+The requirements PDF is an earlier export of this Markdown reference and was not regenerated in this update. The original supplied baseline and earlier generated DOCX remain historical artifacts; neither is evidence that the new audit findings are resolved.

@@ -1,10 +1,10 @@
 # Barangay VMS — Full System Capabilities Reference
 
-UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](../docs/archive/vms/UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
+Reviewed **25 October 2026** against integrated revision `130fe38` on `dev-paul`. See [current revision notes](Current-Revision-2026-10-25.md) for current behavior, audit disposition and verification limits.
 
 A complete, code-verified catalog of everything the system can do today, organized by module. Every capability listed here was confirmed directly against the current codebase (not assumed) — where something is partially built, unused, or a known gap, it's flagged explicitly rather than glossed over. See `Documentation.md` in this folder for the shorter architectural overview; this document goes deep on every feature.
 
-**Audit status - 24 October 2026:** six implementation findings remain open on revision `0027023`: managed-file signing, direct issue visibility, global catalog writes, readiness after parts removal, CSV formula handling and future schedule completion dates. See [the current audit](System-Audit-2026-10-24.md) and [Must-Haves acceptance criteria](Must-Haves.md#8-required-acceptance-criteria-from-the-24-october-audit). Feature availability below is not a claim that every security control has passed acceptance.
+**Audit baseline:** the 24 October report records findings at `0027023`. See [current disposition](Current-Revision-2026-10-25.md#audit-disposition) before treating those findings as current or resolved.
 
 ---
 
@@ -75,17 +75,19 @@ A per-vehicle file cabinet, separate from the vehicle's cover photo — Title (r
 
 ### 3.5 Vehicle History
 
-A fully automatic, derived activity timeline — there is no manual "add a history entry." The backend writes an entry on nearly every vehicle-affecting action: added, info updated, location changed, archived, restored, decommissioned, readiness checked (pass/fail), marked available, condition checked/updated/deleted, issue reported/updated, document added, spreadsheet import, and — closed as a gap in the final senior system review (2026-10-10), since these are arguably the biggest status/condition drivers in the system — a ticket being approved, inspected, closed, cancelled, or restored. Viewable with activity-type and date-range filters, free-text search, a card/table toggle, CSV export, and print — available to Admin and Custodian.
+A fully automatic, derived activity timeline — there is no manual "add a history entry." The backend writes an entry on nearly every vehicle-affecting action: added, info updated, location changed, archived, restored, decommissioned, readiness checked (pass/fail), marked available, condition checked/updated/deleted, issue reported/updated, document added, spreadsheet import, and — closed as a gap in the final senior system review (2026-10-10), since these are arguably the biggest status/condition drivers in the system — a ticket being approved, inspected, closed, cancelled, or restored. Viewable with activity-type and date-range filters, free-text search, a list presentation, CSV export, and print — available to Admin and Custodian.
 
 ### 3.6 Condition Monitoring
 
-A Custodian's routine, *proactive* inspection log — explicitly distinct from an Issue Report (which is reactive, "something's already wrong"). Each check records a Result (Good/Needs Inspection/Needs Repair) and free-text Observations. Custodian creates and can only edit a check **they personally performed**; only Admin can delete one (which reverts the vehicle to its next-latest remaining check, or Good if none remain). A "Needs Repair" result flips the vehicle to Under Maintenance. From the Condition Monitoring list, a check can be turned directly into a ticket proposal ("Create Ticket from Condition" — pre-fills title/description/priority/sub-issue) or into a maintenance schedule for a non-urgent follow-up ("Suggest Schedule from Condition" opens the Add Schedule form pre-filled with the vehicle and the check's result/observations; like any Custodian-booked schedule it then waits for Admin approval — §6). Not visible to Maintenance Personnel at all — scoped out by design.
+A Custodian's routine, *proactive* inspection log — explicitly distinct from an Issue Report (which is reactive, "something's already wrong"). New checks record Good or Needs Repair and free-text Observations. Legacy inconclusive results remain stored. The list shows Not Checked without a concrete outcome and follows a linked ticket?s concrete vehicle condition. Custodian creates and can only edit a check **they personally performed**; only Admin can delete one (which reverts the vehicle to its next-latest remaining check, or Good if none remain). A "Needs Repair" result flips the vehicle to Under Maintenance. From the Condition Monitoring list, a check can be turned directly into a ticket proposal ("Create Ticket from Condition" — pre-fills title/description/priority/sub-issue) or into a maintenance schedule for a non-urgent follow-up ("Suggest Schedule from Condition" opens the Add Schedule form pre-filled with the vehicle and the check's result/observations; like any Custodian-booked schedule it then waits for Admin approval — §6). Not visible to Maintenance Personnel at all — scoped out by design.
 
 ### 3.7 Readiness Checks
 
-A pre-deployment "is this vehicle mission-ready right now" checklist, deliberately independent of repair/condition status (a vehicle can be Available with a lingering Needs Repair flag and still pass readiness). The checklist is type-specific: Water vehicles get fuel/life-vests/bilge-pump/no-hull-water items; an "ambulance" category gets fuel/oxygen/lights-siren/stretcher; a "fire" category gets fuel/water-tank/pump/hoses/lights-siren; everything else gets a generic fuel/lights/engine-starts set — custom items can be added, and there's a "Mark all OK" bulk toggle. Any single failed item fails the whole check.
+A Custodian confirms that they personally checked and operated the vehicle and found it ready to respond. The current form requires explicit attestation and permits notes; the former type-specific checklist remains historical data rather than the current form.
 
-Recorded by Custodian only. A passing check is only considered **fresh for 24 hours** — after that it's "stale" even though it passed. States shown: ready, stale, not_ready, unchecked, in_maintenance, retired. A fresh pass on a non-Available vehicle with no open ticket offers a one-click "Mark Available" shortcut (Admin + Custodian) — deliberately does not clear an unrelated Needs Repair condition flag. Surfaces on the vehicle profile, the main vehicle list, both dashboards, and a per-vehicle history of the last 5 checks.
+The dialog loads server eligibility. Confirmation stays disabled if eligibility cannot be retrieved. The save endpoint checks eligibility again under a vehicle lock: Under Maintenance, an Active/For Verification ticket, or retirement blocks confirmation. Rejected requests create no check. Repair closure invalidates earlier readiness evidence; independent repair verification must be followed by a fresh operation check.
+
+A passing attestation remains fresh for **24 hours**. Availability, physical condition and readiness are separate indicators. States include ready, stale, not_ready, unchecked, in_maintenance and retired. The historical Mark Available endpoint retains open-ticket and retirement guards; it does not bypass active repairs.
 
 ---
 
@@ -204,11 +206,11 @@ A background job checks **every minute using Philippine date and scheduled servi
 
 > Records are written automatically when a Custodian verifies a ticket (one per sub-issue) and from completed schedules. Manual entry remains Admin-only, kept for legacy/historical work; it is not a standing workflow for other roles.
 
-A parallel record type for maintenance that didn't originate from a ticket sub-issue being confirmed (manual entries, historical/external work, or a mechanic self-filing a field repair) — though a Custodian verifying a ticket *also* writes one of these per sub-issue, so this ledger ends up as the single unified maintenance history regardless of where the work came from.
+The unified history displays only **Completed** repairs, one row per repair, including separate repairs on the same vehicle. Sources are **In-House Repair**, **Sent to External Shop** and **Maintenance Schedule**. Scheduled origin takes precedence over repair method so categories do not overlap. Summary cards, source filters and details use the same categories; search includes source labels and date filters use completion dates.
 
-Creation is Admin-only for most fields, though a non-Admin filing a field repair is always stamped as the performer themselves and triggers an Admin notification since Admin wasn't in the loop when the work started. A record can never be created or edited directly into Completed — not even with a receipt or photo attached — only the dedicated Confirm action (Admin, after Custodian verification has passed) can finalize one; this closes a bypass that previously existed here (removed 2026-10-05).
+The barangay-scoped history includes other mechanics and external shops without granting editing or verification rights. Ongoing, submitted, on-hold and reopened repairs stay in active-work and verification views. The authorized API retains these states and its personal-history filter.
 
-Has its own two-step verify/confirm flow, separate from tickets (Custodian verifies, cannot be the repairer; Admin gives final confirmation — tickets no longer have that Admin step, §5.4) and its own decision-close option for ending a record without waiting on verification, with the same written-reason-plus-fitness-call requirement.
+Manual historical entry remains Admin-only. Standalone records require independent Custodian verification followed by Admin confirmation; ticket-generated records finalize through ticket closure. Passing standalone verification requires personal-test attestation; rejection requires notes. Manual and schedule completion dates cannot exceed the Philippine current date. Invalid requests must not create a completion record or recurrence.
 
 ---
 

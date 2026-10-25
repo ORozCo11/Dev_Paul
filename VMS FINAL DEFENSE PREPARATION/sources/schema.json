@@ -1,0 +1,5593 @@
+{
+    "revision": "352fd0e",
+    "engine": "SQLite :memory:",
+    "method": "Fresh migration; no seeders or application data",
+    "tables": {
+        "activity_logs": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "log_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "user_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "role",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "action",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "module",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "affected_record_id",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "details",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "barangay_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "impersonator_user_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "impersonation_session_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "impersonation_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "barangays",
+                    "from": "barangay_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "user_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "activity_logs_barangay_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "barangay_number_sequences": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "barangay_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "resource",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 2
+                },
+                {
+                    "cid": 2,
+                    "name": "last_number",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "barangays",
+                    "from": "barangay_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "sqlite_autoindex_barangay_number_sequences_1",
+                    "unique": 1,
+                    "origin": "pk",
+                    "partial": 0
+                }
+            ]
+        },
+        "barangays": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "city_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "boundary",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "boundary_status",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "boundary_source",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "boundary_verified_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "boundary_verified_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "pending_boundary",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "pending_boundary_source",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "psgc_code",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "provisioned_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "boundary_verified_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "cities",
+                    "from": "city_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "barangays_provisioned_at_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "barangays_psgc_code_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 2,
+                    "name": "barangays_city_id_name_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "cache": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "key",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "value",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "expiration",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "cache_expiration_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "sqlite_autoindex_cache_1",
+                    "unique": 1,
+                    "origin": "pk",
+                    "partial": 0
+                }
+            ]
+        },
+        "cache_locks": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "key",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "owner",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "expiration",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "cache_locks_expiration_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "sqlite_autoindex_cache_locks_1",
+                    "unique": 1,
+                    "origin": "pk",
+                    "partial": 0
+                }
+            ]
+        },
+        "cannibalization_parts": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "part_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "cannibalization_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "part_name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "part_number",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "quantity",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "unit",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'pc'",
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "part_condition",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "installation_details",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "cannibalization_records",
+                    "from": "cannibalization_id",
+                    "to": "cannibalization_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "cannibalization_records": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "cannibalization_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "record_number",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "source_vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "destination_type",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "destination_vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "storage_location",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "reason",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "source_reason",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "recorded_by",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "performed_by_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "removed_at",
+                    "type": "datetime",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "received_by_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "transferred_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 14,
+                    "name": "evidence_urls",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 15,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 16,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "cannibalization_records_record_number_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "cannibalization_records_destination_vehicle_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 2,
+                    "name": "cannibalization_records_source_vehicle_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "cities": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "province_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "code",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "boundary",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "provinces",
+                    "from": "province_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "cities_code_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "cities_province_id_name_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "concern_reports": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "concern_type",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "barangay_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "description",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "reporter_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "reporter_contact",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Open'",
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "resolved_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "resolved_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "province_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "city_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "deleted_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "resolved_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "failed_jobs": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "uuid",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "connection",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "queue",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "payload",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "exception",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "failed_at",
+                    "type": "datetime",
+                    "notnull": 1,
+                    "dflt_value": "CURRENT_TIMESTAMP",
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "failed_jobs_uuid_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "failed_jobs_connection_queue_failed_at_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "fault_categories": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "fault_categories_name_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "hidden_ticket_lists": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "user_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "ticket_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 2
+                },
+                {
+                    "cid": 2,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 1,
+                    "dflt_value": "CURRENT_TIMESTAMP",
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "maintenance_tickets",
+                    "from": "ticket_id",
+                    "to": "ticket_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "user_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "sqlite_autoindex_hidden_ticket_lists_1",
+                    "unique": 1,
+                    "origin": "pk",
+                    "partial": 0
+                }
+            ]
+        },
+        "issue_report_attachments": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "attachment_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "issue_report_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "file_url",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "original_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "uploaded_by",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "uploaded_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "NO ACTION",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicle_issue_reports",
+                    "from": "issue_report_id",
+                    "to": "issue_report_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "job_batches": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "total_jobs",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "pending_jobs",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "failed_jobs",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "failed_job_ids",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "options",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "cancelled_at",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "created_at",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "finished_at",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "sqlite_autoindex_job_batches_1",
+                    "unique": 1,
+                    "origin": "pk",
+                    "partial": 0
+                }
+            ]
+        },
+        "jobs": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "queue",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "payload",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "attempts",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "reserved_at",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "available_at",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "created_at",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "jobs_queue_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "maintenance_tickets": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "ticket_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "created_by",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "issue_report_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "ticket_title",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "ticket_description",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "priority",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Medium'",
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Open'",
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "assigned_custodian_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "assigned_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "inspection_notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "inspection_result",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "inspected_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "inspected_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 14,
+                    "name": "closed_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 15,
+                    "name": "closed_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 16,
+                    "name": "closing_notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 17,
+                    "name": "archived_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 18,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 19,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 20,
+                    "name": "returned_to_service",
+                    "type": "tinyint(1)",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 21,
+                    "name": "recurrence_count",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 22,
+                    "name": "fault_category",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 23,
+                    "name": "down_since",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 24,
+                    "name": "recurrence_of_ticket_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 25,
+                    "name": "assigned_mechanic_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 26,
+                    "name": "decline_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 27,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 28,
+                    "name": "correction_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 29,
+                    "name": "correction_requested_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 30,
+                    "name": "decision_history",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 31,
+                    "name": "decision_revision",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "assigned_mechanic_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "closed_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 2,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "inspected_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 3,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "assigned_custodian_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 4,
+                    "seq": 0,
+                    "table": "vehicle_issue_reports",
+                    "from": "issue_report_id",
+                    "to": "issue_report_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 5,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "created_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 6,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 7,
+                    "seq": 0,
+                    "table": "maintenance_tickets",
+                    "from": "recurrence_of_ticket_id",
+                    "to": "ticket_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "maintenance_tickets_vehicle_id_status_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "maintenance_types": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "maintenance_types_name_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "managed_files": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "disk",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "path",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "directory",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "barangay_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "uploaded_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "original_url",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "managed_files_barangay_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "sqlite_autoindex_managed_files_1",
+                    "unique": 1,
+                    "origin": "pk",
+                    "partial": 0
+                }
+            ]
+        },
+        "migrations": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "migration",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "batch",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": []
+        },
+        "notifications": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "notification_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "user_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "title",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "message",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "type",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "ticket_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "read_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "issue_report_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "schedule_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "maintenance_tickets",
+                    "from": "ticket_id",
+                    "to": "ticket_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 2,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "user_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 3,
+                    "seq": 0,
+                    "table": "vehicle_issue_reports",
+                    "from": "issue_report_id",
+                    "to": "issue_report_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 4,
+                    "seq": 0,
+                    "table": "vehicle_maintenance_schedules",
+                    "from": "schedule_id",
+                    "to": "schedule_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "notifications_user_id_read_at_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "password_reset_tokens": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "email",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "token",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "sqlite_autoindex_password_reset_tokens_1",
+                    "unique": 1,
+                    "origin": "pk",
+                    "partial": 0
+                }
+            ]
+        },
+        "personal_access_tokens": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "tokenable_type",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "tokenable_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "name",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "token",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "abilities",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "last_used_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "expires_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "impersonator_user_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "impersonation_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "personal_access_tokens_expires_at_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "personal_access_tokens_token_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 2,
+                    "name": "personal_access_tokens_tokenable_type_tokenable_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "provinces": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "code",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "provinces_name_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "provinces_code_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "registration_settings": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "staff_code",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "barangay_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "barangays",
+                    "from": "barangay_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "registration_settings_barangay_id_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "reported_persons": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "reported_persons_name_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "retired_feature_backups": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "source_table",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "source_id",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "payload",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "retired_feature_backups_source_table_source_id_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "sessions": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "user_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "ip_address",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "user_agent",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "payload",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "last_activity",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "sessions_last_activity_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "sessions_user_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 2,
+                    "name": "sqlite_autoindex_sessions_1",
+                    "unique": 1,
+                    "origin": "pk",
+                    "partial": 0
+                }
+            ]
+        },
+        "ticket_archive_logs": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "archive_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "ticket_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "ticket_title",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "vehicle_name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "plate_number",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "final_status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "maintenance_cost",
+                    "type": "numeric",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "full_ticket_snapshot",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "archived_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "archived_at",
+                    "type": "datetime",
+                    "notnull": 1,
+                    "dflt_value": "CURRENT_TIMESTAMP",
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "deleted_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "ticket_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "archived_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "ticket_sub_issue_donor_parts": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "part_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "sub_issue_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "part_name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "quantity",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'1'",
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "part_condition",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "installed_at",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "ticket_sub_issues",
+                    "from": "sub_issue_id",
+                    "to": "sub_issue_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "ticket_sub_issue_donor_parts_sub_issue_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "ticket_sub_issues": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "sub_issue_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "ticket_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "issue_report_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "created_by",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "title",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Open'",
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "assigned_mechanic_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "maintenance_type",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "work_order_notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "mechanic_assigned_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "mechanic_assigned_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "repair_logs",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "parts_used",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "repair_started_at",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 14,
+                    "name": "repair_completed_at",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 15,
+                    "name": "maintenance_cost",
+                    "type": "numeric",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 16,
+                    "name": "verification_verdict",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 17,
+                    "name": "verification_notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 18,
+                    "name": "verified_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 19,
+                    "name": "verified_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 20,
+                    "name": "confirmation_verdict",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 21,
+                    "name": "confirmation_notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 22,
+                    "name": "confirmed_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 23,
+                    "name": "confirmed_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 24,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 25,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 26,
+                    "name": "attachment_url",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 27,
+                    "name": "deferred_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 28,
+                    "name": "deferred_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 29,
+                    "name": "deferred_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 30,
+                    "name": "deferred_issue_report_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 31,
+                    "name": "functional_test",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 32,
+                    "name": "test_attested",
+                    "type": "tinyint(1)",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 33,
+                    "name": "verification_assigned_to",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 34,
+                    "name": "reopened_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 35,
+                    "name": "reopened_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 36,
+                    "name": "repair_type",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 37,
+                    "name": "source_vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 38,
+                    "name": "external_vendor",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 39,
+                    "name": "warranty_until",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 40,
+                    "name": "cannibalization_status",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 41,
+                    "name": "cannibalization_rejection_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 42,
+                    "name": "cannibalization_reviewed_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 43,
+                    "name": "cannibalization_reviewed_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 44,
+                    "name": "cannibalization_issue_report_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 45,
+                    "name": "suggested_mechanic_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 46,
+                    "name": "part_missing",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 47,
+                    "name": "part_needed",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 48,
+                    "name": "external_reason",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 49,
+                    "name": "external_work_scope",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 50,
+                    "name": "external_shop_contact",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 51,
+                    "name": "external_estimated_cost",
+                    "type": "numeric",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 52,
+                    "name": "external_sent_by",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 53,
+                    "name": "external_contact_person",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 54,
+                    "name": "part_quantity",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 55,
+                    "name": "part_condition",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 56,
+                    "name": "cannibal_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 57,
+                    "name": "part_installed_at",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 58,
+                    "name": "external_sent_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 59,
+                    "name": "external_returned_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 60,
+                    "name": "external_return_notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 61,
+                    "name": "external_actual_cost",
+                    "type": "numeric",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 62,
+                    "name": "prior_mechanic_ids",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 63,
+                    "name": "external_shop_address",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 64,
+                    "name": "external_expected_return",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 65,
+                    "name": "external_handled_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 66,
+                    "name": "external_received_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 67,
+                    "name": "attachment_files",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 68,
+                    "name": "external_cycles",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 69,
+                    "name": "work_history",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "suggested_mechanic_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "reopened_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 2,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "confirmed_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 3,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "verified_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 4,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "mechanic_assigned_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 5,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "assigned_mechanic_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 6,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "created_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 7,
+                    "seq": 0,
+                    "table": "vehicle_issue_reports",
+                    "from": "issue_report_id",
+                    "to": "issue_report_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 8,
+                    "seq": 0,
+                    "table": "maintenance_tickets",
+                    "from": "ticket_id",
+                    "to": "ticket_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 9,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "verification_assigned_to",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 10,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "source_vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "users": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "email",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "email_verified_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "password",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "role",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Custodian'",
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "remember_token",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "phone",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "address",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "photo_url",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'1'",
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "roles",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 14,
+                    "name": "barangay_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 15,
+                    "name": "city_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 16,
+                    "name": "barangay_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 17,
+                    "name": "approved_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 18,
+                    "name": "can_register_vehicles",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 19,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 20,
+                    "name": "awaiting_staff_code",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 21,
+                    "name": "staff_code_sent_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "barangays",
+                    "from": "barangay_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "cities",
+                    "from": "city_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "users_email_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "users_barangay_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "vehicle_categories": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "category_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "category_name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "description",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "domain",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Land'",
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "default_criticality",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Normal'",
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "vehicle_categories_category_name_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "vehicle_condition_checks": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "condition_check_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "condition_result",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Good'",
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "observations",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "checked_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "resulting_ticket_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "maintenance_tickets",
+                    "from": "resulting_ticket_id",
+                    "to": "ticket_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 2,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "checked_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "vehicle_documents": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "document_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "title",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "category",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "file_url",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "added_by",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "added_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "NO ACTION",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "vehicle_histories": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "history_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "activity_type",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "description",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "related_table",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "related_record_id",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "updated_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "updated_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "vehicle_hubs": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "hub_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "hub_key",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "label",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "lat",
+                    "type": "double",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "lng",
+                    "type": "double",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "match_names",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "is_default",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "is_hidden",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "created_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "barangay_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "barangays",
+                    "from": "barangay_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "created_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "vehicle_hubs_barangay_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "vehicle_hubs_hub_key_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "vehicle_imports": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "user_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "barangay_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "file_name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "stored_path",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'previewed'",
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "total_rows",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "valid_rows",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "error_rows",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "warning_rows",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "imported_rows",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "failed_rows",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "findings",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "completed_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 14,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 15,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "user_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "vehicle_imports_barangay_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "vehicle_issue_reports": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "issue_report_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "issue_type",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "issue_description",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "severity_level",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Medium'",
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "photo_url",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "reported_by",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Pending'",
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "remarks",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "reported_on_behalf_of",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "reported_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "NO ACTION",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "vehicle_locations": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "location_record_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "current_location",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "address_area",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "updated_by",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "remarks",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "updated_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "NO ACTION",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "vehicle_maintenance_records": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "maintenance_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "issue_report_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "maintenance_type",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "problem_reason",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "date_started",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "date_completed",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "maintenance_personnel_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "action_taken",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "parts_used",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "progress_status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Assigned'",
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "remarks",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 14,
+                    "name": "verification_result",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 15,
+                    "name": "verification_notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 16,
+                    "name": "verified_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 17,
+                    "name": "verified_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 18,
+                    "name": "confirmed_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 19,
+                    "name": "confirmed_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 20,
+                    "name": "maintenance_cost",
+                    "type": "numeric",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 21,
+                    "name": "is_external",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 22,
+                    "name": "external_vendor",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 23,
+                    "name": "warranty_until",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 24,
+                    "name": "receipt_url",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 25,
+                    "name": "source_vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 26,
+                    "name": "closure_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 27,
+                    "name": "performed_by_other",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 28,
+                    "name": "part_name",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 29,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 30,
+                    "name": "ticket_sub_issue_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 31,
+                    "name": "test_attested",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "maintenance_personnel_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "NO ACTION",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicle_issue_reports",
+                    "from": "issue_report_id",
+                    "to": "issue_report_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 2,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 3,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "verified_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 4,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "confirmed_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 5,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "source_vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "maintenance_ticket_item_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "vehicle_maintenance_schedules": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "schedule_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "maintenance_type",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "scheduled_date",
+                    "type": "date",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "scheduled_time",
+                    "type": "time",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "service_location",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Scheduled'",
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "created_by",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "assigned_to",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "recurrence_months",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "resulting_maintenance_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 14,
+                    "name": "resulting_ticket_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 15,
+                    "name": "due_notified_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 16,
+                    "name": "decline_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 17,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "vehicle_maintenance_records",
+                    "from": "resulting_maintenance_id",
+                    "to": "maintenance_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 2,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "created_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                },
+                {
+                    "id": 3,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "assigned_to",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 4,
+                    "seq": 0,
+                    "table": "maintenance_tickets",
+                    "from": "resulting_ticket_id",
+                    "to": "ticket_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "vehicle_maintenance_schedules_vehicle_id_status_scheduled_date_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "vehicle_readiness_checks": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "readiness_check_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "checked_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "checklist",
+                    "type": "TEXT",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "all_passed",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "notes",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "checked_at",
+                    "type": "datetime",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "checked_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicles",
+                    "from": "vehicle_id",
+                    "to": "vehicle_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": []
+        },
+        "vehicle_type_fields": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "field_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "category_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "key",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "label",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "field_type",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "is_required",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "unit",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "options",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "sort_order",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": "'0'",
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "notnull": 1,
+                    "dflt_value": "'1'",
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "vehicle_categories",
+                    "from": "category_id",
+                    "to": "category_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "CASCADE",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "vehicle_type_fields_category_id_key_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        },
+        "vehicles": {
+            "columns": [
+                {
+                    "cid": 0,
+                    "name": "vehicle_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 1
+                },
+                {
+                    "cid": 1,
+                    "name": "vehicle_name",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 2,
+                    "name": "plate_number",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 3,
+                    "name": "category_id",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 4,
+                    "name": "brand",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 5,
+                    "name": "model",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 6,
+                    "name": "year_model",
+                    "type": "INTEGER",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 7,
+                    "name": "capacity",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 8,
+                    "name": "vehicle_color",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 9,
+                    "name": "current_location",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 10,
+                    "name": "remarks",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 11,
+                    "name": "status",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Available'",
+                    "pk": 0
+                },
+                {
+                    "cid": 12,
+                    "name": "condition",
+                    "type": "varchar",
+                    "notnull": 1,
+                    "dflt_value": "'Good'",
+                    "pk": 0
+                },
+                {
+                    "cid": 13,
+                    "name": "created_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 14,
+                    "name": "updated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 15,
+                    "name": "fuel_type",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 16,
+                    "name": "photo_url",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 17,
+                    "name": "hull_material",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 18,
+                    "name": "engine_type",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 19,
+                    "name": "archived_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 20,
+                    "name": "archived_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 21,
+                    "name": "estimated_return_date",
+                    "type": "date",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 22,
+                    "name": "decommission_reason",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 23,
+                    "name": "decommissioned_by",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 24,
+                    "name": "decommissioned_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 25,
+                    "name": "acquisition_cost",
+                    "type": "numeric",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 26,
+                    "name": "barangay_id",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 27,
+                    "name": "custom_values",
+                    "type": "TEXT",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 28,
+                    "name": "criticality",
+                    "type": "varchar",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 29,
+                    "name": "barangay_number",
+                    "type": "INTEGER",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                },
+                {
+                    "cid": 30,
+                    "name": "readiness_invalidated_at",
+                    "type": "datetime",
+                    "notnull": 0,
+                    "dflt_value": null,
+                    "pk": 0
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "id": 0,
+                    "seq": 0,
+                    "table": "users",
+                    "from": "archived_by",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                },
+                {
+                    "id": 1,
+                    "seq": 0,
+                    "table": "vehicle_categories",
+                    "from": "category_id",
+                    "to": "category_id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "NO ACTION",
+                    "match": "NONE"
+                },
+                {
+                    "id": 2,
+                    "seq": 0,
+                    "table": "barangays",
+                    "from": "barangay_id",
+                    "to": "id",
+                    "on_update": "NO ACTION",
+                    "on_delete": "SET NULL",
+                    "match": "NONE"
+                }
+            ],
+            "indexes": [
+                {
+                    "seq": 0,
+                    "name": "vehicles_plate_number_unique",
+                    "unique": 1,
+                    "origin": "c",
+                    "partial": 0
+                },
+                {
+                    "seq": 1,
+                    "name": "vehicles_barangay_id_index",
+                    "unique": 0,
+                    "origin": "c",
+                    "partial": 0
+                }
+            ]
+        }
+    }
+}

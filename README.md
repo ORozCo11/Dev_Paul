@@ -158,9 +158,8 @@ Permission checks use role membership (not just the primary role), so multi-role
 
 Maintenance records created outside the ticket workflow have their own lifecycle: Custodian verification followed by Admin confirmation. Recurring schedule completion creates such a proof record and the next occurrence.
 
-### Handling reality: deferral & decision-close
-- **Defer a sub-issue:** something that can't be finished now (no budget, part on back-order) can be recorded as **Deferred** with a reason — and a **follow-up Issue Report is opened automatically** so it isn't forgotten.
-- **Decision-close:** a ticket can be closed with unfinished work; the leftovers become Deferred, and the Admin must justify it **and** make an explicit **fit-for-service** call (is the vehicle safe to dispatch?). Closing a ticket never blindly returns a possibly-unsafe vehicle to service.
+### Handling unfinished work
+- **Rework and cancellation:** independent Custodian verification returns selected failed repairs for rework; cancellation requires a reason and preserves evidence. Admin decision-close and per-item deferral are legacy paths without current role grants.
 - **Aging:** open tickets are flagged once they pass 30 days.
 
 ### Archives
@@ -174,11 +173,10 @@ Closed tickets are locked in a permanent **Ticket Archive** audit log. An accide
 - Register / edit / archive / restore vehicles, with photo upload.
 - **Vehicle Types** (categories) with a **domain** (land / water) — water vehicles capture hull material (dropdown) and engine type.
 - **Availability** (Available / Under Maintenance / Inactive / Decommissioned) vs **Condition** (physical state) tracked separately.
-- Rich **vehicle profile page**: information, status & key dates, analytics, reliability, location map, documents/photos, and full maintenance record history.
+- Rich **vehicle profile page**: information, status & key dates, operational status, location map and documents/photos; repair history is available through Maintenance Records.
 
 ### Issue Reporting
 - Custodian and Maintenance Personnel can both report vehicle issues (severity-rated, with photo evidence); filing one lands on that report's own page with a **Create Maintenance Ticket** action right there for the Custodian — not back on a list to search for what was just submitted.
-- Deferred sub-issues auto-generate breadcrumb issue reports.
 
 ### Maintenance Records & Schedules
 - **Maintenance Records:** log external/historical/third-party maintenance and costs without running the full ticket workflow. Verify/confirm flow supported.
@@ -202,7 +200,7 @@ Closed tickets are locked in a permanent **Ticket Archive** audit log. An accide
 - In-app notifications for workflow handoffs (assignments, reassignments, verifications), with read/read-all/delete.
 
 ### Reports
-- Report catalog with a generator and printable preview (browser print), plus **CSV export** on Vehicles and Schedules.
+- Report catalog with a generator and printable preview (browser print), with the supported export actions in each module.
 
 ### Users & Logs
 - User management (create, edit, activate/deactivate) with multi-role support.
@@ -219,7 +217,7 @@ Closed tickets are locked in a permanent **Ticket Archive** audit log. An accide
 The dashboard surfaces the operational and analytical signals that make this more than a CRUD app:
 
 - **Emergency readiness & coverage** — how many units of each type are ready to respond.
-- **Response-readiness checks** — a "ready to respond" checklist per vehicle, with a freshness window (a readiness check goes stale after 24h; "never checked" is flagged).
+- **Response-readiness checks** — a Custodian personal-operation attestation per vehicle, with a freshness window (a readiness check goes stale after 24h; "never checked" is flagged).
 - **Availability forecast** — expected return-to-service dates.
 - **Preventive-maintenance watch** — services coming due.
 - **Reliability** — failure counts (6-/12-month), average days out of service, and lifetime repair spend; chronic/repeat-failure units flagged.
@@ -458,3 +456,7 @@ See [UI updates and branch status](docs/archive/vms/UI-UPDATES-2026-10-23.md) fo
 Use [the current VMS document index](VMS%20Docs/README.md) for maintained references, the requirements PDF and the latest presentation with examples. Older reports and superseded exports are in [the historical archive](docs/archive/vms/README.md). Earlier generated manuals elsewhere in the repository remain historical material.
 
 Registration address suggestions use [Photon](https://github.com/komoot/photon) / OpenStreetMap after a typing pause only when the registrant explicitly opts in; suggestions are off by default. Requests include the selected barangay, city and province, are rate limited, and fall back to manual entry if unavailable. Suggestions are not proof of residence. Set backend `PHOTON_URL` to a compatible hosted or private Photon `/api/` endpoint for larger deployments; the public demo has no availability guarantee.
+
+## Current documentation ? 25 October 2026
+
+See [current revision notes](VMS%20Docs/Current-Revision-2026-10-25.md) for integrated behavior at `130fe38`, audit disposition, setup after pulling and verification limits. The maintained overview, capabilities and requirements Markdown have been reconciled; existing exported PDFs, slides and diagrams have not been regenerated.

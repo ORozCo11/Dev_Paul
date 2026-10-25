@@ -1,15 +1,18 @@
 # Current VMS documents
 
-Start with the overview, then open the detailed reference or the document needed for your task.
+Reviewed 25 October 2026 against `130fe38`. Start with [current revision notes](Current-Revision-2026-10-25.md), then the overview or detailed reference. ERD and use-case SVG overviews now have editable Markdown sources. Existing PDFs, slides and the architecture SVG were not regenerated.
 
 | File | Use it for |
 |---|---|
+| [Requirements-Traceability.md](Requirements-Traceability.md) | Start here for actor/use-case IDs, requirements, entities and acceptance rules. |
+| [ERD.md](ERD.md) | Editable logical ERD, key notes and schema constraints to verify. |
+| [Use-Case-Diagram.md](Use-Case-Diagram.md) | Editable actor/action overview and diagram rules. |
 | [Documentation.md](Documentation.md) | System overview, architecture, workflow and current audit status. |
 | [System-Capabilities.md](System-Capabilities.md) | Detailed module and feature reference; check the audit for known limitations. |
 | [Must-Haves.md](Must-Haves.md) | Editable requirements mapping and outstanding acceptance criteria. |
-| [VMS-Must-Haves-Updated.pdf](VMS-Must-Haves-Updated.pdf) | Shareable requirements reference. |
+| [VMS-Must-Haves-Updated.pdf](VMS-Must-Haves-Updated.pdf) | Earlier requirements export; consult Markdown for current changes. |
 | [Sample-Data.md](Sample-Data.md) | Team setup, demo accounts, five vehicles, sample work and verification results. |
-| [System-Audit-2026-10-24.md](System-Audit-2026-10-24.md) | Six open implementation findings, evidence and required retests. |
+| [System-Audit-2026-10-24.md](System-Audit-2026-10-24.md) | Historical six-finding audit baseline; see current revision notes for disposition. |
 | [Ticket-Process-Review-2026-10-24.md](Ticket-Process-Review-2026-10-24.md) | Ticket fields, repair/decision fixes, migration notes and verification evidence. |
 | [Claude-Browser-QA.md](Claude-Browser-QA.md) | Claude browser QA skill, full-system test catalogue, findings format and starter prompt. |
 | [Branch-Integration-2026-10-25.md](Branch-Integration-2026-10-25.md) | Unmerged V2 branches integrated into dev-paul, conflict decisions and combined verification. |

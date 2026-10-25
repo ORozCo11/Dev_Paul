@@ -1,0 +1,75 @@
+digraph Architecture {graph [bgcolor="white", fontname="Arial", fontsize=24, fontcolor="#0f172a", pad=0.45, nodesep=0.4, ranksep=1.0, labelloc=t, labeljust=l];
+node [fontname="Arial", fontsize=13, color="#94a3b8", fontcolor="#0f172a", penwidth=1.1];
+edge [fontname="Arial", fontsize=10, color="#64748b", fontcolor="#475569", penwidth=1.1];
+graph [rankdir=LR, splines=polyline, ranksep=1.2, nodesep=0.6, label="03  SYSTEM ARCHITECTURE | Barangay VMS
+Implementation view at revision 352fd0e | 25 October 2026
+Deployment hosts are proposed; this diagram does not claim a live production deployment."];
+node [shape=box, style="rounded,filled", margin="0.24,0.18"];
+subgraph cluster_client {label="PRESENTATION | Browser"; fontsize=18; color="#93c5fd"; style=rounded;
+spa [fillcolor="#eff6ff", label="React 19 / Vite 8 SPA
+React Router, Axios, Leaflet
+Fleet role workspaces
+Separate Super Admin portal
+Public registration and Support Center"];
+}
+subgraph cluster_api {label="APPLICATION | Laravel 13 / PHP"; fontsize=18; color="#86efac"; style=rounded;
+public [fillcolor="#f0fdf4", label="Public routes
+Login / registration / activation
+Concern submission
+Geography and opt-in suggestions"];
+gate [fillcolor="#f0fdf4", label="Protected API boundary
+Sanctum bearer authentication
+Active-account and platform-scope guards
+Role / ownership / state checks
+Barangay scoping; input validation"];
+domain [fillcolor="#f0fdf4", label="Controllers and domain logic
+Fleet, tickets and verification
+Schedules, records and readiness
+Users, concerns and platform controls
+Eloquent models; transactions / locks"];
+files [fillcolor="#f0fdf4", label="Managed file handling
+Private object references
+Temporary signed links / renewal"];
+schedule [fillcolor="#f0fdf4", label="Laravel scheduler
+Every minute: due schedules -> proposals
+Hourly: expire unclaimed Admin signups
+Daily: notification pruning"];
+}
+subgraph cluster_data {label="PERSISTENCE"; fontsize=18; color="#c4b5fd"; style=rounded;
+db [shape=cylinder, fillcolor="#f5f3ff", label="Relational database
+SQLite for local/testing
+PostgreSQL: planned deployment
+Tenant fleet + platform records
+Sanctum tokens; activity/history"];
+storage [shape=cylinder, fillcolor="#f5f3ff", label="Private files
+Supabase Storage when configured
+Persistent local private fallback
+Photos, documents, repair evidence"];
+}
+subgraph cluster_external {label="EXTERNAL SERVICES"; fontsize=18; color="#fcd34d"; style=rounded;
+mail [fillcolor="#fffbeb", label="Configured mail transport
+Activation code and account emails
+Current AccountMail sends synchronously"];
+maps [fillcolor="#fffbeb", label="Map / geocoding providers
+Esri map and satellite tiles
+Reverse-geocoding services"];
+photon [fillcolor="#fffbeb", label="Photon / OpenStreetMap
+Opt-in address suggestions
+Manual-entry fallback"];
+}
+spa -> public [label="JSON / HTTP(S)
+public actions"];
+spa -> gate [label="JSON / HTTP(S)
+Bearer token"];
+public -> domain [label="validated commands"];
+gate -> domain [label="authorized commands"];
+domain -> db [label="Eloquent / SQL"];
+domain -> files [label="upload / resolve"];
+files -> storage [label="private bytes"];
+files -> spa [label="signed download link", style=dashed, constraint=false];
+domain -> mail [label="activation and account mail"];
+spa -> maps [label="tiles / location lookup", constraint=false];
+public -> photon [label="rate-limited
+suggestion lookup"];
+schedule -> domain [label="scheduled commands", constraint=false];
+}
