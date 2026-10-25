@@ -16487,7 +16487,6 @@ html[data-theme="dark"] :is(.schedule-detail-vehicle-photo,.schedule-detail-coun
 
 .workflow-status-controls { display:flex; flex-wrap:wrap; align-items:flex-end; gap:8px; padding:0; border:0; background:transparent; color:var(--text); }
 .workflow-status-controls .multi-select-dropdown { min-width:120px; }
-.workflow-status-controls .ghost-button { min-height:34px; padding:6px 10px; font-size:.75rem; }
 
 .schedule-table-actions .sch-card-actions { margin: 0; padding: 0; border: 0; justify-content: center; }
 .sch-card-actions .sch-action svg { flex-shrink: 0; display: block; }
