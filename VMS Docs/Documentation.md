@@ -1,6 +1,6 @@
 # Barangay Vehicle Management System (VMS) — Documentation
 
-Requirements and audit status reviewed: **24 October 2026**, against revision `0027023`. See [the current audit](System-Audit-2026-10-24.md) for six open implementation findings and corrected documentation discrepancies. UI documentation reviewed: **23 October 2026**. See [UI updates and branch status](../docs/archive/vms/UI-UPDATES-2026-10-23.md) for current presentation changes, separate branch delivery, and verification limits.
+Reviewed **25 October 2026** against integrated revision `130fe38` on `dev-paul`. See [current revision notes](Current-Revision-2026-10-25.md) for current behavior, audit disposition and verification limits.
 
 ## 1. What this system is
 
@@ -8,7 +8,7 @@ The Barangay VMS is a fleet management platform for a barangay's emergency respo
 
 It is explicitly **not** a dispatch/operations system, a document-compliance tracker, or a mileage-based service planner. Vehicle dispatch, the Dispatched badge/action, Usage Log and temporary-release feature have been removed. Availability, physical condition and verified readiness remain separate. Sending a vehicle to an external shop remains part of the repair workflow.
 
-See `System-Architecture.svg` in this folder for the full component diagram.
+See `System-Architecture.svg` for the component overview. For diagram revision, use [ERD.md](ERD.md), [Use-Case-Diagram.md](Use-Case-Diagram.md) and [requirements traceability](Requirements-Traceability.md). The ERD distinguishes logical associations from physical constraints.
 
 ## 2. Tech stack
 
@@ -29,7 +29,7 @@ The frontend is almost entirely one large component tree (`frontend-spa/src/view
 | **Admin** | One Barangay | Runs the fleet: reviews and approves/declines Custodian-proposed tickets and schedules, assigns mechanics, handles external-shop work, approves accounts, manages vehicle types/locations/master data, and generates reports. Admin does **not** create tickets directly or verify repairs — see §5. |
 | **Custodian** | One Barangay | Files Issue Reports, is the **only** role that creates a Maintenance Ticket (by proposing one for Admin's approval), registers/imports vehicles as a standard role duty, verifies a mechanic's completed repair, records preventive-maintenance checks and schedules. |
 | **Maintenance Personnel** | One Barangay | Can file a technical Issue Report (routed to the Custodian, who still owns ticket creation), repairs assigned sub-issues, logs work and parts used. |
-| **Super Admin** | Platform-wide | Manages Barangays and their user accounts, approves each Barangay's first-ever Admin, regenerates registration codes, handles concern reports, can impersonate accounts for support. Sees **no** fleet data — vehicles, tickets, and issues are intentionally out of its scope. |
+| **Super Admin** | Platform-wide | Manages Barangays and their user accounts, approves each Barangay's first-ever Admin, regenerates registration codes, handles concern reports, handles platform support; workspace switching uses the dedicated switcher account. Sees **no** fleet data — vehicles, tickets, and issues are intentionally out of its scope. |
 
 The intended operational boundary for Admin, Custodian and Maintenance Personnel is their own Barangay. Vehicle-rooted query scopes enforce that boundary for many records, but shared-catalog writes and issue/file access have confirmed open exceptions (AUD-24-01/02/03); full isolation must not be claimed as accepted yet. A user can hold more than one of these three roles at once (e.g. a small Barangay's one staff member covering both Custodian and Maintenance Personnel duties).
 
@@ -132,9 +132,9 @@ Use [the current document index](README.md) to choose the right reference.
 - The Custodian closes tickets: verification is a popup (Approve / Disapprove with reason); "Tickets Ready to Close" is on the Custodian page; closing notifies the Admin. Verification is never done by Admin or by the repairer.
 - Assigned-personnel avatars on tickets, schedules and records; completion counts/stages on ticket cards and a progress bar/percentage in the ticket list; inline per-field validation messages in the shared form.
 
-## 11. Current audit findings and acceptance - 24 October 2026
+## 11. Audit baseline and acceptance
 
-The source review and isolated probes confirmed six implementation findings, all still open:
+The 24 October probes recorded six findings at `0027023`. The table preserves their original descriptions. Later integrated code rejects future completion dates; the remaining controls require their specific acceptance retests. See [current audit disposition](Current-Revision-2026-10-25.md#audit-disposition).
 
 | ID | Severity | Current problem |
 |---|---|---|
@@ -149,4 +149,4 @@ Documentation discrepancies AUD-24-07/08 are now aligned with code: registration
 
 Verification record: the merged revision passed 480 backend tests (2,245 assertions), frontend lint/build and targeted desktop/mobile checks. A later six-test isolated investigation (36 assertions), plus a CSV-generation probe, reproduced the findings above. Passing those probes confirmed the defective behavior, not its resolution. The investigation files were removed and no application fixes were made in this documentation update.
 
-The current requirements PDF is `VMS-Must-Haves-Updated.pdf`, regenerated from `Must-Haves.md`. Older audit documents and the earlier generated DOCX are historical artifacts in `docs/archive/vms/`. Deployment storage policy, persistence, recovery and representative-user acceptance still need target-host evidence; this is not an exhaustive penetration-test certification.
+The editable requirements source is `Must-Haves.md`; its PDF is an earlier export and was not regenerated in this update. Older audit documents and the earlier generated DOCX are historical artifacts in `docs/archive/vms/`. Deployment storage policy, persistence, recovery and representative-user acceptance still need target-host evidence; this is not an exhaustive penetration-test certification.
