@@ -11,7 +11,9 @@ use App\Models\ConcernReport;
 use App\Models\RegistrationSetting;
 use App\Models\User;
 use App\Services\BarangayGeography;
+use App\Services\PsgcRegions;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
@@ -67,11 +69,9 @@ class SuperAdminController extends Controller
         $this->requireAbility($request, 'barangay.view_all', 'Only a Super Admin can perform this action.');
 
         return Barangay::with(['city.province', 'registrationSetting'])
-            // Reference-only PSGC rows are registration choices, not platform tenants.
-            // Keep manually added barangays visible before their first staff joins.
-            ->where(function ($query) {
-                $query->whereNull('psgc_code')->orWhereNotNull('provisioned_at')->orWhereHas('users')->orWhereHas('registrationSetting');
-            })
+            // A registration code on its own doesn't count: BarangaySeeder pre-issues
+            // codes for all of Mandaue City, and those barangays were never onboarded.
+            ->registered()
             ->select(['id', 'name', 'psgc_code', 'city_id', 'boundary_status', 'boundary_source', 'boundary_verified_by', 'pending_boundary', 'pending_boundary_source', 'updated_at'])
             ->selectRaw('CASE WHEN boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
             ->withCount([
@@ -123,6 +123,108 @@ class SuperAdminController extends Controller
                     'updated_at' => $b->updated_at,
                 ];
             });
+    }
+
+    /**
+     * Server-side, paginated search over registered barangays nationwide,
+     * for screens that must not pull every barangay into the browser.
+     * Location filters use stable ids (and the PSGC region prefix), never
+     * names, so same-named barangays in different cities stay distinct.
+     */
+    public function searchBarangays(Request $request)
+    {
+        $this->requireAbility($request, 'barangay.view_all', 'Only a Super Admin can perform this action.');
+        $data = $request->validate($this->locationFilterRules() + [
+            'q' => ['nullable', 'string', 'max:100'],
+            'barangay_id' => ['nullable', 'integer'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', Rule::in([10, 25, 50])],
+        ]);
+
+        $query = $this->registeredLocations($data)
+            ->select(['barangays.id', 'barangays.name', 'barangays.psgc_code', 'barangays.city_id', 'cities.name as located_city', 'cities.code as located_city_code', 'cities.province_id as located_province_id', 'provinces.name as located_province'])
+            ->selectRaw('CASE WHEN barangays.boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
+            ->selectRaw('CASE WHEN barangays.pending_boundary IS NULL THEN 0 ELSE 1 END AS pending_present')
+            ->withExists('registrationSetting as code_issued');
+        if (!empty($data['barangay_id'])) $query->where('barangays.id', $data['barangay_id']);
+        if (($search = trim($data['q'] ?? '')) !== '') {
+            $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search)).'%';
+            $query->where(function ($query) use ($pattern) {
+                foreach (['barangays.name', 'cities.name', 'provinces.name', 'barangays.psgc_code'] as $column) {
+                    $query->orWhereRaw("LOWER({$column}) LIKE ? ESCAPE '!'", [$pattern]);
+                }
+            });
+        }
+
+        return $query->orderBy('barangays.name')->orderBy('cities.name')->orderBy('barangays.id')
+            ->paginate($data['per_page'] ?? 25)->withQueryString()
+            ->through(function ($b) {
+                $region = PsgcRegions::codeForCity($b->located_city_code);
+
+                return [
+                    'id' => $b->id,
+                    'name' => $b->name,
+                    'psgc_code' => $b->psgc_code,
+                    'city_id' => $b->city_id,
+                    'city_name' => $b->located_city,
+                    'province_id' => $b->located_province_id,
+                    'province_name' => $b->located_province,
+                    'region_code' => $region,
+                    'region_name' => PsgcRegions::name($region),
+                    'has_registration_code' => (bool) $b->code_issued,
+                    'has_boundary' => (bool) $b->boundary_present,
+                    'has_pending_boundary' => (bool) $b->pending_present,
+                ];
+            });
+    }
+
+    /**
+     * Dependent Region > Province > City > Barangay choices, limited to
+     * places that actually contain a registered barangay so no filter ever
+     * leads to an empty list. Barangays are listed only within one city.
+     */
+    public function barangayLocations(Request $request)
+    {
+        $this->requireAbility($request, 'barangay.view_all', 'Only a Super Admin can perform this action.');
+        $data = $request->validate($this->locationFilterRules());
+
+        $rows = $this->registeredLocations([])
+            ->get(['barangays.id', 'barangays.name', 'cities.id as located_city_id', 'cities.name as located_city', 'cities.code as located_city_code', 'provinces.id as located_province_id', 'provinces.name as located_province']);
+        $regionOf = fn ($row) => PsgcRegions::codeForCity($row->located_city_code);
+        $inRegion = fn ($row) => empty($data['region']) || $regionOf($row) === $data['region'];
+        $inProvince = fn ($row) => $inRegion($row) && (empty($data['province_id']) || $row->located_province_id === (int) $data['province_id']);
+
+        return response()->json([
+            'regions' => $rows->map($regionOf)->filter()->unique()->sort()->values()
+                ->map(fn ($code) => PsgcRegions::all()[$code] ?? ['code' => $code, 'name' => "Region {$code}", 'long_name' => "Region {$code}"])->values(),
+            'provinces' => $rows->filter($inRegion)->unique('located_province_id')->sortBy('located_province')->values()
+                ->map(fn ($row) => ['id' => $row->located_province_id, 'name' => $row->located_province, 'region_code' => $regionOf($row)]),
+            'cities' => $rows->filter($inProvince)->unique('located_city_id')->sortBy('located_city')->values()
+                ->map(fn ($row) => ['id' => $row->located_city_id, 'name' => $row->located_city, 'province_id' => $row->located_province_id]),
+            'barangays' => empty($data['city_id']) ? [] : $rows->where('located_city_id', (int) $data['city_id'])->sortBy('name')->values()
+                ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name]),
+        ]);
+    }
+
+    private function locationFilterRules(): array
+    {
+        return [
+            'region' => ['nullable', 'regex:/^\d{2}$/'],
+            'province_id' => ['nullable', 'integer'],
+            'city_id' => ['nullable', 'integer'],
+        ];
+    }
+
+    private function registeredLocations(array $filters)
+    {
+        $query = Barangay::registered()
+            ->join('cities', 'cities.id', '=', 'barangays.city_id')
+            ->leftJoin('provinces', 'provinces.id', '=', 'cities.province_id');
+        if (!empty($filters['region'])) $query->where('cities.code', 'like', $filters['region'].'%');
+        if (!empty($filters['province_id'])) $query->where('cities.province_id', $filters['province_id']);
+        if (!empty($filters['city_id'])) $query->where('barangays.city_id', $filters['city_id']);
+
+        return $query;
     }
 
     /**
@@ -669,18 +771,28 @@ class SuperAdminController extends Controller
         $this->requireAbility($request, 'barangay.view_registration_code', 'Only a Super Admin can perform this action.');
 
         $setting = RegistrationSetting::for($barangay->id);
+        $this->markProvisioned($barangay);
+        if ($setting->wasRecentlyCreated) {
+            $this->log($request, 'Create', "Issued the staff registration code for {$barangay->name}.");
+        }
 
-        return response()->json(['staff_code' => $setting->staff_code, 'updated_at' => $setting->updated_at]);
+        return response()->json(['staff_code' => $setting->staff_code, 'created_at' => $setting->created_at, 'updated_at' => $setting->updated_at]);
     }
 
     public function regenerateRegistrationCode(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'barangay.regenerate_registration_code', 'Only a Super Admin can perform this action.');
 
-        $setting = RegistrationSetting::regenerateFor($barangay->id);
+        // Optional so existing callers keep working; the portal sends the
+        // version it is showing so a code someone else just changed is
+        // never silently replaced.
+        $data = $request->validate(['expected_updated_at' => ['nullable', 'date']]);
+        $setting = RegistrationSetting::regenerateFor($barangay->id, isset($data['expected_updated_at']) ? Carbon::parse($data['expected_updated_at']) : null);
+        abort_if($setting === null, 409, 'This registration code was changed by someone else a moment ago. Reload it to see the current code before regenerating.');
+        $this->markProvisioned($barangay);
         $this->log($request, 'Edit', "Regenerated the staff registration code for {$barangay->name}.");
 
-        return response()->json(['staff_code' => $setting->staff_code, 'updated_at' => $setting->updated_at]);
+        return response()->json(['staff_code' => $setting->staff_code, 'created_at' => $setting->created_at, 'updated_at' => $setting->updated_at]);
     }
 
     /**
@@ -717,6 +829,14 @@ class SuperAdminController extends Controller
         // requests pagination so search covers the complete authorized history.
         if ($request->boolean('paginate')) return $query->paginate($data['per_page'] ?? 25)->withQueryString();
         return $query->limit(200)->get();
+    }
+
+    // A Super Admin issuing a code onboards that barangay onto the platform.
+    private function markProvisioned(Barangay $barangay): void
+    {
+        if ($barangay->provisioned_at === null) {
+            $barangay->update(['provisioned_at' => now()]);
+        }
     }
 
     private function boundaryStatus(Barangay $barangay): string
