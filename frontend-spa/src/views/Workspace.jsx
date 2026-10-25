@@ -237,17 +237,13 @@ function defaultWorkflowStatuses(module, user) {
   return [];
 }
 
-function WorkflowStatusControls({ options, selected, onChange, defaults, showShortcuts = true }) {
+function WorkflowStatusControls({ options, selected, onChange }) {
   const allowed = options.map((option) => typeof option === 'object' ? option.value : option);
   const statuses = selected.filter((value) => allowed.includes(value));
   return <div className="workflow-status-controls" role="group" aria-label="Work status filters">
     <div className="filter-date-group"><span>Status</span>
       <MultiSelectDropdown placeholder="All statuses" options={options} selected={statuses} onChange={onChange} />
     </div>
-    {showShortcuts && <>
-      <button type="button" className="ghost-button" onClick={() => onChange([...defaults])}>Ongoing only</button>
-      <button type="button" className="ghost-button" onClick={() => onChange([])}>All statuses</button>
-    </>}
   </div>;
 }
 
@@ -3734,7 +3730,7 @@ function Workspace() {
           <PaginatedTable
             columns={issueColumnChooser.visibleColumns}
             onReorderColumn={issueColumnChooser.reorderColumn}
-            emptyMessage="No issue reports match the current filters. Clear the filters or choose All statuses."
+            emptyMessage="No issue reports match the current filters. Clear the filters, including Status."
             rows={visibleRows}
             onRowClick={(row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`)}
           />
@@ -3955,7 +3951,7 @@ function Workspace() {
           }
           filterBar={
             <FilterBar
-          statusControls={<WorkflowStatusControls options={['Pending Approval','Scheduled','Declined','AwaitingVerification','Completed','Cancelled']} selected={filterStatus} onChange={setFilterStatus} defaults={defaultWorkflowStatuses('schedules', user)} />}
+          statusControls={<WorkflowStatusControls options={['Pending Approval','Scheduled','Declined','AwaitingVerification','Completed','Cancelled']} selected={filterStatus} onChange={setFilterStatus} />}
               categories={lookups.categories}
               vehicles={lookups.vehicles}
               filterCategory={filterCategory}
@@ -4003,7 +3999,7 @@ function Workspace() {
             <PaginatedCardGrid
               items={scheduleRows}
               keyOf={(row) => row.schedule_id}
-              emptyMessage="No schedules match the selected filters. Choose All statuses to include history."
+              emptyMessage="No schedules match the selected filters. Clear the Status filter to include history."
               renderItem={(row) => (
                 <MaintenanceScheduleCard
                   row={row}
@@ -4026,7 +4022,7 @@ function Workspace() {
             <PaginatedTable
               columns={scheduleColumnChooser.visibleColumns}
               onReorderColumn={scheduleColumnChooser.reorderColumn}
-              emptyMessage="No schedules match the selected filters. Choose All statuses to include history."
+              emptyMessage="No schedules match the selected filters. Clear the Status filter to include history."
               rows={scheduleRows}
             />
           )}
@@ -14733,7 +14729,7 @@ function CustodianVerificationModule({
       <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
       <section className="panel module-filter-panel">
         <FilterBar
-          statusControls={<WorkflowStatusControls options={TICKET_VERIFICATION_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Active','Pending']} />}
+          statusControls={<WorkflowStatusControls options={TICKET_VERIFICATION_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} />}
           categories={categories}
           vehicles={vehicles}
           filterCategory={filterCategory}
@@ -14922,7 +14918,7 @@ function MechanicWorkOrderModule({
           />
           <section className="panel module-filter-panel">
             <FilterBar
-          statusControls={<WorkflowStatusControls showShortcuts={false} options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} />}
+          statusControls={<WorkflowStatusControls options={TICKET_WORK_ORDER_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} />}
               categories={categories}
               vehicles={vehicles}
               filterCategory={filterCategory}
