@@ -1,0 +1,44 @@
+.account-cascade { display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; }
+.account-cascade :is(select,.searchable-select) { width:auto; min-width:105px; max-width:180px; height:34px; padding:5px 8px; border:1px solid #cbd9ed; border-radius:6px; background:#fff; color:#1e3a5f; font:inherit; font-size:12px; }
+.account-cascade :is(select,.searchable-select):focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
+.account-cascade :is(select,.searchable-select):disabled { opacity:.6; }
+.account-cascade-error { flex-basis:100%; font-size:12px; }
+.account-cascade-error { color:#b91c1c; }
+.topbar-left:has(.account-cascade) { flex-wrap:wrap; min-width:0; }
+@media(max-width:800px) {
+  .topbar:has(.account-cascade) { flex-wrap:wrap; }
+  .topbar-left:has(.account-cascade) { flex:1 1 100%; width:100%; }
+  .topbar .account-cascade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+  .account-cascade :is(select,.searchable-select) { width:100%; max-width:none; min-width:0; min-height:40px; }
+  .account-cascade-error { grid-column:1 / -1; }
+}
+
+@media(max-width:800px) {
+  html .topbar:has(.account-cascade) { height:auto !important; min-height:64px; padding:8px 12px !important; align-items:flex-start !important; }
+  html .topbar:has(.account-cascade) .topbar-left { flex:1 1 0 !important; width:auto !important; }
+  html .topbar:has(.account-cascade) .topbar-right { align-self:flex-start; padding-top:4px; }
+  html:has(.topbar .account-cascade) .workspace { padding-top:var(--topbar-height, 156px) !important; }
+  html:has(.topbar .account-cascade) .workspace > .sidebar { top:var(--topbar-height, 156px) !important; }
+}
+
+.account-user-control { display:flex; align-items:center; gap:6px; min-width:0; max-width:350px; }
+.account-user-control :is(select,.searchable-select) { width:220px; min-width:0; max-width:240px; text-overflow:ellipsis; }
+.searchable-select-menu.account-user-menu > button { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.account-impersonate-button { min-height:34px; padding:6px 12px; border:1px solid #2563eb; border-radius:6px; background:#2563eb; color:#fff; font:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
+.account-user-control .account-impersonate-button:disabled { opacity:1; cursor:default; }
+.account-impersonate-button:focus-visible { outline:2px solid #60a5fa; outline-offset:2px; }
+@media(max-width:800px) {
+  .account-user-control { grid-column:1 / -1; max-width:none; }
+  .account-user-control :is(select,.searchable-select) { flex:1; width:0; }
+  .account-impersonate-button { min-height:40px; }
+}
+
+.account-cascade .searchable-select { padding:0; border:0; background:transparent; }
+.account-cascade .searchable-select > input[role="combobox"] { height:34px; min-height:34px; border:1px solid #cbd9ed; border-radius:6px; background:#fff; color:#1e3a5f; font:inherit; font-size:12px; padding:5px 26px 5px 8px; }
+@media(max-width:800px) { .account-cascade .searchable-select > input[role="combobox"] { height:40px; min-height:40px; } }
+
+
+.account-selector { display:flex; min-width:0; }
+.account-user-control { align-items:flex-end; }
+.account-cascade { align-items:flex-end; }
+@media(max-width:800px) { .account-user-control > .account-selector { flex:1; } .account-user-control .account-selector .searchable-select { width:100%; } }

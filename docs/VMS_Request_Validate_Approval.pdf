@@ -1,0 +1,325 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [7 0 R 8 0 R 9 0 R 10 0 R 11 0 R] /Count 5 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 12 0 R >>
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 13 0 R >>
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 14 0 R >>
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 15 0 R >>
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 16 0 R >>
+endobj
+12 0 obj
+<< /Length 1041 >>
+stream
+q 0.13 0.15 0.18 rg BT /F2 32 Tf 1 0 0 1 208.91 560.00 Tm (VMS System) Tj ET Q
+q 0.80 0.83 0.88 RG 1 w 216.00 545.00 m 396.00 545.00 l S Q
+q 0.145 0.388 0.922 rg BT /F2 15 Tf 1 0 0 1 185.19 512.00 Tm (Request  ->  Validate  ->  Approval) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F1 12.5 Tf 1 0 0 1 233.74 486.00 Tm (15 Governance Scenarios) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F1 12.5 Tf 1 0 0 1 219.18 468.00 Tm (Dataflows & Sample Workflows) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 10 Tf 1 0 0 1 108.97 410.00 Tm (Every action runs on a double-validation, single-approval spine, with separation of duties:) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F4 10.5 Tf 1 0 0 1 128.61 388.00 Tm (REQUEST  ->  VALIDATE \(1\)  ->  \(work\)  ->  VALIDATE \(2\)  ->  APPROVAL) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F1 10 Tf 1 0 0 1 226.51 366.00 Tm (requester  !=  validator  !=  approver) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F1 10.5 Tf 1 0 0 1 235.39 150.00 Tm (For Capstone Project Defense) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F1 10.5 Tf 1 0 0 1 249.77 132.00 Tm (Version 1.0  |  July 2026) Tj ET Q
+endstream
+endobj
+13 0 obj
+<< /Length 6612 >>
+stream
+q 0.145 0.388 0.922 rg BT /F2 14 Tf 1 0 0 1 54.00 724.00 Tm (A. Core Repair Pipeline) Tj ET Q
+q 0.145 0.388 0.922 RG 1.4 w 54.00 718.00 m 558.00 718.00 l S Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 700.00 Tm (1) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 700.00 Tm (Standard reactive repair \(the full happy path\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 610.50 504.00 71.50 re f
+q 0.145 0.388 0.922 rg BT /F4 8 Tf 1 0 0 1 62.00 667.00 Tm (REQ:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 667.00 Tm ([Sarah/Custodian files report]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 254.00 667.00 Tm ( -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 273.20 667.00 Tm ([Paul/Admin creates ticket]) Tj ET Q
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 655.50 Tm (VALIDATE\(1\):) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 124.40 655.50 Tm ([Sarah inspects -> "Needs Maintenance" -> sub-issue]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 374.00 655.50 Tm ( -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 393.20 655.50 Tm ([Paul assigns James]) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 644.00 Tm ([James repairs]) Tj ET Q
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 632.50 Tm (VALIDATE\(2\):) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 124.40 632.50 Tm ([Sarah functional test -> all Pass -> Approved]) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 621.00 Tm (APPROVAL:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 621.00 Tm ([Paul confirms -> Done]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 220.40 621.00 Tm ( -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 239.60 621.00 Tm ([Paul closes ticket]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 335.60 621.00 Tm ( -> vehicle Available) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 600.50 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 588.50 Tm (Sarah notices Ambulance 04's brakes feel soft and files an Issue Report \(severity High\). Paul creates Ticket #8 and) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 575.90 Tm (assigns Sarah to inspect. She confirms it's real \("Needs Maintenance"\), logs sub-issue "Brake pads." Paul assigns) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 563.30 Tm (James, who replaces the pads and logs the work. Sarah road-tests it -- all checks pass, she Approves. Paul gives final) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 550.70 Tm (Confirmation; Ticket #8 closes and Ambulance 04 returns to Available.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 524.10 Tm (2) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 524.10 Tm (False alarm \(Validate \(1\) kills the request\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 457.60 504.00 48.50 re f
+q 0.145 0.388 0.922 rg BT /F4 8 Tf 1 0 0 1 62.00 491.10 Tm (REQ:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 491.10 Tm ([Lisa files report]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 201.20 491.10 Tm ( -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 220.40 491.10 Tm ([Paul creates ticket]) Tj ET Q
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 479.60 Tm (VALIDATE\(1\):) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 124.40 479.60 Tm ([Lisa inspects -> "No Issues" -> NO sub-issue created]) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 468.10 Tm (APPROVAL:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 468.10 Tm ([Paul confirms & closes]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 225.20 468.10 Tm ( -> Issue Report -> Resolved) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 447.60 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 435.60 Tm (Lisa reports "Firetruck 2 overheating." Paul opens Ticket #9. On inspection, Lisa finds the temperature gauge normal) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 423.00 Tm (and coolant full -- a sensor glitch, not a real fault. She submits "No Issues" \(no sub-issue\). Paul reviews, agrees, and) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 410.40 Tm (closes the ticket with no repair. The report is marked Resolved.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 383.80 Tm (3) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 383.80 Tm (Multiple sub-issues from one inspection \(fan-out\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 294.30 504.00 71.50 re f
+q 0.145 0.388 0.922 rg BT /F4 8 Tf 1 0 0 1 62.00 350.80 Tm (REQ:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 350.80 Tm ([Sarah files "brake problem"]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 249.20 350.80 Tm ( -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 268.40 350.80 Tm ([Paul creates ticket]) Tj ET Q
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 339.30 Tm (VALIDATE\(1\):) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 124.40 339.30 Tm ([Sarah inspects -> finds 2 root causes -> 2 sub-issues]) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 327.80 Tm ([James -> pads]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 182.00 327.80 Tm ( + ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 196.40 327.80 Tm ([David -> fluid line]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 297.20 327.80 Tm (   <- two independent tracks) Tj ET Q
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 316.30 Tm (VALIDATE\(2\):) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 124.40 316.30 Tm ([Sarah verifies each separately]) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 304.80 Tm (APPROVAL:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 304.80 Tm ([Paul confirms each]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 206.00 304.80 Tm ( - ticket closes only when BOTH Done) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 284.30 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 272.30 Tm (Sarah's brake inspection uncovers two causes -- worn pads and a leaking fluid line. She logs them as two sub-issues) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 259.70 Tm (under Ticket #8. Paul assigns James to the pads and David to the line. Each is repaired, verified, and confirmed on its) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 247.10 Tm (own timeline; the ticket stays Active until both hit Done, then Paul closes it.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 14 Tf 1 0 0 1 54.00 210.50 Tm (B. Work Outside the Normal Pipeline) Tj ET Q
+q 0.145 0.388 0.922 RG 1.4 w 54.00 204.50 m 558.00 204.50 l S Q
+endstream
+endobj
+14 0 obj
+<< /Length 6470 >>
+stream
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 734.00 Tm (4) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 734.00 Tm (Emergency field repair \(work-first -- engine dies mid-drive\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 656.00 504.00 60.00 re f
+q 0.42 0.45 0.5 rg BT /F4 8 Tf 1 0 0 1 62.00 701.00 Tm (WORK:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 701.00 Tm ([Driver calls James]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 206.00 701.00 Tm ( -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 225.20 701.00 Tm ([James repairs in field, logs Standalone Record]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 62.00 689.50 Tm (          progress = Assigned \(NOT Completed\) - personnel forced to James himself) Tj ET Q
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 678.00 Tm (VALIDATE:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 678.00 Tm ([Precious inspects the repair -> Passed]) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 666.50 Tm (APPROVAL:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 666.50 Tm ([Paul confirms -> progress = Completed]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 297.20 666.50 Tm ( -> vehicle Available) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 646.00 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 634.00 Tm (Ambulance 06's engine fails on a route; the driver phones James, who does a field repair. James logs a Standalone) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 621.40 Tm (Maintenance Record -- but the system parks it at "Assigned," not done. Precious \(a different person\) inspects and) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 608.80 Tm (verifies it Passed; only then can Paul confirm it Completed. James cannot certify his own work -- the) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 596.20 Tm (Request->Validate->Approval rule holds even when the work jumps the queue.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 569.60 Tm (5) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 569.60 Tm (Preventive scheduled maintenance \(the one no-gate exception\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 514.60 504.00 37.00 re f
+q 0.145 0.388 0.922 rg BT /F4 8 Tf 1 0 0 1 62.00 536.60 Tm (REQ:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 90.80 536.60 Tm ([Paul schedules "Oil change, every 6 mo"]) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F4 8 Tf 1 0 0 1 62.00 525.10 Tm (WORK:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 90.80 525.10 Tm ([James marks Done]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 177.20 525.10 Tm ( -> Record = Completed IMMEDIATELY + next occurrence auto-created) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 504.60 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 492.60 Tm (Paul schedules a recurring 6-month oil change for Ambulance 04, assigned to James. On the due date James performs) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 480.00 Tm (it and clicks "Mark Done" -- the record is instantly Completed \(no verify/confirm\), and the system auto-queues the next) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 467.40 Tm (one for 6 months out. Deliberately lightweight: routine, low-risk, planned work needs no independent validation.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 14 Tf 1 0 0 1 54.00 430.80 Tm (C. Rework & Correction Loops) Tj ET Q
+q 0.145 0.388 0.922 RG 1.4 w 54.00 424.80 m 558.00 424.80 l S Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 406.80 Tm (6) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 406.80 Tm (Rejected repair \(Validate \(2\) bounces it back\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 351.80 504.00 37.00 re f
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 62.00 373.80 Tm ([James repairs]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 134.00 373.80 Tm ( -> VALIDATE\(2\): ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 215.60 373.80 Tm ([Sarah functional test -> a check FAILS -> Rejected]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 62.00 362.30 Tm (   -> sub-issue -> Under Repair \(back to James\) -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 306.80 362.30 Tm ([James redoes it]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 388.40 362.30 Tm ( -> re-verify) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 341.80 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 329.80 Tm (James replaces the pads, but on Sarah's road test the brakes still pull left -- she marks that check Fail, so the whole) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 317.20 Tm (verification is Rejected. The sub-issue drops back to Under Repair automatically and James is notified to redo it. No) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 304.60 Tm (approval is ever reached until a clean pass.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 278.00 Tm (7) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 278.00 Tm (Add sub-issue mid-repair \(scope grows during work\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 211.50 504.00 48.50 re f
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 62.00 245.00 Tm ([James, repairing brakes, spots a leaking differential]) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F4 8 Tf 1 0 0 1 62.00 233.50 Tm (REQ:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 86.00 233.50 Tm ([James adds a new sub-issue on the SAME ticket]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 311.60 233.50 Tm ( -> status Open) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 62.00 222.00 Tm (     -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 100.40 222.00 Tm ([Paul assigns it out]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 201.20 222.00 Tm ( -> its own validate->approve track) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 201.50 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 189.50 Tm (While under Ambulance 04 for the brakes, James notices the rear differential leaking oil -- unrelated. He can't open a) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 176.90 Tm (new ticket \(Admin-only\), so he adds a sub-issue "Differential leak" onto Ticket #8. Ticket progress recalculates \(now 1) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 164.30 Tm (of 2\); Paul assigns it and it runs its own cycle. Only the ticket's own Custodian/Mechanic can add -- never Admin.) Tj ET Q
+endstream
+endobj
+15 0 obj
+<< /Length 5696 >>
+stream
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 734.00 Tm (8) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 734.00 Tm (Reassign mechanic mid-repair) Tj ET Q
+0.955 0.965 0.982 rg 54.00 679.00 504.00 37.00 re f
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 62.00 701.00 Tm ([James is 60% done, falls ill]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 206.00 701.00 Tm ( -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 225.20 701.00 Tm ([Paul reassigns to David]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 62.00 689.50 Tm (   work log preserved - ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 177.20 689.50 Tm ([David]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 210.80 689.50 Tm ( continues -> verify -> approve) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 669.00 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 657.00 Tm (James is halfway through a transmission rebuild on Firetruck 2 when he's out sick for two weeks. Paul reassigns the) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 644.40 Tm (sub-issue to David, who reads James's work log, finishes the job, and submits for verification. The audit trail shows both) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 631.80 Tm (mechanics worked on it.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 605.20 Tm (9) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 68.01 605.20 Tm (Admin unconfirms a Done sub-issue \(post-approval adjustment\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 538.70 504.00 48.50 re f
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 62.00 572.20 Tm ([Sub-issue is Done/Confirmed]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 201.20 572.20 Tm ( -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 220.40 572.20 Tm ([Paul realizes cost was wrong]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 62.00 560.70 Tm (   -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 90.80 560.70 Tm ([Paul clicks "Unconfirm" -> status back to For Confirmation]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 62.00 549.20 Tm (   -> ) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 90.80 549.20 Tm ([Paul re-confirms after fixing]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 239.60 549.20 Tm (   <- stays in Admin's hands, no re-verify) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 528.70 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 516.70 Tm (After confirming the brake repair, Paul spots he entered the wrong maintenance cost. He clicks "Unconfirm" on the) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 504.10 Tm (Done sub-issue, which pops it back to For Confirmation, corrects the figure, and re-confirms -- without dragging Sarah) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 491.50 Tm (through another verification.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 14 Tf 1 0 0 1 54.00 454.90 Tm (D. Decisions & Closures) Tj ET Q
+q 0.145 0.388 0.922 RG 1.4 w 54.00 448.90 m 558.00 448.90 l S Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 430.90 Tm (10) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 75.02 430.90 Tm (Defer -- can't fix now \(Approval of a decision\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 364.40 504.00 48.50 re f
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 397.90 Tm (VALIDATE\(1\):) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 124.40 397.90 Tm ([Sarah inspects -> real problem]) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 386.40 Tm (APPROVAL:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 386.40 Tm ([Paul defers with reason]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 230.00 386.40 Tm ( -> sub-issue -> Deferred) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 62.00 374.90 Tm (          -> auto-opens a follow-up Issue Report \(breadcrumb\)) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 354.40 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 342.40 Tm (Sarah confirms Firetruck 2 needs a new water pump, but it's on back-order for a month. Paul records a Deferral \("part) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 329.80 Tm (unavailable, ETA 4 weeks"\). The sub-issue is marked Deferred and the system auto-creates a follow-up report so it) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 317.20 Tm (resurfaces later.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 290.60 Tm (11) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 75.02 290.60 Tm (Decision close \(close early, defer the leftovers\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 224.10 504.00 48.50 re f
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 62.00 257.60 Tm ([Ticket has 3 sub-issues, only 1 Done]) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 246.10 Tm (APPROVAL:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 246.10 Tm ([Paul "Close as Decision"]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 234.80 246.10 Tm ( -> ticket Closed) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 62.00 234.60 Tm (          - the 2 unfinished sub-issues auto-marked Deferred) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 214.10 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 202.10 Tm (Ambulance 04's ticket has 3 sub-issues; only the brakes are done, and the barangay needs the vehicle back now. Paul) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 189.50 Tm (closes the ticket as a Decision -- the brake fix stands, the other two are recorded as Deferred with his reason, and) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 176.90 Tm (everyone \(Sarah + mechanics\) is notified.) Tj ET Q
+endstream
+endobj
+16 0 obj
+<< /Length 5289 >>
+stream
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 734.00 Tm (12) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 75.02 734.00 Tm (Admin resolves an issue report directly \(no ticket\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 679.00 504.00 37.00 re f
+q 0.145 0.388 0.922 rg BT /F4 8 Tf 1 0 0 1 62.00 701.00 Tm (REQ:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 701.00 Tm ([Lisa files a minor report]) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 689.50 Tm (APPROVAL:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 689.50 Tm ([Paul edits it straight to Resolved]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 282.80 689.50 Tm (   <- Admin authority, skips formal validate) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 669.00 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 657.00 Tm (Lisa reports a loose wiper that she then tightens herself. Paul, seeing it's trivial and already handled, edits the report) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 644.40 Tm (straight to Resolved without ever opening a ticket. Only Admin can short-circuit like this; a Custodian may only touch) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 631.80 Tm (their own still-Pending report.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 14 Tf 1 0 0 1 54.00 595.20 Tm (E. Asset Lifecycle) Tj ET Q
+q 0.145 0.388 0.922 RG 1.4 w 54.00 589.20 m 558.00 589.20 l S Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 571.20 Tm (13) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 75.02 571.20 Tm (Decommission \(Validate = a guard rule\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 504.70 504.00 48.50 re f
+q 0.145 0.388 0.922 rg BT /F4 8 Tf 1 0 0 1 62.00 538.20 Tm (REQ:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 538.20 Tm ([Paul requests decommission + reason]) Tj ET Q
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 526.70 Tm (VALIDATE:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 526.70 Tm ([System: any open ticket on this vehicle?]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 311.60 526.70 Tm ( -> if yes, BLOCKED) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 515.20 Tm (APPROVAL:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 515.20 Tm ([Paul]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 138.80 515.20 Tm ( -> Decommissioned - removed from all coverage counts) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 494.70 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 482.70 Tm (Firetruck Uno's chassis is rusted beyond safe repair. Paul clicks Decommission, but the system blocks him -- there's still) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 470.10 Tm (an Active ticket on it. He closes that as a Decision first, then decommissions with a reason. It drops out of the) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 457.50 Tm (readiness/coverage math; history is kept.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 430.90 Tm (14) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 75.02 430.90 Tm (Recommission) Tj ET Q
+0.955 0.965 0.982 rg 54.00 387.40 504.00 25.50 re f
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 62.00 397.90 Tm ([Paul restores a Decommissioned vehicle]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 254.00 397.90 Tm ( -> Available/Good - decommission fields cleared) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 377.40 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 365.40 Tm (A month later the barangay funds a full refurbishment of Firetruck Uno. Paul clicks Recommission; it returns to) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 352.80 Tm (Available/Good and rejoins the active fleet.) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F2 12 Tf 1 0 0 1 54.00 326.20 Tm (15) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F2 12 Tf 1 0 0 1 75.02 326.20 Tm (Readiness check \(pre-deployment validate -- the proactive gate\)) Tj ET Q
+0.955 0.965 0.982 rg 54.00 259.70 504.00 48.50 re f
+q 0.145 0.388 0.922 rg BT /F4 8 Tf 1 0 0 1 62.00 293.20 Tm (REQ:) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 81.20 293.20 Tm (      \(vehicle about to be relied on for emergency response\)) Tj ET Q
+q 0.706 0.325 0.035 rg BT /F4 8 Tf 1 0 0 1 62.00 281.70 Tm (VALIDATE:) Tj ET Q
+q 0.145 0.388 0.922 rg BT /F3 8 Tf 1 0 0 1 110.00 281.70 Tm ([Precious runs the readiness checklist]) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 297.20 281.70 Tm ( -> any Fail = NOT Ready) Tj ET Q
+q 0.082 0.502 0.239 rg BT /F4 8 Tf 1 0 0 1 62.00 270.20 Tm (APPROVAL:) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F3 8 Tf 1 0 0 1 105.20 270.20 Tm ( all Pass -> "Verified Ready to Respond" \(valid 24 hrs\)) Tj ET Q
+q 0.42 0.45 0.5 rg BT /F2 7.5 Tf 1 0 0 1 54.00 249.70 Tm (SAMPLE WORKFLOW) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 237.70 Tm (Before the shift, Precious runs Ambulance 06's readiness checklist -- fuel full, oxygen present, siren works, stretcher) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 225.10 Tm (aboard. All pass, so it's marked Verified Ready to Respond on the dashboard. This is the gate meant to catch a problem) Tj ET Q
+q 0.13 0.15 0.18 rg BT /F1 9.5 Tf 1 0 0 1 54.00 212.50 Tm (before a mid-drive failure like Scenario 4.) Tj ET Q
+endstream
+endobj
+xref
+0 17
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000147 00000 n 
+0000000244 00000 n 
+0000000346 00000 n 
+0000000441 00000 n 
+0000000541 00000 n 
+0000000698 00000 n 
+0000000855 00000 n 
+0000001012 00000 n 
+0000001170 00000 n 
+0000001328 00000 n 
+0000002422 00000 n 
+0000009087 00000 n 
+0000015610 00000 n 
+0000021359 00000 n 
+trailer
+<< /Size 17 /Root 1 0 R >>
+startxref
+26701
+%%EOF

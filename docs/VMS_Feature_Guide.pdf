@@ -1,0 +1,221 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Length 6402 >>
+stream
+0.043 0.42 0.47 rg 0 696 612 96 re f
+BT 1 1 1 rg /F2 22 Tf 1 0 0 1 54.00 740.00 Tm (Vehicle Management System) Tj ET
+BT 0.9 0.95 0.96 rg /F1 10.5 Tf 1 0 0 1 54.00 720.00 Tm (Feature Guide  -  Barangay Emergency Response Vehicle Management) Tj ET
+BT 0.78 0.88 0.9 rg /F1 9 Tf 1 0 0 1 54.00 706.00 Tm (Group 4   |   What the system does today, and what is planned) Tj ET
+0.043 0.42 0.47 rg 54 656 4 22 re f
+BT 0.043 0.42 0.47 rg /F2 15 Tf 1 0 0 1 66.00 664.00 Tm (Overview) Tj ET
+0.85 0.85 0.85 RG 0.6 w 54 646 m 558 646 l S
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 54.00 632.00 Tm (The Vehicle Management System \(VMS\) is a web-based desktop system that helps the barangay organize,) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 54.00 618.50 Tm (monitor, and maintain its emergency response vehicles. It gives Admin, Custodian, and Maintenance Personnel a) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 54.00 605.00 Tm (shared, accountable record of every vehicle - its condition, reported issues, repairs, schedules, and readiness to) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 54.00 591.50 Tm (respond. This guide lists what the system does today and the enhancements planned to make it capture reality) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 54.00 578.00 Tm (more completely.) Tj ET
+0.043 0.42 0.47 rg 54 550.5 4 22 re f
+BT 0.043 0.42 0.47 rg /F2 15 Tf 1 0 0 1 66.00 558.50 Tm (Part A  -  What the System Can Do Today) Tj ET
+0.85 0.85 0.85 RG 0.6 w 54 540.5 m 558 540.5 l S
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 520.50 Tm (Platform & Access) Tj ET
+0.043 0.42 0.47 rg 60 507.5 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 504.50 Tm (Web desktop application with role-based access for Admin, Custodian, and Maintenance Personnel; one) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 490.90 Tm (account may hold several roles.) Tj ET
+0.043 0.42 0.47 rg 60 480.29999999999995 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 477.30 Tm (Secure login \(rate-limited\), logout, password change, and active/inactive account enforcement.) Tj ET
+0.043 0.42 0.47 rg 60 466.69999999999993 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 463.70 Tm (Cloud file and image uploads - issue photos, repair attachments, and vehicle photos.) Tj ET
+0.043 0.42 0.47 rg 60 453.0999999999999 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 450.10 Tm (User account management: create accounts, activate and deactivate users.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 430.50 Tm (Vehicle Records) Tj ET
+0.043 0.42 0.47 rg 60 417.4999999999999 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 414.50 Tm (Full vehicle records with create, edit, archive/restore, and decommission.) Tj ET
+0.043 0.42 0.47 rg 60 403.89999999999986 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 400.90 Tm (Vehicle categories/types and locations/hubs \(with map coordinates\).) Tj ET
+0.043 0.42 0.47 rg 60 390.29999999999984 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 387.30 Tm (Vehicle statuses: Available, Under Maintenance, Inactive, Decommissioned.) Tj ET
+0.043 0.42 0.47 rg 60 376.6999999999998 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 373.70 Tm (Ready-to-Respond readiness: readiness checks with 24-hour freshness, readiness states, a) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 360.10 Tm (Ready-to-Respond column and stat cards, plus add/remove of readiness-check items.) Tj ET
+0.043 0.42 0.47 rg 60 349.4999999999998 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 346.50 Tm (Vehicle reliability view.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 326.90 Tm (Condition Monitoring) Tj ET
+0.043 0.42 0.47 rg 60 313.89999999999975 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 310.90 Tm (Periodic custodian condition checks recording each vehicle's physical condition over time.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 291.30 Tm (Issue Reports) Tj ET
+0.043 0.42 0.47 rg 60 278.2999999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 275.30 Tm (Issue report records with photo evidence, severity level, and status tracking.) Tj ET
+0.043 0.42 0.47 rg 60 264.6999999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 261.70 Tm (Duplicate / open-ticket warning before filing a new issue on a vehicle.) Tj ET
+0.043 0.42 0.47 rg 60 251.0999999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 248.10 Tm (One-click Create Ticket directly from an issue report.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 228.50 Tm (Maintenance Records) Tj ET
+0.043 0.42 0.47 rg 60 215.49999999999972 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 212.50 Tm (Standalone maintenance records with a Verify \(Custodian\) then Confirm \(Admin\) lifecycle.) Tj ET
+0.043 0.42 0.47 rg 60 201.89999999999972 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 198.90 Tm (Progress states: Assigned, Under Repair, For Verification, Completed.) Tj ET
+0.043 0.42 0.47 rg 60 188.29999999999973 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 185.30 Tm (Maintenance Personnel can self-file a record; Admins are notified; a new issue report can be created inline) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 171.70 Tm (from the form.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 152.10 Tm (Maintenance Schedules \(Preventive\)) Tj ET
+0.043 0.42 0.47 rg 60 139.09999999999974 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 136.10 Tm (Preventive schedules that, on completion, auto-generate the next recurrence at a chosen interval \(including a) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 122.50 Tm (custom number of months\) while avoiding double-booking.) Tj ET
+0.043 0.42 0.47 rg 60 111.89999999999975 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 108.90 Tm (Default "Scheduled only" view with pagination.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 89.30 Tm (Ticket Workflow  \(Request -> Validate -> Approval engine\)) Tj ET
+0.043 0.42 0.47 rg 60 76.29999999999976 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 73.30 Tm (Create \(Admin\) -> assign Custodian -> Inspect \(Custodian; result Needs Maintenance or No Issues, creating) Tj ET
+0.85 0.85 0.85 RG 0.5 w 54 44 m 558 44 l S
+BT 0.42 0.45 0.5 rg /F1 8 Tf 1 0 0 1 54.00 32.00 Tm (VMS Feature Guide) Tj ET
+BT 0.42 0.45 0.5 rg /F1 8 Tf 1 0 0 1 517.08 32.00 Tm (Page 1 of 3) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 7519 >>
+stream
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 738.00 Tm (sub-issues\) -> Assign mechanic per sub-issue -> Log repairs \(Mechanic\) -> Verify \(Custodian functional-test) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 724.40 Tm (checklist + attestation\) -> Confirm \(Admin\) -> Done.) Tj ET
+0.043 0.42 0.47 rg 60 713.8 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 710.80 Tm (Add a sub-issue mid-ticket; reassign a mechanic; reopen/unconfirm a Done sub-issue; defer a sub-issue) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 697.20 Tm (\(opens a breadcrumb issue report\).) Tj ET
+0.043 0.42 0.47 rg 60 686.5999999999999 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 683.60 Tm (Close, cancel/uncancel, or delete a ticket; assignment-based verification \(only the assigned custodian may) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 670.00 Tm (verify\).) Tj ET
+0.043 0.42 0.47 rg 60 659.3999999999999 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 656.40 Tm (Ticket archive audit log with the ability to reopen an accidentally deleted ticket.) Tj ET
+0.043 0.42 0.47 rg 60 645.7999999999998 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 642.80 Tm (Recurrence count - how many times the same issue recurred in the last 90 days.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 623.20 Tm (Dashboards & Oversight) Tj ET
+0.043 0.42 0.47 rg 60 610.1999999999998 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 607.20 Tm (Role-specific dashboards for Admin, Custodian, and Maintenance.) Tj ET
+0.043 0.42 0.47 rg 60 596.5999999999998 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 593.60 Tm (Emergency Readiness dashboard card with verified-ready as the headline number.) Tj ET
+0.043 0.42 0.47 rg 60 582.9999999999998 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 580.00 Tm (Reports \(vehicle, issue, maintenance, history\), activity logs, and a per-vehicle history timeline.) Tj ET
+0.043 0.42 0.47 rg 60 569.3999999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 566.40 Tm (Color-coded notifications by type, with read/unread tracking.) Tj ET
+0.043 0.42 0.47 rg 60 555.7999999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 552.80 Tm (Work Tracker - Custodian and Maintenance see the vehicles they have worked on and the outcomes, with) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 539.20 Tm (filters.) Tj ET
+0.043 0.42 0.47 rg 54 511.5999999999997 4 22 re f
+BT 0.043 0.42 0.47 rg /F2 15 Tf 1 0 0 1 66.00 519.60 Tm (Part B  -  Planned Enhancements \(13\)) Tj ET
+0.85 0.85 0.85 RG 0.6 w 54 501.5999999999997 m 558 501.5999999999997 l S
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 54.00 487.60 Tm (These build on the existing system and stay within the project scope. Each turns a real-world situation the system) Tj ET
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 54.00 474.77 Tm (currently drops into captured, usable data.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 455.95 Tm (Flexible Ticket Entry  \(enter the workflow at the right phase\)) Tj ET
+0.043 0.42 0.47 rg 60 442.9499999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 439.95 Tm (1. Pre-diagnosed tickets \(Mode B\) - when the problem is already known, the ticket skips the redundant) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 426.35 Tm (inspection and is born ready for a mechanic.) Tj ET
+0.043 0.42 0.47 rg 60 415.74999999999966 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 412.75 Tm (2. Create ticket from a condition check \(Mode C\) - a "Needs Repair" condition check gets a one-click Create) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 399.15 Tm (Ticket that carries its findings in, pre-diagnosed.) Tj ET
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 68.00 383.55 Tm (Mode A \(full inspection\) remains today's flow, as an opt-in for genuinely unknown symptoms. Mode D \(emergency) Tj ET
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 68.00 370.72 Tm (field repair\) is already served by the mechanic self-file standalone maintenance record - one governance decision) Tj ET
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 68.00 357.90 Tm (remains \(full confirm vs. acknowledge-and-close\).) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 339.07 Tm (Truthful Data Capture) Tj ET
+0.043 0.42 0.47 rg 60 326.07499999999965 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 323.07 Tm (3. Real down/up times \(backdating\) - log when the vehicle actually went down and returned, so downtime) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 309.47 Tm (figures are accurate.) Tj ET
+0.043 0.42 0.47 rg 60 298.8749999999996 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 295.87 Tm (4. "On Hold - Awaiting Parts" state - separates a slow mechanic from a slow supplier.) Tj ET
+0.043 0.42 0.47 rg 60 285.2749999999996 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 282.27 Tm (5. External-shop repair record - vendor, cost, warranty-until date, and receipt photo for third-party repairs.) Tj ET
+0.043 0.42 0.47 rg 60 271.67499999999956 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 268.67 Tm (6. "Reported on behalf of [driver]" field - a text box that keeps the real eyewitness on the record \(no driver) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 255.07 Tm (login needed\).) Tj ET
+0.043 0.42 0.47 rg 60 244.47499999999957 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 241.47 Tm (7. Duplicate-report warning - catch two people reporting the same issue before two tickets open.) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 221.87 Tm (Learning from History) Tj ET
+0.043 0.42 0.47 rg 60 208.87499999999957 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 205.87 Tm (8. Standardized issue catalog - pick a fault type from a list instead of free text, so recurrence and duplicate) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 192.27 Tm (detection work reliably. \(Build first - items 9 and 10 depend on it.\)) Tj ET
+0.043 0.42 0.47 rg 60 181.67499999999959 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 178.67 Tm (9. "It broke again" recurrence link - connect a re-break to the original closed ticket to surface repeat failures.) Tj ET
+0.043 0.42 0.47 rg 60 168.0749999999996 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 165.07 Tm (10. Lifetime cost per vehicle - total every repair and flag when a vehicle is consuming too much of its value) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 151.47 Tm (\(decommission signal\).) Tj ET
+BT 0.13 0.15 0.18 rg /F2 11.5 Tf 1 0 0 1 54.00 131.87 Tm (Readiness & Accountability) Tj ET
+0.043 0.42 0.47 rg 60 118.8749999999996 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 115.87 Tm (11. Overdue-PM flag - a missed or overdue scheduled maintenance actively warns instead of sitting silent.) Tj ET
+0.043 0.42 0.47 rg 60 105.27499999999961 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 102.27 Tm (12. Fleet-level readiness summary - one figure and alert: how many emergency vehicles are ready right now,) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 88.67 Tm (turning red below a set minimum.) Tj ET
+0.043 0.42 0.47 rg 60 78.07499999999962 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 75.07 Tm (13. Edit-trail on records - who changed what and when on sensitive/closed records \(serves the "logs for) Tj ET
+0.85 0.85 0.85 RG 0.5 w 54 44 m 558 44 l S
+BT 0.42 0.45 0.5 rg /F1 8 Tf 1 0 0 1 54.00 32.00 Tm (VMS Feature Guide) Tj ET
+BT 0.42 0.45 0.5 rg /F1 8 Tf 1 0 0 1 517.08 32.00 Tm (Page 2 of 3) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 2818 >>
+stream
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 738.00 Tm (accountability" must-have; essential once backdating is allowed\).) Tj ET
+BT 0.78 0.53 0.09 rg /F2 11.5 Tf 1 0 0 1 54.00 712.40 Tm (Build order & open decision) Tj ET
+0.78 0.53 0.09 rg 60 699.4 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 696.40 Tm (Dependency: build #8 \(standardized issue catalog\) before #9 and #10 - recurrence and cost-by-fault rely on) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 682.80 Tm (standardized fault types.) Tj ET
+0.78 0.53 0.09 rg 60 672.1999999999999 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 669.20 Tm (Open decision \(Mode D\): when a mechanic self-files an emergency repair that is already fixed and back in) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 655.60 Tm (service, does an Admin do a full confirm, or simply acknowledge-and-close? Recommended:) Tj ET
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 642.00 Tm (acknowledge-and-close, still logged - fast but auditable.) Tj ET
+0.043 0.42 0.47 rg 54 614.3999999999999 4 22 re f
+BT 0.043 0.42 0.47 rg /F2 15 Tf 1 0 0 1 66.00 622.40 Tm (Appendix  -  Consciously Out of Scope) Tj ET
+0.85 0.85 0.85 RG 0.6 w 54 604.3999999999999 m 558 604.3999999999999 l S
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 54.00 590.40 Tm (These are real needs deliberately left out because they fall outside the project scope \(web desktop only; roles limited to) Tj ET
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 54.00 577.57 Tm (Admin/Custodian/Maintenance; no operations/dispatch, inventory, or mileage\). They are noted so the boundary is a) Tj ET
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 54.00 564.75 Tm (conscious choice.) Tj ET
+0.72 0.24 0.20 rg 60 554.9249999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 551.92 Tm (Offline / mobile field capture - scope is a web desktop platform.) Tj ET
+0.72 0.24 0.20 rg 60 541.3249999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 538.32 Tm (Dispatch-anyway override and post-emergency-use checks - require operations/deployment tracking.) Tj ET
+0.72 0.24 0.20 rg 60 527.7249999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 524.72 Tm (Consumables/stock readiness \(oxygen, water, fuel\) and parts cannibalization - require an inventory domain.) Tj ET
+0.72 0.24 0.20 rg 60 514.1249999999997 3 3 re f
+BT 0.13 0.15 0.18 rg /F1 10 Tf 1 0 0 1 72.00 511.12 Tm (Shift-roster handoff - requires an on-duty roster concept.) Tj ET
+BT 0.42 0.45 0.5 rg /F1 9.5 Tf 1 0 0 1 68.00 495.52 Tm (Of these, consumables readiness is the most emergency-relevant candidate should the scope ever be widened.) Tj ET
+0.85 0.85 0.85 RG 0.5 w 54 44 m 558 44 l S
+BT 0.42 0.45 0.5 rg /F1 8 Tf 1 0 0 1 54.00 32.00 Tm (VMS Feature Guide) Tj ET
+BT 0.42 0.45 0.5 rg /F1 8 Tf 1 0 0 1 517.08 32.00 Tm (Page 3 of 3) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 9 0 R >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000128 00000 n 
+0000000225 00000 n 
+0000000327 00000 n 
+0000006781 00000 n 
+0000006917 00000 n 
+0000014488 00000 n 
+0000014624 00000 n 
+0000017494 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+17631
+%%EOF

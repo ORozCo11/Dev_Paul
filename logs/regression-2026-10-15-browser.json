@@ -1,0 +1,372 @@
+{
+  "results": [
+    {
+      "test": "public /login",
+      "url": "http://127.0.0.1:5185/login",
+      "heading": [
+        "Login"
+      ],
+      "overflow": false
+    },
+    {
+      "test": "public /register",
+      "url": "http://127.0.0.1:5185/register",
+      "heading": [
+        "Create your account"
+      ],
+      "overflow": true
+    },
+    {
+      "test": "public /about",
+      "url": "http://127.0.0.1:5185/about",
+      "heading": [
+        "About the System"
+      ],
+      "overflow": false
+    },
+    {
+      "test": "public /developers",
+      "url": "http://127.0.0.1:5185/developers",
+      "heading": [
+        "Meet the Team"
+      ],
+      "overflow": false
+    },
+    {
+      "test": "public /support",
+      "url": "http://127.0.0.1:5185/support",
+      "heading": [
+        "Support Center"
+      ],
+      "overflow": false
+    },
+    {
+      "test": "public /privacy",
+      "url": "http://127.0.0.1:5185/privacy",
+      "heading": [
+        "Privacy Policy"
+      ],
+      "overflow": false
+    },
+    {
+      "test": "public /terms",
+      "url": "http://127.0.0.1:5185/terms",
+      "heading": [
+        "Terms of Service"
+      ],
+      "overflow": false
+    },
+    {
+      "test": "public /admin/vehicles",
+      "url": "http://127.0.0.1:5185/login",
+      "heading": [
+        "Login"
+      ],
+      "overflow": false
+    },
+    {
+      "test": "registration empty step",
+      "errors": [
+        "First name is required.",
+        "Last name is required.",
+        "Email address is required.",
+        "Phone number is required."
+      ]
+    },
+    {
+      "test": "admin login",
+      "url": "http://127.0.0.1:5185/admin",
+      "labels": [
+        "Dashboard",
+        "Maintenance Tickets",
+        "Maintenance Schedule1",
+        "Maintenance Records",
+        "Condition Monitoring",
+        "Vehicle Management",
+        "Vehicle Types",
+        "Vehicle Location",
+        "Users",
+        "Reports",
+        "Activity Log"
+      ]
+    },
+    {
+      "test": "admin module Dashboard",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Maintenance Tickets",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Maintenance Schedule1",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Maintenance Records",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Condition Monitoring",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Vehicle Management",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Vehicle Types",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Vehicle Location",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Users",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Reports",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "admin module Activity Log",
+      "url": "http://127.0.0.1:5185/admin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "custodian login",
+      "url": "http://127.0.0.1:5185/custodian",
+      "labels": [
+        "Dashboard",
+        "Vehicle History",
+        "View Vehicles",
+        "Condition Monitoring",
+        "Report Vehicle Issue",
+        "My Tasks",
+        "Maintenance Schedule1",
+        "Maintenance Records"
+      ]
+    },
+    {
+      "test": "custodian module Dashboard",
+      "url": "http://127.0.0.1:5185/custodian",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "custodian module Vehicle History",
+      "url": "http://127.0.0.1:5185/custodian",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "custodian module View Vehicles",
+      "url": "http://127.0.0.1:5185/custodian",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "custodian module Condition Monitoring",
+      "url": "http://127.0.0.1:5185/custodian",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "custodian module Report Vehicle Issue",
+      "url": "http://127.0.0.1:5185/custodian",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "custodian module My Tasks",
+      "url": "http://127.0.0.1:5185/custodian",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "custodian module Maintenance Schedule1",
+      "url": "http://127.0.0.1:5185/custodian",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "custodian module Maintenance Records",
+      "url": "http://127.0.0.1:5185/custodian",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "mechanic login",
+      "url": "http://127.0.0.1:5185/maintenance",
+      "labels": [
+        "Dashboard",
+        "View Vehicles",
+        "My Work Orders",
+        "Maintenance Records",
+        "Maintenance Schedule1"
+      ]
+    },
+    {
+      "test": "mechanic module Dashboard",
+      "url": "http://127.0.0.1:5185/maintenance",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "mechanic module View Vehicles",
+      "url": "http://127.0.0.1:5185/maintenance",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "mechanic module My Work Orders",
+      "url": "http://127.0.0.1:5185/maintenance",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "mechanic module Maintenance Records",
+      "url": "http://127.0.0.1:5185/maintenance",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "mechanic module Maintenance Schedule1",
+      "url": "http://127.0.0.1:5185/maintenance",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "superadmin login",
+      "url": "http://127.0.0.1:5185/superadmin",
+      "labels": [
+        "Platform Overview",
+        "Barangay Management",
+        "Pending Approvals6",
+        "Users",
+        "Registration Codes",
+        "Concern Reports",
+        "Activity Log"
+      ]
+    },
+    {
+      "test": "superadmin module Platform Overview",
+      "url": "http://127.0.0.1:5185/superadmin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "superadmin module Barangay Management",
+      "url": "http://127.0.0.1:5185/superadmin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "superadmin module Pending Approvals6",
+      "url": "http://127.0.0.1:5185/superadmin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "superadmin module Users",
+      "url": "http://127.0.0.1:5185/superadmin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "superadmin module Registration Codes",
+      "url": "http://127.0.0.1:5185/superadmin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "superadmin module Concern Reports",
+      "url": "http://127.0.0.1:5185/superadmin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "superadmin module Activity Log",
+      "url": "http://127.0.0.1:5185/superadmin",
+      "alert": [],
+      "emptyCrash": 0,
+      "overflow": false
+    },
+    {
+      "test": "superadmin mobile",
+      "overflow": false
+    }
+  ],
+  "errors": [],
+  "failedRequests": [
+    {
+      "url": "http://127.0.0.1:8015/api/impersonate/candidates",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8015/api/impersonate/candidates",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8015/api/impersonate/candidates",
+      "status": 403
+    },
+    {
+      "url": "http://127.0.0.1:8015/api/impersonate/candidates",
+      "status": 403
+    }
+  ]
+}

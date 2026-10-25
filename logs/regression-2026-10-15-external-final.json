@@ -1,0 +1,12 @@
+[
+  {
+    "test": "Admin logs external shop repair",
+    "status": 200,
+    "pass": true
+  },
+  {
+    "test": "Custodian verifies external after repair log",
+    "status": 200,
+    "pass": true
+  }
+]

@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+/* ============================================
+   BARANGAY VMS - Base Styles & Reset
+   ============================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  /* App.css forces body to `font-family: inherit !important`, so the
+     family must live on html or everything falls back to Times. */
+  font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+}
+
+html, body, #root {
+  height: 100%;
+  min-height: 100vh;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #ede7dc;
+  background-color: #08090b;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0;
+  /* Was a hardcoded dark-theme color from before the light/dark theme
+     variable system existed (App.css). Every heading that already had its
+     own specific selector got its own var(--text-strong) override over
+     time, masking this — but any NEW heading with no such override (like
+     .entry-chooser-card h3) falls through to this rule and renders in the
+     old dark-theme cream color regardless of the active theme. Using the
+     variable here (same fallback value, so dark mode is pixel-identical)
+     fixes it at the root instead of adding yet another one-off override. */
+  color: var(--text-strong, #fff8ef);
+}
+
+p { margin: 0; }
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2b2d33; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #2563eb; }
+
+::selection { background: rgba(37, 99, 235, 0.3); color: #fff8ef; }
+
+/* Sidebar scrollbar reads as pure black against the navy chrome by default; make it gray */
+.sidebar::-webkit-scrollbar-thumb,
+.module-nav::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+}
+.sidebar::-webkit-scrollbar-thumb:hover,
+.module-nav::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}

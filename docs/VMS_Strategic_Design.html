@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VMS — Strategic Design &amp; Panel Defense</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1e293b; font-size: 10.5pt; line-height: 1.5; margin: 0; }
+  h1,h2,h3,h4 { color: #0f2f6b; line-height: 1.25; }
+  h1 { font-size: 25pt; }
+  h2 { font-size: 15pt; border-bottom: 2px solid #2563eb; padding-bottom: 4px; margin-top: 26px; page-break-after: avoid; }
+  h3 { font-size: 12.5pt; color: #1d4ed8; margin-top: 16px; page-break-after: avoid; }
+  h4 { font-size: 10.5pt; margin: 12px 0 3px; color: #0f2f6b; text-transform: uppercase; letter-spacing: 0.03em; }
+  p { margin: 5px 0; }
+  ul,ol { margin: 5px 0; padding-left: 20px; }
+  li { margin: 2px 0; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 9pt; color: #b91c1c; }
+  .cover { text-align: center; padding-top: 55mm; page-break-after: always; }
+  .cover .sub { color: #475569; font-size: 13pt; margin-top: 8px; }
+  .cover .meta { margin-top: 42mm; color: #64748b; font-size: 10pt; }
+  .feature { border: 1px solid #e2e8f0; border-radius: 10px; padding: 4px 16px 14px; margin: 16px 0; page-break-inside: avoid; }
+  .example { background: #f0f9ff; border-left: 4px solid #2563eb; padding: 8px 13px; border-radius: 6px; margin: 8px 0; font-style: italic; }
+  .flow { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 14px 10px; margin: 8px 0; }
+  .data { font-family: "Consolas", monospace; font-size: 8.8pt; background: #0f172a; color: #e2e8f0; padding: 10px 14px; border-radius: 8px; margin: 8px 0; line-height: 1.55; white-space: pre-wrap; }
+  .data b { color: #7dd3fc; font-weight: 600; }
+  .arrow { color: #38bdf8; }
+  .principle { background: #ecfdf5; border-left: 4px solid #16a34a; padding: 10px 14px; border-radius: 6px; margin: 10px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 9pt; }
+  th,td { border: 1px solid #cbd5e1; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #eff6ff; color: #0f2f6b; }
+  .tag { display: inline-block; background: #dbeafe; color: #1e40af; border-radius: 999px; padding: 1px 9px; font-size: 8pt; font-weight: 700; }
+  .muted { color: #64748b; font-size: 9pt; }
+  .qa { margin: 10px 0; }
+  .qa .q { font-weight: 700; color: #0f2f6b; }
+  .qa .a { margin: 3px 0 10px; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div style="font-size:38pt;">🛡️</div>
+  <h1>Strategic Design &amp; Panel Defense</h1>
+  <div class="sub">Barangay Vehicle Management System</div>
+  <div class="sub" style="font-size:11pt;margin-top:18px;">Every strategic feature — the gap it closes, the reasoning,<br>the workflow, and the dataflow — in one defensible reference.</div>
+  <div class="meta">Version 2.0.3 · Generated 18 July 2026<br>Backend feature suite: 72 automated tests passing</div>
+</div>
+
+<h2>How to read this document</h2>
+<p>This is not a user manual — it is the <strong>"why"</strong> behind the system, written so you can defend every design decision to a panel. Each strategic feature is presented in five parts:</p>
+<ul>
+  <li><span class="tag">EXAMPLE</span> a concrete scenario that exposes the problem;</li>
+  <li><span class="tag">THE GAP</span> what the system used to fail to do;</li>
+  <li><span class="tag">THE SOLUTION</span> what was built and why;</li>
+  <li><span class="tag">WORKFLOW</span> who does what, step by step;</li>
+  <li><span class="tag">DATAFLOW</span> how the data actually moves through the system.</li>
+</ul>
+
+<div class="principle">
+  <strong>The one principle behind all of it.</strong> Every strategic feature is the same move: <em>turn a silent default into a conscious, reasoned, recorded decision by a person.</em> The system's job is to <strong>surface the decision and record it</strong> — never to make it silently or let something important happen (or fail to happen) unnoticed. Hold onto this sentence; it answers most panel questions.
+</div>
+
+<!-- ============ PROBLEM 1 ============ -->
+<h2>1. Deferred sub-issues &amp; decision-close</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> An ambulance ticket has two problems; the brakes are fixed, but the water-pump seal is on back-order with no budget until Q4. The ticket can never reach "all done," so the vehicle would sit benched forever over one unfixable line item.</div>
+  <h4>The gap</h4><p>A sub-issue had only one exit — "Done." One item that couldn't be finished trapped the whole ticket, and the vehicle stayed out of service indefinitely.</p>
+  <h4>The solution</h4><p>A second exit, <strong>Deferred</strong> — a recorded decision <em>not</em> to fix it now, with a mandatory reason. A ticket closes when every sub-issue is <em>resolved</em> (Done <strong>or</strong> Deferred). Closing with unfinished work ("decision-close") forces a <strong>fit-for-service</strong> answer — "No" keeps the vehicle out even though the ticket closed — and every deferred defect opens a <strong>breadcrumb</strong> issue report so it isn't forgotten.</p>
+  <div class="flow"><h4>Workflow</h4><ol>
+    <li>Admin opens a sub-issue that can't proceed and clicks <strong>Defer</strong>, entering a reason.</li>
+    <li>System marks it Deferred and auto-opens a Pending follow-up issue report.</li>
+    <li>With all sub-issues Done/Deferred, Admin closes — answering "Is the vehicle fit to return to service?"</li>
+    <li>Fit = Yes → vehicle returns to Available; Fit = No → vehicle stays out.</li>
+  </ol></div>
+  <div class="data"><b>Defer</b>  Admin <span class="arrow">→</span> PUT /tickets/{t}/sub-issues/{s}/defer {reason}
+      <span class="arrow">→</span> ticket_sub_issues.status = 'Deferred', deferred_reason/by/at set
+      <span class="arrow">→</span> createDeferralBreadcrumb() <span class="arrow">→</span> vehicle_issue_reports (status 'Pending')
+<b>Close</b>  MaintenanceTicket.isEligibleToClose() = every subIssue.isResolved()
+      <span class="arrow">→</span> closeTicket {returned_to_service} <span class="arrow">→</span> vehicles.status set by fit-for-service
+      <span class="arrow">→</span> archiveCompleted() snapshot to ticket_archive_logs</div>
+</div>
+
+<!-- ============ PROBLEM 2 ============ -->
+<h2>2. Verification — the functional test</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> A new water-pump seal is installed perfectly — the paperwork says "fixed." But nobody ran the pump. On the next fire, it leaks under pressure. "Looks done" was never the same as "actually works."</div>
+  <h4>The gap</h4><p>Verification could be satisfied by looking at the paperwork. It proved the work was <em>done</em>, not that the vehicle <em>works</em>.</p>
+  <h4>The solution</h4><p>Verification is now a real <strong>functional test</strong>, run by the <strong>Custodian</strong> — deliberately a different role from the mechanic who did the work ("don't grade your own homework"). A <strong>type-specific checklist</strong> is marked Pass/Fail; any fail bounces the repair back to the mechanic; all-pass requires an <strong>attestation</strong> that the vehicle was actually operated.</p>
+  <div class="flow"><h4>Workflow</h4><ol>
+    <li>Mechanic logs the repair → sub-issue goes <em>For Inspection</em>.</li>
+    <li>Custodian operates the vehicle against the checklist and marks each item.</li>
+    <li>Any Fail → <em>Rejected</em>, back to the mechanic. All Pass + attestation → <em>For Confirmation</em>.</li>
+    <li>Admin gives the final verdict → <em>Done</em>.</li>
+  </ol></div>
+  <div class="data">Custodian <span class="arrow">→</span> PUT /tickets/{t}/sub-issues/{s}/verify {verdict, functional_test[], test_attested}
+   <span class="arrow">→</span> backend: Approved requires test_attested = true AND no failed item
+   <span class="arrow">→</span> ticket_sub_issues.functional_test (JSON), test_attested stored
+   <span class="arrow">→</span> pass: status 'For Confirmation'  |  fail: status 'Under Repair' (bounce)</div>
+</div>
+
+<!-- ============ MULTI-ROLE ============ -->
+<h2>3. Multi-role accounts</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> A small barangay has one utility staffer, Juan, who is both the custodian and the mechanic. The system must let him do both jobs without pretending he is two people — and still keep the accountability trail.</div>
+  <h4>The gap</h4><p>Each account had exactly one role, so a real person wearing two hats couldn't be modelled without either a fake merged role or two logins.</p>
+  <h4>The solution</h4><p>An account holds a <strong>list</strong> of roles (the existing three, un-merged). A <em>primary</em> role drives the portal; the sidebar shows the <strong>union</strong> of every role's modules; permission checks accept any hat held. Separation of duties is enforced by <strong>role</strong>, not by person, so every action still records which function was performed.</p>
+  <table><tr><th>Concept</th><th>Mechanism</th></tr>
+    <tr><td>Which hats a person holds</td><td><code>users.roles</code> (JSON), primary kept in <code>users.role</code></td></tr>
+    <tr><td>Permission check</td><td><code>hasRole()</code> / <code>hasAnyRole()</code></td></tr>
+    <tr><td>Assignable-as lookups</td><td><code>scopeHavingRole()</code> (matches primary OR list)</td></tr>
+    <tr><td>Which modules appear</td><td><code>resolveModules()</code> unions all roles' menus</td></tr>
+  </table>
+  <div class="data">Login <span class="arrow">→</span> returns user.roles = allRoles()  |  Add User <span class="arrow">→</span> roles[] multi-select
+Action by Juan <span class="arrow">→</span> stored in the role-specific field (reported_by / assigned_mechanic_id / verified_by)
+   <span class="arrow">→</span> the field that holds his id records WHICH hat he wore</div>
+  <p class="muted"><strong>Panel one-liner:</strong> "A role is a hat, not a headcount. One account can hold several; the system enforces separation by role and records which role acted — so the same system fits a two-person barangay and a twenty-person one with no changes."</p>
+</div>
+
+<!-- ============ GAP 1 ============ -->
+<h2>4. Emergency Readiness (coverage by type)</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> The barangay owns one ambulance. It goes in for repair. The old dashboard said "1 vehicle under maintenance" — indistinguishable from a spare van being serviced. What it really meant: <strong>zero medical-emergency coverage.</strong></div>
+  <h4>The gap</h4><p>Availability was tracked per <em>vehicle</em>. But an emergency service is measured by <em>capability coverage</em> — for each function, is there a ready unit?</p>
+  <h4>The solution</h4><p>Availability is re-aggregated <strong>by vehicle type</strong> — "Ambulance: 1 of 1 ready" — and the loss of the last ready unit of any type raises a hard <strong>NO COVERAGE</strong> alarm.</p>
+  <div class="flow"><h4>Workflow</h4><ol><li>Any status change (ticket close, decommission, inspection) updates a vehicle's availability.</li><li>The dashboard recomputes coverage per type on every load.</li><li>A type dropping to zero ready units shows a red NO COVERAGE banner to every Admin.</li></ol></div>
+  <div class="data">GET /dashboard <span class="arrow">→</span> fleetReadiness()
+   <span class="arrow">→</span> group active vehicles by category
+   <span class="arrow">→</span> ready = status 'Available'; no_coverage = (ready == 0 &amp;&amp; total &gt; 0)
+   <span class="arrow">→</span> Readiness board + NO COVERAGE alarm</div>
+</div>
+
+<!-- ============ GAP 2 ============ -->
+<h2>5. Preventive maintenance with teeth</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> The ambulance's brake servicing was due three weeks ago. The schedule was just a date on a calendar nobody read. Mid-transport, the brakes fail.</div>
+  <h4>The gap</h4><p>A maintenance schedule had no consequences — overdue entries sat in a list, invisible until a breakdown.</p>
+  <h4>The solution</h4><p>Overdue or due-within-7-days schedules surface on a dashboard <strong>Preventive Watch</strong>, colour-coded OVERDUE / DUE SOON — prevention made visible <em>before</em> failure.</p>
+  <div class="data">GET /dashboard <span class="arrow">→</span> preventiveWatch()
+   <span class="arrow">→</span> vehicle_maintenance_schedules where status 'Scheduled' AND date &le; today+7d
+   <span class="arrow">→</span> state = (date &lt; today ? 'overdue' : 'due_soon') <span class="arrow">→</span> Preventive Watch list</div>
+</div>
+
+<!-- ============ GAP 3 ============ -->
+<h2>6. Reliability &amp; repeat-failure detection</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> A rescue boat came in for engine trouble four times in five months. Each ticket was handled cleanly and closed — so nobody noticed it was the <em>same boat, same failure, over and over.</em></div>
+  <h4>The gap</h4><p>Every ticket was an island. History was stored but never turned into insight, so a chronic (and dangerous) unit stayed hidden.</p>
+  <h4>The solution</h4><p>A <strong>recurring flag</strong> on any ticket that repeats a recently-closed Main Issue on the same vehicle, plus a per-vehicle <strong>reliability lens</strong> (failures 6/12 mo, lifetime spend, avg days out, chronic warning).</p>
+  <div class="data"><b>Recurrence</b>  createTicket <span class="arrow">→</span> count prior Closed tickets, same title, same vehicle, &lt;90 days
+       <span class="arrow">→</span> maintenance_tickets.recurrence_count <span class="arrow">→</span> "Recurring — Nth time" badge
+<b>Reliability</b>  GET /vehicles/{id}/reliability <span class="arrow">→</span> aggregate tickets + maintenance_records
+       <span class="arrow">→</span> failures_6mo/12mo, total_spend, avg_days_out, chronic <span class="arrow">→</span> profile panel</div>
+</div>
+
+<!-- ============ GAP 4 ============ -->
+<h2>7. Decommission (end-of-life)</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> A fire truck is written off after a crash. Someone just "archives" it — the same vague action used for a truck that's out temporarily. A year later nobody can tell if it was retired for good or hidden by mistake, and it still quietly inflates "we have 3 fire trucks."</div>
+  <h4>The gap</h4><p>The only way to remove a vehicle was a vague, reversible <em>Archive</em>. There was no honest, documented end-of-life distinct from a temporary hide.</p>
+  <h4>The solution</h4><p>A distinct <strong>Decommissioned</strong> state with a mandatory reason. It leaves the readiness/coverage math for good, blocks new work, keeps full history, and can be <strong>recommissioned</strong> if mistaken. Open tickets must be settled first (use decision-close for an unfinishable one).</p>
+  <div class="data">Admin <span class="arrow">→</span> PUT /vehicles/{id}/decommission {reason}
+   <span class="arrow">→</span> blocked if any open ticket exists
+   <span class="arrow">→</span> vehicles.status 'Decommissioned' + decommission_reason/by/at
+   <span class="arrow">→</span> excluded from syncVehicleStatuses, readiness, lookups, ticket/issue creation
+   <span class="arrow">→</span> restore reverses (clears fields, status 'Available')</div>
+</div>
+
+<!-- ============ GAP A ============ -->
+<h2>8. "Available" ≠ "Ready to respond" — readiness checks</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> 1 AM, a call comes in. The dashboard says the ambulance is Available. The driver runs to it — near-empty fuel tank, no oxygen refilled, one dead siren speaker. The system said "ready." It wasn't.</div>
+  <h4>The gap</h4><p>"Available" meant only <em>"no open repair."</em> That is not the same as <em>"can respond to an emergency right now."</em> The system tracked "not broken" but not "mission-ready."</p>
+  <h4>The solution</h4><p>A short, <strong>type-specific readiness check</strong> the custodian runs on a schedule (fuel, oxygen, siren, equipment). A vehicle is only <strong>verified ready</strong> if it passed a check within a <strong>freshness window (24 h)</strong>; older is <em>stale</em>, a failed check is <em>not ready</em>. This becomes the honest signal feeding the coverage board.</p>
+  <div class="flow"><h4>Workflow</h4><ol>
+    <li>Custodian runs the readiness checklist (daily / pre-shift) on the vehicle.</li>
+    <li>All pass → vehicle reads <em>Ready to respond</em>; any fail → <em>Not ready</em>.</li>
+    <li>A check older than 24 h goes <em>stale</em> and lands on the dashboard Readiness Watch.</li>
+    <li>The coverage board shows "verified ready" alongside merely "available."</li>
+  </ol></div>
+  <div class="data">Custodian <span class="arrow">→</span> POST /vehicles/{id}/readiness-check {checklist[], notes}
+   <span class="arrow">→</span> vehicle_readiness_checks (checklist JSON, all_passed, checked_at)
+   <span class="arrow">→</span> responseReadinessState(): Available + passed + &lt;24h = 'ready';
+                              older = 'stale'; failed = 'not_ready'; none = 'unchecked'
+   <span class="arrow">→</span> feeds readiness.verified_ready + readiness_watch + profile badge</div>
+</div>
+
+<!-- ============ GAP B ============ -->
+<h2>9. Single-point-of-failure risk map</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> The barangay owns exactly one fire truck. Today it's running, so everything looks fine — until it breaks and everyone suddenly realises there was no backup all along.</div>
+  <h4>The gap</h4><p>The readiness board alarms only <em>after</em> a unit is down (reactive). Nothing warned that a type had a single unit — a standing fragility — <em>while it was still healthy</em>.</p>
+  <h4>The solution</h4><p>A proactive <strong>fragility map</strong>: any type with only one operational unit is flagged as a single point of failure, even while it's up — so the barangay can plan a backup before the crisis.</p>
+  <div class="data">GET /dashboard <span class="arrow">→</span> fragility()
+   <span class="arrow">→</span> group operational vehicles by type
+   <span class="arrow">→</span> single_point = (operational == 1); critical = (single &amp;&amp; ready == 0)
+   <span class="arrow">→</span> Risk panel: "Only 1 X — no backup if it goes down"</div>
+</div>
+
+<!-- ============ GAP C ============ -->
+<h2>10. Fleet-wide failure patterns</h2>
+<div class="feature">
+  <div class="example"><strong>Example.</strong> Across the fleet this year, 9 of 14 repairs were brake-related — but each was filed as its own ticket on its own vehicle, so nobody spotted that the flood-damaged roads are eating everyone's brakes.</div>
+  <h4>The gap</h4><p>Reliability was per-vehicle. A <em>systemic</em> cause affecting many vehicles hid in plain sight because failures were never aggregated fleet-wide.</p>
+  <h4>The solution</h4><p>A ranked <strong>"what's breaking most"</strong> view across the whole fleet over 12 months — surfacing a root cause to fix once instead of treating symptoms one ticket at a time.</p>
+  <div class="data">GET /dashboard <span class="arrow">→</span> failurePatterns()
+   <span class="arrow">→</span> vehicle_maintenance_records, last 12 months, grouped by maintenance_type
+   <span class="arrow">→</span> ranked by count <span class="arrow">→</span> "What's Breaking Most" bar chart</div>
+</div>
+
+<!-- ============ PANEL DEFENSE ============ -->
+<h2>11. Panel defense — anticipated questions</h2>
+
+<div class="qa">
+  <p class="q">Q. "Isn't this just a vehicle tracker?"</p>
+  <p class="a">A. No — it's a <strong>readiness system</strong>. It doesn't only ask "is this vehicle up?"; it asks "for each emergency function, do we have a <em>verified-ready</em> unit right now?" (§4, §8), warns where we're fragile before failure (§9), and prevents breakdowns instead of only recording them (§5).</p>
+
+  <p class="q">Q. "It requires three roles — does that break a small barangay with two people?"</p>
+  <p class="a">A. No. A role is a permission set, not a required employee. One account holds several roles; the workflow completes with one person and still records which role performed each step (§3). Hard-coding two roles would have been the real weakness — it wouldn't scale and would throw away the accountability control.</p>
+
+  <p class="q">Q. "What if a repair legitimately needs weeks — won't things look stuck?"</p>
+  <p class="a">A. That case has a home: <strong>Deferral</strong> (§1). A repair that must wait is consciously deferred with a reason and a breadcrumb — a recorded decision, not a silent stall.</p>
+
+  <p class="q">Q. "What if the custodian who tests a repair is also the mechanic who did it?"</p>
+  <p class="a">A. Separation is enforced by <em>role</em> — the functional test is the Custodian's gate, the repair is the Maintenance gate, the final verdict is the Admin's (§2). Even when one person holds two hats, the record shows which role signed each step.</p>
+
+  <p class="q">Q. "Why keep a vehicle whose repairs cost more than it's worth?"</p>
+  <p class="a">A. That's the barangay's call — the system's reliability lens (§6) surfaces the chronic unit and the spend, and decommission (§7) provides an honest, documented retirement. The tool informs the decision; it never forces it.</p>
+
+  <p class="q">Q. "What is the design philosophy in one sentence?"</p>
+  <p class="a">A. <em>Nothing important happens — or fails to happen — silently or unrecorded.</em> Every feature turns a silent default into a conscious, reasoned, recorded decision by a person.</p>
+</div>
+
+<p class="muted" style="margin-top:26px;text-align:center;">Barangay Vehicle Management System · Strategic Design &amp; Panel Defense · v2.0.3 · reflects the system as built and tested (72 automated tests passing).</p>
+
+</body>
+</html>

@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VMS Testing Guide</title>
+<style>
+:root {
+  --accent: #2563eb;
+  --accent-dim: #dbeafe;
+  --role-admin: #7c3aed;
+  --role-admin-bg: #ede9fe;
+  --role-custodian: #0284c7;
+  --role-custodian-bg: #e0f2fe;
+  --role-maint: #b45309;
+  --role-maint-bg: #fef3c7;
+  --success: #16a34a;
+  --success-bg: #dcfce7;
+
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #eef1f8;
+  --border: #dfe4ef;
+  --text: #1c2438;
+  --text-muted: #5b6478;
+  --shadow: 0 1px 2px rgba(30, 41, 59, 0.04);
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e1424;
+  --surface: #161d31;
+  --surface-2: #1c2439;
+  --border: #2a3350;
+  --text: #e7ebf5;
+  --text-muted: #98a2bd;
+  --accent-dim: #1c2b52;
+  --role-admin-bg: #2c2350;
+  --role-custodian-bg: #17293f;
+  --role-maint-bg: #3a2a10;
+  --success-bg: #113322;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1424;
+    --surface: #161d31;
+    --surface-2: #1c2439;
+    --border: #2a3350;
+    --text: #e7ebf5;
+    --text-muted: #98a2bd;
+    --accent-dim: #1c2b52;
+    --role-admin-bg: #2c2350;
+    --role-custodian-bg: #17293f;
+    --role-maint-bg: #3a2a10;
+    --success-bg: #113322;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+h1, h2, h3 { text-wrap: balance; font-family: inherit; }
+code, .mono { font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
+
+.shell {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+  max-width: 1240px;
+  margin: 0 auto;
+}
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { position: static !important; height: auto !important; }
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 22px 18px 30px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.brand { display: flex; flex-direction: column; gap: 2px; }
+.brand-eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 700;
+}
+.brand h1 { font-size: 1.28rem; margin: 0; font-weight: 800; letter-spacing: -0.01em; }
+.brand p { margin: 2px 0 0; font-size: 0.83rem; color: var(--text-muted); }
+
+.progress-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px 14px;
+  box-shadow: var(--shadow);
+}
+.progress-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.progress-card-top strong { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+.progress-card-top span { font-size: 0.78rem; color: var(--text-muted); }
+.progress-track {
+  height: 7px;
+  border-radius: 99px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--success);
+  border-radius: 99px;
+  transition: width 0.25s ease;
+  width: 0%;
+}
+.reset-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 7px 0;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+.reset-btn:hover { color: var(--text); border-color: var(--text-muted); }
+
+.search-box {
+  position: relative;
+}
+.search-box input {
+  width: 100%;
+  padding: 9px 12px 9px 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+.search-box input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.search-box svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+
+.role-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.role-chip {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.role-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+nav.module-nav { display: flex; flex-direction: column; gap: 1px; }
+nav.module-nav a {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+nav.module-nav a:hover { background: var(--surface-2); color: var(--text); }
+nav.module-nav a .count { font-variant-numeric: tabular-nums; color: var(--text-muted); font-weight: 500; }
+
+.main {
+  padding: 30px 34px 80px;
+  min-width: 0;
+}
+.main-intro {
+  max-width: 62ch;
+  margin-bottom: 34px;
+}
+.main-intro h1 { font-size: 1.7rem; margin: 0 0 8px; }
+.main-intro p { color: var(--text-muted); margin: 0 0 6px; }
+.main-intro .hint {
+  font-size: 0.83rem;
+  margin-top: 14px;
+  padding: 10px 13px;
+  background: var(--accent-dim);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+.module-section { margin-bottom: 42px; scroll-margin-top: 20px; }
+.module-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 8px;
+}
+.module-head h2 { font-size: 1.22rem; margin: 0; }
+.module-head .module-count { font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.module-note { font-size: 0.83rem; color: var(--text-muted); margin: 6px 0 16px; max-width: 68ch; }
+
+.ability-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.ability-card.tested { border-color: var(--success); }
+.ability-card[hidden] { display: none; }
+
+.ability-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.ability-title-wrap { display: flex; flex-direction: column; gap: 5px; }
+.ability-title { font-size: 1.03rem; font-weight: 700; margin: 0; }
+.role-pills { display: flex; gap: 5px; flex-wrap: wrap; }
+.role-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  letter-spacing: 0.01em;
+}
+.role-pill.admin { background: var(--role-admin-bg); color: var(--role-admin); }
+.role-pill.custodian { background: var(--role-custodian-bg); color: var(--role-custodian); }
+.role-pill.maint { background: var(--role-maint-bg); color: var(--role-maint); }
+
+.test-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  user-select: none;
+  padding: 4px 6px;
+  border-radius: 7px;
+}
+.test-toggle:hover { background: var(--surface-2); }
+.test-toggle input { width: 16px; height: 16px; accent-color: var(--success); cursor: pointer; }
+.ability-card.tested .test-toggle { color: var(--success); }
+
+.ability-explain { margin: 0 0 10px; color: var(--text); }
+.ability-scenario {
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.ability-scenario strong { color: var(--text); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 3px; }
+.ability-workflow strong { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); display: block; margin-bottom: 6px; }
+.ability-workflow ol { margin: 0; padding-left: 20px; }
+.ability-workflow li { margin-bottom: 4px; }
+.ability-workflow li::marker { color: var(--accent); font-weight: 700; }
+
+.no-results { color: var(--text-muted); font-size: 0.9rem; padding: 20px 0; display: none; }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-eyebrow">Barangay VMS</span>
+      <h1>Testing Guide</h1>
+      <p>Every ability in the system, with a scenario and step-by-step workflow to try.</p>
+    </div>
+
+    <div class="progress-card">
+      <div class="progress-card-top">
+        <strong id="progress-count">0/0</strong>
+        <span>tested</span>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <button class="reset-btn" id="reset-btn" type="button">Reset all progress</button>
+    </div>
+
+    <div class="search-box">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="search-input" type="text" placeholder="Search abilities…" />
+    </div>
+
+    <div class="role-filters" id="role-filters">
+      <button class="role-chip" data-role="All" aria-pressed="true" type="button">All</button>
+      <button class="role-chip" data-role="Admin" aria-pressed="false" type="button">Admin</button>
+      <button class="role-chip" data-role="Custodian" aria-pressed="false" type="button">Custodian</button>
+      <button class="role-chip" data-role="Maintenance Personnel" aria-pressed="false" type="button">Maintenance</button>
+    </div>
+
+    <nav class="module-nav" id="module-nav"></nav>
+  </aside>
+
+  <main class="main">
+    <div class="main-intro">
+      <h1>What to test, and how</h1>
+      <p>This covers every ability across all three portals — Admin, Custodian, and Maintenance Personnel — organized by module in the same order they appear in the sidebar.</p>
+      <p>Each card has a <strong>Scenario</strong> (a realistic situation to set up) and a <strong>Workflow</strong> (the exact steps to run through it). Check a card off as you confirm it works; progress is saved in this browser.</p>
+      <div class="hint">Use the role chips or the search box on the left to narrow the list while you're focused on one portal.</div>
+    </div>
+
+    <div class="no-results" id="no-results">No abilities match that search/filter.</div>
+
+    <!-- ============ AUTH & ACCOUNT ============ -->
+    <section class="module-section" id="mod-auth" data-title="Authentication &amp; Account">
+      <div class="module-head"><h2>Authentication &amp; Account</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="auth-login">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Log In</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Token-based sign-in. The account's role (or roles) determines which sidebar modules and dashboard appear after login.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A tester needs to confirm all three portals look and behave correctly on first login.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Go to <code>/login</code> and sign in as an Admin account.</li>
+          <li>Confirm the sidebar shows the full Admin module list and the Admin dashboard loads.</li>
+          <li>Log out, repeat as a Custodian account, then as a Maintenance Personnel account.</li>
+          <li>Confirm each portal only shows its own module set.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="auth-remember">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Remember Me</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Toggles whether the session token is kept in <code>localStorage</code> (survives closing the browser) or <code>sessionStorage</code> (cleared once the tab closes).</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A user logs in on a shared computer and wants to be sure they aren't left signed in.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Log in with Remember Me left <strong>unchecked</strong>.</li>
+          <li>Close the browser tab entirely and reopen the app — confirm it's back at the login screen.</li>
+          <li>Log in again with Remember Me <strong>checked</strong>, close and reopen the tab — confirm it's still signed in.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="auth-logout">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Log Out</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Clears the session from both storages and returns to the login page.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>End of a work session.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open the account menu and click Logout.</li>
+          <li>Confirm you land on <code>/login</code>.</li>
+          <li>Try navigating back to a protected page directly — confirm it redirects to login instead of showing data.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="auth-password">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Change Password</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Update your own password after verifying the current one, from the profile/account menu.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A user wants to replace a temporary or weak password.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open the profile/account settings panel.</li>
+          <li>Enter the current password plus a new one and save.</li>
+          <li>Log out and log back in using the new password to confirm it took effect.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ DASHBOARD ============ -->
+    <section class="module-section" id="mod-dashboard" data-title="Dashboard">
+      <div class="module-head"><h2>Dashboard</h2><span class="module-count"></span></div>
+      <p class="module-note">The dashboard is role-scoped — every role sees vehicle totals, but the metrics, badges, and panels below them differ by which hat you're wearing.</p>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="dash-metrics">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Role-Scoped Metric Tiles</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Admin sees fleet-wide totals plus total maintenance expenses; Custodian sees their own reported-issue count; Maintenance Personnel sees records, upcoming/overdue maintenance, and vehicles needing attention.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Comparing what each role actually sees at a glance.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Log in as Admin, note every metric tile shown.</li>
+          <li>Log in as Custodian, confirm "My Reported Issues" only counts that account's own reports.</li>
+          <li>Log in as Maintenance Personnel, confirm "Vehicles Needing Attention" and maintenance-record metrics appear.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="dash-readiness">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Readiness &amp; Coverage Panel</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Groups vehicles by type and shows ready vs. verified-ready vs. down counts, flagging a "no coverage" alarm when an entire type has zero ready units.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>The barangay's only ambulance goes into the shop.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open a ticket on the only vehicle of a given type and submit an inspection with "Needs Maintenance".</li>
+          <li>Reload the dashboard.</li>
+          <li>Confirm that vehicle type's readiness panel shows 0 ready and a no-coverage flag.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="dash-fragility">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Single-Point-of-Failure Fragility</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Flags any vehicle type currently down to one (or zero) ready units as a standing risk — before anything else even breaks.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A type has two units; one is already under repair.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Send one of two same-type vehicles into an active ticket.</li>
+          <li>Reload the dashboard.</li>
+          <li>Confirm that type is flagged as fragile (single point of failure), and critical if the last one also goes down.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Maintenance Personnel" data-id="dash-preventive">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Preventive Maintenance Watch</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Surfaces overdue and due-soon scheduled maintenance as an at-risk list rather than a plain calendar entry.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A preventive-maintenance date has quietly passed.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Create a maintenance schedule dated yesterday.</li>
+          <li>Reload the dashboard.</li>
+          <li>Confirm it appears in the overdue watch list.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="dash-forecast">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Availability Forecast</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Lists every vehicle currently under maintenance with its estimated return date, soonest first, so "out of service" reads as a forecast instead of a blank.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Someone needs to know when a specific vehicle will be back.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Log repairs on a work order and set an estimated return date.</li>
+          <li>Reload the dashboard.</li>
+          <li>Confirm that vehicle appears in the forecast list with the date you set.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="dash-activity">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Recent Activity Feed</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A rolling feed of the most recent fleet-history events, for a quick "what just happened" glance.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Confirming actions taken elsewhere in the app actually show up here.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Edit a vehicle, then run a readiness check on it.</li>
+          <li>Reload the dashboard.</li>
+          <li>Confirm both events appear in the activity feed, most recent first.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ ISSUE REPORTS ============ -->
+    <section class="module-section" id="mod-issues" data-title="Issue Reports">
+      <div class="module-head"><h2>Issue Reports</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="issue-report">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Report a Vehicle Issue</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Flags a problem with a specific vehicle — issue type, description, severity, and an optional photo. Any role can file one, though it's most used by Custodians in the field.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A custodian notices a strange engine noise during a routine check.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open Issue Reports → Add.</li>
+          <li>Pick the vehicle, describe the issue, set severity, attach a photo.</li>
+          <li>Submit and confirm it appears in the list with status Pending.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="issue-view">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">View Issue Detail</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">The detail page shows the full-size photo, a distinct remarks callout, that vehicle's issue-history pie chart, the linked ticket (if one was opened from it), a report timeline, and the vehicle's last known map location.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Reviewing everything known about one reported issue in one place.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open any issue report row.</li>
+          <li>Confirm the photo, remarks callout, issue-history chart, linked ticket (if any), timeline, and location map all render correctly.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Custodian" data-id="issue-edit">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Edit an Issue Report</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Correct a report's description, severity, or other details before it moves further along.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>The initial severity was logged too low (or too high).</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open an existing Pending report and edit its severity/description.</li>
+          <li>Save, then confirm the change reflects on both the list and detail view.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="issue-delete">
+        <div class="ability-head">
+          <div class="ability-title-wrap">
+            <p class="ability-title">Delete an Issue Report</p>
+            <div class="role-pills"><span class="role-pill admin">Admin</span></div>
+          </div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Removes a mistaken or duplicate report entirely.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>The same issue was accidentally submitted twice.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open Issue Reports, select the duplicate, delete it.</li>
+          <li>Confirm it no longer appears in the list.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ MAINTENANCE TICKETS ============ -->
+    <section class="module-section" id="mod-tickets" data-title="Maintenance Tickets">
+      <div class="module-head"><h2>Maintenance Tickets</h2><span class="module-count"></span></div>
+      <p class="module-note">The core workflow: a ticket is a Main Issue container. During inspection it's populated with one or more independent Sub-Issues, each running Open → Under Repair → For Inspection → For Confirmation → Done (or Deferred). The ticket itself only closes once every sub-issue has ended one way or another.</p>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-create">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Create a Ticket</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Opens a Main Issue on a vehicle and assigns it to a Custodian for physical inspection. Blocked on archived/decommissioned vehicles, and blocked if that same Main Issue is already open on that vehicle.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A vehicle needs a formal maintenance ticket opened after an issue report or a routine finding.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Maintenance Tickets → Add. Pick vehicle, custodian, priority, and description.</li>
+          <li>Submit and confirm the ticket shows status Open.</li>
+          <li>Confirm the assigned custodian receives a notification.</li>
+          <li>Try creating a second ticket with the same title on the same vehicle — confirm it's blocked with a message pointing at the existing ticket.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Custodian" data-id="ticket-inspect">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Submit Inspection</p><div class="role-pills"><span class="role-pill custodian">Custodian</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Only the assigned custodian can inspect an Open ticket. "No Issues" effectively clears it; "Needs Maintenance" creates one sub-issue per real defect found and flips the vehicle to Under Maintenance.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A custodian physically inspects the vehicle named on a newly assigned ticket.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Log in as the assigned custodian and open the ticket under Assigned Inspections.</li>
+          <li>Submit inspection with result "Needs Maintenance" and two sub-issues.</li>
+          <li>Confirm the ticket becomes Active and the vehicle's condition becomes Needs Repair.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Custodian,Maintenance Personnel" data-id="ticket-add-subissue">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Add a Sub-Issue Mid-Ticket</p><div class="role-pills"><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Appends a newly discovered defect while the ticket is Active. Only the assigned custodian, or a mechanic already working a sub-issue on this ticket, can do this — never Admin directly.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Mid-repair, a mechanic finds a second, unrelated problem.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>As the assigned custodian or an assigned mechanic, open the Active ticket.</li>
+          <li>Add a new sub-issue with a title and maintenance type.</li>
+          <li>Confirm it appears in the sub-issue list as Open.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-assign-mechanic">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Assign a Mechanic (Work Order)</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Dispatches one Open sub-issue to a Maintenance Personnel account along with a maintenance type. Only possible while the ticket is Active and that sub-issue is still Open.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>An inspection just logged a sub-issue that needs a mechanic dispatched.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open an Active ticket, pick an Open sub-issue.</li>
+          <li>Assign a mechanic and a maintenance type.</li>
+          <li>Confirm it becomes Under Repair and the mechanic receives a notification.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-reassign-mechanic">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Reassign a Mechanic</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Hands an in-progress (Under Repair) work order to a different mechanic, with a required reason — for when the original mechanic becomes unavailable.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>The assigned mechanic calls in sick mid-repair.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open a sub-issue that is Under Repair.</li>
+          <li>Reassign it to a different mechanic with a reason.</li>
+          <li>Confirm both the new and previous mechanic receive notifications, and the sub-issue stays Under Repair.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Maintenance Personnel" data-id="ticket-log-repairs">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Log Repairs</p><div class="role-pills"><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Only the assigned mechanic can log what was actually done — logs, parts used, cost, dates, and an optional photo/receipt — which moves the sub-issue to For Inspection and notifies the custodian.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A mechanic finishes physical work on an assigned sub-issue.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Log in as the assigned mechanic, open the work order under My Work Orders.</li>
+          <li>Fill in repair logs, parts used, cost, and dates; attach a photo if relevant.</li>
+          <li>Submit and confirm the status becomes For Inspection.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Custodian" data-id="ticket-verify-approve">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Verify Repair — Functional Test</p><div class="role-pills"><span class="role-pill custodian">Custodian</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">An independent UAT gate: the custodian runs a functional checklist and must attest they personally operated and tested the vehicle. A failed checklist item blocks approval outright — a failed test can never be Approved.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A mechanic logged a repair; it needs independent proof it actually works.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>As the assigned custodian, open the sub-issue that's For Inspection.</li>
+          <li>Run the checklist with one item marked failed, try to Approve — confirm it's blocked.</li>
+          <li>Mark everything passed, check the attestation box, Approve.</li>
+          <li>Confirm the sub-issue moves to For Confirmation.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Custodian" data-id="ticket-verify-reject">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Reject a Repair</p><div class="role-pills"><span class="role-pill custodian">Custodian</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">The same verification screen — choosing Rejected instead sends the sub-issue straight back to Under Repair for the mechanic to redo.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>The repair didn't actually fix the problem.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Verify a For Inspection sub-issue with verdict Rejected and notes explaining why.</li>
+          <li>Confirm it returns to Under Repair and the mechanic is notified.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-confirm">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Confirm a Sub-Issue</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">The final Tier-2 sign-off. Confirmed marks the sub-issue Done and writes a permanent Maintenance Record with its cost/parts/dates; Reopened sends it back to Under Repair instead.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A custodian has already approved the repair; Admin gives final sign-off.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open a sub-issue that's For Confirmation.</li>
+          <li>Confirm it Done.</li>
+          <li>Check Maintenance Records for a new entry, and confirm the ticket's progress count increased.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-defer">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Defer a Sub-Issue</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Records a decision not to fix an item right now (e.g. a backordered part), with a mandatory reason. It becomes a terminal Deferred state, and a breadcrumb Issue Report is opened or resurfaced so the defect is never silently forgotten.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A needed part won't arrive for weeks, but the rest of the ticket shouldn't be held up.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>On an Active ticket, defer an unfinished sub-issue with a reason.</li>
+          <li>Confirm it shows Deferred.</li>
+          <li>Check Issue Reports and confirm a matching breadcrumb report now exists (or was resurfaced).</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-close-clean">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Close a Ticket — Clean Close</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Available once every sub-issue is Done. Frees the vehicle back to Available/Good in one action.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>All repairs on a ticket are confirmed and the vehicle is ready to go back into service.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Confirm every sub-issue on a ticket is Done.</li>
+          <li>Close the ticket.</li>
+          <li>Confirm the ticket becomes Closed and the vehicle returns to Available.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-close-decision">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Close a Ticket — Decision-Close</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Closing is still allowed with unfinished sub-issues, but requires a deferral reason (the leftovers auto-defer) and an explicit fit-for-service answer. Answering "not fit" keeps the vehicle under maintenance even after the ticket closes.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A vehicle needs to be pulled from this ticket for budget or scheduling reasons, with real work still unfinished.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Close a ticket while a sub-issue is still Under Repair.</li>
+          <li>Provide a deferral reason and answer "not fit for service".</li>
+          <li>Confirm the ticket closes, the unfinished sub-issue shows Deferred, and the vehicle stays Under Maintenance rather than returning to Available.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-cancel">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Cancel / Uncancel a Ticket</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Cancel is available at any point before Closed, and resets any linked issue reports back to Pending. Uncancel restores the ticket to whichever phase it was in (Open or Active) if it turns out it's still needed.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A ticket was opened by mistake, then turns out to be needed after all.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Cancel an Open ticket, confirm it shows Cancelled.</li>
+          <li>Confirm the vehicle frees up (if no other tickets are open on it).</li>
+          <li>Uncancel it, confirm it returns to its prior phase.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="ticket-delete">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Delete a Ticket</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Fully discards a ticket. If it already had at least one Done sub-issue, it's archived as "Deleted" (recoverable) instead of vanishing outright. A Closed ticket can never be deleted.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>An Admin accidentally deletes a ticket that had real progress on it.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Delete a ticket that has no completed sub-issues — confirm it's simply gone.</li>
+          <li>Delete a different ticket that has at least one Done sub-issue — confirm it now appears in Ticket Archives tagged Deleted.</li>
+          <li>Try deleting a Closed ticket — confirm it's blocked.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ TICKET ARCHIVES ============ -->
+    <section class="module-section" id="mod-archives" data-title="Ticket Archives">
+      <div class="module-head"><h2>Ticket Archives</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin" data-id="archive-view">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Browse Ticket Archives</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A permanent log of every Closed or Deleted ticket, searchable and filterable by vehicle.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Looking up a vehicle's full maintenance-ticket history.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open Ticket Archives.</li>
+          <li>Search by plate number, confirm matching archived tickets appear.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="archive-view-closed">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">View a Closed Ticket</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A closed ticket is permanently read-only, but its full history should still be reviewable through a View button.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Someone needs to double-check what was done on a ticket closed months ago.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Click View on a Closed archive row.</li>
+          <li>Confirm the full ticket (sub-issues, verdicts, notes) opens without offering any edit actions.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="archive-reopen">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Reopen a Deleted Ticket</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Only archive entries tagged Deleted (never Closed) can be recovered — restores the ticket and every sub-issue exactly as it stood, blocked if a duplicate Main Issue already exists on that vehicle.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A ticket deleted earlier turns out to still matter.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Find a Deleted archive entry and click Reopen.</li>
+          <li>Confirm a new ticket is created with the same sub-issues and progress restored.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ VEHICLE MANAGEMENT ============ -->
+    <section class="module-section" id="mod-vehicles" data-title="Vehicle Management">
+      <div class="module-head"><h2>Vehicle Management</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="vehicle-add">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Add a Vehicle</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Registers a new unit with a validated plate number. Starts life as Available / Good.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A new ambulance joins the fleet.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Vehicle Management → Add.</li>
+          <li>Fill in the vehicle's details including plate number and type, submit.</li>
+          <li>Confirm it appears in the list as Available.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="vehicle-edit">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Edit a Vehicle</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Update a vehicle's details or photo without touching its live status.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A vehicle's brand/model info was entered incorrectly.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Edit an existing vehicle's brand, model, or photo.</li>
+          <li>Save and confirm the changes stick on reload.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="vehicle-archive">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Archive a Vehicle</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Temporarily marks a unit Inactive — out of active lookups and dashboards — without losing its history.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A vehicle is being pulled from service temporarily.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Archive a vehicle.</li>
+          <li>Confirm it disappears from active pickers (e.g. the vehicle dropdown on a new ticket) and shows Inactive.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="vehicle-restore">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Restore a Vehicle</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Reverses either an Archive or a Decommission, bringing the unit back to Available / Good.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>An archived vehicle is being put back into service.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Restore the vehicle archived above.</li>
+          <li>Confirm it's Available again and reappears in active pickers.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="vehicle-decommission">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Decommission a Vehicle</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A permanent end-of-life write-off with a required reason. Blocked while any ticket on that vehicle is still open.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A vehicle is beyond economical repair.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Try decommissioning a vehicle that still has an open ticket — confirm it's blocked.</li>
+          <li>Close or cancel that ticket, then decommission the vehicle with a reason.</li>
+          <li>Confirm its status becomes Decommissioned.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Custodian" data-id="vehicle-readiness">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Readiness Check</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A pass/fail checklist proving a vehicle will actually start and respond — not just that it has no open repair. Feeds the dashboard's "verified ready" vs. merely "available" distinction.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Confirming an available vehicle is genuinely dispatch-ready.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open a vehicle's profile and run a readiness check with one item marked failed.</li>
+          <li>Confirm its state shows "not ready".</li>
+          <li>Run it again with everything passed, confirm it shows "ready".</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="vehicle-reliability">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">View Vehicle Reliability</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A per-vehicle reliability summary built from its maintenance history, for spotting repeat-failure patterns.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Deciding whether a vehicle is becoming unreliable.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open the profile of a vehicle with some prior maintenance history.</li>
+          <li>Confirm the reliability view accurately reflects that history.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ VEHICLE TYPES ============ -->
+    <section class="module-section" id="mod-categories" data-title="Vehicle Types">
+      <div class="module-head"><h2>Vehicle Types</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin" data-id="category-manage">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Add / Edit / Delete a Vehicle Type</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Manages the categories vehicles are grouped under (e.g. Ambulance, Fire Truck, Rescue Boat) — this grouping is what drives the dashboard's readiness/coverage panel.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>The barangay adds a new class of vehicle to the fleet.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Add a new vehicle type.</li>
+          <li>Assign a vehicle to it, confirm it appears as its own group on the dashboard's readiness panel.</li>
+          <li>Edit, then delete a test type you created.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ VEHICLE LOCATION ============ -->
+    <section class="module-section" id="mod-locations" data-title="Vehicle Location">
+      <div class="module-head"><h2>Vehicle Location</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin" data-id="location-map">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Manage Hubs &amp; the Vehicles Map</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Hubs are named service locations pinned on a map within the barangay boundary. The map view shows a live vehicle count on each hub's marker.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A new sub-station hub needs to be added and vehicles assigned to it.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Click "Add Hub", then click the map to pin a new location.</li>
+          <li>Confirm the new hub pin appears.</li>
+          <li>Set a vehicle's current location to that hub, confirm its pin's count increments.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="location-record">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Vehicle Location Record</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A searchable table view of the same location data — which vehicle is where — for a quick non-map lookup.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Finding every vehicle currently parked at a specific hub.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open the "Vehicle Location Record" tab.</li>
+          <li>Search by location name, confirm the matching vehicles list correctly.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ VEHICLE HISTORY ============ -->
+    <section class="module-section" id="mod-history" data-title="Vehicle History">
+      <div class="module-head"><h2>Vehicle History</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin" data-id="history-view">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">View Vehicle History</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A chronological, read-only ledger of every notable event for every vehicle — added, updated, archived, readiness checks, schedule completions, and more.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Auditing everything that's happened to one vehicle over time.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Edit a vehicle, then run a readiness check on it.</li>
+          <li>Open Vehicle History and filter to that vehicle.</li>
+          <li>Confirm both events appear, in the correct order.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ CONDITION MONITORING ============ -->
+    <section class="module-section" id="mod-conditions" data-title="Condition Monitoring">
+      <div class="module-head"><h2>Condition Monitoring</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin,Custodian" data-id="condition-manage">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Log / Edit / Delete a Condition Check</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A periodic physical-condition assessment per vehicle (Good / Needs Inspection / Needs Repair / Damaged), independent from the ticket workflow.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A routine walk-around inspection outside of any specific reported issue.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Add a condition check for a vehicle, marking it Needs Inspection.</li>
+          <li>Confirm it appears in the module list and on that vehicle's profile.</li>
+          <li>Edit, then delete a test entry.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ MAINTENANCE SCHEDULE ============ -->
+    <section class="module-section" id="mod-schedules" data-title="Maintenance Schedule">
+      <div class="module-head"><h2>Maintenance Schedule</h2><span class="module-count"></span></div>
+      <p class="module-note">Preventive maintenance planned ahead of time, separate from reactive ticket repairs.</p>
+
+      <article class="ability-card" data-roles="Admin,Maintenance Personnel" data-id="schedule-create">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Create a Maintenance Schedule</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Books a future preventive-maintenance date for a vehicle, with a service location (dropdown of hubs, or "Other" free text) and optional assigned personnel. Blocked if that vehicle already has a Scheduled entry the same day. Can optionally recur every N months.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Booking a routine oil change three weeks out, recurring every 6 months.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Maintenance Schedule → Add. Confirm the date field defaults to tomorrow.</li>
+          <li>Pick a hub from the Service Location dropdown (or choose "Other" and type a location).</li>
+          <li>Set a recurrence interval, submit, confirm it shows Scheduled.</li>
+          <li>Try adding a second schedule for the same vehicle on the same date — confirm it's blocked.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Maintenance Personnel" data-id="schedule-edit">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Edit a Maintenance Schedule</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Update date, location, or notes. The Status field on this form only ever offers Scheduled or Cancelled — "Completed" is deliberately unreachable here, to force going through the proper Mark Done flow instead.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A booked service date needs to move.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Edit an existing schedule's date or location, save.</li>
+          <li>Confirm the change sticks.</li>
+          <li>Confirm the Status dropdown never offers "Completed" as an option.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Maintenance Personnel" data-id="schedule-complete">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Mark a Schedule Done</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">One action that completes the schedule, writes a proof-of-work Maintenance Record, and — if the schedule recurs — automatically books the next occurrence at the configured interval.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A recurring oil change was just performed on schedule.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open a recurring Scheduled entry, click Mark Done.</li>
+          <li>Fill in cost/notes and confirm.</li>
+          <li>Confirm a new Maintenance Record was created, the schedule shows Completed, and a new Scheduled entry now exists at the correct future date.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Maintenance Personnel" data-id="schedule-cancel">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Cancel a Maintenance Schedule</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Deleting a schedule cancels it rather than erasing it outright, keeping a record that it was once planned.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A planned service is no longer needed.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Delete a Scheduled entry.</li>
+          <li>Confirm it now shows Cancelled rather than disappearing from the list.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ MAINTENANCE RECORDS ============ -->
+    <section class="module-section" id="mod-maintenance" data-title="Maintenance Records">
+      <div class="module-head"><h2>Maintenance Records</h2><span class="module-count"></span></div>
+      <p class="module-note">The unified ledger of completed and in-progress repair work, whether it originated from a ticket, a schedule, or a standalone entry.</p>
+
+      <article class="ability-card" data-roles="Admin,Maintenance Personnel" data-id="record-add">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Add a Maintenance Record</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Logs standalone repair work directly, outside the ticket flow. A pure mechanic account always logs it under their own name; Admin can assign it to someone else.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A quick repair happens outside the formal ticket process.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>As Maintenance Personnel, add a record for a vehicle.</li>
+          <li>Confirm it's attributed to your own account and the vehicle flips to Under Maintenance / Needs Repair.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Custodian" data-id="record-verify">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Verify a Maintenance Record</p><div class="role-pills"><span class="role-pill custodian">Custodian</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">The same Tier-1 verification concept as tickets — the Custodian marks a For Verification record Passed or Failed. Failed bounces it back to Under Repair.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A standalone repair needs independent sign-off before it's considered done.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Verify a For Verification record as Failed, confirm it returns to Under Repair.</li>
+          <li>Repeat with Passed, confirm it stays For Verification awaiting Admin confirmation.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="record-confirm">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Confirm a Maintenance Record</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Final sign-off after a Passed verification. Confirmed marks it Completed and returns the vehicle to Available / Good; declining sends it back to Under Repair.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A Custodian has already passed the repair; Admin gives final confirmation.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Confirm a Passed record.</li>
+          <li>Confirm its status becomes Completed and the vehicle is Available again.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ USERS ============ -->
+    <section class="module-section" id="mod-users" data-title="Users">
+      <div class="module-head"><h2>Users</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin" data-id="user-add">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Add a User</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Creates an account with one or more roles — a person can hold both Custodian and Maintenance Personnel at once, for example.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A staff member does both vehicle inspections and physical repairs.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Create a user assigned both Custodian and Maintenance Personnel roles.</li>
+          <li>Log in as them, confirm the sidebar shows the union of both portals' modules.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="user-edit">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Edit a User</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Update an existing account's name, email, or role assignments.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>An employee changes position and needs a different role.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Edit a user's roles, save.</li>
+          <li>Confirm their next login reflects the new module set.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="user-deactivate">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Deactivate a User</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Immediately revokes every active session token for that account, not just a flag — they're logged out everywhere right away. An Admin cannot deactivate their own account.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>An employee leaves and their access must be cut off immediately, even mid-session.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Log in as a user in one browser session.</li>
+          <li>From another session, deactivate that user.</li>
+          <li>Confirm the first session is rejected on its very next request.</li>
+          <li>Try deactivating your own logged-in Admin account, confirm it's blocked.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin" data-id="user-activate">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Activate a User</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Reverses a deactivation so the account can log in again.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A previously deactivated employee returns.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Reactivate a deactivated user.</li>
+          <li>Confirm they can log in normally again.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ REPORTS ============ -->
+    <section class="module-section" id="mod-reports" data-title="Reports">
+      <div class="module-head"><h2>Reports</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin" data-id="reports-generate">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Generate a Report</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">On-demand report types built from the fleet's live data (e.g. maintenance cost, fleet status) for a chosen range or filter.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Preparing a summary for a barangay council meeting.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Open Reports and generate each available report type.</li>
+          <li>Confirm the output matches what's actually in the system for that range.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ LOGS ============ -->
+    <section class="module-section" id="mod-logs" data-title="Logs">
+      <div class="module-head"><h2>Logs</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin" data-id="logs-view">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">View Activity Logs</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A chronological audit trail of every meaningful action taken across the system — who did what, on which record, and when. Distinct from Vehicle History, which is scoped to a single vehicle.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Investigating who made a particular change.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Perform a handful of actions across different modules.</li>
+          <li>Open Logs, confirm each appears with the correct actor, action, and timestamp.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ NOTIFICATIONS ============ -->
+    <section class="module-section" id="mod-notifications" data-title="Notifications">
+      <div class="module-head"><h2>Notifications</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="notif-manage">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Receive &amp; Manage Notifications</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">In-app alerts for anything relevant to your role (new inspection assignment, work order dispatched, verification needed, ticket closed, etc.) — mark individually read, mark all read, or delete.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A mechanic needs to know the moment a work order is dispatched to them.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Trigger an action that notifies another role (e.g. assign a mechanic to a sub-issue).</li>
+          <li>Log in as that user, confirm the notification appears.</li>
+          <li>Mark it read, then use "mark all as read", then delete a notification.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ DEV TOOLS ============ -->
+    <section class="module-section" id="mod-devtools" data-title="Dev Tools">
+      <div class="module-head"><h2>Dev Tools</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin" data-id="devtools-impersonate">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Impersonate a User</p><div class="role-pills"><span class="role-pill admin">Admin</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">A local/testing-only shortcut for fast role-switching without needing separate credentials for every test account. It doesn't exist in production.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>Quickly checking how a screen looks under a different role while testing.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Click Impersonate and pick a target account.</li>
+          <li>Confirm the UI switches to that account's portal and permissions.</li>
+          <li>Switch back to the real Admin account when done.</li>
+        </ol></div>
+      </article>
+    </section>
+
+    <!-- ============ CROSS-CUTTING UI ============ -->
+    <section class="module-section" id="mod-crosscutting" data-title="Cross-Cutting UI">
+      <div class="module-head"><h2>Cross-Cutting UI</h2><span class="module-count"></span></div>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="ui-theme">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Dark / Light Theme Toggle</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">The whole app, including the public Login/About/Developers pages, supports both a dark and light visual theme.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A user prefers a light interface during the day and dark at night.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Toggle the theme switch.</li>
+          <li>Browse a few different modules plus the public About/Developers pages.</li>
+          <li>Confirm text, icons, and status pills stay legible in both themes.</li>
+        </ol></div>
+      </article>
+
+      <article class="ability-card" data-roles="Admin,Custodian,Maintenance Personnel" data-id="ui-public-pages">
+        <div class="ability-head">
+          <div class="ability-title-wrap"><p class="ability-title">Browse Public Pages</p><div class="role-pills"><span class="role-pill admin">Admin</span><span class="role-pill custodian">Custodian</span><span class="role-pill maint">Maintenance</span></div></div>
+          <label class="test-toggle"><input type="checkbox" /> Tested</label>
+        </div>
+        <p class="ability-explain">Login, About Us, and Developers pages are reachable without a session, sharing a common header and footer distinct from the authenticated app.</p>
+        <p class="ability-scenario"><strong>Scenario</strong>A visitor wants to learn about the system before logging in.</p>
+        <div class="ability-workflow"><strong>Workflow</strong><ol>
+          <li>Log out, visit the Login page directly.</li>
+          <li>Navigate to About Us, then Developers, using the header nav.</li>
+          <li>Confirm each page renders correctly and the links between them work.</li>
+        </ol></div>
+      </article>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  var STORAGE_KEY = 'vms-test-guide-progress-v1';
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.ability-card'));
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.module-section'));
+  var state = {};
+
+  try { state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { state = {}; }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function applyCardState(card) {
+    var id = card.getAttribute('data-id');
+    var checkbox = card.querySelector('.test-toggle input');
+    var checked = !!state[id];
+    checkbox.checked = checked;
+    card.classList.toggle('tested', checked);
+  }
+
+  cards.forEach(function (card) {
+    applyCardState(card);
+    var checkbox = card.querySelector('.test-toggle input');
+    checkbox.addEventListener('change', function () {
+      var id = card.getAttribute('data-id');
+      state[id] = checkbox.checked;
+      card.classList.toggle('tested', checkbox.checked);
+      save();
+      updateProgress();
+    });
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', function () {
+    if (!confirm('Reset all testing progress? This clears every checked box.')) return;
+    state = {};
+    save();
+    cards.forEach(applyCardState);
+    updateProgress();
+  });
+
+  function updateProgress() {
+    var total = cards.length;
+    var tested = cards.filter(function (c) { return state[c.getAttribute('data-id')]; }).length;
+    document.getElementById('progress-count').textContent = tested + '/' + total;
+    document.getElementById('progress-fill').style.width = (total ? (tested / total * 100) : 0) + '%';
+
+    sections.forEach(function (sec) {
+      var secCards = Array.prototype.slice.call(sec.querySelectorAll('.ability-card'));
+      var secTested = secCards.filter(function (c) { return state[c.getAttribute('data-id')]; }).length;
+      var navEntry = document.querySelector('.module-nav a[href="#' + sec.id + '"] .count');
+      if (navEntry) navEntry.textContent = secTested + '/' + secCards.length;
+      var moduleCount = sec.querySelector('.module-count');
+      if (moduleCount) moduleCount.textContent = secTested + '/' + secCards.length + ' tested';
+    });
+  }
+
+  // Build sidebar nav from sections
+  var nav = document.getElementById('module-nav');
+  sections.forEach(function (sec) {
+    var a = document.createElement('a');
+    a.href = '#' + sec.id;
+    var label = document.createElement('span');
+    label.textContent = sec.getAttribute('data-title');
+    var count = document.createElement('span');
+    count.className = 'count';
+    a.appendChild(label);
+    a.appendChild(count);
+    nav.appendChild(a);
+  });
+
+  updateProgress();
+
+  // Role filter
+  var activeRole = 'All';
+  var roleFilters = document.getElementById('role-filters');
+  roleFilters.addEventListener('click', function (e) {
+    var btn = e.target.closest('.role-chip');
+    if (!btn) return;
+    activeRole = btn.getAttribute('data-role');
+    Array.prototype.forEach.call(roleFilters.querySelectorAll('.role-chip'), function (b) {
+      b.setAttribute('aria-pressed', b === btn ? 'true' : 'false');
+    });
+    applyFilters();
+  });
+
+  // Search
+  var searchInput = document.getElementById('search-input');
+  searchInput.addEventListener('input', applyFilters);
+
+  function applyFilters() {
+    var query = searchInput.value.trim().toLowerCase();
+    var anyVisible = false;
+
+    sections.forEach(function (sec) {
+      var secCards = Array.prototype.slice.call(sec.querySelectorAll('.ability-card'));
+      var secHasVisible = false;
+
+      secCards.forEach(function (card) {
+        var roles = (card.getAttribute('data-roles') || '').split(',');
+        var roleMatch = activeRole === 'All' || roles.indexOf(activeRole) !== -1;
+        var text = card.textContent.toLowerCase();
+        var searchMatch = !query || text.indexOf(query) !== -1;
+        var visible = roleMatch && searchMatch;
+        card.hidden = !visible;
+        if (visible) { secHasVisible = true; anyVisible = true; }
+      });
+
+      sec.hidden = !secHasVisible;
+    });
+
+    document.getElementById('no-results').style.display = anyVisible ? 'none' : 'block';
+  }
+})();
+</script>
+
+</body>
+</html>

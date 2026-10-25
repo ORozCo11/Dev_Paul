@@ -1,0 +1,104 @@
+{
+  "checked_at_utc": "2026-10-22T12:56:55.479662+00:00",
+  "scope": "Bundled hierarchy, database identity/parent coverage, all registration dropdown responses, and PSA 2026-Q3 summary/targeted missing-unit comparison; not a complete official row-by-row comparison.",
+  "catalog": {
+    "provinces_and_groups": 84,
+    "cities_and_municipalities": 1634,
+    "barangays": 42046
+  },
+  "database": {
+    "provinces_and_groups": 84,
+    "cities_and_municipalities": 1634,
+    "coded_barangays": 42046,
+    "total_barangays": 42046
+  },
+  "live_dropdown_responses_checked": 1719,
+  "errors": [],
+  "internal_consistency_passed": true,
+  "official_summary": {
+    "as_of": "2026-09-30",
+    "verified_on": "2026-10-22",
+    "source_url": "https://psa.gov.ph/classification/psgc/summary",
+    "publication_url": "https://psa.gov.ph/system/files/scd/PSGC-3Q-2026-Publication-Datafile.xlsx",
+    "provinces": 82,
+    "cities": 149,
+    "municipalities": 1493,
+    "barangays": 42010,
+    "required_province_names": [
+      "Maguindanao del Norte",
+      "Maguindanao del Sur"
+    ],
+    "required_municipalities": {
+      "1999901000": "Kapalawan",
+      "1999902000": "Old Kaabakan",
+      "1999903000": "Kadayangan",
+      "1999904000": "Nabalawag",
+      "1999905000": "Pahamuddin",
+      "1999906000": "Malidegao",
+      "1999907000": "Ligawasan",
+      "1999908000": "Tugunan"
+    },
+    "municipalities_source_url": "https://psa.gov.ph/classification/psgc/municipalities/1900000000",
+    "limitations": "Summary comparison and targeted missing-unit checks; not a code-by-code comparison with the complete official masterlist. Masterlist download returned HTTP 403; official API requires an access token."
+  },
+  "official_freshness_findings": [
+    {
+      "level": "provinces",
+      "bundled": 81,
+      "official": 82,
+      "difference": -1
+    },
+    {
+      "level": "cities_and_municipalities",
+      "bundled": 1634,
+      "official": 1642,
+      "difference": -8
+    },
+    {
+      "level": "barangays",
+      "bundled": 42046,
+      "official": 42010,
+      "difference": 36
+    },
+    {
+      "missing_province": "Maguindanao del Norte"
+    },
+    {
+      "missing_province": "Maguindanao del Sur"
+    },
+    {
+      "missing_municipality": "Kapalawan",
+      "official_psgc_code": "1999901000"
+    },
+    {
+      "missing_municipality": "Old Kaabakan",
+      "official_psgc_code": "1999902000"
+    },
+    {
+      "missing_municipality": "Kadayangan",
+      "official_psgc_code": "1999903000"
+    },
+    {
+      "missing_municipality": "Nabalawag",
+      "official_psgc_code": "1999904000"
+    },
+    {
+      "missing_municipality": "Pahamuddin",
+      "official_psgc_code": "1999905000"
+    },
+    {
+      "missing_municipality": "Malidegao",
+      "official_psgc_code": "1999906000"
+    },
+    {
+      "missing_municipality": "Ligawasan",
+      "official_psgc_code": "1999907000"
+    },
+    {
+      "missing_municipality": "Tugunan",
+      "official_psgc_code": "1999908000"
+    }
+  ],
+  "complete_against_current_official_psgc": false,
+  "passed": false
+}

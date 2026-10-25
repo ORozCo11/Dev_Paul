@@ -1,0 +1,85 @@
+/* Keep schedule styling local to the create/edit form and its preview. */
+.form-context-layout:has(.schedule-entry-form) {
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.form-grid-2col.schedule-entry-form {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.schedule-entry-form .smart-form {
+  max-width: none;
+  gap: 16px;
+}
+
+.schedule-entry-form .form-group {
+  min-width: 0;
+  padding: 18px;
+  background: var(--surface-2, #f8fafc);
+  border-color: var(--border-subtle, #e2e8f0);
+}
+
+.schedule-entry-form .form-group-title {
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.schedule-entry-form .form-group-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+
+.schedule-entry-form .form-group-body > label {
+  min-width: 0;
+}
+
+.schedule-entry-form .form-group-body :is(input, select, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+}
+
+.schedule-entry-form textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.schedule-entry-form .form-actions {
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle, #e2e8f0);
+}
+
+.form-context-layout:has(.schedule-entry-form) .form-context-map-inline {
+  flex: none;
+}
+
+.form-context-layout:has(.schedule-entry-form) .form-context-map-expanded {
+  height: 240px;
+  min-height: 240px;
+  flex: none;
+}
+
+.form-context-layout:has(.schedule-entry-form) .form-context-empty .veh-card-head {
+  align-self: stretch;
+}
+
+@media (max-width: 980px) {
+  .form-context-layout:has(.schedule-entry-form) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .schedule-entry-form .form-group-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-entry-form .form-group {
+    padding: 14px;
+  }
+}

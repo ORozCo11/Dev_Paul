@@ -1,0 +1,27 @@
+{
+    "tables": {
+        "users": {
+            "count": 8,
+            "unchanged": true
+        },
+        "vehicles": {
+            "count": 15,
+            "unchanged": true
+        },
+        "maintenance_tickets": {
+            "count": 18,
+            "unchanged": true
+        },
+        "registration_settings": {
+            "count": 29,
+            "unchanged": true
+        }
+    },
+    "barangay": {
+        "id": 34076,
+        "name": "Suba (Pob.)",
+        "psgc_code": "0702209022",
+        "source": "namria_hdx_reference_2025",
+        "vertices": 1281
+    }
+}

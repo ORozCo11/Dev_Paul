@@ -1,0 +1,28 @@
+html .maintenance-record-detail { gap: 20px; padding: 6px; }
+.maintenance-report-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border-subtle, #dbe5f1); }
+.maintenance-report-heading h2 { margin: 4px 0 6px; font-size: 1.35rem; color: var(--text-strong, #0f172a); }
+.maintenance-report-heading p { margin: 0; font-size: .8rem; color: var(--text-muted, #64748b); }
+html .maintenance-record-hero { padding: 16px 18px; background: var(--surface-2, #f8fafc); border-radius: 8px; }
+html .maintenance-record-layout { grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: 20px; }
+html .maintenance-record-main, html .maintenance-record-sidebar { padding: 20px; border: 1px solid var(--border-subtle, #dbe5f1); border-radius: 10px; background: var(--surface, #fff); gap: 16px; }
+.maintenance-section-title { margin: 0; font-size: .9rem; font-weight: 700; color: var(--text-strong, #0f172a); }
+html .maintenance-progress { box-sizing: border-box; padding: 8px 0 18px; }
+html .maintenance-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border: 0; border-radius: 0; background: transparent; }
+html .maintenance-detail-grid > div { min-height: 80px; padding: 14px; border: 1px solid var(--border-subtle, #e2e8f0); border-radius: 8px; background: var(--surface-2, #f8fafc); color: var(--text, #1e293b); white-space: pre-wrap; }
+.maintenance-proof-file { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--border-subtle, #dbe5f1); border-radius: 8px; color: var(--primary, #2563eb); text-decoration: none; }
+.maintenance-proof-file span { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.maintenance-proof-file strong { font-size: .8rem; }
+.maintenance-proof-file small { color: var(--text-muted, #64748b); font-size: .72rem; }
+html .schedule-detail-hero, html .schedule-detail-hero.is-overdue { border-left-width: 1px; border-left-color: #cbdcff; box-shadow: none; }
+html .schedule-detail-notes, html .schedule-detail-notes.is-declined { border-left-width: 1px; border-left-color: #dbe5f1; box-shadow: none; }
+html .schedule-detail-main, html .schedule-detail-workflow, html .schedule-detail-actions { box-shadow: none; }
+html .maintenance-schedule-detail .sch-card-notes { border-left: 0; box-shadow: none; }
+.smart-form .cabinet-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; grid-column: 1 / -1; }
+.smart-form .cabinet-field > span { font-size: .7rem; font-weight: 700; color: var(--text-muted, #64748b); }
+@media (max-width: 900px) { html .maintenance-record-layout { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) {
+  .maintenance-report-heading { align-items: flex-start; flex-direction: column; }
+  html .maintenance-detail-grid { grid-template-columns: minmax(0, 1fr); }
+  html .maintenance-record-main, html .maintenance-record-sidebar { padding: 14px; }
+  html .maintenance-progress { overflow-x: auto; }
+}

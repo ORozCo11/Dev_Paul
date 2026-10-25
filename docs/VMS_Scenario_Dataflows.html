@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VMS Scenario &amp; Dataflow Reference</title>
+<style>
+:root {
+  --accent: #2563eb;
+  --accent-dim: #dbeafe;
+  --success: #16a34a;
+  --warn: #b45309;
+  --error: #dc2626;
+  --bg: #f9fafb;
+  --surface: #ffffff;
+  --border: #e5e7eb;
+  --text: #111827;
+  --text-muted: #6b7280;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155;
+    --text: #f1f5f9; --text-muted: #cbd5e1; --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 15.5px; line-height: 1.55; }
+h1, h2, h3 { margin: 1.4em 0 0.5em; font-weight: 700; }
+h1 { font-size: 2.1em; }
+h2 { font-size: 1.5em; border-bottom: 2px solid var(--accent); padding-bottom: 0.4em; margin-top: 2.2em; }
+h3 { font-size: 1.05em; margin: 1.6em 0 0.3em; }
+p { margin: 0.4em 0; }
+body { max-width: 980px; margin: 0 auto; padding: 2em; }
+
+.cover { text-align: center; padding: 3.5em 0; }
+.cover h1 { margin: 0; font-size: 2.6em; }
+.cover p { font-size: 1.15em; color: var(--text-muted); margin: 0.5em 0; }
+.cover-meta { color: var(--text-muted); margin-top: 2.5em; font-size: 0.9em; }
+
+.toc { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.4em 1.6em; margin: 2em 0; }
+.toc h3 { margin-top: 0; }
+.toc ol { columns: 2; column-gap: 2em; margin: 0.8em 0; padding-left: 1.2em; }
+.toc li { margin: 0.3em 0; font-size: 0.92em; }
+
+.scenario { page-break-inside: avoid; border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 6px; padding: 1em 1.3em; margin: 1em 0; background: var(--surface); }
+.scenario-num { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); font-weight: 700; font-size: 0.8em; margin-right: 8px; }
+.scenario-title { font-weight: 700; font-size: 1.02em; }
+.flow { font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace; font-size: 0.86em; background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 0.8em 1em; margin: 0.7em 0; overflow-x: auto; white-space: pre-wrap; line-height: 1.7; }
+.role { color: var(--accent); font-weight: 700; }
+.branch { margin-left: 1.4em; font-size: 0.86em; color: var(--text-muted); }
+.branch b { color: var(--text); }
+.note { font-size: 0.86em; color: var(--text-muted); margin-top: 0.5em; }
+.note strong { color: var(--warn); }
+
+table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.86em; }
+th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+th { background: var(--accent-dim); color: var(--accent); font-weight: 700; }
+
+@media print {
+  .scenario { page-break-inside: avoid; }
+  h2 { page-break-after: avoid; }
+  body { padding: 1em; }
+  .toc { page-break-after: always; }
+}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>VMS System</h1>
+  <p>Scenario &amp; Dataflow Reference</p>
+  <p>Every role-to-role flow in the system, at a glance</p>
+  <div class="cover-meta">
+    <p>For Capstone Project Defense</p>
+    <p>Version 3.0 | July 2026</p>
+  </div>
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li>Issue Reporting &amp; Condition Checks</li>
+    <li>Ticket Lifecycle — Main Issue → Sub-Issues</li>
+    <li>Vehicle Lifecycle (Decommission)</li>
+    <li>Readiness &amp; Preventive Maintenance</li>
+    <li>User &amp; Access Management</li>
+    <li>Notification Catalog</li>
+  </ol>
+</div>
+
+<h2>A. Issue Reporting &amp; Condition Checks</h2>
+
+<div class="scenario">
+  <span class="scenario-num">1</span><span class="scenario-title">Custodian Submits a Vehicle Issue Report</span>
+  <div class="flow"><span class="role">[Custodian]</span> --(submits issue report: vehicle, issue_type, severity, description)--> <span class="role">[System]</span>
+   --(status=Pending · vehicle.condition→Needs Inspection)--> <span class="role">[Admin]</span> (sees it in Issue Reports queue)</div>
+  <div class="note">Admin can ALSO submit issue reports directly (not just Custodian). Both roles can create one.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">2</span><span class="scenario-title">Admin Creates a Ticket From an Issue Report</span>
+  <div class="flow"><span class="role">[Admin]</span> --(clicks "Create Ticket" on a Pending report)--> <span class="role">[System]</span>
+   --(issue report status: Pending → In Maintenance · ticket created, status=Open)--> <span class="role">[Custodian]</span> (assigned to inspect)</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">3</span><span class="scenario-title">Admin Resolves an Issue Report Directly — No Ticket</span>
+  <div class="flow"><span class="role">[Admin / Maintenance Personnel]</span> --(edits issue report, sets status)--> <span class="role">[System]</span>
+   --(vehicle status/condition synced to match: Resolved→Available/Good, In Maintenance→Under Maintenance/Needs Repair)--> done</div>
+  <div class="note">No ticket ever required — a false alarm or a quick fix can be closed out this way. A Custodian may only edit/delete their <strong>own</strong> report, and only while it's still Pending.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">4</span><span class="scenario-title">Custodian Logs a Vehicle Condition Check</span>
+  <div class="flow"><span class="role">[Custodian]</span> --(inspects vehicle, submits condition_result)--> <span class="role">[System]</span>
+   --(latest record per vehicle = "current"; older ones become history)--> <span class="role">[Admin]</span> (sees it in Condition Monitoring)</div>
+</div>
+
+<h2>B. Ticket Lifecycle — Main Issue → Sub-Issues</h2>
+
+<div class="scenario">
+  <span class="scenario-num">5</span><span class="scenario-title">Admin Creates a Maintenance Ticket</span>
+  <div class="flow"><span class="role">[Admin]</span> --(creates ticket: vehicle, title, description, priority, assigns Custodian)--> <span class="role">[System]</span>
+   --(status=Open · duplicate-title check on this vehicle)--> <span class="role">[Custodian]</span> (notified: inspection assigned)</div>
+  <div class="note"><strong>Blocked</strong> if this vehicle already has an open ticket with the same (normalized) title — must add as a sub-issue instead.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">6</span><span class="scenario-title">Custodian Inspects the Main Issue — Three Branches</span>
+  <div class="flow"><span class="role">[Custodian]</span> --(physically inspects vehicle, submits verdict)--> <span class="role">[System]</span></div>
+  <div class="branch">→ <b>No Issues</b>: no sub-issues created, ticket jumps straight to Admin confirmation, then Closes</div>
+  <div class="branch">→ <b>Needs Maintenance</b>: one or more sub-issues created, ticket status → Active, ready for mechanic assignment</div>
+  <div class="note">Only two verdicts exist — "No Issues" or "Needs Maintenance". Attestation ("I have personally inspected this vehicle") is required before submission.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">7</span><span class="scenario-title">Admin Assigns a Mechanic to a Sub-Issue</span>
+  <div class="flow"><span class="role">[Admin]</span> --(selects Mechanic + maintenance_type)--> <span class="role">[System]</span>
+   --(sub-issue status → Under Repair)--> <span class="role">[Mechanic]</span> (notified: work order assigned)</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">8</span><span class="scenario-title">Mechanic Logs Repair Work</span>
+  <div class="flow"><span class="role">[Mechanic]</span> --(logs repair notes, parts used, cost, photo)--> <span class="role">[System]</span>
+   --(sub-issue status → For Inspection · verification_assigned_to = the ticket's Custodian)--> <span class="role">[Custodian]</span> (notified: verification required)</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">9</span><span class="scenario-title">Custodian Verifies the Repair — Functional Test</span>
+  <div class="flow"><span class="role">[Custodian]</span> --(operates vehicle, checks each functional-test item, attests)--> <span class="role">[System]</span></div>
+  <div class="branch">→ <b>All Pass → Approved</b>: sub-issue status → For Confirmation --> <span class="role">[Admin]</span> notified (repairs approved)</div>
+  <div class="branch">→ <b>Any Fail → Rejected</b>: sub-issue status → Under Repair (bounced back) --> <span class="role">[Mechanic]</span> notified (redo repairs)</div>
+  <div class="note">Only the Custodian explicitly assigned to <em>this</em> sub-issue's verification can act — not just anyone holding the Custodian role (matters when one person is both Custodian and Mechanic).</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">10</span><span class="scenario-title">Admin Gives Final Confirmation</span>
+  <div class="flow"><span class="role">[Admin]</span> --(reviews verified repair, confirms)--> <span class="role">[System]</span>
+   --(sub-issue status → Done · linked Issue Report → Resolved · unified Maintenance Record created)--> <span class="role">[Custodian]</span> (notified: sub-issue confirmed)</div>
+  <div class="note">If this was the last unresolved sub-issue on the ticket, every Admin is also notified: "Ticket Ready to Close."</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">11</span><span class="scenario-title">Admin Sends a "Confirmed" Sub-Issue Back (Rework)</span>
+  <div class="flow"><span class="role">[Admin]</span> --(rejects at confirmation stage)--> <span class="role">[System]</span>
+   --(sub-issue status → Under Repair · verification cleared)--> <span class="role">[Mechanic]</span> (notified: work order sent back)</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">12</span><span class="scenario-title">Admin Unconfirms a "Done" Sub-Issue (Post-Confirmation Adjustment)</span>
+  <div class="flow"><span class="role">[Admin]</span> --(clicks "Unconfirm" on a Done sub-issue, adds notes)--> <span class="role">[System]</span>
+   --(status → For Confirmation · confirmation cleared)--> <span class="role">[Admin]</span> (re-issues confirmation after adjusting)</div>
+  <div class="note">Lighter than a full reopen — stays within Admin's own hands, doesn't send it back through Custodian verification.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">13</span><span class="scenario-title">Admin Defers a Sub-Issue (Can't Fix Now)</span>
+  <div class="flow"><span class="role">[Admin]</span> --(records reason: no budget, part on back-order, etc.)--> <span class="role">[System]</span>
+   --(sub-issue status → Deferred · auto-opens a follow-up Issue Report)--> <span class="role">[Custodian]</span> (notified)</div>
+  <div class="note">Ensures a deferred defect isn't silently forgotten — it leaves a breadcrumb.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">14</span><span class="scenario-title">Mechanic/Custodian Adds a Sub-Issue Mid-Ticket</span>
+  <div class="flow"><span class="role">[Mechanic]</span> --(discovers unrelated 2nd problem while repairing)--> <span class="role">[System]</span>
+   --(new sub-issue, status=Open · ticket progress recalculated)--> <span class="role">[Admin]</span> (assigns it out via scenario 7)</div>
+  <div class="note">Only the ticket's <em>own</em> assigned Custodian or an assigned Mechanic can do this — <strong>never Admin</strong>, even on a combined-role account. Ticket must be Active.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">15</span><span class="scenario-title">Admin Reassigns the Mechanic Mid-Repair</span>
+  <div class="flow"><span class="role">[Admin]</span> --(mechanic unavailable — sick, transferred)--> <span class="role">[System]</span>
+   --(assigned_mechanic swapped · prior work log preserved)--> <span class="role">[New Mechanic]</span> (notified, sees prior notes) + <span class="role">[Old Mechanic]</span> (notified)</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">16</span><span class="scenario-title">Admin Closes the Ticket — All Sub-Issues Done</span>
+  <div class="flow"><span class="role">[Admin]</span> --(closes, N of N sub-issues Done)--> <span class="role">[System]</span>
+   --(ticket status → Closed)--> <span class="role">[Custodian]</span> + <span class="role">[every assigned Mechanic]</span> (notified: ticket closed)</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">17</span><span class="scenario-title">Admin Closes the Ticket as a Decision (Leftovers Deferred)</span>
+  <div class="flow"><span class="role">[Admin]</span> --(closes early, records deferral reason for the rest)--> <span class="role">[System]</span>
+   --(ticket status → Closed · unresolved sub-issues marked Deferred)--> <span class="role">[Custodian]</span> + <span class="role">[Mechanics]</span> (notified)</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">18</span><span class="scenario-title">Admin Reopens a Deleted (Archived) Ticket</span>
+  <div class="flow"><span class="role">[Admin]</span> --(recovers an accidentally deleted, not-yet-finished ticket)--> <span class="role">[System]</span>
+   --(duplicate-Main-Issue check on this vehicle · ticket restored from snapshot)--> <span class="role">[Custodian]</span> (notified: ticket reopened)</div>
+  <div class="note">Only works for a "Deleted" archive entry — a permanently "Closed" one is locked and cannot be reopened this way.</div>
+</div>
+
+<h2>C. Vehicle Lifecycle</h2>
+
+<div class="scenario">
+  <span class="scenario-num">19</span><span class="scenario-title">Admin Decommissions a Vehicle</span>
+  <div class="flow"><span class="role">[Admin]</span> --(records decommission_reason)--> <span class="role">[System]</span></div>
+  <div class="branch">→ <b>Blocked</b> if any open (non-Closed/Cancelled) ticket exists on this vehicle</div>
+  <div class="branch">→ <b>Else</b>: status → Decommissioned, condition → Damaged; excluded from every readiness/coverage calculation; history preserved</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">20</span><span class="scenario-title">Admin Recommissions a Decommissioned Vehicle</span>
+  <div class="flow"><span class="role">[Admin]</span> --(restores)--> <span class="role">[System]</span>
+   --(status → Available, condition → Good · decommission fields cleared)--> back in the active fleet</div>
+</div>
+
+<h2>D. Readiness &amp; Preventive Maintenance</h2>
+
+<div class="scenario">
+  <span class="scenario-num">21</span><span class="scenario-title">Custodian/Admin Performs a Readiness Check</span>
+  <div class="flow"><span class="role">[Custodian / Admin]</span> --(physically confirms fuelled, equipped, working — per-checklist)--> <span class="role">[System]</span>
+   --(any failed item = NOT ready · otherwise verified ready for 24 hrs)--> reflected instantly in Vehicle Management + Dashboard</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">22</span><span class="scenario-title">Admin/Mechanic Creates a Preventive Maintenance Schedule</span>
+  <div class="flow"><span class="role">[Admin / Mechanic]</span> --(vehicle, type, date, optional recurrence)--> <span class="role">[System]</span>
+   --(status=Scheduled · double-booking check: 1 per vehicle per date)--> sits on the calendar until due</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">23</span><span class="scenario-title">Mechanic Marks a Schedule Done — Recurrence Auto-Regenerates</span>
+  <div class="flow"><span class="role">[Mechanic / Admin]</span> --(marks done, logs cost/notes)--> <span class="role">[System]</span>
+   --(Maintenance Record created as Completed immediately — no verify/confirm gate · schedule → Completed)--> <span class="role">[System]</span>
+   --(if recurring: next occurrence auto-created, collision-checked)--> back on the calendar</div>
+  <div class="note">Deliberately simpler than the ticket pipeline — routine, expected, low-risk work; no independent Custodian verification here.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">24</span><span class="scenario-title">Admin/Mechanic Logs a Standalone Maintenance Record</span>
+  <div class="flow"><span class="role">[Admin / Mechanic]</span> --(external vendor repair, no ticket involved)--> <span class="role">[System]</span>
+   --(vehicle forced Under Maintenance/Needs Repair · progress_status=Assigned)--> <span class="role">[Custodian]</span> (can verify)</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">25</span><span class="scenario-title">Custodian Verifies / Admin Confirms a Standalone Record</span>
+  <div class="flow"><span class="role">[Custodian]</span> --(inspects, submits verification_result)--> <span class="role">[System]</span>
+   --(only if Passed)--> <span class="role">[Admin]</span> --(confirms)--> <span class="role">[System]</span> --(progress_status → Completed)</div>
+  <div class="note">Same Tier-1/Tier-2 checks-and-balances as tickets — Completed can <strong>never</strong> be set by direct edit.</div>
+</div>
+
+<h2>E. User &amp; Access Management</h2>
+
+<div class="scenario">
+  <span class="scenario-num">26</span><span class="scenario-title">Admin Creates a New User (Single or Multi-Role)</span>
+  <div class="flow"><span class="role">[Admin]</span> --(name, email, password, one or more roles)--> <span class="role">[System]</span>
+   --(first role in the list becomes "primary" — drives portal routing)--> <span class="role">[New User]</span> can log in immediately</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">27</span><span class="scenario-title">Admin Deactivates a User</span>
+  <div class="flow"><span class="role">[Admin]</span> --(deactivates)--> <span class="role">[System]</span>
+   --(is_active=false · every active session/token revoked immediately)--> user locked out on next request</div>
+  <div class="note">No check for active ticket/mechanic assignments — deactivating someone mid-repair doesn't auto-reassign their work.</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">28</span><span class="scenario-title">Admin Reactivates a User</span>
+  <div class="flow"><span class="role">[Admin]</span> --(reactivates)--> <span class="role">[System]</span> --(is_active=true)--> user can log in again</div>
+</div>
+
+<div class="scenario">
+  <span class="scenario-num">29</span><span class="scenario-title">Any User Changes Their Own Password</span>
+  <div class="flow"><span class="role">[Any User]</span> --(submits old + new password)--> <span class="role">[System]</span>
+   --(verifies old password first)--> password updated</div>
+  <div class="note">Self-service only for password — no self-service profile/photo edit, and no "forgot password" email-reset flow exists.</div>
+</div>
+
+<h2>F. Notification Catalog</h2>
+<p class="note" style="margin-bottom: 1em;">Every automatic notification the system fires, and who receives it. All are ticket-lifecycle events — issue-report submission, PM schedule due-dates, and decommission/recommission do <strong>not</strong> currently trigger a notification.</p>
+
+<table>
+<tr><th>Event</th><th>Trigger</th><th>Recipient</th></tr>
+<tr><td>Inspection assigned</td><td>Ticket created</td><td>Assigned Custodian</td></tr>
+<tr><td>Inspection submitted</td><td>Custodian submits inspection</td><td>All Admins</td></tr>
+<tr><td>Work order assigned</td><td>Mechanic assigned to sub-issue</td><td>That Mechanic</td></tr>
+<tr><td>Work order reassigned</td><td>Sub-issue reassigned</td><td>New Mechanic + Previous Mechanic</td></tr>
+<tr><td>Repairs completed</td><td>Mechanic logs repair</td><td>Assigned Custodian ("verification required")</td></tr>
+<tr><td>Repairs approved</td><td>Custodian verifies = Approved</td><td>All Admins</td></tr>
+<tr><td>Repairs rejected</td><td>Custodian verifies = Rejected</td><td>Assigned Mechanic</td></tr>
+<tr><td>Sub-issue confirmed</td><td>Admin confirms Done</td><td>Assigned Custodian</td></tr>
+<tr><td>Ticket ready to close</td><td>Last sub-issue confirmed Done</td><td>All Admins</td></tr>
+<tr><td>Work order sent back</td><td>Admin rejects at confirmation</td><td>Assigned Mechanic</td></tr>
+<tr><td>Repair reopened for verification</td><td>Admin reopens a confirmed sub-issue</td><td>Assigned Custodian</td></tr>
+<tr><td>Sub-issue deferred</td><td>Admin defers</td><td>Assigned Custodian</td></tr>
+<tr><td>Ticket closed</td><td>Admin closes ticket</td><td>Assigned Custodian + every assigned Mechanic</td></tr>
+<tr><td>Ticket reopened</td><td>Admin reopens a deleted ticket</td><td>Assigned Custodian</td></tr>
+</table>
+
+<div style="text-align: center; margin-top: 3em; padding-top: 2em; border-top: 2px solid var(--border); color: var(--text-muted);">
+  <p><strong>VMS System — Scenario &amp; Dataflow Reference | Capstone Project Defense</strong></p>
+  <p style="font-size: 0.9em;">29 verified role-to-role scenarios across 6 categories, plus a complete notification catalog.</p>
+</div>
+
+</body>
+</html>

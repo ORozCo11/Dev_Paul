@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500" role="img" aria-label="White and blue ambulance">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eef4ff"/>
+      <stop offset="1" stop-color="#d6e4ff"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e8eef7"/>
+    </linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#bcd6f5"/>
+      <stop offset="1" stop-color="#7fa9d8"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="500" fill="url(#bg)"/>
+  <ellipse cx="400" cy="430" rx="320" ry="34" fill="#9fb4d6" opacity="0.45"/>
+  <!-- body -->
+  <g>
+    <path d="M120 300 L120 210 Q120 192 138 192 L470 192 L540 230 L690 240 Q708 242 708 262 L708 300 Z" fill="url(#body)" stroke="#cdd8e8" stroke-width="3"/>
+    <rect x="120" y="300" width="588" height="26" rx="6" fill="#1d4ed8"/>
+    <!-- blue stripe -->
+    <rect x="120" y="262" width="588" height="20" fill="#2563eb"/>
+    <!-- cab window -->
+    <path d="M486 226 L536 232 L596 240 L596 262 L486 262 Z" fill="url(#glass)" stroke="#9bb8da" stroke-width="2"/>
+    <!-- rear windows -->
+    <rect x="160" y="214" width="80" height="40" rx="6" fill="url(#glass)" stroke="#9bb8da" stroke-width="2"/>
+    <rect x="262" y="214" width="80" height="40" rx="6" fill="url(#glass)" stroke="#9bb8da" stroke-width="2"/>
+    <!-- medical cross -->
+    <g transform="translate(300 226)">
+      <rect x="-7" y="-22" width="14" height="44" rx="3" fill="#dc2626"/>
+      <rect x="-22" y="-7" width="44" height="14" rx="3" fill="#dc2626"/>
+    </g>
+    <!-- emergency lights -->
+    <rect x="250" y="178" width="120" height="16" rx="7" fill="#dc2626"/>
+    <rect x="252" y="180" width="56" height="12" rx="5" fill="#ef4444"/>
+    <rect x="312" y="180" width="56" height="12" rx="5" fill="#3b82f6"/>
+    <!-- headlight -->
+    <rect x="690" y="266" width="20" height="18" rx="4" fill="#fde68a" stroke="#f59e0b" stroke-width="1.5"/>
+    <text x="200" y="296" font-family="Arial, sans-serif" font-size="22" font-weight="800" fill="#1d4ed8" letter-spacing="2">AMBULANCE</text>
+  </g>
+  <!-- wheels -->
+  <g>
+    <circle cx="250" cy="326" r="46" fill="#1f2937"/>
+    <circle cx="250" cy="326" r="22" fill="#cbd5e1"/>
+    <circle cx="250" cy="326" r="9" fill="#64748b"/>
+    <circle cx="590" cy="326" r="46" fill="#1f2937"/>
+    <circle cx="590" cy="326" r="22" fill="#cbd5e1"/>
+    <circle cx="590" cy="326" r="9" fill="#64748b"/>
+  </g>
+</svg>

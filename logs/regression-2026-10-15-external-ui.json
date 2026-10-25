@@ -1,0 +1,28 @@
+[
+  {
+    "test": "Custodian sidebar order",
+    "items": [
+      "Dashboard",
+      "Vehicle History",
+      "View Vehicles",
+      "Condition Monitoring",
+      "Report Vehicle Issue",
+      "My Tasks",
+      "Maintenance Schedule",
+      "Maintenance Records"
+    ],
+    "historyLast": false
+  },
+  {
+    "test": "external proposal layout 1440",
+    "overflow": false
+  },
+  {
+    "test": "external proposal layout 390",
+    "overflow": false
+  },
+  {
+    "test": "external proposal browser submit",
+    "status": 201
+  }
+]

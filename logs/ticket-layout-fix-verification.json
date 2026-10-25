@@ -1,0 +1,170 @@
+{
+  "results": [
+    {
+      "test": "Vehicle History last",
+      "pass": true,
+      "nav": [
+        "Dashboard",
+        "View Vehicles",
+        "Condition Monitoring",
+        "Report Vehicle Issue",
+        "My Tasks",
+        "Maintenance Schedule",
+        "Maintenance Records",
+        "Vehicle History"
+      ]
+    },
+    {
+      "test": "in_house layout 1920",
+      "pass": true,
+      "layout": {
+        "issue": {
+          "left": 646,
+          "bottom": 625.453125
+        },
+        "work": {
+          "left": 646,
+          "top": 643.453125,
+          "width": 1250
+        },
+        "vehicleWidth": 380,
+        "overflow": false
+      }
+    },
+    {
+      "test": "in_house layout 1440",
+      "pass": true,
+      "layout": {
+        "issue": {
+          "left": 646,
+          "bottom": 625.453125
+        },
+        "work": {
+          "left": 646,
+          "top": 643.453125,
+          "width": 770
+        },
+        "vehicleWidth": 380,
+        "overflow": false
+      }
+    },
+    {
+      "test": "in_house layout 1024",
+      "pass": true,
+      "layout": {
+        "issue": {
+          "left": 459.859375,
+          "bottom": 721.921875
+        },
+        "work": {
+          "left": 459.859375,
+          "top": 739.921875,
+          "width": 540.140625
+        },
+        "vehicleWidth": 320,
+        "overflow": false
+      }
+    },
+    {
+      "test": "in_house layout 390",
+      "pass": true,
+      "layout": {
+        "issue": {
+          "left": 102,
+          "bottom": 1871.265625
+        },
+        "work": {
+          "left": 102,
+          "top": 1889.265625,
+          "width": 262
+        },
+        "vehicleWidth": 262,
+        "overflow": false
+      }
+    },
+    {
+      "test": "external layout 1920",
+      "pass": true,
+      "layout": {
+        "issue": {
+          "left": 624.15625,
+          "bottom": 625.453125
+        },
+        "work": {
+          "left": 624.15625,
+          "top": 643.453125,
+          "width": 1271.84375
+        },
+        "vehicleWidth": 380,
+        "overflow": false
+      }
+    },
+    {
+      "test": "external layout 1440",
+      "pass": true,
+      "layout": {
+        "issue": {
+          "left": 646,
+          "bottom": 625.453125
+        },
+        "work": {
+          "left": 646,
+          "top": 643.453125,
+          "width": 770
+        },
+        "vehicleWidth": 380,
+        "overflow": false
+      }
+    },
+    {
+      "test": "external layout 1024",
+      "pass": true,
+      "layout": {
+        "issue": {
+          "left": 450.578125,
+          "bottom": 721.921875
+        },
+        "work": {
+          "left": 450.578125,
+          "top": 739.921875,
+          "width": 549.421875
+        },
+        "vehicleWidth": 320,
+        "overflow": false
+      }
+    },
+    {
+      "test": "external layout 390",
+      "pass": true,
+      "layout": {
+        "issue": {
+          "left": 102,
+          "bottom": 1871.265625
+        },
+        "work": {
+          "left": 102,
+          "top": 1889.265625,
+          "width": 262
+        },
+        "vehicleWidth": 262,
+        "overflow": false
+      }
+    },
+    {
+      "test": "dark theme",
+      "theme": "dark",
+      "overflow": false
+    },
+    {
+      "test": "external proposal submission after layout fix",
+      "status": 201,
+      "pass": true
+    },
+    {
+      "test": "in-house proposal submission after layout fix",
+      "status": 201,
+      "pass": true
+    }
+  ],
+  "errors": []
+}
