@@ -16745,3 +16745,10 @@ html:root[data-theme] button:is(.icon-btn, .file-card-icon-btn, .lr-icon-btn, .r
     min-height: 44px;
   }
 }
+
+/* Keep full repair-source labels within their history column. */
+.maintenance-record-source { display: block; min-width: 0; }
+html .maintenance-record-source .status-badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-transform: none; line-height: 1.35; }
+html .maintenance-record-source .in-house-repair { background: #dcfce7; border-color: #86efac; color: #166534; }
+html .maintenance-record-source .sent-to-external-shop { background: #e0f2fe; border-color: #7dd3fc; color: #075985; }
+html .maintenance-record-source .maintenance-schedule { background: #ede9fe; border-color: #c4b5fd; color: #5b21b6; }

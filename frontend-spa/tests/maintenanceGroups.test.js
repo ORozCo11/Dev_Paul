@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupMaintenanceByVehicle, maintenanceSourceBucket } from '../src/utils/maintenanceGroups.js';
+import { groupMaintenanceByVehicle, maintenanceSourceBucket, completedMaintenanceRecords, maintenanceSourceLabel } from '../src/utils/maintenanceGroups.js';
 
 test('two repaired sub-issues share one vehicle row without losing either repair', () => {
   const repairs = [
@@ -50,4 +50,24 @@ test('maintenance source totals are exclusive and retain separate records for th
   assert.deepEqual(records.map(maintenanceSourceBucket), ['In-House Repair', 'In-House Repair', 'External Shop', 'Scheduled Maintenance', 'Scheduled Maintenance']);
   assert.equal(groupMaintenanceByVehicle(records).length, 3);
   assert.equal(records.filter((record) => maintenanceSourceBucket(record) === 'In-House Repair').length, 2);
+});
+
+
+test('completed history excludes ongoing, submitted and reopened work even when a finish date is recorded', () => {
+  const records = ['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification', 'Completed'].map((progress_status, i) => ({ maintenance_id: i + 1, progress_status, date_completed: '2026-10-25' }));
+  assert.deepEqual(completedMaintenanceRecords(records), [records[4]]);
+  assert.deepEqual(completedMaintenanceRecords(), []);
+});
+
+test('completed repairs on the same vehicle remain separate with exclusive source labels', () => {
+  const records = [
+    { maintenance_id: 1, vehicle_id: 9, progress_status: 'Completed', source: 'From Issue Report' },
+    { maintenance_id: 2, vehicle_id: 9, progress_status: 'Completed', is_external: true, source: 'External Shop' },
+    { maintenance_id: 3, vehicle_id: 9, progress_status: 'Completed', is_external: true, originating_schedule: { schedule_id: 1 } },
+    { maintenance_id: 4, vehicle_id: 9, progress_status: 'Under Repair', source: 'External Shop' },
+  ];
+  const completed = completedMaintenanceRecords(records);
+  assert.equal(completed.length, 3);
+  assert.deepEqual(completed.map(maintenanceSourceLabel), ['In-House Repair', 'Sent to External Shop', 'Maintenance Schedule']);
+  assert.deepEqual(records.map((record) => record.maintenance_id), [1, 2, 3, 4]);
 });

@@ -66,7 +66,7 @@ Selected unfinished work can be reassigned without resetting submitted repairs. 
 - **Vehicle History** — an automatic timeline of every location/issue/condition/maintenance event per vehicle.
 - **Condition Monitoring** — a Custodian's routine physical check-in on a vehicle, independent of any reported issue.
 - **Maintenance Schedule** — preventive maintenance planning, with optional recurrence (fixed intervals or a custom number of months) and an urgency view (Overdue / 1–3 / 4–7 / 8+ days).
-- **Maintenance Records** — a direct log of maintenance done outside the ticket workflow (external shop work, historical records).
+- **Maintenance Records** — finished repair history from tickets, external shops and maintenance schedules. Each completed repair appears separately with its work performed, source and completion date; ongoing work remains in the work and verification views.
 - **Reports** — generated summaries across fleet, maintenance, issues, and users, exportable per report type.
 - **Activity Log** — a full audit trail of actions taken across the fleet, scoped per Barangay.
 - **Users** — account management: roles, activation, and (for Admin) approving pending signups.
