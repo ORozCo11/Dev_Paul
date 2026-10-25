@@ -11479,7 +11479,7 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
                     <span className="muted"> · Personnel: {it.suggested_mechanic_id ? (mechanicOptions.find((m) => String(m.id) === String(it.suggested_mechanic_id))?.name ?? '—') : 'Unassigned'}</span>
                   )}
                 </span>
-                <button type="button" className="icon-btn" title="Edit" aria-label="Edit" onClick={() => startEdit(index)}><Icon name="edit" size={13} /></button>
+                <button type="button" className="icon-btn btn-edit-action" title="Edit" aria-label="Edit" onClick={() => startEdit(index)}><Icon name="edit" size={13} /></button>
                 <button type="button" className="icon-btn btn-delete-action" title="Delete" aria-label="Delete" disabled={items.length <= minItems} onClick={() => remove(index)}><Icon name="trash" size={13} /></button>
               </li>
             ))}
@@ -13550,13 +13550,13 @@ function VehicleFiles({ vehicleId, canManage, onRequestConfirmation }) {
       <div className="veh-card-head veh-files-head">
         <div className="veh-files-head-title"><Icon name="clipboard" size={16} /><h4>Files</h4></div>
         <div className="veh-files-head-actions">
-          <button type="button" className="file-card-icon-btn" onClick={() => openModal()} title="Expand" aria-label="Expand">
+          <button type="button" className="file-card-icon-btn btn-view-action" onClick={() => openModal()} title="Expand" aria-label="Expand">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
             </svg>
           </button>
           {canManage && (
-            <button type="button" className="file-card-icon-btn" onClick={() => openModal()} title="Add file" aria-label="Add file">
+            <button type="button" className="file-card-icon-btn btn-confirm-action" onClick={() => openModal()} title="Add file" aria-label="Add file">
               <Icon name="plus" size={13} />
             </button>
           )}
@@ -13693,12 +13693,12 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
           <div className="files-modal-toolbar">
             {canManage && (
               <>
-                <button type="button" className="file-card-icon-btn" onClick={() => fileInputRef.current?.click()} title="Add file" aria-label="Add file">
+                <button type="button" className="file-card-icon-btn btn-confirm-action" onClick={() => fileInputRef.current?.click()} title="Add file" aria-label="Add file">
                   <Icon name="plus" size={14} />
                 </button>
                 <button
                   type="button"
-                  className="file-card-icon-btn"
+                  className="file-card-icon-btn btn-edit-action"
                   disabled={!canEditSelected}
                   onClick={() => canEditSelected && startEdit(selected)}
                   title={selected && !canEditSelected ? 'You can only edit a file you uploaded yourself' : 'Edit selected'}
@@ -13707,7 +13707,7 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
                   <Icon name="edit" size={14} />
                 </button>
                 {canDeleteDocs && (
-                  <button type="button" className="file-card-icon-btn" disabled={!selected} onClick={() => selected && handleDelete(selected)} title="Delete selected" aria-label="Delete selected">
+                  <button type="button" className="file-card-icon-btn btn-delete-action" disabled={!selected} onClick={() => selected && handleDelete(selected)} title="Delete selected" aria-label="Delete selected">
                     <Icon name="trash" size={14} />
                   </button>
                 )}
@@ -15484,7 +15484,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                   <input type="number" aria-label={`Part ${index + 1} cost`} placeholder="0.00" min="0" step="0.01" value={part.cost} onChange={(e) => updatePart(index, 'cost', e.target.value)} />
                   <button
                     type="button"
-                    className="lr-icon-btn"
+                    className="lr-icon-btn btn-delete-action"
                     onClick={() => removePart(index)}
                     title="Remove part"
                     aria-label={`Remove part ${index + 1}`}
@@ -15629,7 +15629,7 @@ function ticketTableColumns(unreadByTicket = {}, onViewTicket, onChangeVisibilit
     { key: 'vehicle_image', label: 'Vehicle Image', className: 'cell-center', render: (r) => <PhotoCell alt={r.vehicle?.vehicle_name ?? 'Vehicle'} url={r.vehicle?.photo_url} /> },
     { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <span><TicketStatusPill status={r.status} />{r.correction_requested_at && <small className="muted"> Corrections requested</small>}</span> },
     { key: 'personnel', label: 'Assigned To', render: (r) => <TicketPersonnelAvatars ticket={r} /> },
-    { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <span className="ticket-list-actions"><button type="button" className="cell-link" aria-label={`View ticket ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name="eye" size={16} /></button>{onChangeVisibility && <button type="button" className="cell-link" title={r.hidden_from_list ? 'Restore to my list' : 'Hide from my list; repair tracking continues'} aria-label={`${r.hidden_from_list ? 'Restore' : 'Hide'} ticket ${ticketNumber(r)} ${r.hidden_from_list ? 'to' : 'from'} my list`} onClick={(e) => { e.stopPropagation(); onChangeVisibility(r, !r.hidden_from_list); }}><Icon name={r.hidden_from_list ? 'undo' : 'archive'} size={16} /></button>}</span> },
+    { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <span className="ticket-list-actions"><button type="button" className="icon-btn btn-view-action" title="View ticket" aria-label={`View ticket ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name="eye" size={16} /></button>{onChangeVisibility && <button type="button" className={`icon-btn ${r.hidden_from_list ? 'btn-reopen-action' : 'btn-archive-action'}`} title={r.hidden_from_list ? 'Restore to my list' : 'Hide from my list; repair tracking continues'} aria-label={`${r.hidden_from_list ? 'Restore' : 'Hide'} ticket ${ticketNumber(r)} ${r.hidden_from_list ? 'to' : 'from'} my list`} onClick={(e) => { e.stopPropagation(); onChangeVisibility(r, !r.hidden_from_list); }}><Icon name={r.hidden_from_list ? 'undo' : 'archive'} size={16} /></button>}</span> },
   ];
   const order = ['ticket_id', 'created', 'vehicle_image', 'title', 'priority', 'status', 'personnel', 'next_step', 'actions'];
   return order.map((key) => columns.find((column) => column.key === key));

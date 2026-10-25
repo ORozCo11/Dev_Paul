@@ -3,7 +3,6 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import { lazy, Suspense, useContext } from 'react';
 import ManagedFileLinks from './components/ManagedFileLinks';
-import ImpersonationBanner from './components/ImpersonationBanner';
 import { AuthContext } from './context/AuthContextObject';
 import Login from './views/Login';
 const Register = lazy(() => import('./views/Register'));
@@ -42,7 +41,6 @@ function App() {
   return (
     <Router>
       <ManagedFileLinks />
-      <ImpersonationBanner />
       <ErrorBoundary>
         <Suspense fallback={<main className="auth-page" role="status">Loading…</main>}>
         <Routes>
