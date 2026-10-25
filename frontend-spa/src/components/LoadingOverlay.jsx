@@ -6,7 +6,7 @@ export default function LoadingOverlay({ label = 'Loading...' }) {
   return createPortal(
     <div className="vms-loading-overlay" role="status" aria-live="polite" aria-busy="true">
       <div className="vms-loading-card">
-        <VMSLogo variant="blue" single size={26} className="vms-loading-logo" />
+        <VMSLogo size={26} className="vms-loading-logo" />
         <span>{label}</span>
       </div>
     </div>,

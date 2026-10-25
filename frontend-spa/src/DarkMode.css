@@ -36,7 +36,7 @@ html[data-theme="dark"] :is(.workspace, .topbar, .superadmin-shell, .modal-overl
 html[data-theme="dark"] :is(.content-area, .topbar) { background: var(--bg); }
 html[data-theme="dark"] .topbar { border-color: var(--border); }
 html[data-theme="dark"] :is(.sidebar-toggle-btn, .topbar .vms-wordmark) { color: #93c5fd; }
-html[data-theme="dark"] .topbar .topbar-gear-icon { color: #ffffff !important; }
+html[data-theme="dark"] .topbar .topbar-gear-icon > path { fill: #93c5fd; }
 
 /* Dashboard actions and chart labels must read clearly on a dark surface. */
 html[data-theme="dark"] :is(.focus-card button, .focus-more, .focus-readiness-details > summary, .focus-error button) { color: var(--dark-link); }

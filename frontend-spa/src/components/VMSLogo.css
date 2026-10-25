@@ -1,20 +1,9 @@
-.vms-gear { display: block; flex-shrink: 0; }
+.vms-gear { display: block; flex-shrink: 0; transform-box: view-box; transform-origin: center center; }
 .topbar-brand-cluster > .vms-gear { margin-right: -6px; }
 .auth-page-header-brand > .vms-gear { margin-right: -4px; }
-/* The gears turn inside the mark, so the old whole-icon spin is switched off. */
-svg.vms-gear { animation: none !important; }
-.vms-gear-big,
-.vms-gear-small,
-.vms-gear-dot { transform-box: fill-box; transform-origin: center; }
-.vms-gear-big { animation: vms-gear-turn 4.5s linear infinite; }
-.vms-gear-small { animation: vms-gear-turn 4.5s linear infinite reverse; }
-.vms-gear-dot { animation: vms-gear-dot-pulse 1s ease-in-out infinite; }
-.vms-gear-dot-1 { animation-delay: -0.5s; }
-@keyframes vms-gear-turn { to { transform: rotate(360deg); } }
-@keyframes vms-gear-dot-pulse {
-  0%, 100% { transform: scale(0); }
-  50% { transform: scale(1); }
-}
+.vms-gear.auth-page-header-gear,
+.vms-gear.topbar-gear-icon,
+.vms-gear.auth-gear-icon { animation-duration: 6s; }
 @media (prefers-reduced-motion: reduce) {
-  .vms-gear, .vms-gear * { animation: none !important; }
+  .vms-gear { animation: none !important; }
 }
