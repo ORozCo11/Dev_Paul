@@ -30,7 +30,7 @@ class CatalogControllerTest extends TestCase
     use RefreshDatabase;
 
     #[Test]
-    public function operational_roles_can_manage_dropdown_catalogs(): void
+    public function operational_roles_can_add_but_cannot_edit_or_delete_shared_catalogs(): void
     {
         foreach (['Custodian', 'Maintenance Personnel'] as $role) {
             Sanctum::actingAs(User::factory()->create(['role' => $role]), ['*']);
@@ -39,8 +39,8 @@ class CatalogControllerTest extends TestCase
                 $created = $this->postJson('/api/' . $endpoint, ['name' => $name])->assertCreated();
                 $id = $created->json('id');
                 $this->putJson('/api/' . $endpoint . '/' . $id, ['name' => $name . ' renamed'])
-                    ->assertOk()->assertJsonPath('name', $name . ' renamed');
-                $this->deleteJson('/api/' . $endpoint . '/' . $id)->assertNoContent();
+                    ->assertForbidden();
+                $this->deleteJson('/api/' . $endpoint . '/' . $id)->assertForbidden();
             }
         }
     }

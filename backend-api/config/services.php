@@ -14,6 +14,8 @@ return [
     |
     */
 
+    'photon' => ['url' => env('PHOTON_URL', 'https://photon.komoot.io/api/')],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

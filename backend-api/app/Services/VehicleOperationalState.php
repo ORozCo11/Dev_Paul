@@ -19,7 +19,9 @@ class VehicleOperationalState
             || VehicleMaintenanceRecord::where('vehicle_id', $vehicle->vehicle_id)->where('progress_status', '!=', 'Completed')->exists()
             || VehicleIssueReport::where('vehicle_id', $vehicle->vehicle_id)->where('status', 'In Maintenance')->whereDoesntHave('maintenanceTicket')->exists();
         if ($ongoing) {
-            $vehicle->update(['status' => 'Under Maintenance', 'condition' => 'Needs Repair']);
+            $repair = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)->whereIn('status', ['Active', 'For Verification'])->exists()
+                || VehicleMaintenanceRecord::where('vehicle_id', $vehicle->vehicle_id)->whereIn('progress_status', ['Assigned', 'Under Repair'])->exists();
+            $vehicle->update(['status' => 'Under Maintenance', 'condition' => $repair ? 'Needs Repair' : $vehicle->condition]);
         } elseif ($releaseIfIdle || $vehicle->status === 'Under Maintenance') {
             $hasIssue = VehicleIssueReport::where('vehicle_id', $vehicle->vehicle_id)->whereIn('status', ['Pending', 'Under Review', 'In Maintenance'])->exists();
             $vehicle->update(['status' => 'Available', 'condition' => $hasIssue ? 'Needs Inspection' : 'Good', 'estimated_return_date' => null]);

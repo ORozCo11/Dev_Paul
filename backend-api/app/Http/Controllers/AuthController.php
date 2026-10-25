@@ -341,7 +341,9 @@ class AuthController extends Controller
         // ("Unauthenticated") just for taking longer than 30 minutes.
         // Deployed support sessions retain their 30-minute expiry.
         $impersonationExpiry = app()->environment('local') ? null : now()->addMinutes(30);
-        $token = $user->createToken('impersonation_token', [...$user->allRoles(), 'impersonated'], $impersonationExpiry)->plainTextToken;
+        $issued = $user->createToken('impersonation_token', [...$user->allRoles(), 'impersonated'], $impersonationExpiry);
+        $issued->accessToken->forceFill(['impersonator_user_id' => $request->user()->id, 'impersonation_reason' => $data['reason']])->save();
+        $token = $issued->plainTextToken;
 
         ActivityLog::create([
             'user_id'     => $request->user()?->id,

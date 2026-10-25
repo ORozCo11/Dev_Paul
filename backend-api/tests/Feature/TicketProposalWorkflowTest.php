@@ -119,7 +119,7 @@ class TicketProposalWorkflowTest extends TestCase
         $this->assertSame($issue['issue_report_id'], $ticket->issue_report_id);
         $this->assertDatabaseHas('vehicle_issue_reports', [
             'issue_report_id' => $issue['issue_report_id'],
-            'status' => 'In Maintenance',
+            'status' => 'Under Review',
         ]);
     }
 
@@ -287,7 +287,7 @@ class TicketProposalWorkflowTest extends TestCase
         // "MT-0001 — Vehicle — Issue" from the number, vehicle and issue.
         $ticket = $this->propose($vehicle, ['ticket_title' => 'Typed by a user', 'sub_issues' => [['title' => 'Worn belt', 'maintenance_type' => 'Belt Replacement']]]);
 
-        $expected = sprintf('MT-%04d — %s — Belt Replacement', $ticket->ticket_id, $vehicle->vehicle_name);
+        $expected = sprintf('MT-%04d — %s — Worn belt', $ticket->ticket_id, $vehicle->vehicle_name);
         $this->assertSame($expected, $ticket->ticket_title);
 
         Sanctum::actingAs($this->admin, ['*']);

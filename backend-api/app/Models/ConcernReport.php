@@ -8,6 +8,8 @@ class ConcernReport extends Model
 {
     protected $fillable = [
         'concern_type',
+        'province_name',
+        'city_name',
         'barangay_name',
         'description',
         'reporter_name',

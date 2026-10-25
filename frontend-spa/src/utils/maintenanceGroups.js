@@ -9,3 +9,10 @@ export function groupMaintenanceByVehicle(records = []) {
   }
   return [...groups.values()];
 }
+
+// A scheduled job takes precedence over its repair method so totals do not overlap.
+export function maintenanceSourceBucket(record) {
+  if (record.source === 'Scheduled Maintenance' || record.originating_schedule) return 'Scheduled Maintenance';
+  if (record.is_external || record.source === 'External Shop') return 'External Shop';
+  return 'In-House Repair';
+}

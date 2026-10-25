@@ -11,6 +11,9 @@ Start with the overview, then open the detailed reference or the document needed
 | [Sample-Data.md](Sample-Data.md) | Team setup, demo accounts, five vehicles, sample work and verification results. |
 | [System-Audit-2026-10-24.md](System-Audit-2026-10-24.md) | Six open implementation findings, evidence and required retests. |
 | [Ticket-Process-Review-2026-10-24.md](Ticket-Process-Review-2026-10-24.md) | Ticket fields, repair/decision fixes, migration notes and verification evidence. |
+| [Claude-Browser-QA.md](Claude-Browser-QA.md) | Claude browser QA skill, full-system test catalogue, findings format and starter prompt. |
+| [Workflow-Test-Run-2026-10-25.md](Workflow-Test-Run-2026-10-25.md) | Latest ticket/maintenance regression results, real API/browser journey and remaining verification limits. |
+| [QA-Run1-Fixes-2026-10-25.md](QA-Run1-Fixes-2026-10-25.md) | Disposition of all 37 browser-audit findings, safeguards, migration and retest evidence. |
 | [VMS-Evidence-and-Defense-Review-With-Examples.pptx](VMS-Evidence-and-Defense-Review-With-Examples.pptx) | Latest defense presentation, including examples and speaker notes. |
 | [System-Architecture.svg](System-Architecture.svg) | Component diagram. |
 | [ERD.svg](ERD.svg) | Database relationship diagram. |
@@ -18,4 +21,4 @@ Start with the overview, then open the detailed reference or the document needed
 
 Older audits, UI reports, geography-review evidence, planning documents and superseded exports live in [the historical archive](../docs/archive/vms/README.md). Their dates and claims describe earlier revisions. They do not supersede the current audit or establish production acceptance.
 
-The latest recorded regression result is 522 backend tests / 2,621 assertions after the ticket-process and decision fixes; see [the decision-path follow-up](Ticket-Process-Review-2026-10-24.md#decision-path-implementation-follow-up--24-october-2026). Six broader system-audit findings remain open. Diagrams and older generated artifacts are not a substitute for the current code and audit evidence.
+The latest recorded regression result is 537 backend tests / 2,718 assertions after the Run 1 QA fixes, with 20 frontend tests and 16 browser checks passing; see [the Run 1 follow-up](QA-Run1-Fixes-2026-10-25.md). Six broader system-audit findings remain open. Diagrams and older generated artifacts are not a substitute for the current code and audit evidence.

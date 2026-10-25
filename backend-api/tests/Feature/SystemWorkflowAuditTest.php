@@ -70,13 +70,14 @@ class SystemWorkflowAuditTest extends TestCase
         return VehicleMaintenanceRecord::create($extra + ['vehicle_id' => $this->vehicle->vehicle_id, 'maintenance_type' => 'Service', 'problem_reason' => 'Engine fault', 'date_started' => now()->toDateString(), 'maintenance_personnel_id' => $this->mechanic->id, 'progress_status' => 'For Verification']);
     }
 
-    public function test_schedule_edit_cannot_self_approve_but_preserves_shared_custodian_planning(): void
+    public function test_schedule_edit_cannot_self_approve_or_edit_another_creators_plan(): void
     {
         $schedule = $this->schedule();
         Sanctum::actingAs($this->custodian, ['*']);
         $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}", ['status' => 'Scheduled'])->assertUnprocessable();
         Sanctum::actingAs($this->person('Custodian'), ['*']);
-        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}", ['notes' => 'Shared plan update'])->assertOk()->assertJsonPath('status', 'Pending Approval');
+        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}", ['notes' => 'Shared plan update'])->assertForbidden();
+        $this->assertNull($schedule->fresh()->notes);
     }
 
     public function test_schedule_assignment_rejects_wrong_roles_inactive_and_cross_barangay_users(): void
@@ -203,7 +204,7 @@ class SystemWorkflowAuditTest extends TestCase
         $record = $this->record();
         $this->vehicle->update(['status' => 'Decommissioned', 'condition' => 'Needs Repair']);
         Sanctum::actingAs($this->custodian, ['*']);
-        $this->putJson("/api/maintenance-records/{$record->maintenance_id}/verify", ['verification_result' => 'Passed'])->assertOk();
+        $this->putJson("/api/maintenance-records/{$record->maintenance_id}/verify", ['verification_result' => 'Passed', 'test_attested' => true])->assertOk();
         $this->assertSame('Decommissioned', $this->vehicle->fresh()->status);
     }
 

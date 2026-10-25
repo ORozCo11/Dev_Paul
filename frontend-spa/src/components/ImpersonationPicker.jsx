@@ -10,7 +10,10 @@ const options = (rows, id, label, fallback) => [...new Map(rows.map((row) => [ke
 
 export default function ImpersonationPicker({ user }) {
   const rootToken = impersonationRootToken(user);
-  if (!rootToken) return null;
+  // The dedicated switcher auto-opens a role workspace and must remain
+  // available there to switch to the next account.
+  const dedicatedSession = localStorage.getItem('impersonator_role') === 'Impersonator';
+  if (!rootToken || (user.is_impersonating && !dedicatedSession)) return null;
   return <AccountCascade key={user.id} user={user} rootToken={rootToken} />;
 }
 
@@ -48,7 +51,7 @@ function AccountCascade({ user, rootToken }) {
     if (id === String(user.id)) { setSelection({ ...selected, user: id }); return; }
     switchingRef.current = true; setBusy(true); setError('');
     try {
-      const { data } = await api.post(`/impersonate/${id}`, { reason: 'Account selected using the Impersonate button' }, { headers: { Authorization: `Bearer ${rootToken}` } });
+      const { data } = await api.post(`/impersonate/${id}`, { reason: `Account workspace access: ${account.name} (${account.role}) in ${[account.barangay_name, account.city_name, account.province_name].filter(Boolean).join(', ')}`.slice(0, 500) }, { headers: { Authorization: `Bearer ${rootToken}` } });
       if (user.is_impersonating) {
         try { await api.post('/logout'); } catch (err) {
           if (![401, 419].includes(err.response?.status)) {
@@ -64,22 +67,21 @@ function AccountCascade({ user, rootToken }) {
     }
   };
   return <div className="account-cascade" aria-label="Impersonation account controls">
-    <SearchableSelect aria-label="Impersonation province" placeholder={loading ? 'Loading provinces...' : 'Province'} value={selected.province} disabled={loading || busy} onChange={(event) => setSelection({ province: event.target.value, city: '', barangay: '', user: '' })}>
+<div className="account-selector">    <SearchableSelect aria-label="Impersonation province" placeholder={loading ? 'Loading provinces...' : 'Province'} value={selected.province} disabled={loading || busy} onChange={(event) => setSelection({ province: event.target.value, city: '', barangay: '', user: '' })}>
       {options(provinceAccounts, 'province_id', 'province_name', '').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-    </SearchableSelect>
-    <SearchableSelect aria-label="Impersonation city or municipality" placeholder="City / Municipality" value={selected.city} disabled={loading || busy || !selected.province} onChange={(event) => setSelection({ ...selected, city: event.target.value, barangay: '', user: '' })}>
+    </SearchableSelect></div>
+<div className="account-selector">    <SearchableSelect aria-label="Impersonation city or municipality" placeholder="City / Municipality" value={selected.city} disabled={loading || busy || !selected.province} onChange={(event) => setSelection({ ...selected, city: event.target.value, barangay: '', user: '' })}>
       {options(provinceRows, 'city_id', 'city_name', 'No city / municipality').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-    </SearchableSelect>
-    <SearchableSelect aria-label="Impersonation barangay" placeholder="Barangay" value={selected.barangay} disabled={loading || busy || !selected.city} onChange={(event) => setSelection({ ...selected, barangay: event.target.value, user: '' })}>
+    </SearchableSelect></div>
+<div className="account-selector">    <SearchableSelect aria-label="Impersonation barangay" placeholder="Barangay" value={selected.barangay} disabled={loading || busy || !selected.city} onChange={(event) => setSelection({ ...selected, barangay: event.target.value, user: '' })}>
       {options(cityRows, 'barangay_id', 'barangay_name', 'No barangay').map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-    </SearchableSelect>
+    </SearchableSelect></div>
     <div className="account-user-control">
-      <SearchableSelect aria-label="Impersonation user" placeholder={loading ? 'Loading accounts...' : !selected.barangay ? 'Select a barangay first' : !barangayRows.length ? 'No accounts available' : 'Select an account'} menuClassName="account-user-menu" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
+<div className="account-selector">      <SearchableSelect aria-label="Impersonation user" placeholder={loading ? 'Loading accounts...' : !selected.barangay ? 'Select a barangay first' : !barangayRows.length ? 'No accounts available' : 'Select an account'} menuClassName="account-user-menu" value={selectedUserId} disabled={loading || busy || !selected.barangay || !barangayRows.length} onChange={(event) => setSelection({ ...selected, user: event.target.value })}>
         {barangayRows.map((account) => <option key={account.id} value={account.id} disabled={!account.is_active || !supportedRoles.includes(account.role)}>{account.name}</option>)}
-      </SearchableSelect>
-      <button className="account-impersonate-button" type="button" disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}>{busy ? 'Logging in...' : 'Impersonate'}</button>
+      </SearchableSelect></div>
+      <button className="account-impersonate-button" type="button" aria-busy={busy} disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}><span aria-live="polite">{busy ? 'Logging in...' : 'Impersonate'}</span></button>
     </div>
-    {busy && <span className="account-cascade-status" role="status">Logging in...</span>}
     {error && <span className="account-cascade-error" role="alert">{error} {!accounts.length && <button type="button" onClick={() => { setLoading(true); setError(''); setRetry((value) => value + 1); }}>Retry</button>}</span>}
   </div>;
 }

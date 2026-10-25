@@ -44,7 +44,7 @@ A user can hold more than one of the three barangay roles at once (a "dual-hat" 
 
 New vehicles start at status **Available**, condition **Good**. Registration has no document upload — documents are added from the vehicle's own profile (§3.4).
 
-**Import Vehicle Data** (Admin and Custodian as standard role duties; Maintenance Personnel cannot import): an Import button on the Vehicles list opens a wizard — download an Excel or CSV template (columns for every Add Vehicle field plus a column per active custom field, with an Instructions sheet of valid Vehicle Types/Locations/Hull Materials) → upload → **preview with nothing saved** ("N valid / N errors / N warnings", each with its row and field, plus a downloadable CSV error report) → confirm → valid rows are imported in one database transaction and invalid rows are skipped → summary. Every row goes through the *same* validation rules the Add Vehicle form uses (shared in `FleetController::vehicleRules`), duplicate plates are caught both within the file and against the database, and the barangay is always the importer's own — no cross-barangay imports. The upload is checked for extension **and** real file contents (≤2 MB, ≤500 rows), cells starting with `=` are rejected, and confirming re-reads and re-validates the stored file rather than trusting rows sent back by the browser. Each import is recorded (who, when, file name, total/imported/failed/warning counts) and writes one Activity Log entry plus a "Vehicle Added" history entry per vehicle.
+**Vehicle imports (API only)**: The Vehicles toolbar's spreadsheet-import button and its unused dialog were removed on 25 October 2026. Add Vehicle remains the registration action in the UI. The existing Admin/Custodian import API, templates, preview/commit validation and audit records remain available; Maintenance Personnel cannot import. Import requests retain server-side role, barangay, file and duplicate-plate checks.
 
 **Operational criticality** (Critical / High / Normal): each Vehicle Type has a default; an Admin can override it per vehicle (or choose *Inherit* to return to the default). A Custodian cannot set it at registration. It ranks the readiness watch (§9).
 
@@ -385,4 +385,51 @@ Audit follow-up: see [System Audit ? 2026-10-23](../docs/archive/vms/System-Audi
 
 ## Work-list status defaults
 
-Operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders select Pending + Submitted; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records select unfinished progress states; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection, plus Ongoing only and All statuses shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.
+Most operational lists open with ongoing work selected. Admin tickets retain Proposals + Active; mechanic work orders open with all assigned statuses, including Completed; Custodian verification selects Active + To Verify; maintenance schedules select Pending Approval + Scheduled; maintenance records include all progress states, including Completed; issue reports select Pending + Under Review + In Maintenance. Historical and completed items remain available through status filters. Work orders, verification and schedules support independent multi-status selection. Work orders use the status dropdown without the Ongoing only and All statuses shortcut buttons; verification and schedules retain those shortcuts. Archive/history pages retain their historical scope. Counts continue to represent all accessible records, and clicking Total shows all statuses.
+
+
+## QA Run 1 follow-up - 25 October 2026
+
+See [the 37-finding implementation/retest record](QA-Run1-Fixes-2026-10-25.md) for corrections to the older behavior described above. Schedule editing is creator-only; completion dates cannot be in the future. Standalone verification requires a reason for failure and personal-test attestation to pass. Catalogue creation remains available to operational staff; edit/delete are Admin-only. Approved Active/For Verification tickets are cancelled with a reason, never deleted. Ticket titles use the actual first problem, and unchanged correction resubmissions are rejected.
+
+Repair closure and relevant physical changes invalidate older readiness evidence; a fresh readiness attestation is required after repair. Active maintenance blocks readiness confirmation. Availability, physical condition and readiness remain separate. Completed preventive work awaiting verification holds availability with Needs Inspection rather than automatically diagnosing a new defect; a newer Good observation is preserved when no active repair exists.
+
+Impersonation captures initiating identity/session/reason on activity entries. Ordinary barangay-role logins have no switcher. The dedicated impersonation@test.com account keeps its picker inside impersonated workspaces so it can switch repeatedly; other support sessions retain return-to-original-account. Deployed support remains read-only with a 30-minute impersonated token. Module URLs retain selection through a module query parameter, date/time presentation uses Asia/Manila, and reports retain cost fields and identify record types. Historical bad data and missing events are not silently rewritten or fabricated.
+
+
+### Registration and support UI updates (2026-10-25)
+
+- Public concern reports accept optional province, city/municipality and barangay names through suggestions or manual entry; platform reviewers see the full location. Apply migration `2026_10_25_000002_add_concern_location_names.php` after pulling.
+- Registration uses a top back arrow, centered progress and green completed steps/connectors. The address is the applicant's personal contact address, not a barangay/BDRMO office address.
+- Address suggestions are off by default and require the registrant's explicit consent to send typed text and selected location to Photon/OpenStreetMap. Requests are debounced, cancelled when stale and rate limited; failures leave manual entry available. Public map suggestions do not verify residence or authority. `PHOTON_URL` can select a compatible private provider endpoint.
+- First-Admin submission creates an in-app Super Admin notification and Pending Approvals entry. No email/SMS alert is sent. The applicant may leave the page and coordinate through the barangay office; Support Center is a follow-up channel. Reviewers must verify appointment through a trusted contact; possession of the staff code alone does not establish authority.
+- The impersonation selector labels Province, City, Barangay and User. It generates an account/location access description for existing audit metadata instead of asking for a written reason. Role checks, initiating identity and production read-only restrictions remain enforced.
+- Super Admin registration-code lookup/regeneration is independent of boundary availability or pending review. Issuing a code neither approves an applicant nor verifies a boundary.
+
+Verification: 541 backend tests passed (2,736 assertions); concern-location migration up/down/up passed on fresh and existing database copies, preserving existing vehicle counts. Browser checks cover public concern submission, registration back/progress, personal-address help, consent-gated suggestions/manual entry, complete first-Admin submission, role switching and date controls across themes/screen sizes.
+
+
+### Ticket list and handover updates (2026-10-25)
+
+The ticket table heading is **Title**. Priority filters retain two independently reachable handles even when narrowed to one value. Ticket age is highlighted in amber, the header priority/stage badges have matching dimensions, and Overview shows vehicle availability/condition without repeating repair progress.
+
+The archive icon now **hides a ticket from the current user's main list**. Use **Hidden** to open or restore it. This preference is stored per account and does not hide the ticket from teammates, cancel/close work, change vehicle indicators, remove assignments, suppress notifications or exclude it from operational totals. Hidden-list rows obey the same search/status/date filters. Closed-ticket Archives remain separate. Apply `2026_10_25_000003_create_hidden_ticket_lists.php` after pulling; it adds only visibility preferences. Rolling it back removes preferences while preserving tickets and repair evidence.
+
+Mechanic reassignment creates a timeline entry for each affected work item, including its title, previous and new mechanic, reason, actor and time. Other work items and repair evidence remain intact. Reassignment-dialog Cancel and Submit buttons have matching rounded corners.
+
+Verification: 543 backend tests passed (2,765 assertions), 26 frontend tests passed, lint and production build passed. Browser checks covered repeated priority dragging/keyboard input, hide/details/restore, badge dimensions, timeline visibility and matching dialog corners. Visibility migration up/down/up passed on fresh and existing database copies with vehicles, tickets and sub-issues unchanged.
+
+
+### Unified maintenance ledger (2026-10-25)
+
+Maintenance Records opens without a progress restriction and includes all records within the viewer's barangay, including records performed by other mechanics and external shops. The explicit `mine=1` API filter retains personal-history access. This read scope does not grant repair editing, verification or access to another barangay.
+
+Summary cards show **Total Maintenance Records**, **In-House Repair**, **Sent to External Shop** and **Maintenance Schedule**. Counts refer to repair records; the table groups matching records by vehicle. Source cards and the Sources dropdown filter the same categories. Scheduled work, including schedule-generated tickets, takes precedence over repair method so categories do not overlap; other external work counts under External Shop and remaining work under In-House Repair. Opening a grouped vehicle retains its individual repair records.
+
+
+My Work Orders now defaults to List View, reusing the Maintenance Tickets columns, column chooser, pagination and row/detail action. Card View remains selectable with smaller cards and vehicle photos, scoped to the mechanic's Work Orders and its Archive. Both views use the same assigned-ticket scope, search and status filters; reopening the module starts in List View.
+
+
+Readiness confirmation now checks current server eligibility when its dialog opens. Ongoing maintenance or an Active/For Verification ticket disables the attestation and Confirm Ready action, and explains the required maintenance completion, independent Custodian verification and fresh vehicle operation check. Vehicle list actions show a warning color for known blocked vehicles. If eligibility cannot be loaded, confirmation stays disabled until the user closes and retries. The save endpoint rechecks the same rule inside its vehicle-lock transaction, including when an older screen still says Available; a rejected request creates no readiness check.
+
+Readiness validation verification: 545 backend tests passed; frontend lint/build and browser checks passed. Coverage includes Under Maintenance, Active/For Verification tickets despite an Available vehicle status, zero checks saved on rejection, eligibility-service failure, and successful confirmation once eligible.

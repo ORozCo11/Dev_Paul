@@ -1,3 +1,4 @@
+import ConcernLocationFields from '../components/ConcernLocationFields';
 import SearchableSelect from '../components/SearchableSelect';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -7,6 +8,10 @@ import Icon from '../components/Icon';
 import api from '../api/axios';
 
 const FAQ = [
+  {
+    q: 'What happens after I register as the first barangay Admin?',
+    a: 'Your account stays inactive until a Super Admin approves it. Submission creates an in-app notification and a Pending Approvals entry; there is no email or SMS alert. You can leave the page. Coordinate with your barangay office so the platform administrator can verify your appointment through a trusted contact. The staff code alone does not prove authority. If you cannot reach them, report an access concern below with your barangay and contact details; never send passwords or registration codes. Support is a follow-up channel, not a replacement for approval.',
+  },
   {
     q: 'How do I report a vehicle issue?',
     a: "As a Custodian, open Report Vehicle Issue to review issues and propose a maintenance ticket. Describe the problem and the planned repair. An Admin reviews the proposal and assigns the work. Maintenance Personnel can submit technical issue reports for a Custodian to review.",
@@ -55,6 +60,8 @@ function FaqItem({ q, a }) {
 export default function Support() {
   const [form, setForm] = useState({
     concern_type: '',
+    province_name: '',
+    city_name: '',
     barangay_name: '',
     description: '',
     reporter_name: '',
@@ -87,7 +94,7 @@ export default function Support() {
     try {
       const res = await api.post('/concern-reports', form);
       setResult({ type: 'success', text: res.data.message });
-      setForm({ concern_type: '', barangay_name: '', description: '', reporter_name: '', reporter_contact: '' });
+      setForm({ concern_type: '', province_name: '', city_name: '', barangay_name: '', description: '', reporter_name: '', reporter_contact: '' });
     } catch (error) {
       setResult({
         type: 'error',
@@ -139,19 +146,7 @@ export default function Support() {
               </div>
             </label>
 
-            <label className="auth-field auth-field-full">
-              <span>Barangay name (if known)</span>
-              <div className="auth-input-wrapper auth-input-plain">
-                <input
-                  type="text"
-                  name="barangay_name"
-                  value={form.barangay_name}
-                  onChange={handleChange}
-                  placeholder="e.g. Mantalongon"
-                  maxLength={255}
-                />
-              </div>
-            </label>
+            <ConcernLocationFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
 
             <label className="auth-field auth-field-full">
               <span>Describe the concern</span>

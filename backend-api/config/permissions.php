@@ -143,6 +143,7 @@ return [
     // Tickets
     'ticket.view_open_for_vehicle' => ['Admin'],
     'ticket.view_archives' => ['Admin'],
+    'ticket.manage_list_visibility' => ['Admin', 'Custodian', 'Maintenance Personnel'],
     'ticket.check_recurrence' => ['Admin', 'Custodian'],
     // Nobody holds this any more — every ticket must originate as a
     // Custodian's proposal (ticket.propose) that Admin then reviews, edits,
@@ -196,8 +197,8 @@ return [
     // Shared dropdown catalogs.
     // Operational users manage the shared issue and repair catalogs inline.
     'catalog.create' => ['Admin', 'Custodian', 'Maintenance Personnel'],
-    'catalog.edit' => ['Admin', 'Custodian', 'Maintenance Personnel'],
-    'catalog.delete' => ['Admin', 'Custodian', 'Maintenance Personnel'],
+    'catalog.edit' => ['Admin'],
+    'catalog.delete' => ['Admin'],
 
     // Users (barangay-scoped, managed by that barangay's Admin)
     'user.view' => ['Admin'],

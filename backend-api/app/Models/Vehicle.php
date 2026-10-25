@@ -15,6 +15,7 @@ class Vehicle extends Model
     protected $primaryKey = 'vehicle_id';
 
     protected $fillable = [
+        'readiness_invalidated_at',
         'custom_values',
         'criticality',
         'vehicle_name',
@@ -44,7 +45,18 @@ class Vehicle extends Model
         'decommissioned_at',
     ];
 
+    protected static function booted(): void
+    {
+        static::updating(function (self $vehicle) {
+            if (($vehicle->isDirty('status') && $vehicle->status === 'Under Maintenance')
+                || ($vehicle->isDirty('condition') && $vehicle->condition !== 'Good')) {
+                $vehicle->readiness_invalidated_at = now();
+            }
+        });
+    }
+
     protected $casts = [
+        'readiness_invalidated_at' => 'datetime',
         'custom_values' => 'array',
         'archived_at' => 'datetime',
         'decommissioned_at' => 'datetime',

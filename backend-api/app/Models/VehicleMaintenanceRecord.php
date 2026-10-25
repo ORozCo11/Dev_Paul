@@ -15,6 +15,7 @@ class VehicleMaintenanceRecord extends Model
     protected $primaryKey = 'maintenance_id';
 
     protected $fillable = [
+        'test_attested',
         'ticket_sub_issue_id',
         'vehicle_id',
         'source_vehicle_id',
@@ -45,6 +46,7 @@ class VehicleMaintenanceRecord extends Model
     ];
 
     protected $casts = [
+        'test_attested' => 'boolean',
         'is_external' => 'boolean',
         'warranty_until' => 'date',
         'verified_at' => 'datetime',
@@ -55,6 +57,12 @@ class VehicleMaintenanceRecord extends Model
     // needed by the UI (Maintenance Records list/detail), so it's appended
     // to every JSON response instead of making callers remember to ask for it.
     protected $appends = ['source'];
+    protected $hidden = ['ticketSubIssue'];
+
+    public function ticketSubIssue()
+    {
+        return $this->belongsTo(TicketSubIssue::class, 'ticket_sub_issue_id', 'sub_issue_id');
+    }
 
     public function vehicle()
     {
@@ -76,7 +84,7 @@ class VehicleMaintenanceRecord extends Model
     // must win first.
     public function getSourceAttribute()
     {
-        if ($this->originatingSchedule) {
+        if ($this->originatingSchedule || $this->ticketSubIssue?->ticket?->originatingSchedule) {
             return 'Scheduled Maintenance';
         }
         if ($this->is_external) {

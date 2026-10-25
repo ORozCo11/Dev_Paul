@@ -79,7 +79,7 @@ export function PendingApprovalsTab({ approvals, barangays, onApprove, onReject,
     <button type="button" className="ghost-button sa-review-back" onClick={() => setReviewing(null)}><Icon name="arrowLeft" size={16} />Back to Pending Approvals</button>
     <section className="sa-management-card sa-application-card">
       <header className="sa-application-header">
-        <div><h2 id="application-review-title" ref={reviewHeadingRef} tabIndex={-1}>Review application</h2><p>Check the applicant details before making a decision.</p></div>
+        <div><h2 id="application-review-title" ref={reviewHeadingRef} tabIndex={-1}>Review application</h2><p>Verify the applicant through a trusted barangay office contact or appointment record before approving. A registration code proves possession of an invitation, not official authority.</p></div>
         {reviewing && <StatusBadge value="Pending Approval" />}
       </header>
       {reviewing ? <>

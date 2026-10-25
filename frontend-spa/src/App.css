@@ -16352,9 +16352,6 @@ html[data-theme] .ticket-card-grid .sch-card .sch-card-edit-cancel .sch-action.i
 @media (max-width: 540px) {
   .ticket-card-grid .sch-card-actions .sch-action { min-height: 44px; }
 }
-.ticket-overview-progress { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.ticket-overview-progress > span:first-child { flex-basis: 100%; color: var(--text-muted, #64748b); font-size: .7rem; font-weight: 700; }
-.ticket-overview-progress > span { max-width: 100%; white-space: normal; }
 td:has(> .row-actions-visible) { min-width: 140px; }
 .row-actions-visible .icon-btn { flex-shrink: 0; }
 
@@ -16605,3 +16602,65 @@ html[data-theme="dark"] .ticket-reference-progress { color: var(--muted); }
   .ticket-reference-info h4 { font-size: 1rem; }
   .ticket-reference-info p { font-size: .8rem; }
 }
+
+/* QA feedback stays in document flow so users can correct the form. */
+.qa-inline-error { display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 12px; border: 1px solid #ef4444; border-radius: 8px; color: var(--text); background: var(--surface, #fff); }
+
+/* Keep the text and single calendar button inside one date control. */
+html[data-theme] .date-filter-input > .date-filter-input-text { width:0; flex:1 1 0; min-width:0; max-width:100%; border:0; border-radius:0; box-sizing:border-box; background:transparent !important; color:inherit !important; }
+html .date-filter-input:focus-within { outline:2px solid #60a5fa; outline-offset:1px; }
+html .date-filter-input > .date-filter-input-hidden { position:absolute; width:0; min-width:0; max-width:0; height:0; min-height:0; max-height:0; padding:0; border:0; opacity:0; pointer-events:none; }
+html .date-filter-input > .date-filter-input-icon { flex:0 0 32px; padding:0; box-sizing:border-box; }
+@media(max-width:767px) { html .date-filter-input > .date-filter-input-icon { flex-basis:44px; } }
+
+html[data-theme="dark"] .date-filter-input { background:var(--surface-2, #17191e); color:var(--text, #e2e8f0); border-color:var(--control-border, #475569); }
+html[data-theme="dark"] .date-filter-input-icon { color:#93c5fd; border-left-color:var(--control-border, #475569); }
+
+/* Both priority handles must remain reachable when narrowed to one value. */
+html .dual-range-track { margin:22px 0; background:#cbd5e1; }
+html .dual-range-track > .dual-range-input { min-width:0; min-height:18px; height:18px; padding:0; border:0; border-radius:0; box-shadow:none; background:transparent !important; pointer-events:none; }
+html .dual-range-input:focus-visible { outline:2px solid #60a5fa; outline-offset:3px; }
+
+.ticket-list-actions { display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+
+html .ticket-detail-panel .ticket-process-kicker > .ticket-age-badge { display:inline-flex; align-items:center; margin-left:auto; flex-shrink:0; padding:4px 9px; border-radius:6px; background:#fef3c7; color:#92400e; font-weight:700; letter-spacing:normal; text-transform:none; }
+html .ticket-detail-panel .ticket-process-kicker > .ticket-age-badge::before { content:none; }
+.ticket-hero-badges { display:flex; flex-wrap:wrap; gap:6px; }
+html .ticket-detail-panel .ticket-hero-badges > span { display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box; width:140px; height:30px; padding:4px 10px; font-size:.74rem; line-height:1.2; border-radius:6px; }
+
+html .ticket-reassignment-modal .form-actions > button { border-radius:6px; }
+
+/* Compact cards are local to the mechanic's optional Work Orders card view. */
+.mechanic-work-orders .ticket-card-grid:has(> div > .ticket-reference-card) { grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),min(100%,320px))); gap:12px; }
+.mechanic-work-orders .ticket-card-grid > div > .ticket-reference-card { padding:12px; gap:10px; }
+.mechanic-work-orders .ticket-reference-id { padding:5px 8px; font-size:.8rem; }
+.mechanic-work-orders .ticket-reference-main { grid-template-columns:80px minmax(0,1fr); gap:10px; }
+.mechanic-work-orders .ticket-reference-info h4 { margin:0 0 6px; font-size:.9rem; }
+.mechanic-work-orders .ticket-reference-info p { margin-bottom:3px; font-size:.75rem; }
+.mechanic-work-orders .ticket-reference-progress { font-size:.75rem; }
+.mechanic-work-orders .ticket-reference-stage > div { min-height:30px; }
+.mechanic-work-orders .ticket-reference-bottom { gap:6px; }
+.mechanic-work-orders .ticket-reference-bottom .status-badge { padding:4px 8px; font-size:.68rem; }
+.mechanic-work-orders .ticket-reference-bottom .tpa-avatar { width:24px; height:24px; }
+.mechanic-work-orders .operations-board-head > div:last-child { flex-wrap:wrap; }
+
+html[data-theme] :is(table, .table-shell) button.icon-btn.readiness-check-blocked { background:#fff7ed !important; border-color:#fdba74 !important; color:#9a3412 !important; }
+
+/* Keep schedule status labels and row actions aligned beneath their headings. */
+.schedule-table-status { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.schedule-action-cell { min-width: 92px; }
+.schedule-table-actions .sch-card-actions { display: inline-flex; flex-wrap: nowrap; width: max-content; vertical-align: middle; }
+.schedule-table-actions .sch-action.icon-btn { flex: 0 0 36px; width: 36px; height: 36px; padding: 0; }
+.schedule-panel-tools :is(.view-dropdown-btn, .local-search-input, .icon-add-btn, .export-btn) { height: 40px; min-height: 40px; box-sizing: border-box; }
+.schedule-panel-tools .icon-add-btn > svg { flex-shrink: 0; display: block; }
+@media (pointer: coarse) {
+  .schedule-table-actions .sch-action.icon-btn { flex-basis: 44px; width: 44px; height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .schedule-panel-tools { width: 100%; }
+  .schedule-panel-tools .local-search-bar { flex: 1 1 100%; width: 100%; flex-wrap: wrap; }
+  .schedule-panel-tools .local-search-container { flex: 1 1 140px; min-width: 0; width: auto; }
+}
+
+html .ticket-detail-panel.is-page .ticket-process-hero.ticket-process-hero--simple { grid-template-columns: minmax(0, 1fr); }

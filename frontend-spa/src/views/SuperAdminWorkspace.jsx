@@ -219,7 +219,7 @@ function AddBarangayForm({ onAdded, onCancel }) {
     <form className="location-form-panel superadmin-panel-spaced" onSubmit={submit}>
       <h3>Add Barangay</h3>
       <p className="muted superadmin-muted-block">
-        Adds the barangay to platform management. A registration code requires a live boundary outline and no pending replacement. Imported reference outlines can be used without marking them reviewed.
+        Adds the barangay to platform management. Staff registration codes are managed independently of map boundary review. Issuing a code does not verify a boundary or approve an applicant.
       </p>
       {error && <p className="muted" style={{ color: '#dc2626' }}>{error}</p>}
       {[provinceLookup, cityLookup, barangayLookup].filter((lookup) => lookup.error).map((lookup) => <p key={lookup.error} className="notice error" role="alert">{lookup.error} <button type="button" className="ghost-button" onClick={lookup.retry}>Retry lookup</button></p>)}

@@ -37,6 +37,7 @@ Route::post('/register', [AuthController::class, 'register'])->middleware('throt
 // Read-only lookup used interactively while filling the registration form —
 // no credentials involved, but still throttled so it can't be used to
 // cheaply enumerate which barangays already have an Admin.
+Route::get('/address-suggestions', [\App\Http\Controllers\AddressSuggestionController::class, 'index'])->middleware('throttle:20,1');
 Route::get('/registration-status', [AuthController::class, 'registrationStatus'])->middleware('throttle:20,1');
 
 // Cascading Province -> City/Municipality -> Barangay lists for the
@@ -230,6 +231,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
 
     // Lookups & listing
     Route::get('/tickets/lookups', [TicketController::class, 'lookups']);
+    Route::put('/tickets/{ticket}/list-visibility', [TicketController::class, 'listVisibility']);
     Route::get('/tickets', [TicketController::class, 'index']);
     Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
 

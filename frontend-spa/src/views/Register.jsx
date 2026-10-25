@@ -1,3 +1,4 @@
+import AddressSuggestions from '../components/AddressSuggestions';
 import SearchableSelect from '../components/SearchableSelect';
 import LoadingOverlay from '../components/LoadingOverlay';
 import './Register.css';
@@ -331,6 +332,7 @@ function Register() {
       <main className="auth-split-page">
       {submitting && <LoadingOverlay />}
       <section className="auth-split-panel" aria-labelledby="register-title">
+        {!submitted && step > 0 && <button type="button" className="register-back-arrow" aria-label="Previous registration step" title="Back" disabled={submitting} onClick={() => { setStep((current) => current - 1); setError(''); }}><Icon name="arrowLeft" size={20} /></button>}
         <div className="auth-logo-header">
           <h1 id="register-title" className="auth-login-heading">Create your account</h1>
           <p className="register-intro">Join your barangay's vehicle management team.</p>
@@ -343,13 +345,14 @@ function Register() {
                 ? 'Registration submitted. A Super Admin must review and approve your account as this barangay\'s first Administrator before you can sign in.'
                 : 'Registration submitted. An administrator must approve your account before you can sign in.'}
             </p>
+            {isFirstForBarangay && <p className="register-step-help">The Super Admin receives an in-app notice and reviews Pending Approvals. They must confirm your appointment through a trusted barangay contact; a registration code alone does not prove authority. No email or SMS approval alert is sent. Coordinate with your barangay office, then try signing in after approval. If you cannot reach the platform administrator, <Link to="/support#contact">report an access concern</Link> with your barangay and contact details; do not submit your password or staff code.</p>}
             <Link className="primary-button auth-submit-btn" to="/login" style={{ display: 'flex', textDecoration: 'none' }}>
               Back to Login
             </Link>
           </div>
         ) : (
           <form ref={formRef} className="auth-form auth-form-grid" autoComplete="off" onSubmit={handleSubmit} noValidate>
-            <ol className="register-progress" aria-label="Registration progress">{['Your details', 'Your barangay', 'Account access'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={step >= index ? 'is-current' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
+            <ol className="register-progress" aria-label="Registration progress">{['Your details', 'Your barangay', 'Account access'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={step > index ? 'is-complete' : step === index ? 'is-current' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
             <h2 className="register-step-title" ref={stepHeading} tabIndex={-1}>{['Tell us about yourself', 'Where are you based?', 'Secure your account'][step]}</h2>
             <p className="register-step-help">Step {step + 1} of 3 · {['Enter your name and contact information.', 'Choose your barangay and enter your street address.', 'Enter your registration code and choose a strong password.'][step]}</p>
             <fieldset className="register-fields" hidden={step !== 0} disabled={step !== 0}><legend className="sr-only">Personal details</legend>
@@ -522,24 +525,31 @@ function Register() {
             )}
 
             <label className="auth-field auth-field-full">
-              <span>Street Address</span>
+              <span>Your address</span>
               <div className="auth-input-wrapper auth-input-plain">
                 <input
                   autoComplete="street-address"
+                    list="registration-address-suggestions"
                   name="address"
                   {...fieldErrorProps('address')}
                   onChange={handleChange}
-                  placeholder="House no. / street / purok"
+                  placeholder="Your house no. / street / purok"
                   required
                   type="text"
                   value={form.address}
                 />
               </div>
+
+              <small>Your personal contact address within the selected barangay, not the barangay or BDRMO office address. You may type it manually.</small>
               <RegistrationFieldError name="address" errors={fieldErrors} />
             </label>
+            <div className="auth-field-full register-address-help">
+              <AddressSuggestions barangayId={form.barangay_id} query={form.address} active={step === 1} />
+              <small>Suggestions are off until you opt in above. When enabled, typed text is sent to Photon / OpenStreetMap after a pause; you can always enter your address manually. Suggestions do not verify residence.</small>
+            </div>
 
             </fieldset><fieldset className="register-fields" hidden={step !== 2} disabled={step !== 2}><legend className="sr-only">Account access</legend>
-            {isFirstForBarangay === true && <p className="notice success auth-field-full">First Administrator registration. Super Admin approval is required before sign-in.</p>}
+            {isFirstForBarangay === true && <p className="notice success auth-field-full">First Administrator registration: submission adds your application to the Super Admin approval queue and creates an in-app notification. Approval is required before sign-in; you do not need to keep this page open.</p>}
             {isFirstForBarangay !== true && (
               <label className="auth-field">
                 <span>I am a...</span>
@@ -622,7 +632,7 @@ function Register() {
 
             </fieldset>
             {error ? <p role="alert" className="notice error auth-field-full">{error}</p> : null}
-            <div className="register-actions">{step > 0 && <button type="button" className="ghost-button" disabled={submitting} onClick={() => { setStep((current) => current - 1); setError(''); }}>Back</button>}
+            <div className="register-actions">
 
             <button className="primary-button auth-submit-btn auth-field-full" disabled={submitting} type="submit">
               {submitting ? (
