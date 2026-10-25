@@ -75,6 +75,18 @@ html:root[data-theme] .superadmin-shell .sa-table .sa-group-row th { padding:9px
 .superadmin-shell .sa-description-cell { max-width:300px; min-width:180px; }
 .superadmin-shell .sa-log-details { max-width:400px; min-width:240px; }
 .superadmin-shell .sa-text-button { padding:5px 0; background:none; border:0; color:#2563eb; font:inherit; font-weight:600; cursor:pointer; }
+.superadmin-shell .sa-barangay-link { display:grid; gap:2px; text-align:left; text-decoration:none; }
+.superadmin-shell .sa-barangay-link span { color:var(--sa-muted); font-size:11px; font-weight:500; }
+.superadmin-shell .sa-management-summary { display:grid; gap:10px; }
+.superadmin-shell .sa-management-summary p { margin:0; color:var(--sa-muted); font-size:13px; }
+.superadmin-shell .sa-management-summary p strong { color:var(--sa-text); font-variant-numeric:tabular-nums; }
+.superadmin-shell .sa-clear-filters { align-self:end; }
+.superadmin-shell .sa-detail-tabs { display:flex; flex-wrap:wrap; gap:4px; padding:0 24px; border-bottom:1px solid var(--sa-border); background:var(--sa-subtle); }
+.superadmin-shell .sa-detail-tabs a { min-height:42px; display:inline-flex; align-items:center; padding:0 10px; color:var(--sa-muted); font-size:13px; font-weight:600; text-decoration:none; border-bottom:2px solid transparent; }
+.superadmin-shell .sa-detail-tabs a:hover, .superadmin-shell .sa-detail-tabs a:focus-visible { color:#1d4ed8; border-bottom-color:#2563eb; }
+.superadmin-shell .sa-add-barangay-form { display:grid; gap:10px; }
+.superadmin-shell .sa-required-note { margin:0; color:var(--sa-muted); font-size:12px; }
+.superadmin-shell .sa-required-note span { color:#dc2626; font-weight:700; }
 html:root[data-theme] .superadmin-shell .status-badge { display:inline-flex; width:fit-content; gap:5px; font-size:11px; font-weight:600; line-height:1.5; text-transform:none; letter-spacing:normal; padding:3px 8px; border-radius:6px; background:var(--sa-subtle); color:var(--sa-muted); border:1px solid var(--sa-border); white-space:nowrap; }
 html:root[data-theme] .superadmin-shell .status-badge:is(.active,.active-admin,.verified,.resolved,.activate,.approve) { background:#f0fdf4; color:#15803d; border-color:#dcfce7; }
 html:root[data-theme] .superadmin-shell .status-badge:is(.pending-approval,.initial-administrator,.needs-review,.no-active-admin,.open) { background:#fffbeb; color:#a16207; border-color:#fef3c7; }
@@ -157,6 +169,8 @@ html:root[data-theme] .superadmin-shell:has(.sidebar-collapsed) .workspace-foote
  html:root[data-theme] .superadmin-shell .page-heading-row { margin-bottom:20px; }
  .superadmin-shell .page-heading-text h1 { font-size:24px; }
  .superadmin-shell .sa-toolbar, .superadmin-shell .sa-card-summary { padding:16px; }
+ .superadmin-shell .sa-detail-tabs { padding-inline:16px; overflow-x:auto; flex-wrap:nowrap; }
+ .superadmin-shell .sa-detail-tabs a { white-space:nowrap; }
  .superadmin-shell .sa-search, .superadmin-shell .sa-filter-field { flex:1 1 100%; max-width:none; width:100%; }
  html:root[data-theme] .superadmin-shell .sa-table table { min-width:0; display:block; }
  .superadmin-shell .sa-table thead { display:none; }
@@ -277,3 +291,100 @@ html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-sel
   html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-select,
   html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-select > input[role="combobox"] { height:40px; min-height:40px; }
 }
+
+/* Grouped sidebar sections. */
+.superadmin-shell .sa-nav-heading { display:block; padding:6px 12px 2px; color:rgba(255,255,255,.88); font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+html:root[data-theme] .superadmin-shell .sidebar:not(.collapsed) .sa-nav-group > button { padding-left:12px; }
+.superadmin-shell .sidebar.collapsed .sa-nav-heading { display:none; }
+.superadmin-shell .sidebar.collapsed .sa-nav-group + .sa-nav-group { padding-top:8px; border-top:1px solid rgba(255,255,255,.25); }
+/* Between phone and desktop widths the sidebar is an icon rail too. */
+@media (min-width:768px) and (max-width:1100px) {
+  .superadmin-shell .sa-nav-heading { display:none; }
+  html:root[data-theme] .superadmin-shell .sidebar:not(.collapsed) .sa-nav-group > button { padding:10px; }
+  .superadmin-shell .sa-nav-group + .sa-nav-group { padding-top:8px; border-top:1px solid rgba(255,255,255,.25); }
+}
+
+/* Impersonation sits apart from page filters, behind its own label. */
+.superadmin-shell .sa-impersonation-zone { display:flex; align-items:center; gap:8px; min-width:0; margin-left:8px; padding-left:12px; border-left:1px solid var(--sa-border); }
+.superadmin-shell .sa-impersonation-label { display:inline-flex; align-items:center; gap:6px; flex-shrink:0; color:var(--sa-muted); font-size:12px; font-weight:600; white-space:nowrap; }
+.superadmin-shell .sa-impersonation-controls { min-width:0; }
+html:root[data-theme] .superadmin-shell .sa-impersonation-toggle { display:none; }
+@media (max-width:1360px) { .superadmin-shell .sa-impersonation-label > span { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; } }
+@media (max-width:900px) {
+  .superadmin-shell .sa-impersonation-zone { display:grid; gap:8px; margin:10px 0 0; padding:10px 0 0; border-left:0; border-top:1px solid var(--sa-border); }
+  .superadmin-shell .sa-impersonation-label { display:none; }
+  html:root[data-theme] .superadmin-shell .sa-impersonation-toggle { display:inline-flex; align-items:center; justify-self:start; gap:6px; min-height:40px; padding:8px 12px; border:1px solid var(--sa-border); border-radius:8px; background:var(--sa-surface); color:var(--sa-text); font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+  .superadmin-shell .sa-impersonation-toggle[aria-expanded="true"] svg:last-child { transform:rotate(180deg); }
+  .superadmin-shell .sa-impersonation-zone:not(.is-open) .sa-impersonation-controls { display:none; }
+  html:root[data-theme] .superadmin-shell .topbar .sa-impersonation-zone .account-cascade { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+  html:root[data-theme] .superadmin-shell .topbar .sa-impersonation-zone .account-cascade :is(select,.searchable-select) { width:100%; min-width:0; max-width:none; }
+  html:root[data-theme] .superadmin-shell .topbar .sa-impersonation-zone .account-user-control { grid-column:1 / -1; max-width:none; }
+  html:root[data-theme] .superadmin-shell .topbar .sa-impersonation-zone .account-user-control :is(select,.searchable-select) { flex:1 1 0; width:0; }
+}
+
+/* Platform Overview: summary cards, action queue, coverage status. */
+.superadmin-shell .sa-overview { display:grid; gap:20px; min-width:0; }
+.superadmin-shell .sa-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin:0; padding:0; list-style:none; }
+.superadmin-shell .sa-kpi { display:flex; flex-direction:column; align-items:flex-start; gap:4px; width:100%; height:100%; padding:16px; border:1px solid var(--sa-border); border-radius:12px; background:var(--sa-surface); color:var(--sa-text); font:inherit; text-align:left; cursor:pointer; }
+.superadmin-shell .sa-kpi:hover { border-color:#93c5fd; }
+.superadmin-shell .sa-kpi.is-attention { border-left:4px solid #d97706; }
+.superadmin-shell .sa-kpi-top { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; margin-bottom:6px; }
+.superadmin-shell .sa-kpi-icon { display:grid; place-items:center; width:34px; height:34px; border-radius:50%; background:#eff6ff; color:#1d4ed8; }
+.superadmin-shell .sa-kpi-kind { padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; }
+.superadmin-shell .sa-kpi-kind.attention { background:#fffbeb; color:#92400e; }
+.superadmin-shell .sa-kpi-kind.clear { background:#f0fdf4; color:#166534; }
+.superadmin-shell .sa-kpi-kind.total { background:#eff6ff; color:#1d4ed8; }
+.superadmin-shell .sa-kpi-label { font-size:13px; font-weight:600; }
+.superadmin-shell .sa-kpi strong { font-size:28px; line-height:1.2; }
+.superadmin-shell .sa-kpi small { color:var(--sa-muted); font-size:12px; line-height:1.45; }
+.superadmin-shell .sa-kpi-cta { display:inline-flex; align-items:center; gap:4px; margin-top:auto; padding-top:8px; color:#1d4ed8; font-size:13px; font-weight:600; }
+.superadmin-shell .sa-overview-columns { display:grid; grid-template-columns:minmax(0,1.9fr) minmax(280px,1fr); gap:20px; align-items:start; }
+.superadmin-shell .sa-queue-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:16px 20px; border-bottom:1px solid var(--sa-border); }
+.superadmin-shell .sa-queue-head h2 { margin:0; color:var(--sa-text); font-size:17px; line-height:1.35; }
+.superadmin-shell .sa-queue-head p { margin:4px 0 0; color:var(--sa-muted); font-size:13px; line-height:1.5; }
+.superadmin-shell .sa-queue-controls { display:grid; gap:12px; padding:14px 20px; border-bottom:1px solid var(--sa-border); }
+.superadmin-shell .sa-queue-row { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; }
+.superadmin-shell .sa-location-filter { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; min-width:0; margin:0; padding:8px 12px 12px; border:1px solid var(--sa-border); border-radius:10px; background:var(--sa-subtle); }
+.superadmin-shell .sa-location-filter legend { display:inline-flex; align-items:center; gap:6px; padding:0 6px; color:var(--sa-muted); font-size:12px; font-weight:600; }
+.superadmin-shell .sa-location-filter .sa-filter-field { flex:1 1 160px; max-width:none; }
+.superadmin-shell .sa-queue-list { margin:0; padding:0; list-style:none; }
+.superadmin-shell .sa-queue-list li { display:flex; align-items:center; gap:16px; padding:14px 20px; border-bottom:1px solid var(--sa-border); }
+.superadmin-shell .sa-queue-list li:last-child { border-bottom:0; }
+.superadmin-shell .sa-queue-item { display:grid; flex:1; gap:2px; min-width:0; overflow-wrap:anywhere; }
+.superadmin-shell .sa-queue-item h3 { margin:0; color:var(--sa-text); font-size:15px; line-height:1.4; }
+.superadmin-shell .sa-queue-place { color:var(--sa-muted); font-size:12px; }
+.superadmin-shell .sa-queue-item p { margin:4px 0 0; color:var(--sa-text); font-size:13px; line-height:1.5; }
+.superadmin-shell .sa-queue-title { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; }
+.superadmin-shell .sa-queue .sa-count { font-size:13px; }
+html:root[data-theme] .superadmin-shell .sa-queue-action { flex-shrink:0; color:#1d4ed8; }
+.superadmin-shell .sa-queue .sa-page-buttons > span { padding:0 8px; color:var(--sa-text); }
+.superadmin-shell .sa-status-body { display:grid; gap:12px; padding:16px 20px; }
+.superadmin-shell .sa-status-headline { display:flex; align-items:baseline; flex-wrap:wrap; gap:4px 10px; }
+.superadmin-shell .sa-status-headline strong { font-size:30px; line-height:1.1; }
+.superadmin-shell .sa-status-headline span { color:var(--sa-muted); font-size:13px; }
+.superadmin-shell .sa-coverage-row > div:first-child { display:flex; justify-content:space-between; gap:12px; margin-bottom:5px; font-size:13px; }
+.superadmin-shell .sa-coverage-row small { color:var(--sa-muted); font-weight:500; }
+.superadmin-shell .sa-coverage-track { height:8px; overflow:hidden; border:1px solid var(--sa-border); border-radius:999px; background:var(--sa-subtle); }
+.superadmin-shell .sa-coverage-fill { display:block; height:100%; border-radius:inherit; }
+.superadmin-shell .sa-coverage-fill.good { background:#16a34a; }
+.superadmin-shell .sa-coverage-fill.warn { background:#d97706; }
+.superadmin-shell .sa-coverage-fill.muted { background:#94a3b8; }
+.superadmin-shell .sa-status-body h3 { margin:6px 0 0; padding-top:12px; border-top:1px solid var(--sa-border); color:var(--sa-text); font-size:13px; }
+.superadmin-shell .sa-status-note { display:flex; align-items:center; gap:6px; margin:0; color:#b45309; font-size:12px; }
+.superadmin-shell .sa-status-actions { padding:14px 20px; border-top:1px solid var(--sa-border); }
+html:root[data-theme] .superadmin-shell .sa-status-actions .primary-button { width:100%; }
+html[data-theme="dark"] .superadmin-shell .sa-kpi-icon { background:#1e3a8a66; color:#93c5fd; }
+html[data-theme="dark"] .superadmin-shell .sa-kpi-kind.attention { background:#451a03; color:#fcd34d; }
+html[data-theme="dark"] .superadmin-shell .sa-kpi-kind.clear { background:#052e16; color:#86efac; }
+html[data-theme="dark"] .superadmin-shell .sa-kpi-kind.total { background:#1e3a8a66; color:#bfdbfe; }
+html[data-theme="dark"] .superadmin-shell :is(.sa-kpi-cta, .sa-queue-action) { color:#93c5fd; }
+html[data-theme="dark"] .superadmin-shell .sa-status-note { color:#fbbf24; }
+@media (max-width:1200px) { .superadmin-shell .sa-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:1100px) { .superadmin-shell .sa-overview-columns { grid-template-columns:minmax(0,1fr); } }
+@media (max-width:640px) {
+  .superadmin-shell .sa-queue-head, .superadmin-shell .sa-queue-controls, .superadmin-shell .sa-status-body, .superadmin-shell .sa-status-actions { padding-left:16px; padding-right:16px; }
+  .superadmin-shell .sa-queue-list li { flex-wrap:wrap; padding:14px 16px; }
+  html:root[data-theme] .superadmin-shell .sa-queue-action { width:100%; min-height:44px; }
+  .superadmin-shell .sa-queue-row > *, .superadmin-shell .sa-location-filter .sa-filter-field { flex:1 1 100%; max-width:none; }
+}
+@media (max-width:500px) { .superadmin-shell .sa-kpis { grid-template-columns:minmax(0,1fr); } }
