@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\Concerns\UploadsImages;
+use App\Mail\AccountMail;
 use App\Models\ActivityLog;
 use App\Models\Barangay;
 use App\Models\RegistrationSetting;
@@ -19,8 +20,9 @@ class AuthController extends Controller
     /**
      * Register against a preloaded PSGC barangay ID. The barangay must belong
      * to the selected city; free-text barangay creation is not a public flow.
-     * Staff code checks and inactive-until-approved routing remain mandatory.
-     * First Administrators await Super Admin approval; later staff await Admin approval.
+     * Staff need the barangay's staff code and await Admin approval; a first
+     * Administrator registers without one and activates with the code a
+     * Super Admin emails them (activateWithStaffCode).
      */
     public function register(Request $request)
     {
@@ -72,21 +74,20 @@ class AuthController extends Controller
             // across every barangay — this is the one place that's supposed to.
             $isFirstForBarangay = !User::where('barangay_id', $barangayId)->exists();
 
+            // The first-for-this-barangay account has no role choice (it's
+            // always Admin) and no staff code yet: a Super Admin emails it
+            // the code after confirming the appointment, and the account
+            // stays locked until that code is entered (activateWithStaffCode).
             $roleData = $request->validate([
-                // The first-for-this-barangay account has no role choice (it's
-                // always Admin) — but still has to prove they're actually from
-                // this barangay, same as anyone else. Otherwise a stranger
-                // could just claim to be "first" for a real barangay whose
-                // Admin seat is simply still empty and grab it uncontested.
                 'requested_role' => [$isFirstForBarangay ? 'nullable' : 'required', Rule::in(['Custodian', 'Maintenance Personnel'])],
-                'staff_code' => ['required', 'string'],
+                'staff_code' => [$isFirstForBarangay ? 'nullable' : 'required', 'string'],
             ], [
                 'requested_role.required' => 'Please select whether you are a Custodian or Maintenance Personnel.',
                 'staff_code.required' => 'Please enter the staff registration code given to you by your barangay office.',
             ]);
 
             abort_unless(
-                hash_equals(RegistrationSetting::for($barangayId)->staff_code, strtoupper(trim($roleData['staff_code']))),
+                $isFirstForBarangay || hash_equals(RegistrationSetting::for($barangayId)->staff_code, strtoupper(trim($roleData['staff_code']))),
                 422,
                 'That staff registration code is not correct. Ask your barangay office for the current code.'
             );
@@ -115,6 +116,7 @@ class AuthController extends Controller
                 'roles' => [$role],
                 'is_active' => false,
                 'approved_at' => null,
+                'awaiting_staff_code' => $isFirstForBarangay,
             ]);
 
             return [$user, $isFirstForBarangay];
@@ -123,10 +125,11 @@ class AuthController extends Controller
         if ($isFirstForBarangay) {
             $barangayLabel = $user->barangay_name ?? $user->barangay?->name ?? 'their barangay';
             $this->notifySuperAdmins(
-                'New barangay Admin awaiting approval',
-                "{$user->name} registered as the first Admin for {$barangayLabel}. Review and approve before they can sign in.",
+                'New barangay Admin awaiting a staff code',
+                "{$user->name} registered as the first Admin for {$barangayLabel}. Confirm the appointment, then email them the staff registration code from Users.",
                 'pending_admin_approval'
             );
+            AccountMail::trySend($user, 'Welcome to VMS. Your account is waiting for approval', 'welcome');
         } else {
             // Every other registration is approved by the barangay's own
             // Admin(s), who otherwise had no way to learn a pending account
@@ -142,7 +145,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => $isFirstForBarangay
-                ? 'Registration submitted. A Super Admin must approve your account (as the first Admin for your barangay) before you can sign in.'
+                ? 'Registration submitted. Check your email: a Super Admin will send your staff registration code, which you enter after signing in to activate your account.'
                 : 'Registration submitted. An administrator must approve your account before you can sign in.',
             'user' => [
                 'id' => $user->id,
@@ -219,6 +222,17 @@ class AuthController extends Controller
             ], 401); // Returns 401 Unauthorized status code
         }
 
+        if (!$user->is_active && $user->awaiting_staff_code) {
+            // No token: the code window re-sends these credentials with the code.
+            return response()->json([
+                'message' => $user->staff_code_sent_at
+                    ? 'Enter the staff registration code we emailed you to activate your account.'
+                    : 'Your account is waiting for a staff registration code from the Super Admin. We will email it to you.',
+                'awaiting_staff_code' => true,
+                'staff_code_sent' => $user->staff_code_sent_at !== null,
+            ], 403);
+        }
+
         if (!$user->is_active) {
             // approved_at is only ever set the moment an Admin (or, for a
             // barangay's first-ever Admin, a Super Admin) first approves an
@@ -245,6 +259,57 @@ class AuthController extends Controller
             return response()->json(['message' => $message], 403);
         }
 
+        return $this->signedIn($user);
+    }
+
+    /**
+     * A first Administrator's activation: the same email and password as
+     * sign-in, plus the staff code a Super Admin emailed them. The code
+     * must be this barangay's current one and used within
+     * User::STAFF_CODE_VALID_DAYS of being sent; an expired registration
+     * is cancelled so the person can register again.
+     */
+    public function activateWithStaffCode(Request $request)
+    {
+        $data = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string',
+            'staff_code' => 'required|string',
+        ]);
+
+        $user = User::where('email', $data['email'])->first();
+        if (!$user || !Hash::check($data['password'], $user->password)) {
+            return response()->json(['message' => 'Invalid credentials provided. Please check your email or password.'], 401);
+        }
+        abort_unless($user->awaiting_staff_code && !$user->is_active, 422, 'This account is not waiting for a staff registration code.');
+        abort_unless($user->staff_code_sent_at, 422, 'Your staff registration code has not been sent yet. Please wait for the email from the Super Admin.');
+
+        if ($user->staffCodeExpired()) {
+            $user->expireRegistration();
+            return response()->json(['message' => 'Your staff registration code has expired and your registration was cancelled. Please register again.'], 410);
+        }
+
+        abort_unless(
+            hash_equals(RegistrationSetting::for($user->barangay_id)->staff_code, strtoupper(trim($data['staff_code']))),
+            422,
+            'That staff registration code is not correct. Check the code in your email and try again.'
+        );
+
+        $user->update(['is_active' => true, 'approved_at' => $user->approved_at ?? now(), 'awaiting_staff_code' => false]);
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'role' => $user->role,
+            'action' => 'Activate',
+            'module' => 'Authentication',
+            'details' => "{$user->name} activated their account with the emailed staff registration code.",
+        ]);
+        AccountMail::trySend($user, 'Your VMS account is now active', 'activated');
+
+        return $this->signedIn($user);
+    }
+
+    private function signedIn(User $user)
+    {
         // 4. Issue a secure, unique Sanctum token, tagged with every role
         //    (hat) the account may wear so token abilities match its access.
         $token = $user->createToken('auth_token', $user->allRoles())->plainTextToken;

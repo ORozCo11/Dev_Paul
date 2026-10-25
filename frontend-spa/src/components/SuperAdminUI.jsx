@@ -2,6 +2,7 @@ import SearchableSelect from './SearchableSelect';
 import { cloneElement, Fragment, useEffect, useId, useRef, useState } from 'react';
 import Icon from './Icon';
 import ConfirmDialog from './ConfirmDialog';
+import SuccessCheck from './SuccessCheck';
 
 export function AdminConfirmDialog({ dialog, busy, onCancel, onConfirm }) {
   const current = useRef({ busy, onCancel });
@@ -25,6 +26,19 @@ export function AdminConfirmDialog({ dialog, busy, onCancel, onConfirm }) {
   return <ConfirmDialog dialog={dialog} busy={busy} onCancel={onCancel} onConfirm={onConfirm} />;
 }
 
+// Brief check-mark confirmation after an approval or a sent email; closes itself.
+export function SuccessCelebration({ celebration, onDone }) {
+  useEffect(() => {
+    if (!celebration) return undefined;
+    const timer = setTimeout(onDone, 2200);
+    return () => clearTimeout(timer);
+  }, [celebration, onDone]);
+  if (!celebration) return null;
+  return <div className="sa-celebration" role="status" onClick={onDone}>
+    <div className="sa-celebration-card"><SuccessCheck size={120} /><strong>{celebration.title}</strong>{celebration.detail && <p>{celebration.detail}</p>}</div>
+  </div>;
+}
+
 export function StatusBadge({ value }) {
   return <span className={`status-badge ${String(value ?? '').toLowerCase().replaceAll(' ', '-')}`}>{value ?? '\u2014'}</span>;
 }
@@ -33,7 +47,7 @@ export function LocalSearchInput({ value, onChange, placeholder = 'Search...' })
   return <div className="sa-search"><Icon name="search" size={17} /><input type="search" aria-label={placeholder} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />{value && <button type="button" aria-label="Clear search" onClick={() => onChange('')}><Icon name="close" size={14} /></button>}</div>;
 }
 
-export function PaginatedTable({ columns, rows, emptyMessage = 'No matching records', emptyDescription = 'Try another search or adjust the filters.', emptyIcon, groupBy, initialPageSize = 10, pageSizeOptions = [10, 25, 50, 100], pagination, onPageChange, onPageSizeChange }) {
+export function PaginatedTable({ columns, rows, emptyMessage = 'No matching records', emptyDescription = 'Try another search or adjust the filters.', emptyIcon, groupBy, rowClassName, initialPageSize = 10, pageSizeOptions = [10, 25, 50, 100], pagination, onPageChange, onPageSizeChange }) {
   const rowsKey = rows.map((row, index) => row.id ?? row.log_id ?? index).join(',');
   const [paging, setPaging] = useState({ page: 1, size: initialPageSize, rowsKey });
   // Notification polling and theme changes must not reset a table's page.
@@ -51,7 +65,7 @@ export function PaginatedTable({ columns, rows, emptyMessage = 'No matching reco
     <div className="table-shell sa-table"><table><thead><tr>{columns.map((column) => <th scope="col" className={column.className} key={column.label}>{column.label}</th>)}</tr></thead>
       <tbody>{visible.map((row, index) => <Fragment key={row.id ?? row.log_id ?? index}>
         {groupBy && (index === 0 || groupBy(row) !== groupBy(visible[index - 1])) && <tr className="sa-group-row"><th scope="rowgroup" colSpan={columns.length}><Icon name="pin" size={14} />{groupBy(row)}</th></tr>}
-        <tr>{columns.map((column) => <td className={column.className} data-label={column.label} key={column.label}>{column.render ? column.render(row) : (row[column.key] ?? '\u2014')}</td>)}</tr>
+        <tr className={rowClassName?.(row)}>{columns.map((column) => <td className={column.className} data-label={column.label} key={column.label}>{column.render ? column.render(row) : (row[column.key] ?? '\u2014')}</td>)}</tr>
       </Fragment>)}</tbody></table></div>
     <div className="sa-pagination"><span>Showing {start + 1}–{Math.min(start + size, total)} of {total}</span><div className="sa-page-buttons">
       <button type="button" disabled={page === 1} aria-label="Previous page" onClick={() => changePage(page - 1)}><Icon name="arrowLeft" size={16} /></button>
@@ -86,7 +100,7 @@ export function AdminIdentity({ name, email }) {
   return <div className="sa-identity"><span className="sa-avatar" aria-hidden="true">{initials}</span><div><strong>{name || 'Unknown'}</strong>{email && <span>{email}</span>}</div></div>;
 }
 
-export function AdminActionDrawer({ title, description, onClose, children, footer }) {
+export function AdminActionDrawer({ title, description, onClose, children, footer, centered = false }) {
   const titleId = useId();
   const panelRef = useRef(null);
   const closeRef = useRef(onClose);
@@ -111,7 +125,7 @@ export function AdminActionDrawer({ title, description, onClose, children, foote
     document.addEventListener('keydown', keydown);
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener('keydown', keydown); if (previous?.isConnected) previous.focus(); };
   }, []);
-  return <div className="sa-drawer-overlay" onClick={onClose}>
+  return <div className={`sa-drawer-overlay${centered ? ' sa-modal' : ''}`} onClick={onClose}>
     <section ref={panelRef} className="sa-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
       <header><div><h2 id={titleId}>{title}</h2>{description && <p>{description}</p>}</div><button className="ghost-button" type="button" onClick={onClose} aria-label="Close details"><Icon name="close" size={18} /></button></header>
       <div className="sa-drawer-body">{children}</div>

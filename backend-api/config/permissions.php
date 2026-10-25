@@ -224,6 +224,7 @@ return [
     'user.reject' => ['Super Admin'],
     'user.view_pending' => ['Super Admin'],
     'user.change_role_platform' => ['Super Admin'],
+    'user.email_platform' => ['Super Admin'],
     'activity_log.view_platform' => ['Super Admin'],
     'concern_report.view' => ['Super Admin'],
     'concern_report.resolve' => ['Super Admin'],

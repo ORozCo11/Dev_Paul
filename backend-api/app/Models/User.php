@@ -35,7 +35,12 @@ class User extends Authenticatable
         'is_active',
         'approved_at',
         'can_register_vehicles',
+        'awaiting_staff_code',
+        'staff_code_sent_at',
     ];
+
+    // How long an emailed staff code stays usable before the registration expires.
+    public const STAFF_CODE_VALID_DAYS = 7;
 
     /**
      * The attributes that should be hidden for serialization.
@@ -50,7 +55,26 @@ class User extends Authenticatable
         'roles'     => 'array',
         'approved_at' => 'datetime',
         'can_register_vehicles' => 'boolean',
+        'awaiting_staff_code' => 'boolean',
+        'staff_code_sent_at' => 'datetime',
     ];
+
+    public function staffCodeExpiresAt(): ?\Illuminate\Support\Carbon
+    {
+        return $this->staff_code_sent_at?->copy()->addDays(self::STAFF_CODE_VALID_DAYS);
+    }
+
+    public function staffCodeExpired(): bool
+    {
+        return $this->awaiting_staff_code && $this->staffCodeExpiresAt()?->isPast() === true;
+    }
+
+    /** Cancels an unclaimed first-Admin registration so the person can register again. */
+    public function expireRegistration(): void
+    {
+        \App\Mail\AccountMail::trySend($this, 'Your VMS registration has expired', 'expired', ['expiresAt' => $this->staffCodeExpiresAt()]);
+        $this->delete();
+    }
 
     // Matches the migration's DB-level default. Without this, a User
     // instance built in PHP without an explicit is_active (e.g. a factory

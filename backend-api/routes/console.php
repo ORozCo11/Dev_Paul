@@ -12,6 +12,10 @@ Artisan::command('inspire', function () {
 // App\Console\Commands\PruneOldNotifications for the retention rule.
 Schedule::command('notifications:prune')->daily();
 
+// Cancels first-Admin registrations whose emailed staff code went unused for
+// a week — see App\Console\Commands\ExpireUnclaimedRegistrations.
+Schedule::command('registrations:expire-unclaimed')->hourly();
+
 // Turns a due Maintenance Schedule entry into a real ticket automatically —
 // see App\Console\Commands\ConvertDueSchedulesToTickets.
 Schedule::command('schedules:convert-due-to-tickets')->everyMinute()->timezone('Asia/Manila')->withoutOverlapping();
