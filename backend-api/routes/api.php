@@ -184,6 +184,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::put('/superadmin/concern-reports/{concernReport}/resolve', [SuperAdminController::class, 'resolveConcernReport']);
     Route::put('/superadmin/concern-reports/{concernReport}/reopen', [SuperAdminController::class, 'reopenConcernReport']);
     Route::delete('/superadmin/concern-reports/{concernReport}', [SuperAdminController::class, 'destroyConcernReport']);
+    Route::put('/superadmin/concern-reports/{concernReport}/restore', [SuperAdminController::class, 'restoreConcernReport']);
 
     Route::get('/hubs', [HubController::class, 'index']);
     Route::post('/hubs', [HubController::class, 'store']);

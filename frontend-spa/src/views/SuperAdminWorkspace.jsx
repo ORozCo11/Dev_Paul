@@ -700,7 +700,7 @@ export default function SuperAdminWorkspace() {
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
             ) : activeTab === 'support' ? (
-              <SupportCenterTab onRequestConfirmation={setConfirmDialog} setNotice={setNotice} />
+              <SupportCenterTab onRequestConfirmation={setConfirmDialog} onSuccess={setCelebration} />
             ) : (
               <SettingsTab setNotice={setNotice} />
             )}

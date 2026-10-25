@@ -87,8 +87,8 @@ export function AdminFilterField({ label, children }) {
   return <div className="sa-filter-field"><label htmlFor={id}>{label}</label>{cloneElement(children, { id })}</div>;
 }
 
-export function AdminManagementCard({ summary, toolbar, children }) {
-  return <section className="sa-management-card">
+export function AdminManagementCard({ summary, toolbar, children, className = '' }) {
+  return <section className={`sa-management-card ${className}`.trim()}>
     {summary && <div className="sa-card-summary">{summary}</div>}
     {toolbar && <div className="sa-toolbar">{toolbar}</div>}
     {children}
@@ -100,7 +100,7 @@ export function AdminIdentity({ name, email }) {
   return <div className="sa-identity"><span className="sa-avatar" aria-hidden="true">{initials}</span><div><strong>{name || 'Unknown'}</strong>{email && <span>{email}</span>}</div></div>;
 }
 
-export function AdminActionDrawer({ title, description, onClose, children, footer, centered = false }) {
+export function AdminActionDrawer({ title, description, onClose, children, footer, centered = false, className = '' }) {
   const titleId = useId();
   const panelRef = useRef(null);
   const closeRef = useRef(onClose);
@@ -126,7 +126,7 @@ export function AdminActionDrawer({ title, description, onClose, children, foote
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener('keydown', keydown); if (previous?.isConnected) previous.focus(); };
   }, []);
   return <div className={`sa-drawer-overlay${centered ? ' sa-modal' : ''}`} onClick={onClose}>
-    <section ref={panelRef} className="sa-drawer" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
+    <section ref={panelRef} className={`sa-drawer ${className}`.trim()} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
       <header><div><h2 id={titleId}>{title}</h2>{description && <p>{description}</p>}</div><button className="ghost-button" type="button" onClick={onClose} aria-label="Close details"><Icon name="close" size={18} /></button></header>
       <div className="sa-drawer-body">{children}</div>
       {footer && <footer>{footer}</footer>}

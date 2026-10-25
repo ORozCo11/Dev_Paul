@@ -72,6 +72,29 @@ html:root[data-theme] .superadmin-shell .sa-icon-button.sa-attention { color:#25
 .superadmin-shell .sa-email-meta dt { color:var(--sa-muted); }
 .superadmin-shell .sa-email-meta dd { margin:0; overflow-wrap:anywhere; }
 .superadmin-shell .sa-waiting-admin { display:flex; flex-direction:column; gap:4px; }
+/* Support Center: brand-blue summary bar with the Open / History switch. */
+.superadmin-shell .sa-support-card { overflow:hidden; }
+.superadmin-shell .sa-support-card > .sa-card-summary { justify-content:space-between; background:#2563eb; border-bottom:0; color:#fff; }
+.superadmin-shell .sa-support-summary { display:flex; align-items:center; flex-wrap:wrap; gap:6px 18px; }
+.superadmin-shell .sa-support-summary strong { font-size:16px; }
+html:root[data-theme] .superadmin-shell .sa-support-summary :is(span, a) { color:#fff; font-size:13px; }
+html:root[data-theme] .superadmin-shell .sa-support-summary a { font-weight:600; text-decoration:underline; }
+html:root[data-theme] .superadmin-shell .sa-support-views button { color:#fff; border-color:#ffffff59; }
+html:root[data-theme] .superadmin-shell .sa-support-views button:hover { background:#ffffff1f; }
+html:root[data-theme] .superadmin-shell .sa-support-views button[aria-pressed="true"] { background:#fff; color:#1d4ed8; border-color:#fff; }
+html:root[data-theme] .superadmin-shell .sa-support-views button span { background:#ffffff33; color:#fff; }
+html:root[data-theme] .superadmin-shell .sa-support-views button[aria-pressed="true"] span { background:#dbeafe; color:#1d4ed8; }
+
+/* Support Center concern: centered reading modal with a brand-blue header. */
+.superadmin-shell .sa-concern-modal { overflow:hidden; }
+.superadmin-shell .sa-concern-modal > header { background:#2563eb; border-bottom:0; align-items:center; }
+html:root[data-theme] .superadmin-shell .sa-concern-modal > header :is(h2, p) { color:#fff; }
+html:root[data-theme] .superadmin-shell .sa-concern-modal > header .ghost-button { background:transparent; border-color:#ffffff66; color:#fff; }
+html:root[data-theme] .superadmin-shell .sa-concern-modal > header .ghost-button:hover { background:#ffffff1f; border-color:#fff; }
+.superadmin-shell .sa-concern-modal .sa-detail-list { font-size:14px; margin-bottom:22px; }
+.superadmin-shell .sa-concern-modal .sa-concern-heading { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--sa-muted); margin:0 0 8px; }
+.superadmin-shell .sa-concern-text { margin:0; padding:14px 16px; font-size:15px; line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--sa-subtle); border:1px solid var(--sa-border); border-radius:8px; }
+.superadmin-shell .sa-concern-modal > footer .sa-row-actions { justify-content:flex-end; }
 .superadmin-shell .sa-celebration { position:fixed; inset:0; z-index:700; display:grid; place-items:center; padding:20px; background:#0f172a40; }
 .superadmin-shell .sa-celebration-card { width:min(360px,100%); padding:24px 24px 28px; text-align:center; color:var(--sa-text); background:var(--sa-surface); border-radius:14px; box-shadow:0 20px 50px #0f172a33; }
 .superadmin-shell .sa-celebration-card strong { display:block; font-size:22px; }
@@ -107,7 +130,7 @@ html:root[data-theme] .superadmin-shell .sa-table .sa-group-row th { padding:9px
 html:root[data-theme] .superadmin-shell .status-badge { display:inline-flex; width:fit-content; gap:5px; font-size:11px; font-weight:600; line-height:1.5; text-transform:none; letter-spacing:normal; padding:3px 8px; border-radius:6px; background:var(--sa-subtle); color:var(--sa-muted); border:1px solid var(--sa-border); white-space:nowrap; }
 html:root[data-theme] .superadmin-shell .status-badge:is(.active,.active-admin,.verified,.resolved,.activate,.approve) { background:#f0fdf4; color:#15803d; border-color:#dcfce7; }
 html:root[data-theme] .superadmin-shell .status-badge:is(.pending-approval,.awaiting-code,.code-sent,.initial-administrator,.needs-review,.no-active-admin,.open) { background:#fffbeb; color:#a16207; border-color:#fef3c7; }
-html:root[data-theme] .superadmin-shell .status-badge:is(.deactivated,.not-found,.delete,.deactivate) { background:#fef2f2; color:#b91c1c; border-color:#fee2e2; }
+html:root[data-theme] .superadmin-shell .status-badge:is(.deactivated,.deleted,.not-found,.delete,.deactivate) { background:#fef2f2; color:#b91c1c; border-color:#fee2e2; }
 .superadmin-shell .sa-pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:15px 20px; border-top:1px solid var(--sa-border); color:var(--sa-muted); font-size:12px; }
 .superadmin-shell .sa-page-buttons { display:flex; align-items:center; gap:4px; }
 .superadmin-shell .sa-page-buttons button { display:grid; place-items:center; min-width:32px; height:32px; padding:4px; border:1px solid var(--sa-border); border-radius:6px; background:var(--sa-surface); color:var(--sa-text); font:inherit; cursor:pointer; }
