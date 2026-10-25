@@ -25,7 +25,7 @@ import { AuthContext } from '../context/AuthContextObject';
 import { geoJsonToPolygons, isPointWithinBoundaryPolygons, isLocationPointAllowed } from '../utils/boundary';
 import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 import { calendarDate } from '../utils/adminDate';
-import { groupMaintenanceByVehicle, maintenanceSourceBucket } from '../utils/maintenanceGroups';
+import { completedMaintenanceRecords, maintenanceSourceBucket, maintenanceSourceLabel } from '../utils/maintenanceGroups';
 import { currentCondition } from '../utils/conditionMonitoring';
 import { didRepairWorkOn } from '../utils/ticketVerification';
 
@@ -655,7 +655,7 @@ function Workspace() {
   }, [setActiveModule]);
   // Same thin-wrapper pattern as My Tasks above, merging Custodian's
   // "Maintenance Status" (records awaiting their verification) and
-  // "Maintenance Records" (the full ledger) — same underlying data
+  // "Maintenance Records" (completed repair history) — same underlying data
   // (GET /maintenance-records), just a different filter, so this is a pure
   // navigation/presentation merge with zero change to either module.
   const [maintenanceLedgerLastTab, setMaintenanceLedgerLastTab] = useState('maintenanceStatus');
@@ -1749,6 +1749,7 @@ function Workspace() {
   // graduates out of "Issue Reports" (still a pre-ticket proposal) and into
   // this "My Tickets" queue so the Custodian can trace its progress —
   // Active tickets are included here too, not just the verification stage.
+  const completedMaintenanceRows = useMemo(() => completedMaintenanceRecords(records.maintenance), [records.maintenance]);
   const rawRows = useMemo(() => (activeModule === 'ticketWorkOrders'
     // Cancelled tickets aren't work orders — they'd sit in Total but in no bucket.
     ? flattenSubIssueRows(records[activeModule], hasRole(user, 'Admin') ? null : user.id).filter((r) => ['Active', 'For Verification', 'Closed'].includes(r.ticket_status))
@@ -1757,7 +1758,7 @@ function Workspace() {
           String(t.assigned_custodian_id) === String(user.id)
           && ['Active', 'For Verification', 'Closed'].includes(t.status)
         ))
-      : records[activeModule] ?? []), [activeModule, records, user]);
+      : activeModule === 'maintenance' ? completedMaintenanceRows : records[activeModule] ?? []), [activeModule, records, user, completedMaintenanceRows]);
   const visibleRows = useMemo(() => {
     let result = rawRows;
 
@@ -1838,7 +1839,7 @@ function Workspace() {
       // Location records nest the vehicle status under `.vehicle`, not on
       // the row itself (the row IS a location snapshot, not a vehicle).
       result = result.filter((row) => filterStatus.includes(row.vehicle?.status));
-    } else if (filterStatus.length && activeModule !== 'conditions') {
+    } else if (filterStatus.length && !['conditions', 'maintenance'].includes(activeModule)) {
       result = result.filter((row) => {
         const statusVal = row.status ?? row.progress_status ?? row.final_status;
         return filterStatus.includes(statusVal);
@@ -1929,7 +1930,7 @@ function Workspace() {
     // Date range — same two fields, applied to whichever date column is
     // meaningful for the active module.
     if (filterDateStart || filterDateEnd) {
-      const dateField = activeModule === 'maintenance' ? 'date_started'
+      const dateField = activeModule === 'maintenance' ? 'date_completed'
         : activeModule === 'tickets' ? 'created_at'
         : activeModule === 'issues' ? 'created_at'
         : activeModule === 'histories' ? 'created_at'
@@ -1996,6 +1997,8 @@ function Workspace() {
       const query = searchQuery.toLowerCase().trim();
       result = result.filter((row) => {
         const matchesField = (val) => val && String(val).toLowerCase().includes(query);
+
+        if (activeModule === 'maintenance' && matchesField(maintenanceSourceLabel(row))) return true;
 
         if (activeModule === 'conditions' && (
           matchesField(currentCondition(row)) || matchesField(row.resulting_ticket?.status)
@@ -2161,8 +2164,7 @@ function Workspace() {
     [conditionRowsForStats]
   );
 
-  const maintenanceVehicleRows = useMemo(() => groupMaintenanceByVehicle(visibleRows), [visibleRows]);
-  const maintenanceRecordStats = useMemo(() => countByValues(records.maintenance ?? [], maintenanceSourceBucket, ['In-House Repair', 'External Shop', 'Scheduled Maintenance']), [records.maintenance]);
+  const maintenanceRecordStats = useMemo(() => countByValues(completedMaintenanceRows, maintenanceSourceBucket, ['In-House Repair', 'External Shop', 'Scheduled Maintenance']), [completedMaintenanceRows]);
 
   const userStats = useMemo(
     () => countByValues(records.users ?? [], (r) => r.role, ['Admin', 'Custodian', 'Maintenance Personnel']),
@@ -2329,9 +2331,8 @@ function Workspace() {
   const issueColumnDefs = (() => issueColumns(user.role, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}/edit`), handleCreateTicketFromIssue, setUserInfoTarget, (row) => navigate(`${roleRoutes[user.role]}/issues/${row.issue_report_id}`), deleteRecord, user, openTicketProfile, setDismissIssueTarget))();
   const issueColumnChooser = useColumnChooser('vms_issue_columns', issueColumnDefs);
 
-  const maintenanceColumnDefs = maintenanceColumns((row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}?vehicle=1`));
-  const maintenanceColumnDefsWithNote = useMemo(() => withNoteColumn(maintenanceColumnDefs, (r) => r.repair_records.map((repair) => repair.problem_reason).filter(Boolean).join('; '), { label: 'Problems' }), [maintenanceColumnDefs]);
-  const maintenanceColumnChooser = useColumnChooser('vms_maintenance_columns', maintenanceColumnDefsWithNote);
+  const maintenanceColumnDefs = maintenanceColumns((row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`));
+  const maintenanceColumnChooser = useColumnChooser('vms_completed_maintenance_columns', maintenanceColumnDefs);
 
   const maintenanceStatusColumnDefs = useMemo(
     () => maintenanceStatusColumns(setEditTarget, user.id),
@@ -3739,7 +3740,7 @@ function Workspace() {
         <>
         <ModulePanel
           tabBar={maintenanceLedgerTabBar}
-          description="Counts show maintenance records by source. Scheduled work is counted under Maintenance Schedule, including schedule-generated tickets. The list groups records by vehicle; open one to see every repair."
+          description="Finished repair work from in-house repairs, external shops and maintenance schedules. Each row is one completed repair; open it to see the work and verification details."
           statCards={
             <ModuleStatCards
               totalLabel="Total Maintenance Records"
@@ -3760,8 +3761,7 @@ function Workspace() {
               setFilterCapacity={setFilterCapacity}
               filterStatus={filterStatus}
               setFilterStatus={setFilterStatus}
-              statusOptions={lookups.maintenance_statuses}
-              statusLabel="Progress"
+              statusOptions={[]}
               filterPriority={filterPriority}
               setFilterPriority={setFilterPriority}
               priorityOptions={(lookups.maintenance_personnel ?? []).map((p) => p.name)}
@@ -3777,7 +3777,7 @@ function Workspace() {
                 {
                   key: 'source',
                   label: 'Sources',
-                  options: ['In-House Repair', 'External Shop', 'Scheduled Maintenance'],
+                  options: [{ value: 'In-House Repair', label: 'In-House Repair' }, { value: 'External Shop', label: 'Sent to External Shop' }, { value: 'Scheduled Maintenance', label: 'Maintenance Schedule' }],
                   selected: filterSource,
                   setSelected: setFilterSource,
                 },
@@ -3792,7 +3792,7 @@ function Workspace() {
           }
         >
           <div className="panel-header-bar">
-            <h3>Maintenance Records <span className="count-badge">{maintenanceVehicleRows.length}</span></h3>
+            <h3>Maintenance Records <span className="count-badge">{visibleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {/* No general "+ Add" entry point here anymore — repair data
                   is now entered through Tickets; Maintenance Schedule
@@ -3808,10 +3808,10 @@ function Workspace() {
             <PaginatedTable
               columns={maintenanceColumnChooser.visibleColumns}
               onReorderColumn={maintenanceColumnChooser.reorderColumn}
-              emptyMessage="No maintenance records yet. Completed maintenance work will appear here."
-              rows={maintenanceVehicleRows}
+              emptyMessage="No completed repairs match this view. Finished maintenance work will appear here."
+              rows={visibleRows}
               compact
-              onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}?vehicle=1`)}
+              onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`)}
             />
         </ModulePanel>
         <FormModal open={!!editTarget?.__verify} title={`Verify Maintenance #${recordNumber(editTarget, 'maintenance_id')}`} onClose={() => setEditTarget(null)}>
@@ -8994,16 +8994,16 @@ function issueColumns(role, onEdit, onCreateTicketFromIssue, setUserInfoTarget, 
 }
 
 function maintenanceColumns(onViewRecord) {
-  const distinct = (row, field) => [...new Set(row.repair_records.map((repair) => repair[field]).filter(Boolean))];
   return [
-    { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
-    { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
-    { key: 'repairs', label: 'Repair Entries', className: 'cell-center', render: (row) => row.repair_records.length },
-    { key: 'type', label: 'Repair Types', render: (row) => distinct(row, 'maintenance_type').join(', ') || '-' },
-    { key: 'progress', label: 'Progress', render: (row) => <div className="ticket-preview-badges">{distinct(row, 'progress_status').map((status) => <StatusBadge key={status} value={status} />)}</div> },
-    { key: 'date_completed', label: 'Latest Completion', className: 'cell-center', render: (row) => <DateBadge value={row.repair_records.map((repair) => repair.date_completed).filter(Boolean).sort().at(-1)} /> },
-    { key: 'action', label: 'Action', locked: true, className: 'cell-center', render: (row) => (
-      <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View repairs" aria-label="View repairs"><Icon name="eye" size={14} /></button>
+    { key: 'vehicle', width: '16%', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> },
+    { key: 'plate', width: '9%', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
+    { key: 'source', width: '15%', label: 'Source', locked: true, render: (row) => <span className="maintenance-record-source"><StatusBadge value={maintenanceSourceLabel(row)} /></span> },
+    { key: 'type', width: '11%', label: 'Repair Type', render: (row) => row.maintenance_type || '-' },
+    { key: 'work', width: '19%', label: 'Work Performed', render: (row) => row.action_taken || '-' },
+    { key: 'personnel', width: '14%', label: 'Completed By / Shop', render: (row) => row.is_external && row.external_vendor ? row.external_vendor : <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? row.external_vendor ?? '-'} /> },
+    { key: 'date_completed', width: '9%', label: 'Completed', className: 'cell-center', render: (row) => <DateBadge value={row.date_completed} /> },
+    { key: 'action', width: '7%', label: 'Action', locked: true, className: 'cell-center', render: (row) => (
+      <button className="btn-view-action icon-btn" onClick={() => onViewRecord(row)} type="button" title="View completed repair" aria-label="View completed repair"><Icon name="eye" size={14} /></button>
     ) },
   ];
 }
@@ -9052,7 +9052,7 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
         <div className="maintenance-record-hero">
           <VehicleCell vehicle={record.vehicle} />
           <span className="muted">{record.maintenance_type}</span>
-          <StatusBadge value={record.source} />
+          <StatusBadge value={maintenanceSourceLabel(record)} />
           {onHold && (
             <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>ON HOLD — AWAITING PARTS</span>
           )}
@@ -9235,10 +9235,10 @@ function MaintenanceRecordProfilePage({ maintenanceId, groupByVehicle = false, o
   const loadRecord = useCallback(() => {
     return api.get(`/maintenance-records/${maintenanceId}`).then(async (response) => {
       if (groupByVehicle) {
-        // Use the authorized ledger so a mechanic only sees their own work.
+        // Preserve old grouped links, but keep the history limited to completed work.
         const ledger = await api.get('/maintenance-records');
         const vehicleId = response.data.vehicle_id ?? response.data.vehicle?.vehicle_id;
-        setVehicleRecords(vehicleId == null ? [response.data] : ledger.data.filter((repair) => String(repair.vehicle_id ?? repair.vehicle?.vehicle_id) === String(vehicleId)));
+        setVehicleRecords(vehicleId == null ? completedMaintenanceRecords([response.data]) : completedMaintenanceRecords(ledger.data).filter((repair) => String(repair.vehicle_id ?? repair.vehicle?.vehicle_id) === String(vehicleId)));
       }
       setRecord(response.data);
       setNotFound(false);

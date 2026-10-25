@@ -16,3 +16,16 @@ export function maintenanceSourceBucket(record) {
   if (record.is_external || record.source === 'External Shop') return 'External Shop';
   return 'In-House Repair';
 }
+
+// Completion is a workflow state, not merely a mechanic's recorded finish date.
+export function completedMaintenanceRecords(records = []) {
+  return records.filter((record) => record.progress_status === 'Completed');
+}
+
+export function maintenanceSourceLabel(record) {
+  return {
+    'In-House Repair': 'In-House Repair',
+    'External Shop': 'Sent to External Shop',
+    'Scheduled Maintenance': 'Maintenance Schedule',
+  }[maintenanceSourceBucket(record)];
+}
