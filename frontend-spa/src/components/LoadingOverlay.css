@@ -20,13 +20,14 @@
   box-sizing: border-box;
   padding: 12px 24px;
   border: 0;
-  background: transparent;
-  color: #fff;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f2937;
   font-size: 12px;
   font-weight: 400;
   line-height: 1.4;
   text-align: center;
-  box-shadow: none;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
 }
 
 .vms-loading-logo {
