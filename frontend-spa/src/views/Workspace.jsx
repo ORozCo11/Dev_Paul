@@ -13162,7 +13162,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
 
         <div className="form-actions ticket-create-actions">
           <button className="ghost-button" onClick={() => { clearProposeDraft(); onBack(); }} type="button" disabled={submitting}>Cancel</button>
-          <button className="primary-button" type="submit" disabled={submitting}>Submit for Admin Review</button>
+          <button className="primary-button" type="submit" disabled={submitting}>Submit</button>
         </div>
       </form>
       {submitting && <SubmitLoadingOverlay label="Submitting proposal…" />}
