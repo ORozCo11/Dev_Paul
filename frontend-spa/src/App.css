@@ -16372,9 +16372,9 @@ html[data-theme] .ticket-card-grid .sch-card .sch-card-edit-cancel .sch-action.i
 .condition-record-actions .btn-view-action { grid-column: 2; }
 .condition-record-actions .btn-edit-action { grid-column: 3; }
 .condition-record-actions .icon-btn { grid-row: 1; margin: 0; }
-.ready-to-close-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 7px 12px; border: 1px solid #15803d; border-radius: 7px; background: #15803d; color: #fff; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
-.ready-to-close-action:hover { background: #166534; }
-.ready-to-close-action:focus-visible { outline: 3px solid #86efac; outline-offset: 2px; }
+html[data-theme] .ready-to-close-panel button.ready-to-close-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 7px 12px; border: 1px solid #15803d; border-radius: 7px; background: #15803d; color: #fff; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
+html[data-theme] .ready-to-close-panel button.ready-to-close-action:hover { background: #166534; border-color: #166534; color: #fff; }
+html[data-theme] .ready-to-close-panel button.ready-to-close-action:focus-visible { outline: 3px solid #86efac; outline-offset: 2px; }
 @media (max-width: 540px) {
   .ticket-card-grid .sch-card-actions .sch-action { min-height: 44px; }
 }
