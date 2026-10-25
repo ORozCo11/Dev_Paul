@@ -7797,7 +7797,10 @@ function reportFieldDefs(lookups, reportDef) {
     defs.push({ label: 'Vehicle Type', name: 'category_id', options: options(lookups.categories, 'category_id', 'category_name'), type: 'select' });
   }
   if (reportDef.fields.includes('location')) {
-    defs.push({ label: 'Location', name: 'location', type: 'text' });
+    // The report matches current_location exactly, so offer only the
+    // locations the barangay's vehicles are actually at.
+    const locations = [...new Set((lookups.vehicles ?? []).map((vehicle) => vehicle.current_location).filter((value) => value?.trim()))].sort((a, b) => a.localeCompare(b));
+    defs.push({ label: 'Location', name: 'location', options: locations, type: 'select' });
   }
   if (reportDef.fields.includes('maintenance_type')) {
     defs.push({ label: 'Maintenance Type', name: 'maintenance_type', options: lookups.maintenance_types, type: 'select' });
