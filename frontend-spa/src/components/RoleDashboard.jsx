@@ -56,7 +56,10 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
       if (!cancelled) { setFeed({ tickets: tickets.data, schedules: schedules.data, issues: issues.data, role }); setError(''); }
     }).catch(() => { if (!cancelled) setError('Assignments could not be loaded. Retry or open the relevant module.'); });
     return () => { cancelled = true; };
-  }, [user.id, role, retry, data]);
+    // Not keyed on `data`: the dashboard summary is re-polled every 15s and on
+    // window focus, and refetching the full ticket/schedule lists each time
+    // flooded the single-threaded dev server and delayed module switches.
+  }, [user.id, role, retry]);
 
   if (!data) return <p className="empty-state">Dashboard data is not available yet.</p>;
   const pending = !feed || feed.role !== role;

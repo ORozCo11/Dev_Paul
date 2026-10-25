@@ -1071,7 +1071,14 @@ function Workspace() {
   // submitting a repair, an Admin approving) only showed up on the next
   // 15s tick, so coming back to the tab briefly showed stale counts.
   useEffect(() => {
-    const refreshBadges = () => { loadModule('dashboard').catch(() => {}); };
+    // Returning to the tab fires both `focus` and `visibilitychange`; skip a
+    // refresh while one is still in flight so the pair costs one request.
+    let inFlight = false;
+    const refreshBadges = () => {
+      if (inFlight) return;
+      inFlight = true;
+      loadModule('dashboard').catch(() => {}).finally(() => { inFlight = false; });
+    };
     refreshBadges();
     const interval = setInterval(refreshBadges, 15000);
     const onVisible = () => { if (document.visibilityState === 'visible') refreshBadges(); };
