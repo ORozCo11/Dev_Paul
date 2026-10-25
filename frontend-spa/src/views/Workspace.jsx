@@ -2859,6 +2859,7 @@ function Workspace() {
               onSubmit={(payload) => submitFormPage('conditions', editConditionId ? { condition_check_id: editConditionId } : null, payload)}
               submitLabel={editConditionId ? 'Update Condition' : 'Record Condition'}
               contextVehicles={lookups.vehicles}
+              reserveVehiclePreview
               hubs={allHubs}
               onDirty={() => setHasUnsavedChanges(true)}
             />
@@ -7188,7 +7189,7 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
   );
 }
 
-function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty, showDomainPreview = false, categoryVehicleCount = null, compactVehiclePreview = false }) {
+function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty, showDomainPreview = false, categoryVehicleCount = null, compactVehiclePreview = false, reserveVehiclePreview = false }) {
   // Scoped to this exact route (new-X vs. editing record #N are different
   // paths) so a form's in-progress values survive clicking a "view" link
   // (e.g. the selected vehicle/custodian's name) and coming Back, instead of
@@ -7338,7 +7339,7 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   // reviewStep forms skip the persistent side panel entirely — step 1 gets
   // the form full-width (no vehicle card competing for space while typing),
   // and step 2 (above) folds the vehicle card back in alongside the summary.
-  const useSideLayout = (hasContext || showDomainPreview) && !reviewStep;
+  const useSideLayout = (hasContext || showDomainPreview || reserveVehiclePreview) && !reviewStep;
 
   // Live preview of what a vehicle's own Add/Edit form will ask for once
   // it's assigned this Vehicle Type — so picking Land vs Water here shows
@@ -7354,7 +7355,7 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   return (
     <ModulePanel description={description}>
       {useSideLayout ? (
-        <div className="form-context-layout">
+        <div className={`form-context-layout${reserveVehiclePreview ? ' form-context-layout--reserved' : ''}`}>
           <div className="form-context-side">
             {showDomainPreview ? (
               <section className="veh-card">
@@ -14728,8 +14729,6 @@ function CustodianVerificationModule({
         activeFilter={activeFilter}
         onFilterChange={onFilterChange}
       />
-      {tabBar}
-      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
       <section className="panel module-filter-panel">
         <FilterBar
           statusControls={<WorkflowStatusControls options={TICKET_VERIFICATION_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} defaults={['Active','Pending']} />}
@@ -14752,6 +14751,8 @@ function CustodianVerificationModule({
           }]}
         />
       </section>
+      {tabBar}
+      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
       <section className="panel">
         <div className="panel-header-bar">
           <h3>{panelTitle} <span className="count-badge">{tickets.length}</span></h3>

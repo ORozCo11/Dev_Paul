@@ -3035,6 +3035,21 @@ button.vehicle-cell-name.cell-link { font-weight: 600; }
 }
 .form-context-empty svg { stroke: var(--primary, #2563eb); opacity: 0.55; }
 .form-context-empty p { margin: 0; font-size: 0.86rem; color: var(--text-muted, #64748b); max-width: 28ch; }
+/* Keep the condition-check preview column ready before a vehicle is picked. */
+.form-context-layout--reserved .form-context-empty {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+@media (min-width: 981px) {
+  .form-context-layout--reserved {
+    grid-template-columns: 300px minmax(0, 1fr);
+    min-height: 620px;
+  }
+  .form-context-layout--reserved .form-context-empty {
+    justify-content: flex-start;
+  }
+}
 /* Entry Summary values — placeholder dash until answered; clamp long notes. */
 .veh-kv dd.summary-empty { color: var(--text-faint, #94a3b8); font-weight: 400; }
 .veh-kv dd.summary-val {
