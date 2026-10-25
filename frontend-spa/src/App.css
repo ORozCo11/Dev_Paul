@@ -16665,7 +16665,7 @@ html .ticket-reassignment-modal .form-actions > button { border-radius:6px; }
 html[data-theme] :is(table, .table-shell) button.icon-btn.readiness-check-blocked { background:#b45309 !important; border-color:#b45309 !important; color:#fff !important; }
 
 /* Keep schedule status labels and row actions aligned beneath their headings. */
-.schedule-table-status { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.schedule-table-status { display: inline-flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 .schedule-action-cell { min-width: 92px; }
 .schedule-table-actions .sch-card-actions { display: inline-flex; flex-wrap: nowrap; width: max-content; vertical-align: middle; }
 .schedule-table-actions .sch-action.icon-btn { flex: 0 0 36px; width: 36px; height: 36px; padding: 0; }

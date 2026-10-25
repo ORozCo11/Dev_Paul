@@ -2854,7 +2854,7 @@ function Workspace() {
             <FormPage
               description="Periodic inspection log — a Custodian's routine check-in on a vehicle's physical condition."
               onBack={() => { setPrefilledConditionVehicleId(null); returnToModule('conditions'); }}
-              fields={conditionFields(lookups)}
+              fields={conditionFields(lookups, Boolean(editConditionId))}
               initialValues={conditionInitialValues}
               onSubmit={(payload) => submitFormPage('conditions', editConditionId ? { condition_check_id: editConditionId } : null, payload)}
               submitLabel={editConditionId ? 'Update Condition' : 'Record Condition'}
@@ -3971,7 +3971,7 @@ function Workspace() {
         >
           <div className="panel-header-bar schedule-panel-header">
             <div className="schedule-panel-heading">
-              <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p>{hasRole(user, 'Admin') && <button className="ghost-button" type="button" onClick={() => setFilterStatus(['Declined'])}>Declined schedules ({scheduleStats.Declined ?? 0})</button>}</div>
+              <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p></div>
             </div>
             <div className="schedule-panel-tools">
               <ViewModeDropdown value={scheduleViewMode} onChange={changeScheduleViewMode} />
@@ -5701,6 +5701,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
                 <option
                   key={option?.value != null ? option.value : `opt-${i}`}
                   value={option?.value ?? option ?? ''}
+                  disabled={option?.disabled}
                   style={option?.value === NEW_ISSUE_OPTION.value ? { color: '#2563eb', fontWeight: 700 } : undefined}
                 >
                   {option?.label ?? option}
@@ -7468,9 +7469,14 @@ function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl 
   ];
 }
 
-function conditionFields(lookups) {
+function conditionFields(lookups, editing = false) {
+  const vehicles = vehicleOptions(lookups).map((option) => {
+    const vehicle = lookups.vehicles.find((row) => String(row.vehicle_id) === String(option.value));
+    const blocked = !editing && vehicle?.has_open_maintenance_ticket;
+    return { ...option, disabled: Boolean(blocked), label: blocked ? `${option.label} — Open maintenance ticket` : option.label };
+  });
   return [
-    { label: 'Vehicle', name: 'vehicle_id', options: vehicleOptions(lookups), required: true, type: 'select' },
+    { label: 'Vehicle', name: 'vehicle_id', options: vehicles, required: true, type: 'select' },
     { label: 'Condition Result', name: 'condition_result', options: lookups.condition_results, required: true, type: 'select' },
     { label: 'Observations', name: 'observations', type: 'textarea' },
   ];
