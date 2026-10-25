@@ -3940,7 +3940,7 @@ function Workspace() {
             <ModuleStatCards
               totalLabel="Total Schedules"
               total={scheduleStats.total}
-              cards={(hasRole(user, 'Maintenance Personnel') && !hasRole(user, 'Admin')) ? [...SCHEDULE_STAT_CARDS, MY_ASSIGNED_SCHEDULE_CARD] : SCHEDULE_STAT_CARDS}
+              cards={SCHEDULE_STAT_CARDS}
               counts={scheduleStats}
               activeFilter={filterStatus}
               onFilterChange={setFilterStatus}
@@ -7885,17 +7885,12 @@ const ISSUE_STAT_CARDS = [
   { key: 'Resolved', label: 'Resolved', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
 
-// Schedule cards group review and terminal states; individual statuses remain filterable.
+// Keep the schedule overview to Total plus these three status groups.
 const SCHEDULE_STAT_CARDS = [
   { key: 'Scheduled', label: 'Scheduled', icon: 'calendar', bg: '#dbeafe', color: '#1d4ed8' },
-  { key: 'NeedsAttention', label: 'Needs Attention', icon: 'alert', bg: '#fef3c7', color: '#d97706' },
   { key: 'AwaitingVerification', label: 'Awaiting Verification', icon: 'search', bg: '#fef9c3', color: '#854d0e' },
   { key: 'Closed', label: 'Closed / Cancelled', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
-
-// Only shown to a Maintenance-Personnel-only viewer — "how many vehicles do
-// I still need to do", not the fleet-wide count everyone else also sees.
-const MY_ASSIGNED_SCHEDULE_CARD = { key: 'MyAssigned', label: 'Assigned to You', icon: 'wrench', bg: '#eff6ff', color: '#1d4ed8' };
 
 const VEHICLE_STAT_CARDS = [
   { key: 'Available', label: 'Available', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
