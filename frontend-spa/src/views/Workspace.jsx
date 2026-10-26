@@ -11236,13 +11236,10 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
         </div>
       ) : (
         <div className="proposal-review-actions">
-          <p className="proposal-review-hint">
-            {isDeclined
-              ? 'Undecline this proposal first — Approve & Assign appears once it is back to Pending Approval.'
-              : 'Edit anything above before approving or declining.'}
-          </p>
+          {isDeclined && <p className="proposal-review-hint">
+            Undecline this proposal first — Approve &amp; Assign appears once it is back to Pending Approval.
+          </p>}
           <div className="proposal-review-buttons">
-            {!isDeclined && onRequestCorrections && <button className="ghost-button proposal-decision-btn" type="button" disabled={submitting} onClick={() => setRequestingCorrections(true)}>Request Corrections</button>}
             {isDeclined ? (
               <button className="btn-sm ghost-button" type="button" onClick={onUndecline} disabled={submitting}>
                 <Icon name="undo" size={14} /> Undecline
