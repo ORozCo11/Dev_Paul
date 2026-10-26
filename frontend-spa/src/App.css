@@ -16288,6 +16288,14 @@ html .schedule-panel-header .local-search-input,
 html .schedule-panel-header .view-dropdown-btn,
 html .schedule-panel-header .export-btn { border-color: #bfdbfe; background: #fff; color: #174ea6; }
 html .schedule-panel-header .icon-add-btn { border-color: #fff; background: #fff; color: #1d4ed8; }
+html .schedule-panel-header .icon-add-btn:hover,
+html .schedule-panel-header .icon-add-btn:focus-visible {
+  background: #1d4ed8;
+  border-color: #fff;
+  color: #fff;
+}
+html .schedule-panel-header .icon-add-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
 
 html[data-theme] .ticket-card-grid .sch-card {
   background: #fff;
