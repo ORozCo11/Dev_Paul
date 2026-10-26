@@ -35,7 +35,7 @@ class ErrorBoundary extends Component {
     return (
       <main className="auth-page">
         <section className="auth-card">
-          <p className="eyebrow">VMS</p>
+          <p className="eyebrow"><span className="vms-brand">VMS</span></p>
           <h1>Something went wrong</h1>
           <p className="auth-subtitle">
             An unexpected error occurred and this page couldn&apos;t continue.

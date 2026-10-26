@@ -6392,7 +6392,7 @@ function ReportPreview({ report }) {
       <header className="report-document-header">
         <div className="report-brand">
           <span className="report-brand-mark"><VMSLogo variant="blue" size={28} /></span>
-          <span><strong>VMS</strong><small>Barangay Vehicle Management System</small></span>
+          <span><strong className="vms-brand">VMS</strong><small>Barangay Vehicle Management System</small></span>
         </div>
         <div className="report-document-heading"><span>OFFICIAL FLEET REPORT</span><h2>{report.report_type?.toUpperCase()}</h2></div>
         <div className="report-header-meta"><span>Generated</span><strong>{generatedAt}</strong><span>Reporting period</span><strong>{reportPeriod}</strong></div>

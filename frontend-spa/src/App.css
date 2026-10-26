@@ -11057,11 +11057,18 @@ button.btn-view-action svg {
   gap: 10px;
 }
 
+/* The "vms" brand word is always set in Anta (.vms-brand for "VMS" used as a label). */
+.vms-brand {
+  font-family: "Anta", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
 .vms-wordmark {
-  font-family: 'Poppins', 'Inter', "Trebuchet MS", Helvetica, sans-serif;
-  font-weight: 800;
+  font-family: "Anta", sans-serif;
+  font-weight: 400;
+  font-style: normal;
   color: #2563eb;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
   line-height: 1;
   text-transform: lowercase;
   /* Lowercase-only text has no ascenders/descenders, so its ink sits low
