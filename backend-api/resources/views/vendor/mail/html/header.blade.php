@@ -7,7 +7,9 @@
 {{-- Gear is a PNG embedded in the message (cid, see AccountMail): email clients drop SVG and can't reach a local server. --}}
 <table class="header-brand" align="center" cellpadding="0" cellspacing="0" role="presentation">
 <tr>
+@if (config('mail.inline_logo'))
 <td class="header-gear"><img src="cid:vms-gear@vms" width="36" height="36" alt=""></td>
+@endif
 <td><p class="header-wordmark">vms</p></td>
 </tr>
 </table>
