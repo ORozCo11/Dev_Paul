@@ -62,6 +62,24 @@ const ROLES = [
   },
 ];
 
+// Six points per tooth form tapered mechanical teeth with flat tips and roots.
+const GEAR_OUTLINE = Array.from({ length: 20 * 6 }, (_, index) => {
+  const radius = [132, 132, 148, 148, 132, 132][index % 6];
+  const angle = (index / 120) * Math.PI * 2;
+  return `${150 + Math.cos(angle) * radius},${150 + Math.sin(angle) * radius}`;
+}).join(' ');
+
+function HeroGear({ side }) {
+  return <svg className={`home-gear home-gear-${side}`} viewBox="0 0 300 300" aria-hidden="true" focusable="false">
+    <defs><linearGradient id={`home-gear-${side}-blue`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#93C5FD" /><stop offset="1" stopColor="#60A5FA" /></linearGradient></defs>
+    <g className="home-gear-rotor" stroke={`url(#home-gear-${side}-blue)`} strokeWidth="1.3" fill="none" strokeLinejoin="round">
+      <polygon points={GEAR_OUTLINE} fill="#1D4ED8" fillOpacity=".08" />
+      <circle cx="150" cy="150" r="108" /><circle cx="150" cy="150" r="31" /><circle cx="150" cy="150" r="20" strokeOpacity=".55" />
+      {Array.from({ length: 6 }, (_, index) => <path key={index} d="M141 118L137 44H163L159 118Z" transform={`rotate(${index * 60} 150 150)`} fill="#93C5FD" fillOpacity=".12" strokeOpacity=".45" />)}
+    </g>
+  </svg>;
+}
+
 export default function Home() {
   const pageRef = useRef(null);
   const { user } = useContext(AuthContext);
@@ -101,20 +119,8 @@ export default function Home() {
       <AuthHeader />
       <main id="main-content">
         <section className="home-hero" aria-labelledby="home-title">
-          <div className="home-hero-waves" aria-hidden="true">
-            <svg viewBox="0 0 1440 850" preserveAspectRatio="none" focusable="false">
-              <defs>
-                <linearGradient id="home-wave-sky" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#93C5FD" stopOpacity=".48" /><stop offset=".55" stopColor="#DBEAFE" stopOpacity=".38" /><stop offset="1" stopColor="#EFF6FF" stopOpacity="0" /></linearGradient>
-                <linearGradient id="home-wave-royal" x1="0" y1="0" x2="1" y2=".8"><stop stopColor="#1D4ED8" stopOpacity=".16" /><stop offset=".6" stopColor="#93C5FD" stopOpacity=".32" /><stop offset="1" stopColor="#FFFFFF" stopOpacity="0" /></linearGradient>
-                <linearGradient id="home-wave-ice" x1="1" y1="0" x2="0" y2="1"><stop stopColor="#93C5FD" stopOpacity=".42" /><stop offset=".7" stopColor="#DBEAFE" stopOpacity=".46" /><stop offset="1" stopColor="#FFFFFF" stopOpacity="0" /></linearGradient>
-              </defs>
-              <path d="M0 10C210 70 100 270 270 370S420 540 340 680L0 850Z" fill="url(#home-wave-sky)" />
-              <path d="M0 160C160 210 60 370 210 460S340 650 200 850H0Z" fill="url(#home-wave-royal)" />
-              <path d="M0 310C70 380 20 470 160 560S250 740 100 850H0Z" fill="url(#home-wave-sky)" />
-              <path d="M1440 0C1210 120 1370 240 1190 360S1050 590 1130 750L1440 850Z" fill="url(#home-wave-ice)" />
-              <path d="M1440 160C1300 250 1430 360 1280 460S1150 690 1290 850H1440Z" fill="url(#home-wave-royal)" />
-              <path d="M0 690C260 510 380 790 710 680S1170 560 1440 680V850H0Z" fill="url(#home-wave-ice)" opacity=".7" />
-            </svg>
+          <div className="home-hero-gears" aria-hidden="true">
+            <HeroGear side="right" />
           </div>
           <div className="home-container home-hero-inner">
             <p className="home-eyebrow">Smarter barangay operations</p>
