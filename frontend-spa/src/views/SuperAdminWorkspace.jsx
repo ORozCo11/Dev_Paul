@@ -550,10 +550,10 @@ export default function SuperAdminWorkspace() {
     }
   };
 
-  const rejectPending = async (approval) => {
+  const rejectPending = async (approval, draft) => {
     try {
-      await api.delete(`/superadmin/users/${approval.id}/reject`);
-      setNotice({ type: 'success', text: `${approval.name}'s registration was rejected.` });
+      const { data } = await api.delete(`/superadmin/users/${approval.id}/reject`, { data: draft });
+      setCelebration({ title: 'Registration Rejected', detail: data.message });
       await loadAll();
       return true;
     } catch (error) {

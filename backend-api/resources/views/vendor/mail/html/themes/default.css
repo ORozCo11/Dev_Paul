@@ -133,10 +133,10 @@ img {
 
 .header-wordmark {
     color: #ffffff;
-    font-family: 'Poppins', 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-family: 'Anta', 'Segoe UI', Helvetica, Arial, sans-serif;
     font-size: 36px;
-    font-weight: 800;
-    letter-spacing: -1px;
+    font-weight: 400;
+    letter-spacing: 0;
     line-height: 1;
     margin: 0;
     text-align: center;
@@ -509,4 +509,14 @@ h1 {
 .signoff-meta a {
     color: #2563eb;
     text-decoration: none;
+}
+
+.header-brand-image {
+    border: 0;
+    color: #ffffff;
+    display: block;
+    font-family: 'Anta', 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 36px;
+    height: 48px;
+    width: 131px;
 }
