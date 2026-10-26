@@ -12009,7 +12009,6 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
             <SmartForm fields={[{ label: 'Cancellation reason', name: 'closing_notes', type: 'textarea', rows: 3, required: true }]} title="" submitLabel="Cancel Ticket" onCancel={() => setCancelling(false)} onSubmit={(payload) => onCancel(ticket, payload).then((ok) => { if (ok !== false) setCancelling(false); return ok; })} />
           </FormModal>
           {hasEvidence && ticket.status !== 'Closed' && <p className="muted">Repair evidence is retained. An Admin can cancel this ticket with a reason.</p>}
-          {!!ticket.decision_history?.length && <details className="ticket-decision-history"><summary>Decision history</summary><ul>{ticket.decision_history.map((event, index) => <li key={index}><strong>{event.event}</strong> - {event.name} - {formatDate(event.at)}{event.details?.reason ? `: ${event.details.reason}` : ''}{event.details?.cancellation_reason ? `: ${event.details.cancellation_reason}` : ''}</li>)}</ul></details>}
           <div className="ticket-detail-actions-row">
             {canDo(user, 'ticket.uncancel') && ticket.status === 'Cancelled' && onUncancel && (
               <button className="primary-button" type="button" disabled={restoring} onClick={async () => { if (restoring) return; setRestoring(true); try { await onUncancel(ticket); } finally { setRestoring(false); } }}>{restoring ? 'Restoring...' : 'Restore Ticket'}</button>
