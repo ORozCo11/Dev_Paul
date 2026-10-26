@@ -1,8 +1,10 @@
 import VMSLogo from './VMSLogo';
 import Icon from './Icon';
+import ThemeToggle from './ThemeToggle';
 import { useContext, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContextObject';
+import '../PublicDarkMode.css';
 
 const roleRoutes = {
   Admin: '/admin',
@@ -58,15 +60,19 @@ export default function AuthHeader() {
             <Link to="/developers">Team</Link>
             <Link to="/support">Support Center</Link>
           </nav>
-          {dashboardPath ? (
-            <Link to={dashboardPath} className="auth-page-header-login-btn">Back to Dashboard</Link>
-          ) : (
-            <>
-              <Link to="/register" className="auth-page-header-register-btn">Register</Link>
-              <Link to="/login" className="auth-page-header-login-btn">Login</Link>
-            </>
-          )}
+          <div className="auth-page-header-actions">
+            {dashboardPath ? (
+              <Link to={dashboardPath} className="auth-page-header-login-btn">Back to Dashboard</Link>
+            ) : (
+              <>
+                <Link to="/register" className="auth-page-header-register-btn">Register</Link>
+                <Link to="/login" className="auth-page-header-login-btn">Login</Link>
+              </>
+            )}
+          </div>
         </div>
+        {/* Outside the burger panel so phones can switch themes without opening the menu. */}
+        <div className="auth-page-theme"><ThemeToggle /></div>
       </div>
     </header>
   );
