@@ -16770,3 +16770,16 @@ html .maintenance-record-source .maintenance-schedule { background: #ede9fe; bor
   .vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(n) { grid-column: 1 / -1; }
   .vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(n) .form-group-body { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Profile field labels and values, with operational values aligned right. */
+.vehicle-profile-overview .vehicle-profile-specs dt,
+.vehicle-profile-page .vehicle-profile-status-item > span:first-child,
+.vehicle-profile-page .vehicle-profile-keydates dt { color: var(--text-strong, #0f172a); }
+.vehicle-profile-overview .vehicle-profile-specs dd,
+.vehicle-profile-page .vehicle-profile-keydates dd,
+.vehicle-profile-page .vehicle-profile-keydates dd .muted,
+.vehicle-profile-page .vehicle-profile-keydates dd .vehicle-profile-ticket-link { color: var(--text-muted, #64748b); }
+.vehicle-profile-page .vehicle-profile-keydates > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.vehicle-profile-page .vehicle-profile-keydates dt { margin-bottom: 0; min-width: 0; }
+.vehicle-profile-page .vehicle-profile-keydates dd { min-width: 0; text-align: right; }
+.vehicle-profile-page .vehicle-profile-keydates .vehicle-profile-ticket-link { justify-content: flex-end; text-align: right; }
