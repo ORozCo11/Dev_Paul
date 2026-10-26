@@ -791,13 +791,6 @@ function Workspace() {
     setScheduleViewMode(mode);
     localStorage.setItem('vms_schedule_view', mode);
   };
-  const [historyViewMode, setHistoryViewMode] = useState(
-    () => localStorage.getItem('vms_history_view') || 'table'
-  );
-  const changeHistoryViewMode = (mode) => {
-    setHistoryViewMode(mode);
-    localStorage.setItem('vms_history_view', mode);
-  };
   // List/Recent-Activities tab for the Activity Log — not persisted, since
   // "recent activities" is a quick-glance view you'd want defaulting back
   // to the full list on your next visit rather than staying sticky.
@@ -3944,7 +3937,7 @@ function Workspace() {
             <ModuleStatCards
               totalLabel="Total Schedules"
               total={scheduleStats.total}
-              cards={(hasRole(user, 'Maintenance Personnel') && !hasRole(user, 'Admin')) ? [...SCHEDULE_STAT_CARDS, MY_ASSIGNED_SCHEDULE_CARD] : SCHEDULE_STAT_CARDS}
+              cards={SCHEDULE_STAT_CARDS}
               counts={scheduleStats}
               activeFilter={filterStatus}
               onFilterChange={setFilterStatus}
@@ -4073,36 +4066,23 @@ function Workspace() {
           <div className="panel-header-bar">
             <h3>Activity History <span className="count-badge">{visibleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ViewModeDropdown value={historyViewMode} onChange={changeHistoryViewMode} />
               <LocalSearchInput
                 value={searchQuery}
                 onChange={setSearchQuery}
                 placeholder="Search history..."
                 onExport={() => exportRowsToCsv('vehicle-history.csv', VEHICLE_HISTORY_EXPORT_COLUMNS, visibleRows)}
-                columnChooser={historyViewMode === 'card' ? undefined : vehicleHistoryColumnChooser}
+                columnChooser={vehicleHistoryColumnChooser}
               />
-              <button className="ghost-button" onClick={() => window.print()} type="button">Print</button>
             </div>
           </div>
-          {historyViewMode === 'card' ? (
-            <PaginatedCardGrid
-              items={visibleRows}
-              keyOf={(row) => row.history_id}
-              emptyMessage="No vehicle activity recorded yet."
-              renderItem={(row) => (
-                <HistoryCard row={row} onClick={() => {}} />
-              )}
-            />
-          ) : (
-            <PaginatedTable
-              columns={vehicleHistoryColumnChooser.visibleColumns}
-              onReorderColumn={vehicleHistoryColumnChooser.reorderColumn}
-              emptyMessage="No vehicle activity recorded yet."
-              rows={visibleRows}
-              pageSizeOptions={[10, 20, 40, 50]}
-              initialPageSize={10}
-            />
-          )}
+          <PaginatedTable
+            columns={vehicleHistoryColumnChooser.visibleColumns}
+            onReorderColumn={vehicleHistoryColumnChooser.reorderColumn}
+            emptyMessage="No vehicle activity recorded yet."
+            rows={visibleRows}
+            pageSizeOptions={[10, 20, 40, 50]}
+            initialPageSize={10}
+          />
 
           {/* Print-only — same convention as ReportPreview's print view:
               portaled to <body> since the app's @media print rule hides
@@ -7892,17 +7872,12 @@ const ISSUE_STAT_CARDS = [
   { key: 'Resolved', label: 'Resolved', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
 
-// Schedule cards group review and terminal states; individual statuses remain filterable.
+// Keep the schedule overview to Total plus these three status groups.
 const SCHEDULE_STAT_CARDS = [
   { key: 'Scheduled', label: 'Scheduled', icon: 'calendar', bg: '#dbeafe', color: '#1d4ed8' },
-  { key: 'NeedsAttention', label: 'Needs Attention', icon: 'alert', bg: '#fef3c7', color: '#d97706' },
   { key: 'AwaitingVerification', label: 'Awaiting Verification', icon: 'search', bg: '#fef9c3', color: '#854d0e' },
   { key: 'Closed', label: 'Closed / Cancelled', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
-
-// Only shown to a Maintenance-Personnel-only viewer — "how many vehicles do
-// I still need to do", not the fleet-wide count everyone else also sees.
-const MY_ASSIGNED_SCHEDULE_CARD = { key: 'MyAssigned', label: 'Assigned to You', icon: 'wrench', bg: '#eff6ff', color: '#1d4ed8' };
 
 const VEHICLE_STAT_CARDS = [
   { key: 'Available', label: 'Available', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
@@ -9732,26 +9707,6 @@ const VEHICLE_HISTORY_EXPORT_COLUMNS = [
   { label: 'Description', value: (r) => r.description ?? '' },
   { label: 'Date', value: (r) => r.created_at },
 ];
-
-// Card-view counterpart to historyColumns — same fields, laid out for a
-// grid instead of a row.
-function HistoryCard({ row, onClick }) {
-  return (
-    <div className="history-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
-      <div className="history-card-top">
-        <VehicleCell vehicle={row.vehicle} isRowTitle={false} />
-        <span className="history-card-activity">{row.activity_type}</span>
-      </div>
-      {row.description && <p className="history-card-desc">{row.description}</p>}
-      <div className="history-card-bottom">
-        <UserAvatarName user={row.updated_by} />
-        <span className="history-card-date">
-          <DateBadge value={row.created_at} /> {formatTime(row.created_at)}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 // "09/16/26 - 7:05 am" — a single plain-text column combining date and time,
 // in place of the DateBadge/Time column pair every other table uses; the
@@ -13135,7 +13090,7 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
 
         <div className="form-actions ticket-create-actions">
           <button className="ghost-button" onClick={() => { clearProposeDraft(); onBack(); }} type="button" disabled={submitting}>Cancel</button>
-          <button className="primary-button" type="submit" disabled={submitting}>Submit for Admin Review</button>
+          <button className="primary-button" type="submit" disabled={submitting}>Submit</button>
         </div>
       </form>
       {submitting && <SubmitLoadingOverlay label="Submitting proposal…" />}

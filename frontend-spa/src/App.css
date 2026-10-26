@@ -2264,9 +2264,8 @@ html[data-theme="light"] .sole-admin-flag { color: #d97706; }
 @media (max-width: 560px) {
   .dashboard-headline-grid { grid-template-columns: 1fr !important; }
 }
-/* Maintenance Schedule is intentionally capped at five summary cards,
-   including Total, so the status overview stays scannable on one row. */
-.schedule-stat-grid { grid-template-columns: repeat(5, 1fr) !important; }
+/* Show the four Maintenance Schedule summary cards evenly across one row. */
+.schedule-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
 @media (max-width: 900px) {
   .schedule-stat-grid { grid-template-columns: repeat(2, 1fr) !important; }
 }
