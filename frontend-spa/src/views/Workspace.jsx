@@ -2858,11 +2858,12 @@ function Workspace() {
             <FormPage
               description="Periodic inspection log — a Custodian's routine check-in on a vehicle's physical condition."
               onBack={() => { setPrefilledConditionVehicleId(null); returnToModule('conditions'); }}
-              fields={conditionFields(lookups)}
+              fields={conditionFields(lookups, Boolean(editConditionId))}
               initialValues={conditionInitialValues}
               onSubmit={(payload) => submitFormPage('conditions', editConditionId ? { condition_check_id: editConditionId } : null, payload)}
               submitLabel={editConditionId ? 'Update Condition' : 'Record Condition'}
               contextVehicles={lookups.vehicles}
+              reserveVehiclePreview
               hubs={allHubs}
               onDirty={() => setHasUnsavedChanges(true)}
             />
@@ -3975,7 +3976,7 @@ function Workspace() {
         >
           <div className="panel-header-bar schedule-panel-header">
             <div className="schedule-panel-heading">
-              <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p>{hasRole(user, 'Admin') && <button className="ghost-button" type="button" onClick={() => setFilterStatus(['Declined'])}>Declined schedules ({scheduleStats.Declined ?? 0})</button>}</div>
+              <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p></div>
             </div>
             <div className="schedule-panel-tools">
               <ViewModeDropdown value={scheduleViewMode} onChange={changeScheduleViewMode} />
@@ -4482,6 +4483,8 @@ function Workspace() {
             onViewVehicle={openVehicleProfile}
             onViewTicket={openTicketProfile}
             stats={verificationStats}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
             activeFilter={filterStatus}
             onFilterChange={setFilterStatus}
           />
@@ -5705,6 +5708,7 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
                 <option
                   key={option?.value != null ? option.value : `opt-${i}`}
                   value={option?.value ?? option ?? ''}
+                  disabled={option?.disabled}
                   style={option?.value === NEW_ISSUE_OPTION.value ? { color: '#2563eb', fontWeight: 700 } : undefined}
                 >
                   {option?.label ?? option}
@@ -7191,7 +7195,7 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
   );
 }
 
-function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty, showDomainPreview = false, categoryVehicleCount = null, compactVehiclePreview = false }) {
+function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, formTitle = '', onDirty, showDomainPreview = false, categoryVehicleCount = null, compactVehiclePreview = false, reserveVehiclePreview = false }) {
   // Scoped to this exact route (new-X vs. editing record #N are different
   // paths) so a form's in-progress values survive clicking a "view" link
   // (e.g. the selected vehicle/custodian's name) and coming Back, instead of
@@ -7341,7 +7345,7 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   // reviewStep forms skip the persistent side panel entirely — step 1 gets
   // the form full-width (no vehicle card competing for space while typing),
   // and step 2 (above) folds the vehicle card back in alongside the summary.
-  const useSideLayout = (hasContext || showDomainPreview) && !reviewStep;
+  const useSideLayout = (hasContext || showDomainPreview || reserveVehiclePreview) && !reviewStep;
 
   // Live preview of what a vehicle's own Add/Edit form will ask for once
   // it's assigned this Vehicle Type — so picking Land vs Water here shows
@@ -7357,7 +7361,7 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   return (
     <ModulePanel description={description}>
       {useSideLayout ? (
-        <div className="form-context-layout">
+        <div className={`form-context-layout${reserveVehiclePreview ? ' form-context-layout--reserved' : ''}`}>
           <div className="form-context-side">
             {showDomainPreview ? (
               <section className="veh-card">
@@ -7472,9 +7476,14 @@ function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl 
   ];
 }
 
-function conditionFields(lookups) {
+function conditionFields(lookups, editing = false) {
+  const vehicles = vehicleOptions(lookups).map((option) => {
+    const vehicle = lookups.vehicles.find((row) => String(row.vehicle_id) === String(option.value));
+    const blocked = !editing && vehicle?.has_open_maintenance_ticket;
+    return { ...option, disabled: Boolean(blocked), label: blocked ? `${option.label} — Open maintenance ticket` : option.label };
+  });
   return [
-    { label: 'Vehicle', name: 'vehicle_id', options: vehicleOptions(lookups), required: true, type: 'select' },
+    { label: 'Vehicle', name: 'vehicle_id', options: vehicles, required: true, type: 'select' },
     { label: 'Condition Result', name: 'condition_result', options: lookups.condition_results, required: true, type: 'select' },
     { label: 'Observations', name: 'observations', type: 'textarea' },
   ];
@@ -14656,10 +14665,19 @@ function CustodianVerificationModule({
   onViewVehicle,
   onViewTicket,
   stats,
+  searchQuery,
+  setSearchQuery,
   activeFilter,
   onFilterChange,
   tabBar
 }) {
+  const [ticketViewMode, setTicketViewMode] = useState('table');
+  const viewTicket = useCallback((ticket) => {
+    if (onViewTicket) onViewTicket(ticket);
+    else if (ticket.vehicle) onViewVehicle?.(ticket.vehicle);
+  }, [onViewTicket, onViewVehicle]);
+  const ticketColumns = useMemo(() => ticketTableColumns({}, viewTicket), [viewTicket]);
+  const ticketColumnChooser = useColumnChooser('vms_my_ticket_list_columns', ticketColumns);
   const panelTitle = activeFilter.length !== 1 ? 'My Tickets' : activeFilter.includes('Active')
     ? 'Active Tickets'
     : activeFilter.includes('Verified')
@@ -14690,8 +14708,6 @@ function CustodianVerificationModule({
         activeFilter={activeFilter}
         onFilterChange={onFilterChange}
       />
-      {tabBar}
-      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
       <section className="panel module-filter-panel">
         <FilterBar
           statusControls={<WorkflowStatusControls options={TICKET_VERIFICATION_STAT_CARDS.map(({key,label})=>({value:key,label}))} selected={activeFilter} onChange={onFilterChange} />}
@@ -14714,20 +14730,37 @@ function CustodianVerificationModule({
           }]}
         />
       </section>
-      <section className="panel">
+      {tabBar}
+      <TicketsReadyToClosePanel tickets={readyToCloseTickets} onViewTicket={onViewTicket} onCloseTicket={canDo(user, 'ticket.verify') ? setEditTarget : undefined} />
+      <section className="panel ticket-ledger-panel">
         <div className="panel-header-bar">
           <h3>{panelTitle} <span className="count-badge">{tickets.length}</span></h3>
+          <div className="my-ticket-panel-tools">
+            <ViewModeDropdown value={ticketViewMode} onChange={setTicketViewMode} />
+            <LocalSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Search tickets, vehicle, or assignee..."
+              columnChooser={ticketViewMode === 'table' ? ticketColumnChooser : undefined}
+            />
+          </div>
         </div>
-        <div style={{ height: '16px' }} />
-        {/* Every stat tab (Total / Active / To Verify / Verified) reads as
-            ticket cards — same view as My Tickets — never a table. Opening a
-            card shows the full ticket, where Verify Repair lives. */}
-        <PaginatedCardGrid
-          items={tickets}
-          keyOf={(t) => t.ticket_id}
-          emptyMessage={emptyStateText}
-          renderItem={(t) => <TicketCard ticket={t} onClick={() => (onViewTicket ? onViewTicket(t) : (t.vehicle && onViewVehicle(t.vehicle)))} />}
-        />
+        {ticketViewMode === 'table' ? (
+          <PaginatedTable
+            columns={ticketColumnChooser.visibleColumns}
+            onReorderColumn={ticketColumnChooser.reorderColumn}
+            rows={tickets}
+            onRowClick={viewTicket}
+            emptyMessage={emptyStateText}
+          />
+        ) : (
+          <PaginatedCardGrid
+            items={tickets}
+            keyOf={(t) => t.ticket_id}
+            emptyMessage={emptyStateText}
+            renderItem={(t) => <TicketCard ticket={t} onClick={() => viewTicket(t)} />}
+          />
+        )}
       </section>
       {/* The Custodian's one plain attestation for the whole ticket — no
           checklist, no notes, no reject path (see verifyTicket()). Reuses

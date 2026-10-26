@@ -28,7 +28,7 @@ import SupportCenterTab from './SupportCenterTab';
 
 // Flat platform navigation preserves the existing module keys.
 const TABS = [
-  ['dashboard', 'Platform Overview'], ['barangays', 'Barangay Management'], ['pending', 'Pending Approvals'],
+  ['dashboard', 'Dashboard'], ['barangays', 'Barangay Management'], ['pending', 'Pending Approvals'],
   ['users', 'Users'], ['codes', 'Registration Codes'], ['activity', 'Activity Log'],
   ['support', 'Support Center'],
 ];

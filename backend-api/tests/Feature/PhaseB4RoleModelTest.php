@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Barangay;
 use App\Models\City;
+use App\Models\MaintenanceTicket;
 use App\Models\Province;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -71,6 +72,55 @@ class PhaseB4RoleModelTest extends TestCase
     // Condition checks — delete narrowed to Admin only; edit narrowed to
     // "own row" for Custodian
     // =======================================================================
+
+    #[Test]
+    public function open_tickets_block_new_condition_checks_until_the_ticket_is_closed(): void
+    {
+        $vehicle = $this->vehicle();
+        $ticket = MaintenanceTicket::create([
+            'vehicle_id' => $vehicle->vehicle_id,
+            'created_by' => $this->admin->id,
+            'ticket_title' => 'Repair brakes',
+            'ticket_description' => 'Brake inspection required.',
+            'priority' => 'High',
+            'status' => 'Pending Approval',
+        ]);
+        Sanctum::actingAs($this->custodian, ['*']);
+        $payload = ['vehicle_id' => $vehicle->vehicle_id, 'condition_result' => 'Good'];
+
+        foreach (['Pending Approval', 'Active', 'For Verification'] as $status) {
+            $ticket->update(['status' => $status]);
+            $this->postJson('/api/conditions', $payload)->assertUnprocessable()
+                ->assertJsonPath('message', 'This vehicle has an open maintenance ticket. Close the ticket before recording another condition check.');
+            $lookup = collect($this->getJson('/api/lookups')->assertOk()->json('vehicles'))->firstWhere('vehicle_id', $vehicle->vehicle_id);
+            $this->assertTrue($lookup['has_open_maintenance_ticket']);
+        }
+        $this->assertDatabaseCount('vehicle_condition_checks', 0);
+        $this->assertDatabaseMissing('vehicle_histories', ['activity_type' => 'Condition Checked']);
+
+        $ticket->update(['status' => 'Closed']);
+        $lookup = collect($this->getJson('/api/lookups')->assertOk()->json('vehicles'))->firstWhere('vehicle_id', $vehicle->vehicle_id);
+        $this->assertFalse($lookup['has_open_maintenance_ticket']);
+        $this->postJson('/api/conditions', $payload)->assertCreated();
+    }
+
+    #[Test]
+    public function declined_and_cancelled_tickets_do_not_block_new_condition_checks(): void
+    {
+        Sanctum::actingAs($this->custodian, ['*']);
+        foreach (['Declined', 'Cancelled'] as $status) {
+            $vehicle = $this->vehicle();
+            MaintenanceTicket::create([
+                'vehicle_id' => $vehicle->vehicle_id,
+                'created_by' => $this->admin->id,
+                'ticket_title' => 'Repair brakes',
+                'ticket_description' => 'Brake inspection required.',
+                'priority' => 'High',
+                'status' => $status,
+            ]);
+            $this->postJson('/api/conditions', ['vehicle_id' => $vehicle->vehicle_id, 'condition_result' => 'Good'])->assertCreated();
+        }
+    }
 
     #[Test]
     public function a_custodian_can_edit_a_condition_check_they_performed_themselves(): void

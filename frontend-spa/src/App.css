@@ -3060,6 +3060,21 @@ button.vehicle-cell-name.cell-link { font-weight: 600; }
 }
 .form-context-empty svg { stroke: var(--primary, #2563eb); opacity: 0.55; }
 .form-context-empty p { margin: 0; font-size: 0.86rem; color: var(--text-muted, #64748b); max-width: 28ch; }
+/* Keep the condition-check preview column ready before a vehicle is picked. */
+.form-context-layout--reserved .form-context-empty {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+@media (min-width: 981px) {
+  .form-context-layout--reserved {
+    grid-template-columns: 300px minmax(0, 1fr);
+    min-height: 620px;
+  }
+  .form-context-layout--reserved .form-context-empty {
+    justify-content: flex-start;
+  }
+}
 /* Entry Summary values — placeholder dash until answered; clamp long notes. */
 .veh-kv dd.summary-empty { color: var(--text-faint, #94a3b8); font-weight: 400; }
 .veh-kv dd.summary-val {
@@ -16362,9 +16377,9 @@ html[data-theme] .ticket-card-grid .sch-card .sch-card-edit-cancel .sch-action.i
 .condition-record-actions .btn-view-action { grid-column: 2; }
 .condition-record-actions .btn-edit-action { grid-column: 3; }
 .condition-record-actions .icon-btn { grid-row: 1; margin: 0; }
-.ready-to-close-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 7px 12px; border: 1px solid #15803d; border-radius: 7px; background: #15803d; color: #fff; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
-.ready-to-close-action:hover { background: #166534; }
-.ready-to-close-action:focus-visible { outline: 3px solid #86efac; outline-offset: 2px; }
+html[data-theme] .ready-to-close-panel button.ready-to-close-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 7px 12px; border: 1px solid #15803d; border-radius: 7px; background: #15803d; color: #fff; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
+html[data-theme] .ready-to-close-panel button.ready-to-close-action:hover { background: #166534; border-color: #166534; color: #fff; }
+html[data-theme] .ready-to-close-panel button.ready-to-close-action:focus-visible { outline: 3px solid #86efac; outline-offset: 2px; }
 @media (max-width: 540px) {
   .ticket-card-grid .sch-card-actions .sch-action { min-height: 44px; }
 }
@@ -16669,9 +16684,11 @@ html .ticket-reassignment-modal .form-actions > button { border-radius:6px; }
 html[data-theme] :is(table, .table-shell) button.icon-btn.readiness-check-blocked { background:#b45309 !important; border-color:#b45309 !important; color:#fff !important; }
 
 /* Keep schedule status labels and row actions aligned beneath their headings. */
-.schedule-table-status { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
+.schedule-table-status { display: inline-flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
 .schedule-action-cell { min-width: 92px; }
+.schedule-table-actions { display: flex; justify-content: flex-end; }
 .schedule-table-actions .sch-card-actions { display: inline-flex; flex-wrap: nowrap; width: max-content; vertical-align: middle; }
+.my-ticket-panel-tools { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; min-width: 0; }
 .schedule-table-actions .sch-action.icon-btn { flex: 0 0 36px; width: 36px; height: 36px; padding: 0; }
 .schedule-panel-tools :is(.view-dropdown-btn, .local-search-input, .icon-add-btn, .export-btn) { height: 40px; min-height: 40px; box-sizing: border-box; }
 .schedule-panel-tools .icon-add-btn > svg { flex-shrink: 0; display: block; }
