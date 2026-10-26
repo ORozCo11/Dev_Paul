@@ -6665,9 +6665,10 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
       ...customFieldInputs(lookups.categories.find((c) => String(c.category_id) === String(wizardData.category_id))),
     ],
     3: [
-      { label: 'Vehicle Photo', name: 'photo', accept: 'image/*', type: 'file', compactFile: true },
+      { label: 'Vehicle Photo', name: 'photo', accept: 'image/*', type: 'file', profilePhoto: true, group: 'Vehicle profile' },
+      { label: 'Vehicle Documents', name: 'documents', type: 'multi-file', accept: '.jpg,.jpeg,.png,.pdf,.doc,.docx', group: 'Vehicle profile' },
       {
-        label: 'Current Location', name: 'current_location', options: allHubs, required: true, type: 'creatable-select',
+        group: 'Current location', label: 'Current Location', name: 'current_location', options: allHubs, required: true, type: 'creatable-select',
         newItemLabel: 'location', catalogEndpoint: '/hubs', idField: 'hub_id', nameField: 'name',
         // A hub needs real coordinates to ever show up on the map, so
         // unlike Vehicle Type's Domain (a plain preset dropdown), these are
@@ -6682,16 +6683,15 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
         // rather than as a separate full-width row, so it sits directly
         // beneath the dropdown and top-aligns with the photo box beside it
         // instead of leaving a gap where a taller sibling row would go.
-        inlineExtra: (vals) => {
+        extra: (vals) => {
           const hub = allHubs.find((h) => h.name === vals.current_location);
           return hub ? (
-            <div className="veh-map-wrap" style={{ height: 220 }}>
+            <div className="veh-map-wrap" style={{ height: 500 }}>
               <VehicleLocationMap lat={hub.lat} lng={hub.lng} label={hub.name} />
             </div>
           ) : null;
         },
       },
-      { label: 'Remarks (optional)', name: 'remarks', type: 'textarea' },
     ],
   };
 
@@ -6748,7 +6748,7 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
           );
         })}
       </div>
-      <div className={`form-grid-2col${step === 3 ? ' wizard-photo-location-grid' : ''}`}>
+      <div className={`form-grid-2col${step === 3 ? ' wizard-photo-location-grid vehicle-profile-edit' : ''}`}>
         <SmartForm
           fields={stepFields[step]}
           initialValues={wizardData}

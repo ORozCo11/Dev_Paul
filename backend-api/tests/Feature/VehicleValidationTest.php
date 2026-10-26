@@ -24,6 +24,33 @@ class VehicleValidationTest extends TestCase
 {
     use RefreshDatabase;
 
+    #[Test]
+    public function registration_saves_selected_documents(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('supabase');
+        $admin = $this->actingAsAdmin();
+        $response = $this->postJson('/api/vehicles', $this->validPayload([
+            'documents' => [\Illuminate\Http\UploadedFile::fake()->create('registration.pdf', 20, 'application/pdf')],
+        ]));
+        $response->assertCreated();
+        $this->assertDatabaseHas('vehicle_documents', [
+            'vehicle_id' => $response->json('vehicle_id'),
+            'title' => 'registration.pdf',
+            'added_by' => $admin->id,
+        ]);
+    }
+
+    #[Test]
+    public function invalid_registration_documents_do_not_create_a_vehicle(): void
+    {
+        $this->actingAsAdmin();
+        $response = $this->postJson('/api/vehicles', $this->validPayload([
+            'documents' => [\Illuminate\Http\UploadedFile::fake()->create('script.exe', 20, 'application/x-msdownload')],
+        ]));
+        $response->assertUnprocessable()->assertJsonValidationErrors('documents.0');
+        $this->assertDatabaseCount('vehicles', 0);
+    }
+
     private function actingAsAdmin(): User
     {
         $admin = User::factory()->create(['role' => 'Admin']);

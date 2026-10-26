@@ -1000,6 +1000,13 @@ class FleetController extends Controller
         // Keep single registration and import aligned with role eligibility.
         abort_unless($request->user()->canRegisterVehicles(), 403, 'Your account cannot register vehicles.');
 
+        $request->validate([
+            'documents' => ['nullable', 'array'],
+            'documents.*' => ['file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:10240'],
+        ]);
+        if ($request->hasFile('documents')) {
+            $this->requireAbility($request, 'document.create');
+        }
         $data = $this->validateVehicle($request);
 
         if ($request->hasFile('photo')) {
@@ -1013,6 +1020,17 @@ class FleetController extends Controller
                 'status' => 'Available',
                 'condition' => 'Good',
             ]);
+
+            foreach ($request->file('documents', []) as $file) {
+                $document = VehicleDocument::create([
+                    'vehicle_id' => $vehicle->vehicle_id,
+                    'added_by' => $request->user()->id,
+                    'title' => mb_substr($file->getClientOriginalName(), 0, 255),
+                    'file_url' => $this->storeUploadedImage($file, 'vehicle-documents'),
+                ]);
+                $this->history($vehicle, 'Document Added', "{$document->title} was added to {$vehicle->vehicle_name}'s file cabinet.", 'vehicle_documents', $document->document_id, $request);
+                $this->log($request, 'Add', 'Vehicle Documents', $document->document_id, "Added document {$document->title}");
+            }
 
             $this->history($vehicle, 'Vehicle Added', "{$vehicle->vehicle_name} was added to the system.", 'vehicles', $vehicle->vehicle_id, $request);
             $this->log($request, 'Add', 'Vehicle Management', $vehicle->vehicle_id, "Added vehicle {$vehicle->vehicle_name}");
