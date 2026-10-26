@@ -3,11 +3,11 @@ import { useContext, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import Icon from '../components/Icon';
-import Aurora from '../components/Aurora';
 import AuthHeader from '../components/AuthHeader';
 import AuthFooter from '../components/AuthFooter';
 import { AuthContext } from '../context/AuthContextObject';
 import peopleSearch from '../assets/people-search.svg';
+import './Login.css';
 
 // Matches RegistrationSetting::generateCode() on the backend: 8 uppercase letters or digits.
 const STAFF_CODE_LENGTH = 8;
@@ -166,12 +166,11 @@ function Login() {
   };
 
   return (
-    <div className="auth-page-shell">
+    <div className="auth-page-shell login-page">
       <AuthHeader />
 
       <main className="auth-page">
       {submitting && <LoadingOverlay />}
-      <Aurora colorStops={['#0b1220', '#1e3a5f', '#0f172a']} amplitude={0.6} blend={0.55} />
       <section className="auth-card" aria-labelledby="login-title">
         <div className="auth-logo-header">
           <h1 id="login-title" className="auth-login-heading">Login</h1>
