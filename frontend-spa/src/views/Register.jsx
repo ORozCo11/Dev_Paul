@@ -125,6 +125,7 @@ function Register() {
   }, [fieldErrors, step]);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   // null = not checked yet. true/false once we know whether this barangay
   // already has anyone registered — drives whether the role/staff-code
@@ -628,9 +629,18 @@ function Register() {
                   onChange={handleChange}
                   placeholder="Confirm password"
                   required
-                  type={showPassword ? 'text' : 'password'}
+                  type={showConfirmPassword ? 'text' : 'password'}
                   value={form.password_confirmation}
                 />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowConfirmPassword((v) => !v)}
+                  aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                >
+                  <Icon name={showConfirmPassword ? 'eyeOff' : 'eye'} size={18} />
+                </button>
               </div>
               <RegistrationFieldError name="password_confirmation" errors={fieldErrors} />
             </label>
