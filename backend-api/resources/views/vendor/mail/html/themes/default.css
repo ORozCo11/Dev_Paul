@@ -116,6 +116,21 @@ img {
     text-align: center;
 }
 
+.header-band td.header-gear {
+    padding: 0 8px 0 0;
+    vertical-align: middle;
+}
+
+.header-brand td {
+    padding: 0;
+    vertical-align: middle;
+}
+
+.header-gear img {
+    border: 0;
+    display: block;
+}
+
 .header-wordmark {
     color: #ffffff;
     font-family: 'Poppins', 'Segoe UI', Helvetica, Arial, sans-serif;
