@@ -9,6 +9,7 @@ const Register = lazy(() => import('./views/Register'));
 const Privacy = lazy(() => import('./views/Privacy'));
 const Terms = lazy(() => import('./views/Terms'));
 const About = lazy(() => import('./views/About'));
+const Home = lazy(() => import('./views/Home'));
 const Support = lazy(() => import('./views/Support'));
 const Developers = lazy(() => import('./views/Developers'));
 const Workspace = lazy(() => import('./views/Workspace'));
@@ -44,6 +45,7 @@ function App() {
       <ErrorBoundary>
         <Suspense fallback={<main className="auth-page" role="status">Loading…</main>}>
         <Routes>
+          <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/privacy" element={<Privacy />} />
