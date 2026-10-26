@@ -4081,8 +4081,8 @@ function Workspace() {
             onReorderColumn={vehicleHistoryColumnChooser.reorderColumn}
             emptyMessage="No vehicle activity recorded yet."
             rows={visibleRows}
-            pageSizeOptions={[10, 20, 40, 50]}
-            initialPageSize={10}
+            pageSizeOptions={[10, 25, 50, 100]}
+            initialPageSize={25}
           />
 
           {/* Print-only — same convention as ReportPreview's print view:
@@ -9695,7 +9695,7 @@ function logColumns(vehicles, onViewVehicle, onViewTicket) {
 // timeline instead — its own pagination via the same usePagination hook, so
 // switching tabs doesn't lose your place in a 14,000-row activity log.
 function ActivityTimeline({ rows }) {
-  const { page, setPage, pageSize, setPageSize, totalPages, start, end } = usePagination(rows.length, { pageSizeOptions: [10, 25, 50, 100], initialPageSize: 10 });
+  const { page, setPage, pageSize, setPageSize, totalPages, start, end } = usePagination(rows.length, { pageSizeOptions: [10, 25, 50, 100], initialPageSize: 25 });
 
   if (!rows.length) {
     return <p className="empty-state">No activity yet.</p>;
@@ -9777,7 +9777,7 @@ function PaginatedTable({ columns, rows, onRowClick, onReorderColumn, emptyMessa
 // so switching between List and Card view doesn't change how paging looks or
 // behaves. Page size defaults lower than the table's: cards are much taller,
 // so 25 of them is a very long scroll.
-function PaginatedCardGrid({ items, renderItem, keyOf, emptyMessage, pageSizeOptions = [12, 24, 48, 96], initialPageSize = 12 }) {
+function PaginatedCardGrid({ items, renderItem, keyOf, emptyMessage, pageSizeOptions = [10, 25, 50, 100], initialPageSize = 25 }) {
   const { page, setPage, pageSize, setPageSize, totalPages, start, end } = usePagination(items?.length ?? 0, { pageSizeOptions, initialPageSize });
 
   if (!items?.length) {
