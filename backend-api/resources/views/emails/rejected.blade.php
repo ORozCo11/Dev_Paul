@@ -17,9 +17,11 @@ Hi **{{ $firstName }}**,
 
 If you believe this was a mistake, you can reply to this email or register again with the correct details.
 
+@if ($showLinks)
 <x-mail::button :url="$registerUrl">
 Register again
 </x-mail::button>
+@endif
 
 @include('emails._signoff')
 </x-mail::message>
