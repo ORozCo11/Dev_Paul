@@ -61,7 +61,7 @@ html .login-page .auth-card .auth-remember { color: #cbd5e1; }
   transition: background-color 220ms ease, box-shadow 220ms ease, transform 220ms cubic-bezier(.22, 1, .36, 1);
 }
 @media (hover: hover) and (pointer: fine) {
-  .login-page .auth-card .auth-submit-btn:hover:not(:disabled) { background: #1d4ed8; box-shadow: 0 8px 22px rgba(37, 99, 235, .3); transform: translateY(-1px); }
+  html .login-page .auth-card .auth-submit-btn:hover:not(:disabled) { background: #1d4ed8 !important; border-color: #3b82f6 !important; color: #fff; box-shadow: 0 8px 22px rgba(37, 99, 235, .3); transform: translateY(-1px); }
 }
 .login-page .auth-card .auth-submit-btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 2px 8px rgba(37, 99, 235, .15); }
 .login-page .auth-card .auth-submit-btn:disabled { opacity: .65; cursor: wait; }
