@@ -6,6 +6,8 @@ import { ArrowLeftIcon } from '@solar-icons/react/linear/arrow-left';
 import { BellIcon } from '@solar-icons/react/linear/bell';
 import { CalendarIcon } from '@solar-icons/react/linear/calendar';
 import { CarIcon } from '@solar-icons/react/linear/car';
+import { ChartSquareIcon } from '@solar-icons/react/linear/chart-square';
+import { ChecklistIcon } from '@solar-icons/react/linear/checklist';
 import { CheckCircleIcon } from '@solar-icons/react/linear/check-circle';
 import { ClipboardIcon } from '@solar-icons/react/linear/clipboard';
 import { CloseIcon } from '@solar-icons/react/linear/close';
@@ -23,6 +25,7 @@ import { FogIcon } from '@solar-icons/react/linear/fog';
 import { Grid2x2Icon } from '@solar-icons/react/linear/grid-2x2';
 import { GripVerticalIcon } from '@solar-icons/react/linear/grip-vertical';
 import { HamburgerMenuIcon } from '@solar-icons/react/linear/hamburger-menu';
+import { HistoryIcon } from '@solar-icons/react/linear/history';
 import { InfoCircleIcon } from '@solar-icons/react/linear/info-circle';
 import { KeyIcon } from '@solar-icons/react/linear/key';
 import { LetterIcon } from '@solar-icons/react/linear/letter';
@@ -32,6 +35,7 @@ import { MagnifierIcon } from '@solar-icons/react/linear/magnifier';
 import { MapPointIcon } from '@solar-icons/react/linear/map-point';
 import { PenIcon } from '@solar-icons/react/linear/pen';
 import { SettingsIcon } from '@solar-icons/react/linear/settings';
+import { ShieldUserIcon } from '@solar-icons/react/linear/shield-user';
 import { SledgehammerIcon } from '@solar-icons/react/linear/sledgehammer';
 import { SunIcon } from '@solar-icons/react/linear/sun';
 import { TicketIcon } from '@solar-icons/react/linear/ticket';
@@ -79,6 +83,10 @@ const ICONS = {
   gear: SettingsIcon,
   users: UsersGroupTwoRoundedIcon,
   document: DocumentTextIcon,
+  history: HistoryIcon,
+  shield: ShieldUserIcon,
+  chart: ChartSquareIcon,
+  checklist: ChecklistIcon,
   sun: SunIcon,
   cloudSun: CloudSunIcon,
   cloudFog: FogIcon,

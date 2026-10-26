@@ -492,47 +492,6 @@
   cursor: pointer;
 }
 
-/* About page — plain white "what the system can do" feature grid below the
-   dark intro card, icon-tile-and-caption style. */
-.about-features {
-  background: #ffffff;
-  padding: 64px 20px;
-}
-.about-features-inner {
-  width: min(100%, 980px);
-  margin: 0 auto;
-  text-align: center;
-}
-.about-features-title {
-  font-size: clamp(1.4rem, 2.6vw, 1.9rem);
-  font-weight: 800;
-  color: #1d4ed8;
-  margin: 0 0 44px;
-}
-.about-features-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 36px 24px;
-}
-@media (max-width: 760px) {
-  .about-features-grid { grid-template-columns: repeat(2, 1fr); }
-}
-.about-feature-card { display: flex; flex-direction: column; align-items: center; }
-.about-feature-icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 14px;
-  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.28);
-}
-.about-feature-name { font-size: 0.95rem; font-weight: 700; color: #1d4ed8; margin: 0 0 6px; }
-.about-feature-desc { font-size: 0.82rem; line-height: 1.55; color: #64748b; margin: 0; max-width: 210px; }
-
 /* Support Center — plain white body below the compact hero: an FAQ
    accordion, then a "Report a Concern" form reusing the same auth-field
    styling as Register/Login. */
@@ -597,8 +556,8 @@
 .support-form { margin-top: 4px; }
 
 /* Shared full-width blue gradient hero — used by Developers (team carousel)
-   and About (system overview). Privacy/Terms use their own .policy-card
-   instead, unaffected by this. */
+   and Support. About has its own hero (About.css); Privacy/Terms use their
+   own .policy-card instead, unaffected by this. */
 .auth-hero {
   position: relative;
   min-height: calc(100vh - 140px);
@@ -666,37 +625,6 @@
   margin: 0 auto 44px;
 }
 
-/* About page's hero body — the "What it covers" / "Who it's for" text,
-   left-aligned and wider than .auth-hero-subtitle since it's prose rather
-   than a one-line tagline, but still living on the same dark gradient. */
-.about-hero-body {
-  width: min(100%, 760px);
-  margin: 0 auto;
-  text-align: left;
-}
-.about-hero-body p {
-  font-size: 0.95rem;
-  line-height: 1.75;
-  color: rgba(226, 232, 240, 0.85);
-  margin: 0 0 14px;
-}
-.about-hero-body h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #ffffff;
-  margin: 28px 0 12px;
-}
-.about-hero-body ul {
-  margin: 0 0 14px;
-  padding-left: 20px;
-}
-.about-hero-body li {
-  font-size: 0.95rem;
-  line-height: 1.75;
-  color: rgba(226, 232, 240, 0.85);
-  margin-bottom: 6px;
-}
-.about-hero-body strong { color: #ffffff; }
 .dev-team-carousel {
   display: flex;
   align-items: center;
@@ -1440,25 +1368,31 @@
 .auth-footer {
   margin-top: auto;
   background: #1d4ed8;
-  padding: 48px 40px 0;
+  padding: 32px 24px 0;
 }
 .auth-footer-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 32px;
+  gap: 24px;
   flex-wrap: wrap;
   max-width: 1180px;
   margin: 0 auto;
-  padding-bottom: 32px;
+  padding-bottom: 24px;
 }
-.auth-footer-brand { max-width: 420px; }
+.auth-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 560px;
+}
+.auth-footer-brand .vms-gear { flex-shrink: 0; }
 .auth-footer-tagline {
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 800;
   line-height: 1.3;
   color: #ffffff;
-  margin: 0 0 20px;
+  margin: 0;
 }
 .auth-footer-social {
   display: flex;
@@ -1486,7 +1420,7 @@
   text-align: center;
   max-width: 1180px;
   margin: 0 auto;
-  padding: 20px 0;
+  padding: 16px 0;
   border-top: 1px solid rgba(255, 255, 255, 0.22);
 }
 .auth-footer-copyright {
@@ -1514,7 +1448,9 @@
   .auth-footer-legal { justify-content: center; }
 }
 @media (max-width: 720px) {
+  .auth-footer { padding: 28px 16px 0; }
   .auth-footer-main { flex-direction: column; }
+  .auth-footer-tagline { font-size: 1.1rem; }
 }
 
 .ticket-list-identity,
