@@ -2,13 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Mail\AccountMail;
-use App\Mail\ConcernReplyMail;
 use App\Models\ActivityLog;
 use App\Models\ConcernReport;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -159,58 +156,7 @@ class SuperAdminControllerTest extends TestCase
         $this->postJson('/api/concern-reports', ['concern_type' => 'Other', 'description' => 'Unable to reach our administrator'])->assertCreated();
         $this->assertDatabaseHas('concern_reports', ['description' => 'Unable to reach our administrator', 'status' => 'Open']);
         $this->getJson('/api/superadmin/concern-reports')->assertUnauthorized();
-        $this->postJson('/api/concern-reports', ['concern_type' => 'Invalid'])->assertUnprocessable()->assertJsonValidationErrors(['concern_type']);
-        // Only "Other" needs a description; the named types explain themselves and drop any sent text.
-        $this->postJson('/api/concern-reports', ['concern_type' => 'Other'])->assertUnprocessable()->assertJsonValidationErrors(['description']);
-        $this->postJson('/api/concern-reports', ['concern_type' => 'Suspected Fake Staff', 'description' => 'ignored'])->assertCreated();
-        $this->assertDatabaseHas('concern_reports', ['concern_type' => 'Suspected Fake Staff', 'description' => null]);
-    }
-
-    #[Test]
-    public function super_admin_emails_the_reporter_once_per_stage(): void
-    {
-        Mail::fake();
-        $superAdmin = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
-        $report = ConcernReport::create(['concern_type' => 'Other', 'description' => 'Help', 'status' => 'Open', 'reporter_contact' => 'reporter@example.test']);
-        $phoneOnly = ConcernReport::create(['concern_type' => 'Other', 'description' => 'Help', 'status' => 'Open', 'reporter_contact' => '09171234567']);
-        Sanctum::actingAs($superAdmin, ['*']);
-        $email = fn (ConcernReport $r, string $kind) => $this->postJson("/api/superadmin/concern-reports/{$r->id}/email", ['kind' => $kind, 'subject' => 'Update', 'message' => 'We are on it.']);
-
-        $email($report, 'acknowledge')->assertOk()->assertJsonPath('report.id', $report->id);
-        $this->assertNotNull($report->fresh()->acknowledged_email_at);
-        $email($report, 'acknowledge')->assertStatus(409);
-        $email($report, 'resolved')->assertOk();
-        $email($report, 'resolved')->assertStatus(409);
-        $email($phoneOnly, 'acknowledge')->assertUnprocessable();
-
-        Mail::assertSent(ConcernReplyMail::class, 2);
-        Mail::assertSent(ConcernReplyMail::class, fn (ConcernReplyMail $mail) => $mail->hasTo('reporter@example.test'));
-    }
-
-    #[Test]
-    public function rejecting_a_registration_emails_the_reason_before_deleting_it(): void
-    {
-        Mail::fake();
-        $pending = User::factory()->create(['name' => 'Juan Dela Cruz', 'role' => 'Admin', 'roles' => ['Admin'], 'is_active' => false, 'approved_at' => null]);
-        Sanctum::actingAs(User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]), ['*']);
-
-        // A reason is required, and nothing is deleted without it.
-        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject")->assertUnprocessable()->assertJsonValidationErrors(['reason', 'subject', 'message']);
-        $this->assertNotNull($pending->fresh());
-
-        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject", ['reason' => 'We could not confirm your appointment.', 'subject' => 'Your VMS registration was not approved', 'message' => 'We are sorry.'])->assertOk();
-        $this->assertNull($pending->fresh());
-        Mail::assertSent(AccountMail::class, fn (AccountMail $mail) => $mail->hasTo($pending->email) && $mail->template === 'rejected' && $mail->data['reason'] === 'We could not confirm your appointment.');
-    }
-
-    #[Test]
-    public function only_a_super_admin_can_email_a_reporter(): void
-    {
-        Mail::fake();
-        $report = ConcernReport::create(['concern_type' => 'Other', 'description' => 'Help', 'status' => 'Open', 'reporter_contact' => 'reporter@example.test']);
-        Sanctum::actingAs(User::factory()->create(['role' => 'Admin', 'roles' => ['Admin']]), ['*']);
-        $this->postJson("/api/superadmin/concern-reports/{$report->id}/email", ['kind' => 'acknowledge', 'subject' => 'S', 'message' => 'M'])->assertForbidden();
-        Mail::assertNothingSent();
+        $this->postJson('/api/concern-reports', ['concern_type' => 'Invalid'])->assertUnprocessable()->assertJsonValidationErrors(['concern_type', 'description']);
     }
 
     #[Test]
@@ -244,7 +190,7 @@ class SuperAdminControllerTest extends TestCase
         $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'approved_at' => null, 'is_active' => false]);
 
         Sanctum::actingAs($superAdmin, ['*']);
-        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject", ['reason' => 'Could not verify', 'subject' => 'Not approved', 'message' => 'Sorry.'])->assertOk();
+        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject")->assertOk();
 
         $this->assertDatabaseMissing('users', ['id' => $pending->id]);
     }

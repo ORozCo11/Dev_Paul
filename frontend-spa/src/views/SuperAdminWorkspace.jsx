@@ -371,8 +371,6 @@ export default function SuperAdminWorkspace() {
   const [barangays, setBarangays] = useState([]);
   const [users, setUsers] = useState([]);
   const [pendingApprovals, setPendingApprovals] = useState([]);
-  // Open concern reports, for the Support Center badge in the sidebar.
-  const [openConcerns, setOpenConcerns] = useState(0);
   const [resourceLoading, setResourceLoading] = useState({ barangays: true, users: true, pending: true });
   const [resourceErrors, setResourceErrors] = useState({});
   const loadVersion = useRef(0);
@@ -397,7 +395,6 @@ export default function SuperAdminWorkspace() {
       ['barangays', '/superadmin/barangays', setBarangays],
       ['users', '/superadmin/users', setUsers],
       ['pending', '/superadmin/pending-approvals', setPendingApprovals],
-      ['concerns', '/superadmin/concern-reports', (rows) => setOpenConcerns(rows.filter((report) => !report.deleted_at && report.status === 'Open').length)],
     ];
     await Promise.allSettled(resources.map(async ([key, path, update]) => {
       try {
@@ -550,10 +547,10 @@ export default function SuperAdminWorkspace() {
     }
   };
 
-  const rejectPending = async (approval, draft) => {
+  const rejectPending = async (approval) => {
     try {
-      const { data } = await api.delete(`/superadmin/users/${approval.id}/reject`, { data: draft });
-      setCelebration({ title: 'Registration Rejected', detail: data.message });
+      await api.delete(`/superadmin/users/${approval.id}/reject`);
+      setNotice({ type: 'success', text: `${approval.name}'s registration was rejected.` });
       await loadAll();
       return true;
     } catch (error) {
@@ -634,7 +631,7 @@ export default function SuperAdminWorkspace() {
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="superadmin-sidebar">
           <nav className="module-nav" aria-label="Super Admin modules">
             {TABS.map(([key, label]) => <button key={key} type="button" aria-label={label} aria-current={key === activeTab ? 'page' : undefined} className={key === activeTab ? 'active' : ''} onClick={() => navigateTab(key)} title={label}>
-              {TAB_ICONS[key]}<span>{label}</span>{key === 'pending' && pendingApprovals.length > 0 && <span className="module-nav-badge">{pendingApprovals.length}</span>}{key === 'support' && openConcerns > 0 && <span className="module-nav-badge" aria-label={`${openConcerns} open concerns`}>{openConcerns > 99 ? '99+' : openConcerns}</span>}
+              {TAB_ICONS[key]}<span>{label}</span>{key === 'pending' && pendingApprovals.length > 0 && <span className="module-nav-badge">{pendingApprovals.length}</span>}
             </button>)}
 
           </nav>
@@ -703,7 +700,7 @@ export default function SuperAdminWorkspace() {
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
             ) : activeTab === 'support' ? (
-              <SupportCenterTab onRequestConfirmation={setConfirmDialog} onSuccess={setCelebration} onOpenCountChange={setOpenConcerns} />
+              <SupportCenterTab onRequestConfirmation={setConfirmDialog} onSuccess={setCelebration} />
             ) : (
               <SettingsTab setNotice={setNotice} />
             )}
