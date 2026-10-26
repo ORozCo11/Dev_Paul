@@ -252,7 +252,7 @@ export default function About() {
           <span className="about-hero-shape about-hero-shape-a" aria-hidden="true" />
           <span className="about-hero-shape about-hero-shape-b" aria-hidden="true" />
           <div className="about-hero-inner">
-            <p className="about-eyebrow about-eyebrow-light">About Barangay VMS</p>
+            <p className="about-eyebrow about-eyebrow-light">About Barangay <span className="vms-brand">VMS</span></p>
             <h1>Smarter Fleet Management for Every Barangay</h1>
             <p className="about-hero-lead">
               A centralized platform designed to help barangays manage emergency
