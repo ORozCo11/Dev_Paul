@@ -2801,6 +2801,7 @@ function Workspace() {
               onSubmit={(payload) => submitFormPage('categories', editCategoryId ? { category_id: editCategoryId } : null, payload)}
               submitLabel={editCategoryId ? 'Update Vehicle Type' : 'Add Vehicle Type'}
               categoryVehicleCount={editCategoryId ? (records.categories ?? []).find((c) => String(c.category_id) === String(editCategoryId))?.vehicles_count : null}
+              categories={records.categories ?? []}
               onDirty={() => setHasUnsavedChanges(true)}
             />
             </>
@@ -6861,11 +6862,10 @@ function FxField({ id, label, required, hint, error, children, className = '' })
   );
 }
 
-function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel, onDirty, categoryVehicleCount = null }) {
+function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel, onDirty, categoryVehicleCount = null, categories = [] }) {
   const seed = (v) => ({
     category_name: v?.category_name ?? '',
     domain: v?.domain ?? '',
-    default_criticality: v?.default_criticality ?? '',
     description: v?.description ?? '',
   });
   const [values, setValues] = useState(() => seed(initialValues));
@@ -6885,6 +6885,10 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
 
   // Live preview only — nothing is saved until the form is submitted.
   const previewDomain = values.domain || 'Land';
+  const matchingCategory = categories.find((category) =>
+    category.category_name.trim().toLowerCase() === values.category_name.trim().toLowerCase()
+  );
+  const previewVehicleCount = isEditing ? categoryVehicleCount : matchingCategory?.vehicles_count;
   const previewFields = [
     { label: plateFieldLabel(previewDomain), note: previewDomain === 'Water' ? 'registration / hull number' : 'plate number' },
     { label: 'Capacity', note: `in ${capacityUnits(previewDomain).join(', ')}` },
@@ -6928,7 +6932,6 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
             </strong>
             <div className="fx-chips">
               <span className="fx-chip">{values.domain || 'Domain not set'}</span>
-              <span className="fx-chip fx-chip--muted">{values.default_criticality ? `${values.default_criticality} criticality` : 'Criticality not set'}</span>
             </div>
           </div>
           <h4 className="fx-subtitle">{previewDomain} vehicles also ask for</h4>
@@ -6937,10 +6940,10 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
               <div key={f.label}><dt>{f.label}</dt><dd>{f.note}</dd></div>
             ))}
           </dl>
-          {isEditing && categoryVehicleCount != null && (
-            <p className="fx-note">
-              <strong>{categoryVehicleCount}</strong> vehicle{categoryVehicleCount === 1 ? '' : 's'} use this type.
-              {categoryVehicleCount ? ' Renaming it or switching domain affects every one of them.' : ''}
+          {previewVehicleCount != null && (
+            <p className="fx-note" role="status">
+              <strong>{previewVehicleCount}</strong> vehicle{previewVehicleCount === 1 ? ' uses' : 's use'} this type.
+              {previewVehicleCount ? ' Renaming it or switching domain affects every one of them.' : ''}
             </p>
           )}
         </aside>
@@ -6951,17 +6954,11 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
             <FxField id="vt-name" label="Vehicle Type Name" required error={errors.category_name} className="fx-span-2">
               <input id="vt-name" type="text" maxLength={255} value={values.category_name} onChange={(e) => set('category_name', e.target.value)} placeholder="Ambulance, Fire Truck, Rescue Boat" />
             </FxField>
-            <FxField id="vt-domain" label="Domain" required error={errors.domain} hint="Land or Water — decides which vehicle-specific fields a vehicle of this type asks for.">
+            <FxField id="vt-domain" label="Domain" required error={errors.domain} className="fx-span-2" hint="Land or Water — decides which vehicle-specific fields a vehicle of this type asks for.">
               <SearchableSelect id="vt-domain" value={values.domain} onChange={(e) => set('domain', e.target.value)}>
                 <option value="">Select domain</option>
                 <option value="Land">Land</option>
                 <option value="Water">Water</option>
-              </SearchableSelect>
-            </FxField>
-            <FxField id="vt-crit" label="Default Criticality" hint="How much vehicles of this type matter operationally. Critical ones surface first on the readiness watch; Admin can override per vehicle.">
-              <SearchableSelect id="vt-crit" value={values.default_criticality} onChange={(e) => set('default_criticality', e.target.value)}>
-                <option value="">Select criticality</option>
-                {CRITICALITY_LEVELS.map((c) => <option key={c} value={c}>{c}</option>)}
               </SearchableSelect>
             </FxField>
             <FxField id="vt-desc" label="Description" className="fx-span-2" hint="Optional — when to use this type.">
