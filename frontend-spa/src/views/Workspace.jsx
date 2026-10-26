@@ -5528,6 +5528,25 @@ function SmartForm({ initialValues = EMPTY_OBJ, ...props }) {
   return <SmartFormFields key={JSON.stringify(initialValues)} initialValues={initialValues} {...props} />;
 }
 
+function VehicleProfilePhoto({ file, existingUrl, onChange }) {
+  const [preview, setPreview] = useState(null);
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (!isFile(file)) { setPreview(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const src = preview ?? (existingUrl ? resolvePhotoUrl(existingUrl) : null);
+  return (
+    <div className="vehicle-profile-photo">
+      {src ? <img src={src} alt="Vehicle profile" /> : <div className="vehicle-profile-photo-empty"><Icon name="vehicle" size={40} /><span>No vehicle photo</span></div>}
+      <input ref={inputRef} type="file" accept="image/*" aria-label="Choose vehicle profile photo" hidden onChange={onChange} name="photo" />
+      <button type="button" className="vehicle-profile-photo-edit" aria-label="Edit vehicle profile photo" onClick={() => inputRef.current?.click()}><Icon name="edit" size={18} /></button>
+    </div>
+  );
+}
+
 function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cancel', onSubmit, submitLabel, title, onValuesChange }) {
   const [values, setValues] = useState(() => valuesFromFields(fields, initialValues));
   const [submitting, setSubmitting] = useState(false);
@@ -5902,7 +5921,10 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
               value={values[field.name] ?? ''}
             />
           ) : null}
-          {['file', 'multi-file'].includes(field.type) ? (
+          {field.type === 'file' && field.profilePhoto ? (
+            <VehicleProfilePhoto file={values[field.name]} existingUrl={field.existingUrl} onChange={handleChange} />
+          ) : null}
+          {['file', 'multi-file'].includes(field.type) && !field.profilePhoto ? (
             <FileCabinet
               name={field.name}
               accept={field.accept}
@@ -7421,10 +7443,10 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   );
 }
 
-function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl = null, category = null) {
+function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl = null, category = null, profile = false) {
   const hubOptions = allHubs.map((hub) => ({ value: hub.name, label: hub.name }));
 
-  return [
+  const fields = [
     { label: 'Vehicle Name', name: 'vehicle_name', required: true, type: 'text', group: 'Vehicle identity' },
     { label: plateFieldLabel(domain), name: 'plate_number', required: true, type: 'text', maxLength: 10, group: 'Vehicle identity' },
     { label: 'Vehicle Type', name: 'category_id', options: lookups.categories ?? [], required: true, type: 'creatable-select', group: 'Vehicle identity',
@@ -7463,6 +7485,11 @@ function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl 
     // shown read-only on the profile, but had no way to actually be edited.
     { label: 'Remarks (optional)', name: 'remarks', type: 'textarea', group: 'Location & service availability' },
   ];
+  if (profile) {
+    const photo = fields.find((field) => field.name === 'photo');
+    return [{ ...photo, group: 'Vehicle profile', profilePhoto: true }, ...fields.filter((field) => !['photo', 'remarks'].includes(field.name))];
+  }
+  return fields;
 }
 
 function conditionFields(lookups) {
@@ -14040,7 +14067,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
       {editing ? (
         <section className="veh-card veh-edit-card">
           <div className="veh-card-head"><Icon name="edit" size={16} /><h4>Edit Vehicle Information</h4></div>
-          <div className="form-grid-2col veh-edit-body">
+          <div className="form-grid-2col veh-edit-body vehicle-profile-edit">
             <SmartForm
               fields={vehicleFields(
                 lookups,
@@ -14049,7 +14076,8 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
                   ?? vehicle.category?.domain
                   ?? 'Land',
                 vehicle.photo_url,
-                lookups.categories?.find((c) => String(c.category_id) === String(editCategoryId))
+                lookups.categories?.find((c) => String(c.category_id) === String(editCategoryId)),
+                true
               )}
               initialValues={vehicleWithCustomInitials(vehicle)}
               key={vehicle.vehicle_id}
@@ -14084,7 +14112,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
                 {customValueRows(vehicle, lookups)}
               </dl>
             </div>
-            {vehicle.remarks && <div className="veh-remarks"><span className="veh-remarks-label">Remarks</span><p>{vehicle.remarks}</p></div>}
           </section>
 
           <section className="veh-card veh-keydates vehicle-profile-operational">
