@@ -6537,12 +6537,6 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
       { label: 'Model', name: 'model', required: true, type: 'text' },
       { label: 'Year Model', name: 'year_model', required: true, type: 'number' },
       { label: 'Capacity', name: 'capacity', required: true, type: 'quantity', units: capacityUnits(domain) },
-      // Optional — without it, the per-vehicle reliability lens' lifetime-
-      // cost-vs-value (decommission signal) has nothing to compare against
-      // and is just skipped for this vehicle (production-readiness audit
-      // finding #7 — same field already existed on the Edit Vehicle form,
-      // just never on registration itself).
-      { label: 'Acquisition Cost (optional)', name: 'acquisition_cost', type: 'number', placeholder: 'e.g. 850000' },
       { label: 'Vehicle Color', name: 'vehicle_color', required: true, type: 'text' },
       ...vehicleDomainFields(domain),
       ...customFieldInputs(lookups.categories.find((c) => String(c.category_id) === String(wizardData.category_id))),
