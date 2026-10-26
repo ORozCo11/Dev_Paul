@@ -5244,130 +5244,10 @@ const SELECT_OR_OTHER_SENTINEL = '__other__';
 // e.g. Service Location: pick a known hub, or specify an outside repair shop.
 // Tracks "other mode" locally (not in the form's values), seeded from whether
 // the incoming value already fails to match any preset.
-// Same look/interaction as CreatableSelect's combobox — a single bordered
-// input opening a dropdown with a pinned "+ Add …" row — but for a small
-// fixed set of numeric presets (e.g. recurrence intervals). The custom value
-// is entered in a small popup form, like CreatableSelect's add-new modal;
-// nothing is persisted to a catalog, it's just a value on this one record.
-function SelectOrAddNumberField({ field, value, onChange }) {
-  const options = field.options ?? [];
-  const matchesPreset = options.some((o) => String(o?.value ?? o) === String(value ?? ''));
-  const isCustomActive = Boolean(value) && !matchesPreset;
-  const [open, setOpen] = useState(false);
-  // Non-null while the custom-value popup is open.
-  const [customDraft, setCustomDraft] = useState(null);
-  const [customError, setCustomError] = useState(null);
-  const containerRef = useRef(null);
-  const suffix = field.otherSuffix ?? '';
-  const addLabel = field.otherLabel ?? 'Add Custom Value';
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const handleOutsideClick = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [open]);
-
-  const customText = (v) => `Every ${v}${suffix ? ` ${suffix}` : ''}`;
-  const selectedLabel = matchesPreset
-    ? (options.find((o) => String(o?.value ?? o) === String(value ?? ''))?.label ?? '')
-    : (isCustomActive ? customText(value) : '');
-
-  const pick = (option) => {
-    onChange(String(option?.value ?? option ?? ''));
-    setOpen(false);
-  };
-  const openCustom = () => {
-    setCustomDraft(isCustomActive ? String(value) : '');
-    setCustomError(null);
-    setOpen(false);
-  };
-  const closeCustom = () => { setCustomDraft(null); setCustomError(null); };
-  const saveCustom = (e) => {
-    e.preventDefault();
-    // The popup is portaled, but React still bubbles its submit to the
-    // page's own form — stop it there.
-    e.stopPropagation();
-    const n = Number(customDraft);
-    const min = field.otherMin ?? 1;
-    const max = field.otherMax ?? Infinity;
-    if (!customDraft || !Number.isInteger(n) || n < min || n > max) {
-      setCustomError(`Enter a whole number from ${min} to ${max}.`);
-      return;
-    }
-    onChange(String(n));
-    closeCustom();
-  };
-
-  return (
-    <div className="creatable-select" ref={containerRef}>
-      <input
-        type="text"
-        readOnly
-        value={selectedLabel}
-        placeholder={field.placeholder ?? 'Select'}
-        required={field.required}
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
-      />
-      {open && (
-        <div className="creatable-select-panel">
-          <button type="button" className="creatable-select-option creatable-select-add creatable-select-add-pinned" onClick={openCustom}>
-            <Icon name="plus" size={13} /> {addLabel}
-          </button>
-          <div className="creatable-select-option-list">
-            {options.map((option, i) => (
-              <div key={option?.value != null ? option.value : `opt-${i}`} className="creatable-select-option-row">
-                <button type="button" className="creatable-select-option" onClick={() => pick(option)}>
-                  {option?.label ?? option}
-                </button>
-              </div>
-            ))}
-            {isCustomActive && (
-              <div className="creatable-select-option-row">
-                <button type="button" className="creatable-select-option" onClick={() => setOpen(false)}>
-                  {customText(value)} (custom)
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      <FormModal open={customDraft !== null} title={addLabel} onClose={closeCustom}>
-        <form className="smart-form" onSubmit={saveCustom} noValidate>
-          <label>
-            <span>{field.otherInputLabel ?? `Number of ${suffix || 'units'}`} <span className="required-asterisk">*</span></span>
-            <input
-              type="number"
-              autoFocus
-              min={field.otherMin}
-              max={field.otherMax}
-              step="1"
-              placeholder={field.otherPlaceholder ?? ''}
-              value={customDraft ?? ''}
-              onChange={(e) => { setCustomDraft(e.target.value); setCustomError(null); }}
-            />
-          </label>
-          {customError && <p className="form-field-error" role="alert" style={{ color: '#b91c1c', margin: 0, fontSize: '0.82rem' }}>{customError}</p>}
-          <div className="form-actions">
-            <button className="ghost-button" type="button" onClick={closeCustom}>Cancel</button>
-            <button className="primary-button" type="submit">Save</button>
-          </div>
-        </form>
-      </FormModal>
-    </div>
-  );
-}
 function SelectOrOtherField({ field, value, onChange }) {
   const options = field.options ?? [];
   const matchesPreset = options.some((o) => String(o?.value ?? o) === String(value ?? ''));
   const [otherMode, setOtherMode] = useState(Boolean(value) && !matchesPreset);
-
-  if (field.otherType === 'number') {
-    return <SelectOrAddNumberField field={field} value={value} onChange={onChange} />;
-  }
 
   return (
     <>
@@ -5756,6 +5636,9 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
               nameField={field.nameField}
               valueIsId={field.valueIsId}
               extraFields={field.extraFields}
+              inputType={field.inputType}
+              min={field.min}
+              max={field.max}
             />
           ) : null}
           {field.type === 'catalog-or-other' ? (
@@ -7740,25 +7623,18 @@ function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = fal
     // Recurring PM: completing this schedule auto-creates the next at the chosen
     // interval. Left blank = one-time (the default "Select" option).
     {
-      label: 'Repeat Every (optional)',
+      label: 'Repeat Every (months, optional)',
       name: 'recurrence_months',
       group: '2. Date & recurrence',
       fullWidth: true,
-      hint: 'Leave blank for a one-time schedule.',
-      type: 'select-or-other',
-      options: [
-        { value: 1, label: 'Month' },
-        { value: 3, label: 'Quarter (3 months)' },
-        { value: 6, label: '6 Months' },
-        { value: 12, label: 'Year' },
-      ],
-      otherLabel: 'Add Custom Month',
-      otherInputLabel: 'Repeat every how many months? (1–60)',
-      otherPlaceholder: 'e.g. 4',
-      otherSuffix: 'months',
-      otherType: 'number',
-      otherMin: 1,
-      otherMax: 60,
+      hint: 'Leave blank for a one-time schedule. Choose a number of months from 1 to 60.',
+      type: 'creatable-select',
+      options: ['1', '3', '6', '12'],
+      catalogEndpoint: '/recurrence-intervals',
+      newItemLabel: 'month interval',
+      inputType: 'number',
+      min: 1,
+      max: 60,
     },
     // A known hub, or "Other" for an outside repair shop not in that list.
     { label: 'Service Location', name: 'service_location', type: 'select-or-other', options: hubOptions, otherLabel: 'Other / External Shop', otherPlaceholder: 'e.g. Toyota Service Center', group: '3. Location & assignment' },
@@ -15887,6 +15763,7 @@ function CreatableSelect({
   // categories use {category_id, category_name} — read/write under these
   // keys instead, normalizing to {id, name} internally either way.
   idField = 'id', nameField = 'name',
+  inputType = 'text', min, max,
   // True when the field this drives (e.g. category_id) stores the
   // catalog row's id, not its name — value/onChange deal in ids, and the
   // displayed text is resolved by looking the id up in the catalog.
@@ -15910,7 +15787,7 @@ function CreatableSelect({
   // row keyed by idField/nameField (e.g. vehicle categories) — either way,
   // normalized to one {id, name} shape everything below works with.
   const normalizeItem = useCallback((raw) => (
-    typeof raw === 'string' ? { id: null, name: raw } : { ...raw, id: raw[idField] ?? null, name: raw[nameField] }
+    typeof raw === 'string' ? { id: null, name: raw } : { ...raw, id: raw[idField] ?? null, name: String(raw[nameField]) }
   ), [idField, nameField]);
   const [open, setOpen] = useState(false);
   // Only holds what's being typed while the panel is open — closed, the
@@ -15971,7 +15848,7 @@ function CreatableSelect({
         const remaining = items.filter((item) => item.id !== detail.item.id && item.name !== detail.previous?.name && item.name !== detail.item.name);
         return (detail.deleted ? remaining : [...remaining, detail.item]).sort((a, b) => a.name.localeCompare(b.name));
       });
-      const selected = valueIsId ? String(value) === String(detail.item.id) : value === (detail.previous?.name ?? detail.item.name);
+      const selected = valueIsId ? String(value) === String(detail.item.id) : String(value ?? '') === String(detail.previous?.name ?? detail.item.name);
       if (selected && detail.deleted) onChange(valueIsId ? null : '');
       else if (selected && detail.previous && !valueIsId) onChange(detail.item.name);
     };
@@ -16004,7 +15881,7 @@ function CreatableSelect({
   // for display — `value` itself is never text in that mode.
   const selectedItem = valueIsId ? catalogItems.find((o) => String(o.id) === String(value)) : null;
   const displayText = valueIsId ? (selectedItem?.name ?? '') : (value ?? '');
-  const text = open ? draftText : displayText;
+  const text = String(open ? draftText : displayText);
   const query = justOpened ? '' : text.trim().toLowerCase();
   const domainItems = optionDomain == null ? catalogItems : catalogItems.filter((item) => item.domain === optionDomain);
   const filtered = query ? domainItems.filter((o) => o.name.toLowerCase().includes(query)) : domainItems;
@@ -16049,6 +15926,10 @@ function CreatableSelect({
     const val = addModalName.trim();
     if (!val) {
       setAddModalError('Name is required.');
+      return;
+    }
+    if (inputType === 'number' && (!Number.isInteger(Number(val)) || Number(val) < min || Number(val) > max)) {
+      setAddModalError(`Enter a whole number from ${min} to ${max}.`);
       return;
     }
     const missingExtra = extraFields.find((f) => f.required && (addModalExtra[f.name] ?? '') === '');
@@ -16215,7 +16096,7 @@ function CreatableSelect({
           )}
           <label>
             <span>Name <span className="required-asterisk">*</span></span>
-            <input type="text" required autoFocus value={addModalName ?? ''} onChange={(e) => setAddModalName(e.target.value)} />
+            <input type={inputType} min={min} max={max} step={inputType === 'number' ? 1 : undefined} required autoFocus value={addModalName ?? ''} onChange={(e) => setAddModalName(e.target.value)} />
           </label>
           {extraFields.map((f) => (
             <label key={f.name}>
