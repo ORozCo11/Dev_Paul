@@ -1,8 +1,10 @@
 import VMSLogo from './VMSLogo';
 import Icon from './Icon';
+import ThemeToggle from './ThemeToggle';
 import { useContext, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContextObject';
+import '../PublicDarkMode.css';
 
 const roleRoutes = {
   Admin: '/admin',
@@ -34,7 +36,7 @@ export default function AuthHeader() {
   return (
     <header className="auth-page-header">
       <div className="auth-page-header-inner">
-        <Link to={dashboardPath ?? '/login'} className="auth-page-header-brand">
+        <Link to={dashboardPath ?? '/'} className="auth-page-header-brand">
           <VMSLogo variant="white" size={32} className="auth-page-header-gear" />
           <div className="auth-page-header-brand-text">
             <span className="vms-wordmark auth-page-header-wordmark">vms</span>
@@ -53,20 +55,24 @@ export default function AuthHeader() {
         </button>
         <div id="auth-page-menu" className={`auth-page-header-right${menuOpen ? ' is-open' : ''}`} onClick={(event) => { if (event.target.closest('a')) setOpenOn(null); }}>
           <nav className="auth-page-nav">
-            <Link to={dashboardPath ?? '/login'}>Home</Link>
+            <Link to={dashboardPath ?? '/'}>Home</Link>
             <Link to="/about">About</Link>
             <Link to="/developers">Team</Link>
             <Link to="/support">Support Center</Link>
           </nav>
-          {dashboardPath ? (
-            <Link to={dashboardPath} className="auth-page-header-login-btn">Back to Dashboard</Link>
-          ) : (
-            <>
-              <Link to="/register" className="auth-page-header-register-btn">Register</Link>
-              <Link to="/login" className="auth-page-header-login-btn">Login</Link>
-            </>
-          )}
+          <div className="auth-page-header-actions">
+            {dashboardPath ? (
+              <Link to={dashboardPath} className="auth-page-header-login-btn">Back to Dashboard</Link>
+            ) : (
+              <>
+                <Link to="/register" className="auth-page-header-register-btn">Register</Link>
+                <Link to="/login" className="auth-page-header-login-btn">Login</Link>
+              </>
+            )}
+          </div>
         </div>
+        {/* Outside the burger panel so phones can switch themes without opening the menu. */}
+        <div className="auth-page-theme"><ThemeToggle /></div>
       </div>
     </header>
   );
