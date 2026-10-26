@@ -6459,13 +6459,13 @@ const VEHICLE_WIZARD_STEP_LABELS = ['Basic Information', 'Specs', 'Photo & Locat
 const VEHICLE_WIZARD_STEP_ICONS = ['clipboard', 'wrench', 'pin'];
 
 function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
-  // Persisted across a route change and back (e.g. adding a new Vehicle
-  // Type mid-wizard opens its own page/modal) — see useDraftState.
-  const [step, setStep] = useDraftState('draft:new-vehicle:step', 1);
-  const [wizardData, setWizardData] = useDraftState('draft:new-vehicle:data', EMPTY_OBJ);
+  // Each new registration starts empty; keep entries only while this
+  // wizard is open so Next/Back preserves the current vehicle's inputs.
+  const [step, setStep] = useState(1);
+  const [wizardData, setWizardData] = useState(EMPTY_OBJ);
   const clearNewVehicleDraft = () => {
-    clearDraftState('draft:new-vehicle:step');
-    clearDraftState('draft:new-vehicle:data');
+    setStep(1);
+    setWizardData(EMPTY_OBJ);
   };
   // Live-tracks the in-progress Category pick within step 1 (before it's
   // merged into wizardData on "Next") so the Vehicle Type options can
