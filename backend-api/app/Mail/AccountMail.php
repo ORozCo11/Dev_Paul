@@ -7,6 +7,9 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mime\Email;
+use Symfony\Component\Mime\Part\DataPart;
+use Symfony\Component\Mime\Part\File;
 
 /** One class for every account email; each message is just its own markdown view in resources/views/emails. */
 class AccountMail extends Mailable
@@ -31,6 +34,16 @@ class AccountMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(subject: $this->subjectLine);
+    }
+
+    /** Inline gear logo for the mail header (referenced there as cid:vms-gear@vms). */
+    public function build(): static
+    {
+        return $this->withSymfonyMessage(fn (Email $message) => $message->addPart(
+            (new DataPart(new File(resource_path('images/vms-gear-white.png')), 'vms-gear.png', 'image/png'))
+                ->asInline()
+                ->setContentId('vms-gear@vms')
+        ));
     }
 
     public function content(): Content
