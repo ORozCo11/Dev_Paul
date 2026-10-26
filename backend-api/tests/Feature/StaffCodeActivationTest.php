@@ -139,7 +139,7 @@ class StaffCodeActivationTest extends TestCase
         Sanctum::actingAs($this->superAdmin, ['*']);
         $this->putJson("/api/superadmin/users/{$user->id}/activate")->assertOk();
 
-        $this->deleteJson("/api/superadmin/users/{$user->id}/reject")->assertOk();
+        $this->deleteJson("/api/superadmin/users/{$user->id}/reject", ['reason' => 'Could not verify', 'subject' => 'Not approved', 'message' => 'Sorry.'])->assertOk();
         $this->assertModelMissing($user);
     }
 

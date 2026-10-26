@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AccountMail;
 use App\Mail\ConcernReplyMail;
 use App\Models\ActivityLog;
 use App\Models\ConcernReport;
@@ -187,6 +188,22 @@ class SuperAdminControllerTest extends TestCase
     }
 
     #[Test]
+    public function rejecting_a_registration_emails_the_reason_before_deleting_it(): void
+    {
+        Mail::fake();
+        $pending = User::factory()->create(['name' => 'Juan Dela Cruz', 'role' => 'Admin', 'roles' => ['Admin'], 'is_active' => false, 'approved_at' => null]);
+        Sanctum::actingAs(User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]), ['*']);
+
+        // A reason is required, and nothing is deleted without it.
+        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject")->assertUnprocessable()->assertJsonValidationErrors(['reason', 'subject', 'message']);
+        $this->assertNotNull($pending->fresh());
+
+        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject", ['reason' => 'We could not confirm your appointment.', 'subject' => 'Your VMS registration was not approved', 'message' => 'We are sorry.'])->assertOk();
+        $this->assertNull($pending->fresh());
+        Mail::assertSent(AccountMail::class, fn (AccountMail $mail) => $mail->hasTo($pending->email) && $mail->template === 'rejected' && $mail->data['reason'] === 'We could not confirm your appointment.');
+    }
+
+    #[Test]
     public function only_a_super_admin_can_email_a_reporter(): void
     {
         Mail::fake();
@@ -227,7 +244,7 @@ class SuperAdminControllerTest extends TestCase
         $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'approved_at' => null, 'is_active' => false]);
 
         Sanctum::actingAs($superAdmin, ['*']);
-        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject")->assertOk();
+        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject", ['reason' => 'Could not verify', 'subject' => 'Not approved', 'message' => 'Sorry.'])->assertOk();
 
         $this->assertDatabaseMissing('users', ['id' => $pending->id]);
     }

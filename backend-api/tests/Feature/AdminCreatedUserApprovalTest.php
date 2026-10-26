@@ -73,7 +73,7 @@ class AdminCreatedUserApprovalTest extends TestCase
         $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'is_active' => false, 'approved_at' => null]);
         $this->actAsSuperAdmin();
 
-        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject")->assertOk();
+        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject", ['reason' => 'Could not verify', 'subject' => 'Not approved', 'message' => 'Sorry.'])->assertOk();
         $this->assertNull($pending->fresh());
     }
 

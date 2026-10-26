@@ -781,12 +781,20 @@ class SuperAdminController extends Controller
         // An approved first Admin who never entered their code was never live, so it can still be rejected.
         abort_if($user->is_active || ($user->approved_at !== null && !$user->awaiting_staff_code), 422, 'This account is active or was already approved at some point — deactivate it instead of rejecting.');
 
+        // The rejection email goes out first: if it fails the account stays, so the Super Admin can retry.
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:500'],
+            'subject' => ['required', 'string', 'max:150'],
+            'message' => ['required', 'string', 'max:5000'],
+        ]);
+        $this->sendMail($user, new AccountMail($user, $data['subject'], 'rejected', ['body' => $data['message'], 'reason' => $data['reason']]));
+
         $name = $user->name;
         $email = $user->email;
         $user->delete();
-        $this->log($request, 'Delete', "Rejected pending registration for {$name} ({$email}).");
+        $this->log($request, 'Delete', "Rejected pending registration for {$name} ({$email}) and emailed the reason: {$data['reason']}");
 
-        return response()->json(['message' => 'Registration rejected.']);
+        return response()->json(['message' => "{$name}'s registration was rejected and the rejection email was sent to {$email}."]);
     }
 
     /**
