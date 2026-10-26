@@ -1,6 +1,6 @@
 import ConcernLocationFields from '../components/ConcernLocationFields';
 import SearchableSelect from '../components/SearchableSelect';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import AuthHeader from '../components/AuthHeader';
 import AuthFooter from '../components/AuthFooter';
@@ -8,184 +8,35 @@ import Icon from '../components/Icon';
 import api from '../api/axios';
 
 const FAQ = [
-  {
-    q: 'What happens after I register as the first barangay Admin?',
-    a: 'Your account stays inactive until a Super Admin approves it. Submission creates an in-app notification and a Pending Approvals entry; there is no email or SMS alert. You can leave the page. Coordinate with your barangay office so the platform administrator can verify your appointment through a trusted contact. The staff code alone does not prove authority. If you cannot reach them, report an access concern below with your barangay and contact details; never send passwords or registration codes. Support is a follow-up channel, not a replacement for approval.',
-  },
-  {
-    q: 'How do I report a vehicle issue?',
-    a: "As a Custodian, open Report Vehicle Issue to review issues and propose a maintenance ticket. Describe the problem and the planned repair. An Admin reviews the proposal and assigns the work. Maintenance Personnel can submit technical issue reports for a Custodian to review.",
-  },
-  {
-    q: "How do I approve a new staff registration, and what's the Staff Registration Code?",
-    a: 'As an Admin, go to Users to review pending registrations. The Staff Registration Code (also on the Users page) is what a barangay hands out to real staff so a stranger can\'t reach your approval queue — regenerate it any time from the same page if it leaks.',
-  },
-  {
-    q: 'How do I log completed repairs?',
-    a: 'As Maintenance Personnel, open the work order from My Work Orders, record what was done and any parts used, then submit it for the Custodian to verify.',
-  },
-  {
-    q: 'Why does a vehicle show "NOT ready to respond" or "Check stale"?',
-    a: '"NOT ready" means the vehicle needs repair/is damaged, or its last readiness check failed. "Check stale" means it last passed but that check is over 24 hours old and should be re-verified before you trust it in an emergency.',
-  },
-  {
-    q: 'What do the different vehicle statuses mean?',
-    a: 'Available: available for service. Under Maintenance: currently being repaired. Inactive: temporarily out of service. Decommissioned: permanently retired.',
-  },
-  {
-    q: "I forgot my password or can't log in — what do I do?",
-    a: "There's no self-service password reset yet — contact your barangay's Admin, who can update your account. If your barangay's Admin account itself seems unreachable, use the form below to flag it."
-  },
+  { category: 'Account access', q: 'What happens after I register as the first barangay Admin?', a: 'Your account stays inactive until a Super Admin approves it. Submission creates an in-app notification and a Pending Approvals entry; there is no email or SMS alert. You can leave the page. Coordinate with your barangay office so the platform administrator can verify your appointment through a trusted contact. The staff code alone does not prove authority. If you cannot reach them, report an access concern below with your barangay and contact details; never send passwords or registration codes. Support is a follow-up channel, not a replacement for approval.' },
+  { category: 'Vehicle maintenance', q: 'How do I report a vehicle issue?', a: 'As a Custodian, open Report Vehicle Issue to review issues and propose a maintenance ticket. Describe the problem and the planned repair. An Admin reviews the proposal and assigns the work. Maintenance Personnel can submit technical issue reports for a Custodian to review.' },
+  { category: 'Account access', q: "How do I approve a new staff registration, and what's the Staff Registration Code?", a: "As an Admin, go to Users to review pending registrations. The Staff Registration Code (also on the Users page) is what a barangay hands out to real staff so a stranger can't reach your approval queue — regenerate it any time from the same page if it leaks." },
+  { category: 'Vehicle maintenance', q: 'How do I log completed repairs?', a: 'As Maintenance Personnel, open the work order from My Work Orders, record what was done and any parts used, then submit it for the Custodian to verify.' },
+  { category: 'Vehicle readiness', q: 'Why does a vehicle show "NOT ready to respond" or "Check stale"?', a: '"NOT ready" means the vehicle needs repair/is damaged, or its last readiness check failed. "Check stale" means it last passed but that check is over 24 hours old and should be re-verified before you trust it in an emergency.' },
+  { category: 'Vehicle readiness', q: 'What do the different vehicle statuses mean?', a: 'Available: available for service. Under Maintenance: currently being repaired. Inactive: temporarily out of service. Decommissioned: permanently retired.' },
+  { category: 'Account access', q: "I forgot my password or can't log in — what do I do?", a: "There's no self-service password reset yet — contact your barangay's Admin, who can update your account. If your barangay's Admin account itself seems unreachable, use the form below to flag it." },
 ];
+const CONCERN_TYPES = [{ value: 'Barangay Inactive', label: "My barangay's account seems inactive or unmanaged" }, { value: 'Suspected Fake Staff', label: "I don't think this person is really barangay staff" }, { value: 'Other', label: 'Something else' }];
 
-const CONCERN_TYPES = [
-  { value: 'Barangay Inactive', label: "My barangay's account seems inactive or unmanaged" },
-  { value: 'Suspected Fake Staff', label: "I don't think this person is really barangay staff" },
-  { value: 'Other', label: 'Something else' },
-];
-
-function FaqItem({ q, a }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className={`faq-item${open ? ' is-open' : ''}`}>
-      <button type="button" className="faq-question" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <span>{q}</span>
-        <Icon name="chevronDown" size={16} className="faq-chevron" />
-      </button>
-      {open && <p className="faq-answer">{a}</p>}
-    </div>
-  );
+function FaqItem({ q, a, open, onToggle }) {
+  const contentId = useId();
+  return <article className={`faq-item${open ? ' is-open' : ''}`}><button type="button" className="faq-question" onClick={onToggle} aria-expanded={open} aria-controls={contentId}><span>{q}</span><Icon name="chevronDown" size={18} className="faq-chevron" /></button><div id={contentId} className="faq-answer-wrap" hidden={!open}><p className="faq-answer">{a}</p></div></article>;
 }
 
 export default function Support() {
-  const [form, setForm] = useState({
-    concern_type: '',
-    province_name: '',
-    city_name: '',
-    barangay_name: '',
-    description: '',
-    reporter_name: '',
-    reporter_contact: '',
-  });
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState(null);
-  const location = useLocation();
+  const emptyForm = { concern_type: '', province_name: '', city_name: '', barangay_name: '', description: '', reporter_name: '', reporter_contact: '' };
+  const [form, setForm] = useState(emptyForm); const [query, setQuery] = useState(''); const [openQuestion, setOpenQuestion] = useState(null); const [submitting, setSubmitting] = useState(false); const [result, setResult] = useState(null); const location = useLocation();
+  const filteredFaqs = useMemo(() => { const needle = query.trim().toLowerCase(); return FAQ.filter(({ q, a, category }) => `${q} ${a} ${category}`.toLowerCase().includes(needle)); }, [query]);
+  const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  useEffect(() => { if (location.hash === '#contact') setTimeout(() => scrollTo('contact'), 50); }, [location.hash]);
+  const handleChange = (e) => setForm((current) => ({ ...current, [e.target.name]: e.target.value }));
+  const handleSubmit = async (e) => { e.preventDefault(); if (submitting) return; setResult(null); setSubmitting(true); try { const res = await api.post('/concern-reports', { ...form, description: form.concern_type === 'Other' ? form.description : '' }); setResult({ type: 'success', text: res.data.message || 'Your concern has been submitted.' }); setForm(emptyForm); } catch (error) { setResult({ type: 'error', text: error.response?.data?.message || 'Could not submit your concern. Please try again.' }); } finally { setSubmitting(false); } };
 
-  useEffect(() => {
-    if (location.hash !== '#contact') return;
-    // Wait a tick for layout to settle before scrolling — the target sits
-    // well below the fold, past the hero.
-    const id = setTimeout(() => {
-      document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 50);
-    return () => clearTimeout(id);
-  }, [location.hash]);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((current) => ({ ...current, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (submitting) return;
-    setResult(null);
-    setSubmitting(true);
-    try {
-      const res = await api.post('/concern-reports', form);
-      setResult({ type: 'success', text: res.data.message });
-      setForm({ concern_type: '', province_name: '', city_name: '', barangay_name: '', description: '', reporter_name: '', reporter_contact: '' });
-    } catch (error) {
-      setResult({
-        type: 'error',
-        text: error.response?.data?.message || 'Could not submit your concern. Please try again.',
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="auth-page-shell">
-      <AuthHeader />
-
-      <main className="auth-hero is-compact">
-        <div className="auth-hero-inner">
-          <p className="auth-hero-eyebrow">Barangay VMS</p>
-          <h1 className="auth-hero-title">Support Center</h1>
-          <p className="auth-hero-subtitle">
-            Answers to common questions, and a way to flag a real concern — like a
-            barangay account that's gone unmanaged, or someone who doesn't seem to
-            actually be barangay staff.
-          </p>
-        </div>
-      </main>
-
-      <section className="support-body">
-        <div className="support-body-inner">
-          <h2 className="support-section-title">Frequently Asked Questions</h2>
-          <div className="faq-list">
-            {FAQ.map((item) => <FaqItem key={item.q} {...item} />)}
-          </div>
-
-          <h2 className="support-section-title" id="contact">Report a Concern</h2>
-          <p className="support-section-subtitle">
-            Use this if a barangay's account seems dead, or you suspect someone
-            isn't really barangay staff. A platform administrator reviews every
-            submission.
-          </p>
-
-          <form className="auth-form auth-form-grid support-form" onSubmit={handleSubmit}>
-            <label className="auth-field auth-field-full">
-              <span>What's the concern?</span>
-              <div className="auth-input-wrapper auth-input-plain">
-                <SearchableSelect name="concern_type" value={form.concern_type} onChange={handleChange} required>
-                  <option value="" disabled>Select a concern type</option>
-                  {CONCERN_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </SearchableSelect>
-              </div>
-            </label>
-
-            <ConcernLocationFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
-
-            <label className="auth-field auth-field-full">
-              <span>Describe the concern</span>
-              <div className="auth-input-wrapper auth-input-plain">
-                <textarea
-                  name="description"
-                  value={form.description}
-                  onChange={handleChange}
-                  placeholder="What's happening, and why does it concern you?"
-                  required
-                  maxLength={2000}
-                />
-              </div>
-            </label>
-
-            <label className="auth-field">
-              <span>Your name (optional)</span>
-              <div className="auth-input-wrapper auth-input-plain">
-                <input type="text" name="reporter_name" value={form.reporter_name} onChange={handleChange} maxLength={255} />
-              </div>
-            </label>
-
-            <label className="auth-field">
-              <span>Email or phone (optional)</span>
-              <div className="auth-input-wrapper auth-input-plain">
-                <input type="text" name="reporter_contact" value={form.reporter_contact} onChange={handleChange} maxLength={255} />
-              </div>
-            </label>
-
-            {result && <p className={`notice ${result.type} auth-field-full`} role={result.type === 'error' ? 'alert' : 'status'}>{result.text}</p>}
-
-            <button className="primary-button auth-submit-btn auth-field-full" type="submit" disabled={submitting}>
-              {submitting ? 'Submitting…' : 'Submit Concern'}
-            </button>
-          </form>
-        </div>
-      </section>
-
-      <AuthFooter />
-    </div>
-  );
+  return <div className="auth-page-shell support-page"><AuthHeader /><main>
+    <section className="support-hero" aria-labelledby="support-title"><div className="support-hero-inner"><p className="support-kicker"><span className="vms-brand">VMS</span> Support Center</p><h1 id="support-title">How can we help you?</h1><p>Find clear answers about Barangay VMS, or safely let our platform team know about an account concern.</p><label className="support-search" htmlFor="support-search"><Icon name="search" size={21} /><span className="sr-only">Search frequently asked questions</span><input id="support-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search for answers, guides, or account help" />{query && <button type="button" aria-label="Clear search" onClick={() => setQuery('')}><Icon name="close" size={17} /></button>}</label></div></section>
+    <section className="support-content" aria-label="Support options"><div className="support-container">
+      <div className="support-nav-cards"><button className="support-nav-card" type="button" onClick={() => scrollTo('faq')}><span className="support-card-icon"><Icon name="document" size={23} /></span><span><strong>Help Guides</strong><small>Learn the main VMS tasks and workflows.</small></span><Icon name="chevronRight" size={18} /></button><button className="support-nav-card" type="button" onClick={() => scrollTo('faq')}><span className="support-card-icon"><Icon name="info" size={23} /></span><span><strong>Frequently Asked Questions</strong><small>Quick answers to common concerns.</small></span><Icon name="chevronRight" size={18} /></button><button className="support-nav-card" type="button" onClick={() => scrollTo('contact')}><span className="support-card-icon is-alert"><Icon name="flag" size={23} /></span><span><strong>Report a Concern</strong><small>Flag a suspicious or unmanaged account.</small></span><Icon name="chevronRight" size={18} /></button></div>
+      <section className="support-section" id="faq" aria-labelledby="faq-title"><div className="support-section-heading"><div><p className="support-kicker is-blue">Self-service support</p><h2 id="faq-title">Frequently asked questions</h2></div><span className="faq-count">{filteredFaqs.length} {filteredFaqs.length === 1 ? 'answer' : 'answers'}</span></div>{filteredFaqs.length ? <div className="faq-list">{filteredFaqs.map((item) => <FaqItem key={item.q} {...item} open={openQuestion === item.q} onToggle={() => setOpenQuestion((current) => current === item.q ? null : item.q)} />)}</div> : <div className="faq-empty"><Icon name="search" size={25} /><strong>No matching answers yet</strong><p>Try a different word, or report your concern below.</p><button type="button" onClick={() => { setQuery(''); scrollTo('contact'); }}>Report a concern</button></div>}</section>
+      <section className="support-section support-report" id="contact" aria-labelledby="contact-title"><div className="support-section-heading"><div><p className="support-kicker is-blue">Safe reporting</p><h2 id="contact-title">Report a concern</h2><p>Use this form for suspicious staff accounts or a barangay account that seems inactive. Please do not include passwords or registration codes.</p></div></div>{result?.type === 'success' ? <div className="support-success" role="status" aria-live="polite"><svg className="support-success-check" viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24" /><path d="M15 27l7.5 7.5L37.5 19" /></svg><h3>Concern submitted</h3><p>{result.text}</p><button className="support-success-again" type="button" onClick={() => setResult(null)}>Submit another concern</button></div> : <form className="auth-form auth-form-grid support-form" onSubmit={handleSubmit}><label className="auth-field auth-field-full"><span>What is the concern? <b aria-hidden="true">*</b></span><div className="auth-input-wrapper auth-input-plain"><SearchableSelect name="concern_type" value={form.concern_type} onChange={handleChange} required><option value="" disabled>Select a concern type</option>{CONCERN_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</SearchableSelect></div></label>{form.concern_type === 'Other' && <label className="auth-field auth-field-full"><span>Describe the concern <b aria-hidden="true">*</b></span><div className="auth-input-wrapper auth-input-plain"><textarea name="description" autoFocus value={form.description} onChange={handleChange} placeholder="Tell us what happened and why it concerns you." required minLength={10} maxLength={2000} /></div><small className="field-helper">{form.description.length}/2000 characters</small></label>}<ConcernLocationFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} /><label className="auth-field"><span>Your name <em>(optional)</em></span><div className="auth-input-wrapper auth-input-plain"><input type="text" name="reporter_name" value={form.reporter_name} onChange={handleChange} maxLength={255} placeholder="Name you would like to share" /></div></label><label className="auth-field"><span>Email or phone <em>(optional)</em></span><div className="auth-input-wrapper auth-input-plain"><input type="text" name="reporter_contact" value={form.reporter_contact} onChange={handleChange} maxLength={255} placeholder="For a follow-up, if needed" /></div></label>{result && <p className={`notice ${result.type} auth-field-full`} role={result.type === 'error' ? 'alert' : 'status'}>{result.text}</p>}<button className="primary-button auth-submit-btn auth-field-full" type="submit" disabled={submitting}>{submitting ? 'Submitting…' : 'Submit concern'}</button></form>}</section>
+    </div></section></main><AuthFooter /></div>;
 }

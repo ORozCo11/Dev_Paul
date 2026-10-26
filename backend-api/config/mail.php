@@ -115,4 +115,9 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    // The email header brand: gear + "vms" in Anta as one PNG. Embedding images (cid) got emails filtered by
+    // Gmail, so by default it is linked from the public repo, pinned to the commit that added it.
+    'inline_logo' => env('MAIL_INLINE_LOGO', false),
+    'logo_url' => env('MAIL_LOGO_URL', 'https://raw.githubusercontent.com/ORozCo11/V2-VMS/5bda905686ca278c200744e277ab9b14b07ccd5d/backend-api/resources/images/vms-email-brand.png'),
+
 ];

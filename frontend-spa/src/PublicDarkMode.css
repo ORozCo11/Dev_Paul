@@ -1,0 +1,153 @@
+/* Dark mode for the public pages (Home, About, Support and the shared header/footer).
+   Uses the same html[data-theme] switch as the workspace, set by the header's
+   ThemeToggle. Light mode is untouched: every rule here is dark-only. */
+
+html[data-theme="dark"] {
+  --public-bg: #0b1220;
+  --public-surface: #111a2e;
+  --public-surface-2: #16213a;
+  --public-border: #24324d;
+  --public-text: #e2e8f0;
+  --public-muted: #94a3b8;
+  --public-accent: #60a5fa;
+  --public-button: #2563eb;
+}
+
+/* Header and footer: deeper navy instead of bright royal blue. */
+html[data-theme="dark"] .auth-page-header { background: #0f1b3d; border-bottom: 1px solid #1e2b4f; }
+html[data-theme="dark"] .auth-page-header-gear { --gear-ring: #0f1b3d; }
+html[data-theme="dark"] .auth-page-header-register-btn { background: var(--public-button); border-color: var(--public-button); color: #ffffff; }
+html[data-theme="dark"] .auth-footer { background: #0f1b3d; border-top: 1px solid #1e2b4f; }
+html[data-theme="dark"] .auth-footer .vms-gear { --gear-ring: #0f1b3d; }
+html[data-theme="dark"] .auth-page-shell { background: var(--public-bg); }
+
+/* Home */
+html[data-theme="dark"] .home-page {
+  --home-navy: var(--public-text);
+  --home-bg: var(--public-bg);
+  --home-tint: #14213d;
+  --home-surface: var(--public-surface);
+  --home-muted: var(--public-muted);
+  --home-border: var(--public-border);
+  --home-blue: var(--public-accent);
+  --home-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.3);
+  --home-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 36px rgba(37, 99, 235, 0.25);
+}
+html[data-theme="dark"] .home-hero {
+  background:
+    radial-gradient(900px 420px at 15% -10%, rgba(37, 99, 235, 0.22), transparent 70%),
+    radial-gradient(800px 380px at 95% 10%, rgba(14, 165, 233, 0.12), transparent 70%),
+    linear-gradient(180deg, #0f1b36 0%, var(--public-bg) 78%);
+}
+html[data-theme="dark"] .home-eyebrow { background: rgba(59, 130, 246, 0.16); }
+html[data-theme="dark"] .home-highlights li,
+html[data-theme="dark"] .home-role li { color: #cbd5e1; }
+html[data-theme="dark"] .home-btn-primary { background: var(--public-button); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.35); }
+html[data-theme="dark"] .home-btn-primary:hover { background: #1d4ed8; }
+html[data-theme="dark"] .home-btn-secondary { border-color: #2a4170; }
+html[data-theme="dark"] .home-btn-secondary:hover { border-color: var(--public-accent); }
+html[data-theme="dark"] .home-browser { border-color: var(--public-border); background: var(--public-surface); box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5); }
+html[data-theme="dark"] .home-browser-bar { background: var(--public-surface-2); border-bottom-color: var(--public-border); }
+html[data-theme="dark"] .home-feature:hover { border-color: #2a4170; }
+html[data-theme="dark"] .home-step-badge { background: var(--public-button); box-shadow: 0 0 0 6px var(--home-surface), 0 8px 18px rgba(37, 99, 235, 0.35); }
+html[data-theme="dark"] .home-role-green { --tone: #4ade80; --tone-bg: rgba(34, 197, 94, 0.14); }
+html[data-theme="dark"] .home-role-amber { --tone: #fbbf24; --tone-bg: rgba(245, 158, 11, 0.14); }
+html[data-theme="dark"] .home-cta-inner { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45); }
+
+/* About */
+html[data-theme="dark"] .about-page {
+  --about-blue: var(--public-accent);
+  --about-bg: var(--public-bg);
+  --about-surface: var(--public-surface);
+  --about-text: var(--public-text);
+  --about-muted: var(--public-muted);
+  --about-border: var(--public-border);
+  --about-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.3);
+  --about-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 14px 32px rgba(37, 99, 235, 0.25);
+}
+html[data-theme="dark"] .about-hero { background: linear-gradient(135deg, #081530 0%, #12285e 50%, #1d4ed8 100%); }
+html[data-theme="dark"] .about-icon-tile { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+html[data-theme="dark"] .about-icon-tile.is-soft,
+html[data-theme="dark"] .about-step-who { background: #14213d; }
+html[data-theme="dark"] .about-step-who { color: #bfdbfe; }
+html[data-theme="dark"] .about-feature:hover { border-color: #2a4170; }
+html[data-theme="dark"] .about-step-marker { background: var(--public-surface); box-shadow: 0 0 0 6px var(--public-bg); }
+html[data-theme="dark"] .about-role { --role-soft: #14213d; }
+html[data-theme="dark"] .about-role.is-green { --role-accent: #4ade80; --role-soft: rgba(34, 197, 94, 0.12); }
+html[data-theme="dark"] .about-role.is-amber { --role-accent: #fbbf24; --role-soft: rgba(245, 158, 11, 0.12); }
+html[data-theme="dark"] .about-role.is-slate { --role-accent: #cbd5e1; --role-soft: rgba(148, 163, 184, 0.12); }
+html[data-theme="dark"] .about-role-duties li,
+html[data-theme="dark"] .about-check-list li { color: #cbd5e1; }
+html[data-theme="dark"] .about-dialog-close:hover { background: var(--public-surface-2); }
+
+/* Support Center */
+html[data-theme="dark"] .support-page,
+html[data-theme="dark"] .support-body { background: var(--public-bg); }
+html[data-theme="dark"] .support-hero { background: radial-gradient(circle at 85% 20%, rgba(59, 130, 246, 0.28), transparent 32%), linear-gradient(135deg, #081530 0%, #12285e 55%, #1d4ed8 100%); }
+html[data-theme="dark"] .support-search { background: var(--public-surface); border-color: var(--public-border); }
+html[data-theme="dark"] .support-search input { color: var(--public-text); }
+html[data-theme="dark"] .support-nav-card,
+html[data-theme="dark"] .support-report,
+html[data-theme="dark"] .faq-item,
+html[data-theme="dark"] .faq-empty { background: var(--public-surface); border-color: var(--public-border); box-shadow: none; }
+html[data-theme="dark"] .support-nav-card strong,
+html[data-theme="dark"] .support-section-heading h2,
+html[data-theme="dark"] .faq-empty strong,
+html[data-theme="dark"] .support-report h2,
+html[data-theme="dark"] .support-success h3 { color: var(--public-text); }
+html[data-theme="dark"] .support-nav-card small,
+html[data-theme="dark"] .support-section-heading p:not(.support-kicker),
+html[data-theme="dark"] .support-section-subtitle,
+html[data-theme="dark"] .support-success p { color: var(--public-muted); }
+html[data-theme="dark"] .support-section-heading .support-kicker,
+html[data-theme="dark"] .support-section-title { color: var(--public-accent); }
+html[data-theme="dark"] .faq-count { background: rgba(59, 130, 246, 0.16); color: #bfdbfe; }
+html[data-theme="dark"] .faq-question { background: var(--public-surface); color: var(--public-text); }
+html[data-theme="dark"] .faq-item.is-open .faq-question { background: #14213d; color: #bfdbfe; }
+html[data-theme="dark"] .faq-answer { color: #cbd5e1; }
+html[data-theme="dark"] .support-success-again { background: #14213d; border-color: #2a4170; color: #bfdbfe; }
+/* Form fields inside the dark report card. */
+html[data-theme="dark"] .support-report .auth-field > span { color: var(--public-accent); }
+html[data-theme="dark"] .support-report :is(.auth-input-plain input, .auth-input-plain select, .auth-input-plain textarea) {
+  background-color: var(--public-surface-2); border-color: var(--public-border); color: var(--public-text) !important;
+}
+html[data-theme="dark"] .support-report :is(input, textarea)::placeholder { color: #64748b; }
+html[data-theme="dark"] .support-report .concern-location-select:disabled { color: #64748b !important; }
+html[data-theme="dark"] .support-report .concern-location-select option { background: var(--public-surface); color: var(--public-text); }
+
+/* Login, Register, Privacy and Terms: cards and the register form panel. */
+/* The light theme pins these cards white with !important, so dark needs it too. */
+html[data-theme="dark"] .auth-page-shell :is(.auth-card, .auth-split-panel) { background: var(--public-surface) !important; color: var(--public-text); border: 1px solid var(--public-border); }
+html[data-theme="dark"] .auth-page-shell .auth-split-page { background: #05070d; }
+html[data-theme="dark"] .auth-page-shell .auth-login-heading { color: var(--public-accent) !important; }
+html[data-theme="dark"] .auth-page-shell .auth-card h1 { color: var(--public-text); }
+html[data-theme="dark"] .auth-page-shell .auth-field > span,
+html[data-theme="dark"] .register-page .auth-field > span { color: #cbd5e1; }
+html[data-theme="dark"] .auth-page-shell :is(.auth-remember, .register-intro, .register-step-help, .register-address-consent, .register-address-help small, .auth-subtitle) { color: var(--public-muted); }
+html[data-theme="dark"] .auth-page-shell :is(.register-step-title, .register-success-title) { color: var(--public-text); }
+html[data-theme="dark"] .auth-page-shell .register-success-text { color: #cbd5e1; }
+/* Text fields (the light theme forces dark text with !important). */
+html[data-theme="dark"] .auth-page-shell :is(.auth-input-plain input, .auth-input-plain select, .auth-input-plain textarea, .auth-input-wrapper input, .auth-input-wrapper select) {
+  background-color: var(--public-surface-2); border-color: var(--public-border); color: var(--public-text) !important;
+}
+html[data-theme="dark"] .auth-page-shell :is(input, textarea)::placeholder { color: #64748b; }
+html[data-theme="dark"] .auth-page-shell :is(.auth-input-plain, .auth-input-wrapper) :is(input, select, textarea):focus { border-color: var(--public-accent); }
+html[data-theme="dark"] .auth-page-shell .password-toggle-btn { color: var(--public-muted); }
+/* Register progress steps and boundary preview. */
+html[data-theme="dark"] .register-progress li { color: var(--public-muted); }
+html[data-theme="dark"] .register-progress li > span { background: var(--public-surface-2); border-color: var(--public-border); color: var(--public-muted); }
+html[data-theme="dark"] .register-progress .is-current { color: var(--public-accent); }
+html[data-theme="dark"] .register-progress .is-current > span { background: var(--public-button); border-color: var(--public-button); color: #ffffff; }
+html[data-theme="dark"] .register-progress .is-complete { color: #4ade80; }
+html[data-theme="dark"] .register-progress .is-complete > span { background: #16a34a; border-color: #16a34a; color: #ffffff; }
+html[data-theme="dark"] .register-boundary-preview { background: var(--public-surface-2); border-color: var(--public-border); }
+html[data-theme="dark"] .register-boundary-preview header { color: var(--public-text); }
+html[data-theme="dark"] .register-back-arrow { background: var(--public-surface-2); border-color: var(--public-border); color: var(--public-text); }
+/* Privacy and Terms (their light colors use !important). */
+html[data-theme="dark"] .auth-page-shell .policy-card { color: #cbd5e1 !important; }
+html[data-theme="dark"] .auth-page-shell .policy-card :is(h1, h2, h3, strong) { color: var(--public-text) !important; }
+html[data-theme="dark"] .auth-page-shell .policy-card .eyebrow { color: var(--public-accent) !important; }
+html[data-theme="dark"] .auth-page-shell .policy-card-logo-wordmark { color: var(--public-accent); }
+/* Staff code boxes in the "under verification" dialog. */
+html[data-theme="dark"] .staff-code-boxes input { background: var(--public-surface-2); border-color: #2a4170; box-shadow: none; color: var(--public-text); }
+html[data-theme="dark"] .staff-code-boxes input.is-filled { background: #14213d; border-color: var(--public-accent); }

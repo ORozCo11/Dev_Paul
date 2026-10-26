@@ -318,3 +318,11 @@ html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-sel
   html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-select,
   html:root[data-theme] .superadmin-shell .topbar .account-cascade .searchable-select > input[role="combobox"] { height:40px; min-height:40px; }
 }
+
+/* Reject registration dialog: reason box and quick-pick reasons. */
+.superadmin-shell .sa-email-form textarea.sa-reject-reason { min-height:76px; }
+.superadmin-shell .sa-reason-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:-4px; }
+.superadmin-shell .sa-reason-chips button { padding:6px 12px; border:1px solid var(--sa-border); border-radius:999px; background:var(--sa-surface); color:var(--sa-text); font:inherit; font-size:12.5px; text-align:left; cursor:pointer; }
+.superadmin-shell .sa-reason-chips button:hover { border-color:#fca5a5; }
+.superadmin-shell .sa-reason-chips button[aria-pressed="true"] { border-color:#dc2626; background:#fef2f2; color:#b91c1c; }
+.superadmin-shell .sa-email-form .danger-button { gap:8px; }
