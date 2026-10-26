@@ -13611,7 +13611,7 @@ function VehicleFiles({ vehicleId, canManage, onRequestConfirmation }) {
             )}
           </div>
         ) : (
-          <div className="file-card-empty"><Icon name="clipboard" size={18} /><span>No files yet. Vehicle documents and repair evidence will appear here.</span></div>
+          <div className="file-card-empty"><Icon name="clipboard" size={18} /><span>No files yet</span></div>
         )}
       </div>
       {modal}
