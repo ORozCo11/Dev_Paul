@@ -107,6 +107,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::post('/maintenance-types', [CatalogController::class, 'storeMaintenanceType']);
     Route::put('/maintenance-types/{maintenanceType}', [CatalogController::class, 'updateMaintenanceType']);
     Route::delete('/maintenance-types/{maintenanceType}', [CatalogController::class, 'destroyMaintenanceType']);
+    Route::get('/recurrence-intervals', [CatalogController::class, 'recurrenceIntervals']);
+    Route::post('/recurrence-intervals', [CatalogController::class, 'storeRecurrenceInterval']);
+    Route::put('/recurrence-intervals/{interval}', [CatalogController::class, 'updateRecurrenceInterval']);
+    Route::delete('/recurrence-intervals/{interval}', [CatalogController::class, 'destroyRecurrenceInterval']);
     Route::get('/reported-persons', [CatalogController::class, 'reportedPersons']);
     Route::post('/reported-persons', [CatalogController::class, 'storeReportedPerson']);
     Route::put('/reported-persons/{reportedPerson}', [CatalogController::class, 'updateReportedPerson']);

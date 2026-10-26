@@ -138,6 +138,36 @@ class CatalogController extends Controller
         return response()->noContent();
     }
 
+    public function recurrenceIntervals()
+    {
+        return DB::table('recurrence_intervals')->orderBy('name')->get();
+    }
+
+    public function storeRecurrenceInterval(Request $request)
+    {
+        $this->requireAbility($request, 'catalog.create');
+        $data = $request->validate(['name' => ['required', 'integer', 'min:1', 'max:60']]);
+        DB::table('recurrence_intervals')->insertOrIgnore(['name' => (int) $data['name']]);
+        return response()->json(DB::table('recurrence_intervals')->where('name', $data['name'])->first(), 201);
+    }
+
+    public function updateRecurrenceInterval(Request $request, int $interval)
+    {
+        $this->requireAbility($request, 'catalog.edit');
+        abort_unless(DB::table('recurrence_intervals')->where('id', $interval)->exists(), 404);
+        $data = $request->validate(['name' => ['required', 'integer', 'min:1', 'max:60', \Illuminate\Validation\Rule::unique('recurrence_intervals', 'name')->ignore($interval)]]);
+        // Catalog presets do not change the recurrence of existing schedules.
+        DB::table('recurrence_intervals')->where('id', $interval)->update(['name' => (int) $data['name']]);
+        return DB::table('recurrence_intervals')->where('id', $interval)->first();
+    }
+
+    public function destroyRecurrenceInterval(Request $request, int $interval)
+    {
+        $this->requireAbility($request, 'catalog.delete');
+        abort_unless(DB::table('recurrence_intervals')->where('id', $interval)->delete(), 404);
+        return response()->noContent();
+    }
+
     public function reportedPersons()
     {
         return ReportedPerson::orderBy('name')->get(['id', 'name']);

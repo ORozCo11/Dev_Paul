@@ -5231,130 +5231,10 @@ const SELECT_OR_OTHER_SENTINEL = '__other__';
 // e.g. Service Location: pick a known hub, or specify an outside repair shop.
 // Tracks "other mode" locally (not in the form's values), seeded from whether
 // the incoming value already fails to match any preset.
-// Same look/interaction as CreatableSelect's combobox — a single bordered
-// input opening a dropdown with a pinned "+ Add …" row — but for a small
-// fixed set of numeric presets (e.g. recurrence intervals). The custom value
-// is entered in a small popup form, like CreatableSelect's add-new modal;
-// nothing is persisted to a catalog, it's just a value on this one record.
-function SelectOrAddNumberField({ field, value, onChange }) {
-  const options = field.options ?? [];
-  const matchesPreset = options.some((o) => String(o?.value ?? o) === String(value ?? ''));
-  const isCustomActive = Boolean(value) && !matchesPreset;
-  const [open, setOpen] = useState(false);
-  // Non-null while the custom-value popup is open.
-  const [customDraft, setCustomDraft] = useState(null);
-  const [customError, setCustomError] = useState(null);
-  const containerRef = useRef(null);
-  const suffix = field.otherSuffix ?? '';
-  const addLabel = field.otherLabel ?? 'Add Custom Value';
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const handleOutsideClick = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [open]);
-
-  const customText = (v) => `Every ${v}${suffix ? ` ${suffix}` : ''}`;
-  const selectedLabel = matchesPreset
-    ? (options.find((o) => String(o?.value ?? o) === String(value ?? ''))?.label ?? '')
-    : (isCustomActive ? customText(value) : '');
-
-  const pick = (option) => {
-    onChange(String(option?.value ?? option ?? ''));
-    setOpen(false);
-  };
-  const openCustom = () => {
-    setCustomDraft(isCustomActive ? String(value) : '');
-    setCustomError(null);
-    setOpen(false);
-  };
-  const closeCustom = () => { setCustomDraft(null); setCustomError(null); };
-  const saveCustom = (e) => {
-    e.preventDefault();
-    // The popup is portaled, but React still bubbles its submit to the
-    // page's own form — stop it there.
-    e.stopPropagation();
-    const n = Number(customDraft);
-    const min = field.otherMin ?? 1;
-    const max = field.otherMax ?? Infinity;
-    if (!customDraft || !Number.isInteger(n) || n < min || n > max) {
-      setCustomError(`Enter a whole number from ${min} to ${max}.`);
-      return;
-    }
-    onChange(String(n));
-    closeCustom();
-  };
-
-  return (
-    <div className="creatable-select" ref={containerRef}>
-      <input
-        type="text"
-        readOnly
-        value={selectedLabel}
-        placeholder={field.placeholder ?? 'Select'}
-        required={field.required}
-        onFocus={() => setOpen(true)}
-        onClick={() => setOpen(true)}
-      />
-      {open && (
-        <div className="creatable-select-panel">
-          <button type="button" className="creatable-select-option creatable-select-add creatable-select-add-pinned" onClick={openCustom}>
-            <Icon name="plus" size={13} /> {addLabel}
-          </button>
-          <div className="creatable-select-option-list">
-            {options.map((option, i) => (
-              <div key={option?.value != null ? option.value : `opt-${i}`} className="creatable-select-option-row">
-                <button type="button" className="creatable-select-option" onClick={() => pick(option)}>
-                  {option?.label ?? option}
-                </button>
-              </div>
-            ))}
-            {isCustomActive && (
-              <div className="creatable-select-option-row">
-                <button type="button" className="creatable-select-option" onClick={() => setOpen(false)}>
-                  {customText(value)} (custom)
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-      <FormModal open={customDraft !== null} title={addLabel} onClose={closeCustom}>
-        <form className="smart-form" onSubmit={saveCustom} noValidate>
-          <label>
-            <span>{field.otherInputLabel ?? `Number of ${suffix || 'units'}`} <span className="required-asterisk">*</span></span>
-            <input
-              type="number"
-              autoFocus
-              min={field.otherMin}
-              max={field.otherMax}
-              step="1"
-              placeholder={field.otherPlaceholder ?? ''}
-              value={customDraft ?? ''}
-              onChange={(e) => { setCustomDraft(e.target.value); setCustomError(null); }}
-            />
-          </label>
-          {customError && <p className="form-field-error" role="alert" style={{ color: '#b91c1c', margin: 0, fontSize: '0.82rem' }}>{customError}</p>}
-          <div className="form-actions">
-            <button className="ghost-button" type="button" onClick={closeCustom}>Cancel</button>
-            <button className="primary-button" type="submit">Save</button>
-          </div>
-        </form>
-      </FormModal>
-    </div>
-  );
-}
 function SelectOrOtherField({ field, value, onChange }) {
   const options = field.options ?? [];
   const matchesPreset = options.some((o) => String(o?.value ?? o) === String(value ?? ''));
   const [otherMode, setOtherMode] = useState(Boolean(value) && !matchesPreset);
-
-  if (field.otherType === 'number') {
-    return <SelectOrAddNumberField field={field} value={value} onChange={onChange} />;
-  }
 
   return (
     <>
@@ -5513,6 +5393,25 @@ function SmartForm({ initialValues = EMPTY_OBJ, ...props }) {
   // Reset only when the actual record/defaults change. Conditional fields
   // and unrelated parent renders must preserve typed values and File objects.
   return <SmartFormFields key={JSON.stringify(initialValues)} initialValues={initialValues} {...props} />;
+}
+
+function VehicleProfilePhoto({ file, existingUrl, onChange }) {
+  const [preview, setPreview] = useState(null);
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (!isFile(file)) { setPreview(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const src = preview ?? (existingUrl ? resolvePhotoUrl(existingUrl) : null);
+  return (
+    <div className="vehicle-profile-photo">
+      {src ? <img src={src} alt="Vehicle profile" /> : <div className="vehicle-profile-photo-empty"><Icon name="vehicle" size={40} /><span>No vehicle photo</span></div>}
+      <input ref={inputRef} type="file" accept="image/*" aria-label="Choose vehicle profile photo" hidden onChange={onChange} name="photo" />
+      <button type="button" className="vehicle-profile-photo-edit" aria-label="Edit vehicle profile photo" onClick={() => inputRef.current?.click()}><Icon name="edit" size={18} /></button>
+    </div>
+  );
 }
 
 function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cancel', onSubmit, submitLabel, title, onValuesChange }) {
@@ -5725,6 +5624,9 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
               nameField={field.nameField}
               valueIsId={field.valueIsId}
               extraFields={field.extraFields}
+              inputType={field.inputType}
+              min={field.min}
+              max={field.max}
             />
           ) : null}
           {field.type === 'catalog-or-other' ? (
@@ -5890,7 +5792,10 @@ function SmartFormFields({ fields, initialValues, onCancel, cancelLabel = 'Cance
               value={values[field.name] ?? ''}
             />
           ) : null}
-          {['file', 'multi-file'].includes(field.type) ? (
+          {field.type === 'file' && field.profilePhoto ? (
+            <VehicleProfilePhoto file={values[field.name]} existingUrl={field.existingUrl} onChange={handleChange} />
+          ) : null}
+          {['file', 'multi-file'].includes(field.type) && !field.profilePhoto ? (
             <FileCabinet
               name={field.name}
               accept={field.accept}
@@ -6620,20 +6525,15 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
       { label: 'Model', name: 'model', required: true, type: 'text' },
       { label: 'Year Model', name: 'year_model', required: true, type: 'number' },
       { label: 'Capacity', name: 'capacity', required: true, type: 'quantity', units: capacityUnits(domain) },
-      // Optional — without it, the per-vehicle reliability lens' lifetime-
-      // cost-vs-value (decommission signal) has nothing to compare against
-      // and is just skipped for this vehicle (production-readiness audit
-      // finding #7 — same field already existed on the Edit Vehicle form,
-      // just never on registration itself).
-      { label: 'Acquisition Cost (optional)', name: 'acquisition_cost', type: 'number', placeholder: 'e.g. 850000' },
       { label: 'Vehicle Color', name: 'vehicle_color', required: true, type: 'text' },
       ...vehicleDomainFields(domain),
       ...customFieldInputs(lookups.categories.find((c) => String(c.category_id) === String(wizardData.category_id))),
     ],
     3: [
-      { label: 'Vehicle Photo', name: 'photo', accept: 'image/*', type: 'file', compactFile: true },
+      { label: 'Vehicle Photo', name: 'photo', accept: 'image/*', type: 'file', profilePhoto: true, group: 'Vehicle profile' },
+      { label: 'Vehicle Documents', name: 'documents', type: 'multi-file', accept: '.jpg,.jpeg,.png,.pdf,.doc,.docx', group: 'Vehicle profile' },
       {
-        label: 'Current Location', name: 'current_location', options: allHubs, required: true, type: 'creatable-select',
+        group: 'Current location', label: 'Current Location', name: 'current_location', options: allHubs, required: true, type: 'creatable-select',
         newItemLabel: 'location', catalogEndpoint: '/hubs', idField: 'hub_id', nameField: 'name',
         // A hub needs real coordinates to ever show up on the map, so
         // unlike Vehicle Type's Domain (a plain preset dropdown), these are
@@ -6648,16 +6548,15 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
         // rather than as a separate full-width row, so it sits directly
         // beneath the dropdown and top-aligns with the photo box beside it
         // instead of leaving a gap where a taller sibling row would go.
-        inlineExtra: (vals) => {
+        extra: (vals) => {
           const hub = allHubs.find((h) => h.name === vals.current_location);
           return hub ? (
-            <div className="veh-map-wrap" style={{ height: 220 }}>
+            <div className="veh-map-wrap" style={{ height: 500 }}>
               <VehicleLocationMap lat={hub.lat} lng={hub.lng} label={hub.name} />
             </div>
           ) : null;
         },
       },
-      { label: 'Remarks (optional)', name: 'remarks', type: 'textarea' },
     ],
   };
 
@@ -6714,7 +6613,7 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
           );
         })}
       </div>
-      <div className={`form-grid-2col${step === 3 ? ' wizard-photo-location-grid' : ''}`}>
+      <div className={`form-grid-2col${step === 3 ? ' wizard-photo-location-grid vehicle-profile-edit' : ''}`}>
         <SmartForm
           fields={stepFields[step]}
           initialValues={wizardData}
@@ -7409,10 +7308,10 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
   );
 }
 
-function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl = null, category = null) {
+function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl = null, category = null, profile = false) {
   const hubOptions = allHubs.map((hub) => ({ value: hub.name, label: hub.name }));
 
-  return [
+  const fields = [
     { label: 'Vehicle Name', name: 'vehicle_name', required: true, type: 'text', group: 'Vehicle identity' },
     { label: plateFieldLabel(domain), name: 'plate_number', required: true, type: 'text', maxLength: 10, group: 'Vehicle identity' },
     { label: 'Vehicle Type', name: 'category_id', options: lookups.categories ?? [], required: true, type: 'creatable-select', group: 'Vehicle identity',
@@ -7451,6 +7350,11 @@ function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl 
     // shown read-only on the profile, but had no way to actually be edited.
     { label: 'Remarks (optional)', name: 'remarks', type: 'textarea', group: 'Location & service availability' },
   ];
+  if (profile) {
+    const photo = fields.find((field) => field.name === 'photo');
+    return [{ ...photo, group: 'Vehicle profile', profilePhoto: true }, ...fields.filter((field) => !['photo', 'remarks'].includes(field.name))];
+  }
+  return fields;
 }
 
 function conditionFields(lookups, editing = false) {
@@ -7706,25 +7610,18 @@ function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = fal
     // Recurring PM: completing this schedule auto-creates the next at the chosen
     // interval. Left blank = one-time (the default "Select" option).
     {
-      label: 'Repeat Every (optional)',
+      label: 'Repeat Every (months, optional)',
       name: 'recurrence_months',
       group: '2. Date & recurrence',
       fullWidth: true,
-      hint: 'Leave blank for a one-time schedule.',
-      type: 'select-or-other',
-      options: [
-        { value: 1, label: 'Month' },
-        { value: 3, label: 'Quarter (3 months)' },
-        { value: 6, label: '6 Months' },
-        { value: 12, label: 'Year' },
-      ],
-      otherLabel: 'Add Custom Month',
-      otherInputLabel: 'Repeat every how many months? (1–60)',
-      otherPlaceholder: 'e.g. 4',
-      otherSuffix: 'months',
-      otherType: 'number',
-      otherMin: 1,
-      otherMax: 60,
+      hint: 'Leave blank for a one-time schedule. Choose a number of months from 1 to 60.',
+      type: 'creatable-select',
+      options: ['1', '3', '6', '12'],
+      catalogEndpoint: '/recurrence-intervals',
+      newItemLabel: 'month interval',
+      inputType: 'number',
+      min: 1,
+      max: 60,
     },
     // A known hub, or "Other" for an outside repair shop not in that list.
     { label: 'Service Location', name: 'service_location', type: 'select-or-other', options: hubOptions, otherLabel: 'Other / External Shop', otherPlaceholder: 'e.g. Toyota Service Center', group: '3. Location & assignment' },
@@ -13516,7 +13413,7 @@ function VehicleFiles({ vehicleId, canManage, onRequestConfirmation }) {
             )}
           </div>
         ) : (
-          <div className="file-card-empty"><Icon name="clipboard" size={18} /><span>No files yet. Vehicle documents and repair evidence will appear here.</span></div>
+          <div className="file-card-empty"><Icon name="clipboard" size={18} /><span>No files yet</span></div>
         )}
       </div>
       {modal}
@@ -13972,7 +13869,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
       {editing ? (
         <section className="veh-card veh-edit-card">
           <div className="veh-card-head"><Icon name="edit" size={16} /><h4>Edit Vehicle Information</h4></div>
-          <div className="form-grid-2col veh-edit-body">
+          <div className="form-grid-2col veh-edit-body vehicle-profile-edit">
             <SmartForm
               fields={vehicleFields(
                 lookups,
@@ -13981,7 +13878,8 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
                   ?? vehicle.category?.domain
                   ?? 'Land',
                 vehicle.photo_url,
-                lookups.categories?.find((c) => String(c.category_id) === String(editCategoryId))
+                lookups.categories?.find((c) => String(c.category_id) === String(editCategoryId)),
+                true
               )}
               initialValues={vehicleWithCustomInitials(vehicle)}
               key={vehicle.vehicle_id}
@@ -14016,7 +13914,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
                 {customValueRows(vehicle, lookups)}
               </dl>
             </div>
-            {vehicle.remarks && <div className="veh-remarks"><span className="veh-remarks-label">Remarks</span><p>{vehicle.remarks}</p></div>}
           </section>
 
           <section className="veh-card veh-keydates vehicle-profile-operational">
@@ -15816,6 +15713,7 @@ function CreatableSelect({
   // categories use {category_id, category_name} — read/write under these
   // keys instead, normalizing to {id, name} internally either way.
   idField = 'id', nameField = 'name',
+  inputType = 'text', min, max,
   // True when the field this drives (e.g. category_id) stores the
   // catalog row's id, not its name — value/onChange deal in ids, and the
   // displayed text is resolved by looking the id up in the catalog.
@@ -15839,7 +15737,7 @@ function CreatableSelect({
   // row keyed by idField/nameField (e.g. vehicle categories) — either way,
   // normalized to one {id, name} shape everything below works with.
   const normalizeItem = useCallback((raw) => (
-    typeof raw === 'string' ? { id: null, name: raw } : { ...raw, id: raw[idField] ?? null, name: raw[nameField] }
+    typeof raw === 'string' ? { id: null, name: raw } : { ...raw, id: raw[idField] ?? null, name: String(raw[nameField]) }
   ), [idField, nameField]);
   const [open, setOpen] = useState(false);
   // Only holds what's being typed while the panel is open — closed, the
@@ -15900,7 +15798,7 @@ function CreatableSelect({
         const remaining = items.filter((item) => item.id !== detail.item.id && item.name !== detail.previous?.name && item.name !== detail.item.name);
         return (detail.deleted ? remaining : [...remaining, detail.item]).sort((a, b) => a.name.localeCompare(b.name));
       });
-      const selected = valueIsId ? String(value) === String(detail.item.id) : value === (detail.previous?.name ?? detail.item.name);
+      const selected = valueIsId ? String(value) === String(detail.item.id) : String(value ?? '') === String(detail.previous?.name ?? detail.item.name);
       if (selected && detail.deleted) onChange(valueIsId ? null : '');
       else if (selected && detail.previous && !valueIsId) onChange(detail.item.name);
     };
@@ -15933,7 +15831,7 @@ function CreatableSelect({
   // for display — `value` itself is never text in that mode.
   const selectedItem = valueIsId ? catalogItems.find((o) => String(o.id) === String(value)) : null;
   const displayText = valueIsId ? (selectedItem?.name ?? '') : (value ?? '');
-  const text = open ? draftText : displayText;
+  const text = String(open ? draftText : displayText);
   const query = justOpened ? '' : text.trim().toLowerCase();
   const domainItems = optionDomain == null ? catalogItems : catalogItems.filter((item) => item.domain === optionDomain);
   const filtered = query ? domainItems.filter((o) => o.name.toLowerCase().includes(query)) : domainItems;
@@ -15978,6 +15876,10 @@ function CreatableSelect({
     const val = addModalName.trim();
     if (!val) {
       setAddModalError('Name is required.');
+      return;
+    }
+    if (inputType === 'number' && (!Number.isInteger(Number(val)) || Number(val) < min || Number(val) > max)) {
+      setAddModalError(`Enter a whole number from ${min} to ${max}.`);
       return;
     }
     const missingExtra = extraFields.find((f) => f.required && (addModalExtra[f.name] ?? '') === '');
@@ -16144,7 +16046,7 @@ function CreatableSelect({
           )}
           <label>
             <span>Name <span className="required-asterisk">*</span></span>
-            <input type="text" required autoFocus value={addModalName ?? ''} onChange={(e) => setAddModalName(e.target.value)} />
+            <input type={inputType} min={min} max={max} step={inputType === 'number' ? 1 : undefined} required autoFocus value={addModalName ?? ''} onChange={(e) => setAddModalName(e.target.value)} />
           </label>
           {extraFields.map((f) => (
             <label key={f.name}>

@@ -16307,6 +16307,14 @@ html .schedule-panel-header .local-search-input,
 html .schedule-panel-header .view-dropdown-btn,
 html .schedule-panel-header .export-btn { border-color: #bfdbfe; background: #fff; color: #174ea6; }
 html .schedule-panel-header .icon-add-btn { border-color: #fff; background: #fff; color: #1d4ed8; }
+html .schedule-panel-header .icon-add-btn:hover,
+html .schedule-panel-header .icon-add-btn:focus-visible {
+  background: #1d4ed8;
+  border-color: #fff;
+  color: #fff;
+}
+html .schedule-panel-header .icon-add-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
 
 html[data-theme] .ticket-card-grid .sch-card {
   background: #fff;
@@ -16831,3 +16839,44 @@ html .maintenance-record-source .maintenance-schedule { background: #ede9fe; bor
 .support-success-again:hover { background: #dbeafe; }
 .support-success-again:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
 .sa-email-sent { display: inline-flex; align-items: center; justify-content: center; color: #16a34a; background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 10px; cursor: default; }
+/* Vehicle profile: photo and identity, then full-width specifications. */
+.vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(1) { grid-column: 1; }
+.vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(2) { grid-column: 2; }
+.vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(3),
+.vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(4) { grid-column: 1 / -1; }
+.vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(2) .form-group-body,
+.vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(4) .form-group-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.vehicle-profile-edit .vehicle-profile-photo { position: relative; margin-top: 12px; width: 100%; height: 220px; }
+.vehicle-profile-edit .vehicle-profile-photo img, .vehicle-profile-edit .vehicle-profile-photo-empty { display: block; width: 100%; height: 100%; border-radius: 10px; object-fit: cover; }
+.vehicle-profile-edit .vehicle-profile-photo-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--surface-alt, #eff6ff); color: var(--primary, #2563eb); }
+.vehicle-profile-photo-edit { position: absolute; bottom: 10px; right: 10px; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #bfdbfe; background: #fff; color: #2563eb; cursor: pointer; box-shadow: 0 2px 8px #0002; }
+.vehicle-profile-photo-edit:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+@media (max-width: 720px) {
+  .form-grid-2col.vehicle-profile-edit.veh-edit-body .smart-form { grid-template-columns: minmax(0, 1fr); }
+  .vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(n) { grid-column: 1 / -1; }
+  .vehicle-profile-edit.veh-edit-body .smart-form > .form-group:nth-of-type(n) .form-group-body { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Profile field labels and values, with operational values aligned right. */
+.vehicle-profile-overview .vehicle-profile-specs dt,
+.vehicle-profile-page .vehicle-profile-status-item > span:first-child,
+.vehicle-profile-page .vehicle-profile-keydates dt { color: var(--text-strong, #0f172a); }
+.vehicle-profile-overview .vehicle-profile-specs dd,
+.vehicle-profile-page .vehicle-profile-keydates dd,
+.vehicle-profile-page .vehicle-profile-keydates dd .muted,
+.vehicle-profile-page .vehicle-profile-keydates dd .vehicle-profile-ticket-link { color: var(--text-muted, #64748b); }
+.vehicle-profile-page .vehicle-profile-keydates > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.vehicle-profile-page .vehicle-profile-keydates dt { margin-bottom: 0; min-width: 0; }
+.vehicle-profile-page .vehicle-profile-keydates dd { min-width: 0; text-align: right; }
+.vehicle-profile-page .vehicle-profile-keydates .vehicle-profile-ticket-link { justify-content: flex-end; text-align: right; }
+
+/* Registration photo/documents alongside the location picker and map. */
+.form-grid-2col.wizard-photo-location-grid .smart-form { grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); align-items: start; gap: 18px; }
+.wizard-photo-location-grid .form-group { min-width: 0; padding: 18px; border: 1px solid #dce7f4; border-radius: 12px; background: var(--surface, #fff); }
+.wizard-photo-location-grid .form-group-title { margin: 0 0 16px; font-size: .8rem; color: var(--text-strong, #0f172a); }
+.wizard-photo-location-grid .form-group-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.wizard-photo-location-grid .veh-map-wrap { width: 100%; }
+.wizard-photo-location-grid .smart-form > .form-actions { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .form-grid-2col.wizard-photo-location-grid .smart-form { grid-template-columns: minmax(0, 1fr); }
+}
