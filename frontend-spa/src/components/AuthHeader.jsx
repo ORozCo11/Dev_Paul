@@ -34,7 +34,7 @@ export default function AuthHeader() {
   return (
     <header className="auth-page-header">
       <div className="auth-page-header-inner">
-        <Link to={dashboardPath ?? '/login'} className="auth-page-header-brand">
+        <Link to={dashboardPath ?? '/'} className="auth-page-header-brand">
           <VMSLogo variant="white" size={32} className="auth-page-header-gear" />
           <div className="auth-page-header-brand-text">
             <span className="vms-wordmark auth-page-header-wordmark">vms</span>
@@ -53,7 +53,7 @@ export default function AuthHeader() {
         </button>
         <div id="auth-page-menu" className={`auth-page-header-right${menuOpen ? ' is-open' : ''}`} onClick={(event) => { if (event.target.closest('a')) setOpenOn(null); }}>
           <nav className="auth-page-nav">
-            <Link to={dashboardPath ?? '/login'}>Home</Link>
+            <Link to={dashboardPath ?? '/'}>Home</Link>
             <Link to="/about">About</Link>
             <Link to="/developers">Team</Link>
             <Link to="/support">Support Center</Link>
