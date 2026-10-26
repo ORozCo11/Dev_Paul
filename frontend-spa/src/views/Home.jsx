@@ -1,4 +1,4 @@
-import { useContext } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import AuthHeader from '../components/AuthHeader';
 import AuthFooter from '../components/AuthFooter';
@@ -63,11 +63,41 @@ const ROLES = [
 ];
 
 export default function Home() {
+  const pageRef = useRef(null);
   const { user } = useContext(AuthContext);
   const dashboardPath = user ? (roleRoutes[user.role] ?? '/admin') : null;
 
+  useEffect(() => {
+    const root = pageRef.current;
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (!root || !('IntersectionObserver' in window)) return undefined;
+    const elements = root.querySelectorAll('.home-section-head, .home-feature, .home-timeline, .home-timeline > li, .home-role, .home-role-note, .home-cta-inner, .auth-footer');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(({ target, isIntersecting }) => {
+        if (!isIntersecting) return;
+        target.classList.remove('home-reveal-pending');
+        target.classList.add('home-revealed');
+        observer.unobserve(target);
+      });
+    }, { threshold: 0.08 });
+    const revealAll = () => elements.forEach((element) => element.classList.remove('home-reveal-pending'));
+    const setup = () => {
+      observer.disconnect();
+      if (preference.matches) { revealAll(); return; }
+      elements.forEach((element) => {
+        if (element.classList.contains('home-revealed')) return;
+        // Only prepare offscreen content; visible content never flashes away.
+        if (element.getBoundingClientRect().top > window.innerHeight) element.classList.add('home-reveal-pending');
+        observer.observe(element);
+      });
+    };
+    setup();
+    preference.addEventListener('change', setup);
+    return () => { observer.disconnect(); revealAll(); preference.removeEventListener('change', setup); };
+  }, []);
+
   return (
-    <div className="auth-page-shell home-page">
+    <div className="auth-page-shell home-page" ref={pageRef}>
       <AuthHeader />
       <main id="main-content">
         <section className="home-hero" aria-labelledby="home-title">
