@@ -117,3 +117,31 @@ html .ticket-create-form .ticket-external-grid label:last-child { grid-column:au
 
 html .ticket-create-form > .ticket-create-header { min-width:0; max-width:100%; }
 html .ticket-create-form > .ticket-create-header p { max-width:100%; }
+
+/* Keep the vehicle panel aligned with the adjacent repair details. */
+@media (min-width: 901px) {
+  html .smart-form.ticket-create-form > .ticket-vehicle-section {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-self: stretch;
+    height: auto;
+    min-height: 100%;
+    box-sizing: border-box;
+  }
+  html .ticket-create-form > .ticket-vehicle-section > .veh-card-head { flex-shrink: 0; }
+  html .smart-form.ticket-create-form > .ticket-vehicle-section > .ticket-vehicle-grid {
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: stretch;
+  }
+  html .smart-form.ticket-create-form .ticket-vehicle-grid > .ticket-preview-card--lg {
+    align-self: stretch;
+    min-height: 280px;
+    justify-content: flex-start;
+  }
+  html .smart-form.ticket-create-form .ticket-vehicle-grid > .ticket-preview-card--lg.is-empty {
+    justify-content: center;
+    align-items: center;
+    padding: 18px;
+  }
+}
