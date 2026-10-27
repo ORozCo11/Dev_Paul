@@ -10,7 +10,7 @@ import AuthFooter from '../components/AuthFooter';
 // `photo: null` keeps the initials placeholder shown now.
 const TEAM = [
   { name: 'Precious Dignos', role: 'Project Manager / QA Specialist', photo: '/team/precious-dignos.jpg' },
-  { name: 'John Paul Orozco', role: 'Project Lead / Full-Stack Developer', photo: '/team/paul-orozco.jpg' },
+  { name: 'John Paul Orozco', role: 'Project Lead / Backend Developer', photo: '/team/paul-orozco.jpg' },
   { name: 'Justine Mae Belia', role: 'Documentation / QA Specialist', photo: '/team/justine-mae-belia.jpg' },
   { name: 'Jake Engana', role: 'Backend Developer', photo: '/team/jake-engana.png' },
 ];

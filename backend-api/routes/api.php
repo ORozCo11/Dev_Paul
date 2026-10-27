@@ -107,6 +107,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::post('/maintenance-types', [CatalogController::class, 'storeMaintenanceType']);
     Route::put('/maintenance-types/{maintenanceType}', [CatalogController::class, 'updateMaintenanceType']);
     Route::delete('/maintenance-types/{maintenanceType}', [CatalogController::class, 'destroyMaintenanceType']);
+    Route::get('/external-reasons', [CatalogController::class, 'externalReasons']);
+    Route::post('/external-reasons', [CatalogController::class, 'storeExternalReason']);
+    Route::put('/external-reasons/{reason}', [CatalogController::class, 'updateExternalReason']);
+    Route::delete('/external-reasons/{reason}', [CatalogController::class, 'destroyExternalReason']);
     Route::get('/recurrence-intervals', [CatalogController::class, 'recurrenceIntervals']);
     Route::post('/recurrence-intervals', [CatalogController::class, 'storeRecurrenceInterval']);
     Route::put('/recurrence-intervals/{interval}', [CatalogController::class, 'updateRecurrenceInterval']);
@@ -175,6 +179,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::put('/superadmin/users/{user}/deactivate', [SuperAdminController::class, 'deactivateUser']);
     Route::delete('/superadmin/users/{user}/reject', [SuperAdminController::class, 'rejectUser']);
     Route::put('/superadmin/users/{user}/role', [SuperAdminController::class, 'updateUserRole']);
+    Route::get('/superadmin/users/{user}/registration-document/{type}', [SuperAdminController::class, 'registrationDocument']);
     Route::post('/superadmin/users/{user}/send-staff-code', [SuperAdminController::class, 'sendStaffCode'])->middleware('throttle:10,1');
     Route::post('/superadmin/users/{user}/email', [SuperAdminController::class, 'emailUser'])->middleware('throttle:10,1');
     Route::get('/superadmin/barangays/{barangay}/registration-code', [SuperAdminController::class, 'registrationCode']);

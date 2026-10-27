@@ -39,6 +39,29 @@ export function PlatformOverview({ barangays, approvals, onNavigate }) {
   </div>;
 }
 
+// The applicant's ID and photo live on a private disk; fetch them with the
+// reviewer's token and show them from short-lived object URLs.
+function ApplicantDocument({ accountId, type, label, available }) {
+  const [state, setState] = useState({ url: null, pdf: false, error: '' });
+  useEffect(() => {
+    if (!available) return undefined;
+    let current = true;
+    let objectUrl = null;
+    api.get(`/superadmin/users/${accountId}/registration-document/${type}`, { responseType: 'blob' })
+      .then(({ data }) => { if (!current) return; objectUrl = URL.createObjectURL(data); setState({ url: objectUrl, pdf: data.type === 'application/pdf', error: '' }); })
+      .catch(() => { if (current) setState({ url: null, pdf: false, error: 'Could not load this document.' }); });
+    return () => { current = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [accountId, type, available]);
+  return <figure className="sa-applicant-document">
+    <figcaption>{label}</figcaption>
+    {!available ? <p className="muted">Not submitted</p>
+      : state.error ? <p role="alert">{state.error}</p>
+      : !state.url ? <p role="status">Loading…</p>
+      : state.pdf ? <a className="ghost-button" href={state.url} target="_blank" rel="noreferrer">Open PDF</a>
+      : <a href={state.url} target="_blank" rel="noreferrer"><img src={state.url} alt={label} /></a>}
+  </figure>;
+}
+
 export function PendingApprovalsTab({ approvals, barangays, onApprove, onReject, onRequestConfirmation }) {
   const [search, setSearch] = useState('');
   const [barangay, setBarangay] = useState('');
@@ -59,14 +82,14 @@ export function PendingApprovalsTab({ approvals, barangays, onApprove, onReject,
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [applicationId]);
   const requestApprove = (account) => onRequestConfirmation({ title: 'Approve Registration', message: firstAdmin(account, barangays) ? `Approve ${account.name} as ${account.barangay_name ?? 'this barangay'}'s first Admin? Their account stays locked until they enter the staff registration code you email them from Users.` : `Approve ${account.name}'s registration for ${account.barangay_name ?? 'their barangay'} as ${account.role}?`, confirmLabel: 'Approve', variant: 'primary', onConfirm: async () => { const success = await onApprove(account); if (success) setReviewing(null); } });
-  const requestReject = (account) => onRequestConfirmation({ title: 'Reject Registration', message: `Reject ${account.name}'s registration for ${account.barangay_name ?? 'their barangay'}? Their account is permanently deleted — this cannot be undone.`, confirmLabel: 'Reject & Delete', variant: 'danger', onConfirm: async () => { const success = await onReject(account); if (success) setReviewing(null); } });
+  const requestReject = (account) => onRequestConfirmation({ title: 'Reject Registration', message: `Reject ${account.name}'s registration for ${account.barangay_name ?? 'their barangay'}? They are emailed a polite note asking for a valid ID and clear photo if they try again, and their account is permanently deleted — this cannot be undone.`, confirmLabel: 'Reject & Delete', variant: 'danger', onConfirm: async () => { const success = await onReject(account); if (success) setReviewing(null); } });
   const matching = approvals.filter((account) => (!barangay || String(account.barangay_id) === barangay) && [account.name, account.email, account.role, location(account)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   // Keep barangay groups together; groups awaiting their initial Admin lead.
   const priorityGroups = new Set(approvals.filter((account) => firstAdmin(account, barangays)).map((account) => account.barangay_id));
   const visible = matching.sort((a, b) => Number(priorityGroups.has(b.barangay_id)) - Number(priorityGroups.has(a.barangay_id)) || location(a).localeCompare(location(b)) || Number(firstAdmin(b, barangays)) - Number(firstAdmin(a, barangays)) || new Date(b.created_at) - new Date(a.created_at));
   const currentPage = Math.min(paging.page, Math.max(1, Math.ceil(visible.length / paging.size)));
   const pageRows = visible.slice((currentPage - 1) * paging.size, currentPage * paging.size);
-  const actions = (account) => <div className="sa-row-actions"><button className="ghost-button" type="button" onClick={() => setReviewing(account)}>Review</button><button className="primary-button" type="button" onClick={() => requestApprove(account)}>Approve</button><button className="ghost-button sa-destructive" type="button" onClick={() => requestReject(account)}>Reject</button></div>;
+  const actions = (account) => <div className="sa-row-actions"><button className="ghost-button sa-icon-button sa-icon-edit" type="button" aria-label={`Review application from ${account.name}`} title="Review application" onClick={() => setReviewing(account)}><Icon name="eye" size={17} /></button><button className="ghost-button sa-icon-button sa-icon-confirm" type="button" aria-label={`Approve ${account.name}`} title="Approve registration" onClick={() => requestApprove(account)}><Icon name="checkCircle" size={17} /></button><button className="ghost-button sa-icon-button sa-destructive" type="button" aria-label={`Reject ${account.name}`} title="Reject registration" onClick={() => requestReject(account)}><Icon name="close" size={17} /></button></div>;
   const columns = [
     { label: 'Applicant', render: (account) => <AdminIdentity name={account.name} email={account.email} /> },
     { label: 'Barangay', render: (account) => <div className="sa-stacked"><strong>{account.barangay_name || 'Unassigned'}</strong><span>{[account.city_name, account.province_name].filter(Boolean).join(', ')}</span></div> },
@@ -83,7 +106,7 @@ export function PendingApprovalsTab({ approvals, barangays, onApprove, onReject,
         {reviewing && <StatusBadge value="Pending Approval" />}
       </header>
       {reviewing ? <>
-        <div className="sa-application-body"><AdminIdentity name={reviewing.name} email={reviewing.email} /><dl className="sa-detail-list"><dt>Barangay</dt><dd>{location(reviewing)}</dd><dt>Requested role</dt><dd>{reviewing.role}</dd><dt>Phone</dt><dd>{reviewing.phone || 'Not provided'}</dd><dt>Submitted</dt><dd>{formatDate(reviewing.created_at)}</dd><dt>Account state</dt><dd><StatusBadge value="Pending Approval" /></dd><dt>Approval type</dt><dd>{firstAdmin(reviewing, barangays) ? 'Initial Administrator registration' : 'Staff registration'}</dd></dl></div>
+        <div className="sa-application-body"><AdminIdentity name={reviewing.name} email={reviewing.email} /><dl className="sa-detail-list"><dt>Barangay</dt><dd>{location(reviewing)}</dd><dt>Requested role</dt><dd>{reviewing.role}</dd><dt>Phone</dt><dd>{reviewing.phone || 'Not provided'}</dd><dt>Submitted</dt><dd>{formatDate(reviewing.created_at)}</dd><dt>Account state</dt><dd><StatusBadge value="Pending Approval" /></dd><dt>Approval type</dt><dd>{firstAdmin(reviewing, barangays) ? 'Initial Administrator registration' : 'Staff registration'}</dd></dl><div className="sa-applicant-documents"><ApplicantDocument accountId={reviewing.id} type="id" label="Valid ID" available={reviewing.has_valid_id} /><ApplicantDocument accountId={reviewing.id} type="photo" label="Photo of applicant" available={reviewing.has_photo} /></div></div>
         <footer className="sa-application-actions"><p>Approve this registration to grant account access, or reject the application.</p><div className="sa-row-actions"><button className="ghost-button" type="button" onClick={() => setReviewing(null)}>Cancel</button><button className="ghost-button sa-destructive" type="button" onClick={() => requestReject(reviewing)}>Reject application</button><button className="primary-button" type="button" onClick={() => requestApprove(reviewing)}>Approve application</button></div></footer>
       </> : <AdminEmptyState icon="clipboard" title="Application unavailable" description="This application may have already been reviewed. Return to Pending Approvals to see the current list." />}
     </section>
@@ -173,10 +196,17 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onApprove, onRej
   // Barangay Management links here with ?user=<id> to land on one account.
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => users.find((account) => String(account.id) === searchParams.get('user'))?.email ?? '');
+  const [province, setProvince] = useState('');
+  const [city, setCity] = useState('');
   const [barangay, setBarangay] = useState('');
   const [role, setRole] = useState('');
   const [status, setStatus] = useState('');
   const [editing, setEditing] = useState(null);
+  // Only locations that actually have registered users are offered, narrowed province → city → barangay.
+  const located = users.filter((account) => account.barangay_id);
+  const provinceOptions = [...new Set(located.map((account) => account.province_name).filter(Boolean))].sort();
+  const cityOptions = [...new Set(located.filter((account) => !province || account.province_name === province).map((account) => account.city_name).filter(Boolean))].sort();
+  const barangayOptions = [...new Map(located.filter((account) => (!province || account.province_name === province) && (!city || account.city_name === city)).map((account) => [String(account.barangay_id), account.barangay_name])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
   const [nextRole, setNextRole] = useState('');
   const [emailing, setEmailing] = useState(null);
   // A first Admin goes Pending Approval → Awaiting Code → Code Sent, and only turns Active by entering the code.
@@ -191,7 +221,7 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onApprove, onRej
     event.preventDefault();
     onRequestConfirmation({ title: 'Change Account Role', message: `Change ${editing.name}'s role from ${effectiveRoles(editing).join(', ')} to ${nextRole}? This replaces their current roles and changes account permissions.`, confirmLabel: 'Confirm Role Change', variant: 'primary', onConfirm: async () => { const success = await onChangeRole(editing, nextRole); if (success) setEditing(null); } });
   };
-  const visible = users.filter((account) => (!barangay || String(account.barangay_id) === barangay) && (!role || effectiveRoles(account).includes(role)) && (!status || accountStatus(account) === status) && [account.name, account.email, location(account)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const visible = users.filter((account) => (!province || account.province_name === province) && (!city || account.city_name === city) && (!barangay || String(account.barangay_id) === barangay) && (!role || effectiveRoles(account).includes(role)) && (!status || accountStatus(account) === status) && [account.name, account.email, location(account)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const columns = [
     { label: 'User', render: (account) => <AdminIdentity name={account.name} email={account.email} /> },
     { label: 'Barangay', render: (account) => <div className="sa-stacked"><strong>{account.barangay_name || 'Unassigned'}</strong><span>{[account.city_name, account.province_name].filter(Boolean).join(', ')}</span></div> },
@@ -200,15 +230,15 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onApprove, onRej
     { label: 'Actions', render: (account) => {
       const stateLabel = !account.approved_at ? 'Approve' : account.is_active ? 'Deactivate' : 'Activate';
       return <div className="sa-row-actions">
-        <button className="ghost-button sa-icon-button" type="button" aria-label={`Edit role for ${account.name}`} title="Edit role" onClick={() => { setEditing(account); setNextRole(account.role); }}><Icon name="edit" size={17} /></button>
+        <button className="ghost-button sa-icon-button sa-icon-edit" type="button" aria-label={`Edit role for ${account.name}`} title="Edit role" onClick={() => { setEditing(account); setNextRole(account.role); }}><Icon name="edit" size={17} /></button>
         {/* Once approved, a first Administrator activates only with the emailed code. */}
-        {!waitingForCode(account) && <button type="button" className={`ghost-button sa-icon-button${stateLabel === 'Deactivate' ? ' sa-destructive' : ''}`} aria-label={`${stateLabel} ${account.name}`} title={stateLabel} onClick={() => requestStateChange(account)}><Icon name={stateLabel === 'Deactivate' ? 'ban' : 'checkCircle'} size={17} /></button>}
+        {!waitingForCode(account) && <button type="button" className={`ghost-button sa-icon-button ${stateLabel === 'Deactivate' ? 'sa-destructive' : 'sa-icon-confirm'}`} aria-label={`${stateLabel} ${account.name}`} title={stateLabel} onClick={() => requestStateChange(account)}><Icon name={stateLabel === 'Deactivate' ? 'ban' : 'checkCircle'} size={17} /></button>}
         {(!account.approved_at || waitingForCode(account)) && <button className="ghost-button sa-icon-button sa-destructive" type="button" aria-label={`Reject ${account.name}`} title="Reject registration" onClick={() => onRequestConfirmation({ title: 'Reject Registration', message: `Permanently delete ${account.name}'s pending registration? This cannot be undone.`, confirmLabel: 'Reject & Delete', variant: 'danger', onConfirm: () => onReject(account) })}><Icon name="trash" size={17} /></button>}
-        <button className={`ghost-button sa-icon-button${account.awaiting_staff_code ? ' sa-attention' : ''}`} type="button" aria-label={account.awaiting_staff_code ? `Send staff registration code to ${account.name}` : `Email ${account.name}`} title={account.awaiting_staff_code ? 'Send staff registration code' : 'Send email'} onClick={() => setEmailing(account)}><Icon name="mail" size={17} /></button>
+        <button className={`ghost-button sa-icon-button sa-icon-mail${account.awaiting_staff_code ? ' sa-attention' : ''}`} type="button" aria-label={account.awaiting_staff_code ? `Send staff registration code to ${account.name}` : `Email ${account.name}`} title={account.awaiting_staff_code ? 'Send staff registration code' : 'Send email'} onClick={() => setEmailing(account)}><Icon name="mail" size={17} /></button>
       </div>;
     } },
   ];
-  return <div className="superadmin-tab"><AdminManagementCard toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search user or email..." /><AdminFilterField label="Barangay"><SearchableSelect value={barangay} onChange={(event) => setBarangay(event.target.value)}><option value="">All Barangays</option>{[...new Map(users.map((account) => [String(account.barangay_id), location(account)])).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Role"><SearchableSelect value={role} onChange={(event) => setRole(event.target.value)}><option value="">All Roles</option>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Account status"><SearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option>{['Active', 'Deactivated', 'Pending Approval', 'Awaiting Code', 'Code Sent'].map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField></>}>
+  return <div className="superadmin-tab"><AdminManagementCard toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search user or email..." /><AdminFilterField label="Province"><SearchableSelect value={province} onChange={(event) => { setProvince(event.target.value); setCity(''); setBarangay(''); }}><option value="">All Provinces</option>{provinceOptions.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="City / Municipality"><SearchableSelect value={city} onChange={(event) => { setCity(event.target.value); setBarangay(''); }}><option value="">All Cities</option>{cityOptions.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Barangay"><SearchableSelect value={barangay} onChange={(event) => setBarangay(event.target.value)}><option value="">All Barangays</option>{barangayOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Role"><SearchableSelect value={role} onChange={(event) => setRole(event.target.value)}><option value="">All Roles</option>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Account status"><SearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option>{['Active', 'Deactivated', 'Pending Approval', 'Awaiting Code', 'Code Sent'].map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField></>}>
     <PaginatedTable rows={visible} columns={columns} rowClassName={(account) => account.awaiting_staff_code ? 'sa-row-waiting' : undefined} emptyMessage="No matching users" emptyDescription="Try another user name or adjust the account filters." />
   </AdminManagementCard>{emailing && (emailing.awaiting_staff_code
     ? <StaffCodeEmail account={emailing} onSend={onSendStaffCode} onClose={() => setEmailing(null)} />
@@ -311,13 +341,13 @@ export function ActivityLogTab() {
   }, [path, key]);
   const columns = [
     { label: 'Date & Time', className: 'sa-date-cell', render: (entry) => formatDate(entry.created_at) },
-    { label: 'Actor', render: (entry) => entry.user?.name ?? 'Deleted account' },
+    { label: 'Actor', render: (entry) => <AdminIdentity name={entry.user?.name ?? 'Deleted account'} /> },
     { label: 'Role', render: (entry) => entry.role ?? entry.user?.role ?? 'Not recorded' },
     { label: 'Action', render: (entry) => <StatusBadge value={entry.action} /> },
-    { label: 'Module', key: 'module' },
+    { label: 'Category', className: 'cell-center', render: (entry) => <span className="log-category-tag">{entry.module ?? '-'}</span> },
     { label: 'Details', className: 'sa-log-details', render: (entry) => <><p className="sa-truncate">{entry.details}</p><button className="sa-text-button" type="button" onClick={() => setReviewing(entry)}>View full details</button></> },
   ];
-  return <div className="superadmin-tab"><AdminManagementCard summary={<><strong>{loading ? 'Loading activity records…' : result.error ? 'Activity records unavailable' : `${result.data.total} activity records`}</strong><span>Account and platform administration · Times shown in Philippine time</span></>} toolbar={<><div className="sa-segments"><button type="button" aria-pressed={scope === 'all'} onClick={() => updateFilters({ scope: 'all' })}>Full Platform Log</button><button type="button" aria-pressed={scope === 'superadmin'} onClick={() => updateFilters({ scope: 'superadmin' })}>Super Admin Actions Only</button></div><LocalSearchInput value={search} onChange={(value) => updateFilters({ search: value.slice(0, 200) })} placeholder="Search platform activity..." /></>}>
+  return <div className="superadmin-tab"><AdminManagementCard className="sa-support-card sa-log-card" summary={<><strong>{loading ? 'Loading activity records…' : result.error ? 'Activity records unavailable' : `${result.data.total} activity records`}</strong><span>Account and platform administration · Times shown in Philippine time</span></>} toolbar={<><div className="sa-segments"><button type="button" aria-pressed={scope === 'all'} onClick={() => updateFilters({ scope: 'all' })}>Full Platform Log</button><button type="button" aria-pressed={scope === 'superadmin'} onClick={() => updateFilters({ scope: 'superadmin' })}>Super Admin Actions Only</button></div><LocalSearchInput value={search} onChange={(value) => updateFilters({ search: value.slice(0, 200) })} placeholder="Search platform activity..." /></>}>
     {loading ? <p role="status">Loading activity records…</p> : result.error ? <p role="alert">{result.error} <button type="button" className="ghost-button" onClick={() => updateFilters({ attempt: attempt + 1, page })}>Retry activity records</button></p> : <PaginatedTable rows={result.data.data} columns={columns} pagination={{ page, size, total: result.data.total }} onPageChange={(value) => updateFilters({ page: value })} onPageSizeChange={(value) => updateFilters({ size: value })} initialPageSize={25} pageSizeOptions={[10, 25, 50, 100]} emptyMessage="No matching activity records" emptyDescription="Try another search or choose the full authorized platform log." />}
   </AdminManagementCard>{reviewing && <AdminActionDrawer title="Activity details" description={`Record ${reviewing.log_id ?? reviewing.id ?? ''}`} onClose={() => setReviewing(null)}><dl className="sa-detail-list"><dt>Date & time</dt><dd>{formatDate(reviewing.created_at)}</dd><dt>Actor</dt><dd>{reviewing.user?.name ?? 'Deleted account'}</dd><dt>Role at time of action</dt><dd>{reviewing.role ?? reviewing.user?.role ?? 'Not recorded'}</dd><dt>Action</dt><dd>{reviewing.action}</dd><dt>Module</dt><dd>{reviewing.module}</dd></dl><h3>Complete details</h3><p className="sa-full-text">{reviewing.details}</p></AdminActionDrawer>}</div>;
 }

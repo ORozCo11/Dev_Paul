@@ -58,3 +58,5 @@ html .register-page .auth-split-hero-content p { color: #e2e8f0; font-size: 16px
 .register-address-consent { display:flex; align-items:flex-start; gap:8px; font-size:12px; line-height:1.5; color:#475569; }
 .register-address-consent input[type="checkbox"] { flex:0 0 18px; width:18px; height:18px; min-height:18px; margin:0; }
 .register-address-help small { display:block; margin-top:6px; color:#64748b; line-height:1.5; }
+.register-page .register-field-hint { display: block; margin-top: 6px; color: #64748b; font-size: 12px; line-height: 1.5; }
+.register-page input[type="file"] { padding: 9px 10px; font-size: 13px; }

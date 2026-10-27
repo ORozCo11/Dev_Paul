@@ -101,21 +101,19 @@ function ProfileMenu({ user, open, setOpen, onOpenSettings, onLogout }) {
   );
 }
 
-function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, onRetryBoundary, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, showAddForm, onCloseAdd, onRegistrationCode, onRequestConfirmation }) {
+function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, showAddForm, onCloseAdd, onRegistrationCode, onRequestConfirmation }) {
   const [activeFilter, setActiveFilter] = useState(initialFilter || 'all');
   const [search, setSearch] = useState('');
   const [provinceFilter, setProvinceFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
-  const [boundaryFilter, setBoundaryFilter] = useState('');
+  const [boundaryFilter] = useState('');
   const navigate = useNavigate();
   const detailRoute = useMatch('/superadmin/barangays/:barangayId');
   const managingId = detailRoute?.params.barangayId;
   const setManagingId = (id) => navigate(id == null ? '/superadmin/barangays' : `/superadmin/barangays/${id}`);
   const [pickedUserId, setPickedUserId] = useState('');
   const [reviewingBoundary, setReviewingBoundary] = useState(null);
-  const [retryingId, setRetryingId] = useState(null);
   const orphaned = barangays.filter((b) => !b.has_active_admin);
-  const pending = barangays.filter((b) => b.boundary_status === 'needs_review');
   const provinceOptions = [...new Set(barangays.map((b) => b.province_name).filter(Boolean))].sort();
   const cities = [...new Set(barangays.filter((b) => !provinceFilter || b.province_name === provinceFilter).map((b) => b.city_name).filter(Boolean))].sort();
   const boundaryStatus = (b) => b.boundary_status === 'verified' ? 'Reviewed' : b.boundary_status === 'needs_review' ? 'Needs Review' : 'Not Found';
@@ -123,30 +121,27 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const managing = barangays.find((b) => String(b.id) === managingId);
   const candidates = managing ? users.filter((account) => account.barangay_id === managing.id) : [];
   const waitingAdmins = candidates.filter((account) => account.awaiting_staff_code);
-  const retryBoundary = async (b) => { setRetryingId(b.id); try { await onRetryBoundary(b); } finally { setRetryingId(null); } };
   const columns = [
     { label: 'Barangay', render: (b) => <strong>{b.name}</strong> },
     { label: 'City / Province', render: (b) => <div className="sa-stacked"><strong>{b.city_name || 'Not specified'}</strong><span>{b.province_name || 'Not specified'}</span></div> },
     { label: 'Staff Count', key: 'staff_count' },
-    { label: 'Administrator Status', render: (b) => <div className="sa-stacked"><StatusBadge value={b.has_active_admin ? 'Active Admin' : 'No Active Admin'} />{b.sole_active_admin && <span className="sa-warning"><Icon name="alert" size={12} />Only one active Admin</span>}</div> },
-    { label: 'Boundary Status', render: (b) => <StatusBadge value={boundaryStatus(b)} /> },
+    { label: 'Administrator Status', render: (b) => <div className="sa-stacked"><StatusBadge value={b.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></div> },
     { label: 'Actions', render: (b) => <button type="button" className="ghost-button" onClick={() => { setManagingId(b.id); setPickedUserId(''); }}>View / Manage</button> },
   ];
   return <div className="superadmin-tab">
     {showAddForm && <AddBarangayForm existingBarangayIds={barangays.map((b) => String(b.id))} onAdded={(created) => { onAddedBarangay(created); onCloseAdd(); }} onCancel={onCloseAdd} />}
-    {!managingId && <AdminManagementCard summary={<div className="sa-segments">{[['all', 'All Barangays', barangays.length], ['active', 'Active Admin', barangays.length - orphaned.length], ['orphaned', 'Orphaned', orphaned.length], ['boundary_review', 'Needs Boundary Review', pending.length]].map(([key, label, count]) => <button key={key} type="button" aria-pressed={activeFilter === key} onClick={() => setActiveFilter(key)}>{label}<span>{count}</span></button>)}</div>} toolbar={<>
+    {!managingId && <AdminManagementCard summary={<div className="sa-segments">{[['all', 'All Barangays', barangays.length], ['active', 'Active Admin', barangays.length - orphaned.length], ['orphaned', 'Orphaned', orphaned.length]].map(([key, label, count]) => <button key={key} type="button" aria-pressed={activeFilter === key} onClick={() => setActiveFilter(key)}>{label}<span>{count}</span></button>)}</div>} toolbar={<>
       <LocalSearchInput value={search} onChange={setSearch} placeholder="Search barangay, city, or province..." />
       <AdminFilterField label="Province"><SearchableSelect aria-label="Filter by province" value={provinceFilter} onChange={(event) => { setProvinceFilter(event.target.value); setCityFilter(''); }}><option value="">All Provinces</option>{provinceOptions.map((province) => <option key={province}>{province}</option>)}</SearchableSelect></AdminFilterField>
       <AdminFilterField label="City"><SearchableSelect aria-label="Filter by city" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}><option value="">All Cities</option>{cities.map((city) => <option key={city}>{city}</option>)}</SearchableSelect></AdminFilterField>
-      <AdminFilterField label="Boundary status"><SearchableSelect aria-label="Boundary status" value={boundaryFilter} onChange={(event) => setBoundaryFilter(event.target.value)}><option value="">All Boundaries</option>{['Reviewed', 'Needs Review', 'Not Found'].map((status) => <option key={status}>{status}</option>)}</SearchableSelect></AdminFilterField>
     </>}><PaginatedTable rows={filtered} columns={columns} emptyIcon="pin" emptyMessage="No barangays found" emptyDescription="Try another search or adjust the location and status filters." /></AdminManagementCard>}
     {managingId && !managing && <p role="alert">Barangay not found. <button type="button" className="ghost-button" onClick={() => setManagingId(null)}>Back to Barangays</button></p>}
     {managing && <section className="sa-management-card sa-barangay-page">
       <header className="sa-barangay-page-header"><button type="button" className="ghost-button" onClick={() => setManagingId(null)}><Icon name="arrowLeft" size={15} />Back to Barangays</button><h2>{managing.name}</h2><p>{[managing.city_name, managing.province_name].filter(Boolean).join(', ')}</p></header>
       <div className="sa-barangay-page-grid">
-      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd>{waitingAdmins.length > 0 && <><dt>Admin awaiting code</dt><dd className="sa-waiting-admin">{waitingAdmins.map((account) => <span key={account.id}><button type="button" className="sa-text-button" onClick={() => navigate(`/superadmin/users?user=${account.id}`)}>{account.name}</button> <StatusBadge value={!account.approved_at ? 'Pending Approval' : account.staff_code_sent_at ? 'Code Sent' : 'Awaiting Code'} /></span>)}</dd></>}<dt>Boundary status</dt><dd><StatusBadge value={boundaryStatus(managing)} /></dd><dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
+      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd>{waitingAdmins.length > 0 && <><dt>Admin awaiting code</dt><dd className="sa-waiting-admin">{waitingAdmins.map((account) => <span key={account.id}><button type="button" className="sa-text-button" onClick={() => navigate(`/superadmin/users?user=${account.id}`)}>{account.name}</button> <StatusBadge value={!account.approved_at ? 'Pending Approval' : account.staff_code_sent_at ? 'Code Sent' : 'Awaiting Code'} /></span>)}</dd></>}<dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
       <section className="sa-detail-section"><h3>Registration code</h3><p>View or regenerate this barangay's staff registration code.</p><button type="button" className="ghost-button" onClick={() => onRegistrationCode(managing)}><Icon name="key" size={15} />Manage Registration Code</button></section>
-      <section className="sa-detail-section"><h3>Boundary configuration</h3><button type="button" className="ghost-button" onClick={() => { setReviewingBoundary(managing); }}>Review / Replace Boundary</button>{managing.boundary_status === 'needs_review' ? <><p>{managing.pending_boundary ? 'A candidate outline is waiting for review.' : 'The current outline is an unverified reference.'} Review it against an LGU-approved boundary map or survey.</p><button type="button" className="primary-button" onClick={() => { setReviewingBoundary(managing); }}>Review Boundary</button></> : managing.boundary_status === 'verified' ? <p>A boundary reviewed against an uploaded source document is on file. This is an administrator review, not a legal certification.</p> : <><p>No matching boundary is on file. Retry the supported lookup.</p><button type="button" className="ghost-button" disabled={retryingId === managing.id} onClick={() => retryBoundary(managing)}>{retryingId === managing.id ? 'Checking…' : 'Retry Boundary Lookup'}</button></>}</section>
+      <section className="sa-detail-section sa-barangay-users"><h3>Users in this barangay</h3>{!candidates.length ? <p>No registered users yet.</p> : <ul className="sa-barangay-user-list">{candidates.map((account) => <li key={account.id}><div><strong>{account.name}</strong><span>{account.role}</span></div><StatusBadge value={account.is_active ? 'Active' : account.awaiting_staff_code ? (!account.approved_at ? 'Pending Approval' : account.staff_code_sent_at ? 'Code Sent' : 'Awaiting Code') : 'Inactive'} /></li>)}</ul>}</section>
       {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities. An inactive account will also be approved and activated.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
       </div>
     </section>}
@@ -464,25 +459,6 @@ export default function SuperAdminWorkspace() {
     await loadAll();
   };
 
-  // Only meaningful for a barangay without a verified boundary yet — re-runs
-  // the same OSM lookup storeBarangay() tried on creation, for the (common)
-  // case where nothing trustworthy was found the first time. Never
-  // overwrites a boundary that's already verified (see
-  // refreshBarangayBoundary()). A match found here lands as a candidate
-  // awaiting review (boundary_status 'needs_review'), not an immediate save.
-  const retryBoundary = async (barangay) => {
-    try {
-      const res = await api.post(`/superadmin/barangays/${barangay.id}/boundary/refresh`);
-      setNotice(res.data.boundary_status === 'needs_review'
-        ? { type: 'success', text: `A reference outline is on file for ${barangay.name}. Review or replace it against an LGU-approved source.` }
-        : res.data.boundary_status === 'verified'
-          ? { type: 'success', text: `${barangay.name} already has a reviewed boundary.` }
-          : { type: 'error', text: `Still no boundary match for ${barangay.name} — try again later, or add it manually.` });
-      await loadAll();
-    } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not retry that boundary lookup.' });
-    }
-  };
 
   const confirmBoundary = async (barangay) => {
     try {
@@ -681,7 +657,6 @@ export default function SuperAdminWorkspace() {
                 users={visibleUsers}
                 onPromote={promoteToAdmin}
                 onAddedBarangay={addBarangay}
-                onRetryBoundary={retryBoundary}
                 onConfirmBoundary={confirmBoundary}
                 onDiscardBoundary={discardBoundary}
               />

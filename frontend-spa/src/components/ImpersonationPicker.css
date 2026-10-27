@@ -42,3 +42,9 @@
 .account-user-control { align-items:flex-end; }
 .account-cascade { align-items:flex-end; }
 @media(max-width:800px) { .account-user-control > .account-selector { flex:1; } .account-user-control .account-selector .searchable-select { width:100%; } }
+
+/* Phones: the theme toggle and avatar sit in the first row, so the selectors
+   start below that row instead of tucking under the toggle. */
+@media(max-width:800px) {
+  html .topbar:has(.account-cascade) .account-cascade { margin-top:10px; }
+}

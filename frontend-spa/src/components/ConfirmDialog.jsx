@@ -37,7 +37,7 @@ export default function ConfirmDialog({ busy, dialog, onCancel, onConfirm }) {
           <h3 id="confirm-dialog-title">{dialog.title ?? 'Confirm Action'}</h3>
           <p>{dialog.message}</p>
         </div>
-        <div className="confirm-dialog-actions">
+        <div className={`confirm-dialog-actions${dialog.variant === 'primary' ? '' : ' is-danger'}`}>
           <button className="ghost-button" disabled={busy} onClick={onCancel} type="button">
             Cancel
           </button>

@@ -48,6 +48,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'registration_id_path',
+        'registration_photo_path',
     ];
 
     protected $casts = [
@@ -200,7 +202,7 @@ class User extends Authenticatable
             }
 
             return $this->is_active && $this->role === 'Impersonator'
-                && strtolower(trim($this->email)) === 'impersonation@test.com';
+                && strtolower(trim($this->email)) === 'superadmin@demotest.com';
         }
 
         // Note: config('permissions.' . $ability) would be wrong here — Laravel's

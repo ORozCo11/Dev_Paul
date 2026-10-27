@@ -297,7 +297,7 @@ All routes are under `/api` (see `backend-api/routes/api.php`). All protected ro
 - **SQL injection:** all queries are parameterized (Eloquent / bound placeholders).
 - **Authorization:** every controller action enforces role membership; ownership checks (e.g. only the assigned Custodian/Mechanic can add a sub-issue) are by ID, not just role label.
 
-> **Dedicated account switcher:** `impersonation@test.com` automatically enters the active `admin@barangay.gov` workspace (Paknaan in the demo data). If unavailable, the system uses the first active barangay Admin by barangay ID and user ID. This utility account can open active staff and Super Admin workspaces across every barangay. It has no direct fleet or Super Admin administration access. Ordinary users and Super Admins cannot start impersonation. Only sessions opened through the utility account show the Province, City/Municipality, Barangay, and User dropdowns. Direct staff logins have no impersonation controls; their fleet maps use their own barangay boundary. Select an account from the User dropdown, then click the adjacent Impersonate button to open its workspace and record the switch in the audit log. The dropdown contains only real accounts, with no empty User option. Production sessions retain the existing 30-minute expiry and read-only behavior.
+> **Dedicated account switcher:** `superadmin@demotest.com` automatically enters the active `admin@barangay.gov` workspace (Paknaan in the demo data). If unavailable, the system uses the first active barangay Admin by barangay ID and user ID. This utility account can open active staff and Super Admin workspaces across every barangay. It has no direct fleet or Super Admin administration access. Ordinary users and Super Admins cannot start impersonation. Only sessions opened through the utility account show the Province, City/Municipality, Barangay, and User dropdowns. Direct staff logins have no impersonation controls; their fleet maps use their own barangay boundary. Select an account from the User dropdown, then click the adjacent Impersonate button to open its workspace and record the switch in the audit log. The dropdown contains only real accounts, with no empty User option. Production sessions retain the existing 30-minute expiry and read-only behavior.
 
 ---
 
@@ -442,7 +442,7 @@ After pulling this update, run `php artisan migrate` from `backend-api` to apply
 
 ### Account switcher setup
 
-For local/testing use, sign in with `impersonation@test.com` and password `test123`. Run `php artisan db:seed --class=ImpersonationAccountSeeder` from `backend-api` to create or reset only this utility account. The regular user seeder also includes it. Its role is `Impersonator`, separate from Super Admin, and no schema migration is needed on an up-to-date database. Fixed demo credentials are not seeded in production.
+For local/testing use, sign in with `superadmin@demotest.com` and password `test123`. Run `php artisan db:seed --class=ImpersonationAccountSeeder` from `backend-api` to create or reset only this utility account. The regular user seeder also includes it. Its role is `Impersonator`, separate from Super Admin, and no schema migration is needed on an up-to-date database. Fixed demo credentials are not seeded in production.
 
 ### Scope limitation
 

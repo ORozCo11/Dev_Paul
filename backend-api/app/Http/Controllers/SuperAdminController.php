@@ -774,14 +774,31 @@ class SuperAdminController extends Controller
      * Deliberately refuses to touch anyone who was EVER approved (even if
      * later deactivated) — that path only goes through deactivateUser().
      */
+    /** Streams an applicant's ID or photo to a reviewer; these files are never public. */
+    public function registrationDocument(Request $request, User $user, string $type)
+    {
+        $this->requireAbility($request, 'user.view_pending', 'Only a Super Admin can perform this action.');
+        abort_unless(in_array($type, ['id', 'photo'], true), 404);
+        $path = $type === 'id' ? $user->registration_id_path : $user->registration_photo_path;
+        abort_unless($path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404, 'No document was submitted.');
+        $this->log($request, 'View', "Viewed the registration {$type} of {$user->name} ({$user->email}).");
+
+        return \Illuminate\Support\Facades\Storage::disk('local')->response($path, null, ['Cache-Control' => 'private, no-store']);
+    }
+
     public function rejectUser(Request $request, User $user)
     {
         $this->requireAbility($request, 'user.reject', 'Only a Super Admin can perform this action.');
         // An approved first Admin who never entered their code was never live, so it can still be rejected.
         abort_if($user->is_active || ($user->approved_at !== null && !$user->awaiting_staff_code), 422, 'This account is active or was already approved at some point — deactivate it instead of rejecting.');
 
+        foreach ([$user->registration_id_path, $user->registration_photo_path] as $document) {
+            if ($document) \Illuminate\Support\Facades\Storage::disk('local')->delete($document);
+        }
         $name = $user->name;
         $email = $user->email;
+        // A courtesy note so the applicant knows why and how to try again; a mail outage must not block the rejection.
+        AccountMail::trySend($user, 'Update on your VMS registration', 'rejected');
         $user->delete();
         $this->log($request, 'Delete', "Rejected pending registration for {$name} ({$email}).");
 
@@ -810,6 +827,8 @@ class SuperAdminController extends Controller
                 'email' => $u->email,
                 'role' => $u->role,
                 'phone' => $u->phone,
+                'has_valid_id' => (bool) $u->registration_id_path,
+                'has_photo' => (bool) $u->registration_photo_path,
                 'created_at' => $u->created_at,
                 'barangay_id' => $u->barangay_id,
                 'barangay_name' => $u->barangay?->name ?? $u->barangay_name,

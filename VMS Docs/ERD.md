@@ -1,6 +1,6 @@
 # ERD working source
 
-Baseline: 25 October 2026, `130fe38`. This is a logical relationship overview derived from Eloquent models, not an exhaustive physical database diagram. The [SVG](ERD.svg) is a core-module summary. Use migration definitions for enforced keys, nullable relations, unique constraints and cascade rules.
+Baseline: 25 October 2026, `130fe38`. This is a logical relationship overview derived from Eloquent models, not an exhaustive physical database diagram. The [ERD](../VMS%20FINAL%20DEFENSE%20PREPARATION/ERD.svg) is a core-module summary. Use migration definitions for enforced keys, nullable relations, unique constraints and cascade rules.
 
 ```mermaid
 erDiagram

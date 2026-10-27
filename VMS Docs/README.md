@@ -19,9 +19,9 @@ Reviewed 25 October 2026 against `130fe38`. Start with [current revision notes](
 | [Workflow-Test-Run-2026-10-25.md](Workflow-Test-Run-2026-10-25.md) | Latest ticket/maintenance regression results, real API/browser journey and remaining verification limits. |
 | [QA-Run1-Fixes-2026-10-25.md](QA-Run1-Fixes-2026-10-25.md) | Disposition of all 37 browser-audit findings, safeguards, migration and retest evidence. |
 | [VMS-Evidence-and-Defense-Review-With-Examples.pptx](VMS-Evidence-and-Defense-Review-With-Examples.pptx) | Latest defense presentation, including examples and speaker notes. |
-| [System-Architecture.svg](System-Architecture.svg) | Component diagram. |
-| [ERD.svg](ERD.svg) | Database relationship diagram. |
-| [Use-Case-Diagram.svg](Use-Case-Diagram.svg) | Role and use-case diagram. |
+| [System-Architecture.svg](../VMS%20FINAL%20DEFENSE%20PREPARATION/System-Architecture.svg) | Component diagram. |
+| [ERD.svg](../VMS%20FINAL%20DEFENSE%20PREPARATION/ERD.svg) | Database relationship diagram. |
+| [Use-Case-Diagram.svg](../VMS%20FINAL%20DEFENSE%20PREPARATION/Use-Case-Diagram.svg) | Role and use-case diagram. |
 
 Older audits, UI reports, geography-review evidence, planning documents and superseded exports live in [the historical archive](../docs/archive/vms/README.md). Their dates and claims describe earlier revisions. They do not supersede the current audit or establish production acceptance.
 

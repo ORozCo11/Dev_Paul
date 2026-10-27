@@ -13,6 +13,6 @@ The PHP exporter forces a disposable SQLite `:memory:` connection before migrati
 
 To change the maintained diagram layout/content, edit `generate-diagrams.cjs`, then regenerate. The DOT files are also independently editable with Graphviz; regeneration from the script overwrites them. To use dependencies elsewhere, set `VMS_DIAGRAM_TOOLS` to their installation directory.
 
-Open `Defense-Diagrams.html` in a browser and print to PDF using its CSS page sizes (A3 landscape for ERDs/architecture; A3 portrait for use cases), without browser headers/footers. Save as `Defense-Diagrams.pdf`. The SVGs remain vector graphics in browser print output.
+Open `Defense-Diagrams.html` in a browser and print to PDF using its CSS page sizes (A3 landscape for ERDs/architecture; A3 portrait for use cases), without browser headers/footers. Save as `Defense-Diagrams.pdf` if you need a printable copy. The SVGs remain vector graphics in browser print output.
 
 Update the revision labels when preparing artifacts for a later code baseline. The current schema exporter and renderer deliberately label the inspected revision `352fd0e`.

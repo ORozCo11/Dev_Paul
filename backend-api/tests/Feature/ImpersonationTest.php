@@ -48,7 +48,7 @@ class ImpersonationTest extends TestCase
     public function dedicated_switcher_can_open_staff_and_super_admin_accounts_with_an_audited_reason(): void
     {
         app()['env'] = 'production';
-        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        $actor = User::factory()->create(['email' => 'superadmin@demotest.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
         Sanctum::actingAs($actor, $actor->allRoles());
         $this->getJson('/api/impersonate/candidates')->assertOk()->assertJsonFragment(['id' => $target->id]);
@@ -80,7 +80,7 @@ class ImpersonationTest extends TestCase
             ['email' => 'admin@barangay.gov', 'role' => 'Admin'],
             ['email' => 'other@test.com', 'role' => 'Impersonator'],
         ])->map(fn ($attributes) => User::factory()->create($attributes + ['roles' => [$attributes['role']]]));
-        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        $actor = User::factory()->create(['email' => 'superadmin@demotest.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
         foreach (['local', 'testing', 'production'] as $environment) {
             app()['env'] = $environment;
             Sanctum::actingAs($actor, $actor->allRoles());
@@ -104,7 +104,7 @@ class ImpersonationTest extends TestCase
         $this->seed(\Database\Seeders\ImpersonationAccountSeeder::class);
         $this->seed(\Database\Seeders\ImpersonationAccountSeeder::class);
         $this->assertDatabaseCount('users', $before + 1);
-        $data = $this->postJson('/api/login', ['email' => 'impersonation@test.com', 'password' => 'test123'])
+        $data = $this->postJson('/api/login', ['email' => 'superadmin@demotest.com', 'password' => 'test123'])
             ->assertOk()->assertJsonPath('user.role', 'Impersonator')
             ->assertJsonPath('user.abilities', ['impersonation.start'])->json();
         $this->withHeader('Authorization', 'Bearer '.$data['access_token'])->getJson('/api/vehicles')->assertForbidden();
@@ -120,7 +120,7 @@ class ImpersonationTest extends TestCase
         $first = User::factory()->create(['role' => 'Admin', 'barangay_id' => $a->id]);
         $second = User::factory()->create(['role' => 'Custodian', 'barangay_id' => $b->id]);
         $superAdmin = User::where('email', 'superadmin@barangay.gov')->firstOrFail();
-        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        $actor = User::factory()->create(['email' => 'superadmin@demotest.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
         Sanctum::actingAs($actor, $actor->allRoles());
         $this->getJson('/api/impersonate/candidates')->assertOk()
             ->assertJsonFragment(['id' => $first->id])->assertJsonFragment(['id' => $second->id])
@@ -150,7 +150,7 @@ class ImpersonationTest extends TestCase
         $barangay = \App\Models\Barangay::create(['name' => 'Paknaan']);
         $fallback = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $barangay->id]);
         $preferred = User::factory()->create(['email' => 'admin@barangay.gov', 'role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $barangay->id]);
-        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        $actor = User::factory()->create(['email' => 'superadmin@demotest.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
         Sanctum::actingAs($actor, $actor->allRoles());
         $this->postJson('/api/impersonate/default')->assertOk()->assertJsonPath('user.id', $preferred->id);
         $this->assertDatabaseHas('activity_logs', ['action' => 'Impersonate', 'user_id' => $actor->id, 'barangay_id' => $barangay->id]);
@@ -164,7 +164,7 @@ class ImpersonationTest extends TestCase
         $barangay = \App\Models\Barangay::create(['name' => 'Test Barangay']);
         User::factory()->create(['role' => 'Admin', 'barangay_id' => null]);
         User::factory()->create(['role' => 'Admin', 'barangay_id' => $barangay->id, 'is_active' => false]);
-        $actor = User::factory()->create(['email' => 'impersonation@test.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
+        $actor = User::factory()->create(['email' => 'superadmin@demotest.com', 'role' => 'Impersonator', 'roles' => ['Impersonator']]);
         Sanctum::actingAs($actor, $actor->allRoles());
         $this->postJson('/api/impersonate/default')->assertUnprocessable();
         $this->assertDatabaseCount('personal_access_tokens', 0);

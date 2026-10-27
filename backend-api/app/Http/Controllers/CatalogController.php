@@ -138,6 +138,55 @@ class CatalogController extends Controller
         return response()->noContent();
     }
 
+    public function externalReasons()
+    {
+        return DB::table('external_reasons')->orderBy('name')->get(['id', 'name']);
+    }
+
+    public function storeExternalReason(Request $request)
+    {
+        $this->requireAbility($request, 'catalog.create');
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $name = trim($data['name']);
+        $existing = DB::table('external_reasons')->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        if (!$existing) {
+            DB::table('external_reasons')->insert(['name' => $name]);
+            $existing = DB::table('external_reasons')->where('name', $name)->first();
+        }
+
+        return response()->json($existing, 201);
+    }
+
+    public function updateExternalReason(Request $request, int $reason)
+    {
+        $this->requireAbility($request, 'catalog.edit');
+        $current = DB::table('external_reasons')->where('id', $reason)->first();
+        abort_unless($current, 404);
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $newName = trim($data['name']);
+        abort_if(DB::table('external_reasons')->whereRaw('LOWER(name) = ?', [mb_strtolower($newName)])->where('id', '!=', $reason)->exists(), 422, "\"{$newName}\" already exists — pick a different name, or delete this one and use that instead.");
+
+        DB::transaction(function () use ($reason, $current, $newName) {
+            DB::table('external_reasons')->where('id', $reason)->update(['name' => $newName]);
+            TicketSubIssue::withoutGlobalScopes()->where('external_reason', $current->name)->update(['external_reason' => $newName]);
+        });
+
+        return DB::table('external_reasons')->where('id', $reason)->first(['id', 'name']);
+    }
+
+    public function destroyExternalReason(Request $request, int $reason)
+    {
+        $this->requireAbility($request, 'catalog.delete');
+        $current = DB::table('external_reasons')->where('id', $reason)->first();
+        abort_unless($current, 404);
+        $this->abortIfInUse($current->name, [
+            'external repair' => TicketSubIssue::withoutGlobalScopes()->where('external_reason', $current->name)->count(),
+        ]);
+        DB::table('external_reasons')->where('id', $reason)->delete();
+
+        return response()->noContent();
+    }
+
     public function recurrenceIntervals()
     {
         return DB::table('recurrence_intervals')->orderBy('name')->get();

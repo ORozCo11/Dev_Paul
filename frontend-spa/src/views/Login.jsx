@@ -205,9 +205,9 @@ function Login() {
               <h3 id="activation-title">Your profile is under review</h3>
               <p>{activation.sent
                 ? 'You can continue once your account is verified. Paste the Staff Registration Code the Super Admin emailed you below. Check your Spam or Promotions folder if you cannot find it.'
-                : 'You can continue once your account is verified. The Super Admin is reviewing your registration and will email you a Staff Registration Code. When it arrives, paste it below.'}</p>
+                : 'You can continue once your account is verified. The Super Admin is reviewing your registration and will email you a Staff Registration Code. Once it arrives, sign in again and paste it here.'}</p>
             </div>
-            {activation.expired ? (
+            {!activation.sent ? null : activation.expired ? (
               <p className="notice error" role="alert">{activation.error} <Link to="/register">Register again</Link></p>
             ) : (
               <>
@@ -230,7 +230,7 @@ function Login() {
             )}
             <div className="confirm-dialog-actions">
               <button className="ghost-button" disabled={activation.busy} onClick={() => setActivation(null)} type="button">Close</button>
-              {!activation.expired && <button className="primary-button" disabled={activation.busy} type="submit">{activation.busy ? 'Activating…' : 'Activate'}</button>}
+              {activation.sent && !activation.expired && <button className="primary-button" disabled={activation.busy} type="submit">{activation.busy ? 'Activating…' : 'Activate'}</button>}
             </div>
           </form>
         </div>

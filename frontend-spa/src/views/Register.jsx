@@ -67,6 +67,8 @@ const STEP_FIELDS = [
   ['requested_role', 'staff_code', 'password', 'password_confirmation'],
 ];
 
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+
 function validateStep(values, step, isFirstForBarangay) {
   const errors = {};
   if (step === 0) {
@@ -79,6 +81,16 @@ function validateStep(values, step, isFirstForBarangay) {
     else if (!EMAIL_PATTERN.test(values.email.trim())) errors.email = 'Enter a valid email address.';
     if (!values.phone) errors.phone = 'Phone number is required.';
     else if (!PHONE_PATTERN.test(values.phone)) errors.phone = 'Enter an 11-digit mobile number starting with 09.';
+    const documentError = (file, label, allowPdf) => {
+      if (!file) return `${label} is required.`;
+      if (file.size > MAX_DOCUMENT_BYTES) return `${label} must be 5 MB or smaller.`;
+      if (!(allowPdf ? /^(image\/(jpeg|png)|application\/pdf)$/ : /^image\/(jpeg|png|webp)$/).test(file.type)) return allowPdf ? `${label} must be a JPG, PNG or PDF file.` : `${label} must be a JPG, PNG or WebP image.`;
+      return '';
+    };
+    const idError = documentError(values.valid_id, 'A valid ID', true);
+    if (idError) errors.valid_id = idError;
+    const photoError = documentError(values.photo, 'A photo of yourself', false);
+    if (photoError) errors.photo = photoError;
   } else if (step === 1) {
     if (!values.province_id) errors.province_id = 'Select your province.';
     if (!values.city_id) errors.city_id = 'Select your city or municipality.';
@@ -114,6 +126,12 @@ function Register() {
   const [locationError, setLocationError] = useState('');
   const [locationRetry, setLocationRetry] = useState(0);
   const [error, setError] = useState('');
+  const [documents, setDocuments] = useState({ valid_id: null, photo: null });
+  const chooseDocument = (name) => (event) => {
+    const file = event.target.files?.[0] ?? null;
+    setDocuments((current) => ({ ...current, [name]: file }));
+    clearFieldErrors(name);
+  };
   const [fieldErrors, setFieldErrors] = useState({});
   const formRef = useRef(null);
   const errorFocus = useRef(null);
@@ -267,8 +285,8 @@ function Register() {
     if (submitting) return;
     setError('');
     const errors = step < 2
-      ? validateStep(form, step, isFirstForBarangay)
-      : Object.assign({}, ...STEP_FIELDS.map((_, index) => validateStep(form, index, isFirstForBarangay)));
+      ? validateStep({ ...form, ...documents }, step, isFirstForBarangay)
+      : Object.assign({}, ...STEP_FIELDS.map((_, index) => validateStep({ ...form, ...documents }, index, isFirstForBarangay)));
     if (Object.keys(errors).length) { showFieldErrors(errors); return; }
     setFieldErrors({});
     if (step < 2) {
@@ -283,7 +301,11 @@ function Register() {
         .map((part) => part.trim())
         .filter(Boolean)
         .join(' ');
-      await api.post('/register', { ...form, name });
+      const payload = new FormData();
+      Object.entries({ ...form, name }).forEach(([key, value]) => { if (value !== null && value !== undefined) payload.append(key, value); });
+      payload.append('valid_id', documents.valid_id);
+      payload.append('photo', documents.photo);
+      await api.post('/register', payload);
       setSubmitted(true);
     } catch (requestError) {
       const messages = requestError.response?.data?.errors;
@@ -293,7 +315,7 @@ function Register() {
       ]));
       showFieldErrors(inlineErrors);
       const failed = Object.keys(messages ?? {});
-      if (failed.some((key) => ['name','first_name','middle_name','last_name','email','phone'].includes(key))) setStep(0);
+      if (failed.some((key) => ['name','first_name','middle_name','last_name','email','phone','valid_id','photo'].includes(key))) setStep(0);
       else if (failed.some((key) => ['province_id','city_id','barangay_id','barangay_name','address'].includes(key))) setStep(1);
 
       // If we thought we'd be the first (and so hid the role/staff-code
@@ -446,6 +468,38 @@ function Register() {
                 />
               </div>
               <RegistrationFieldError name="phone" errors={fieldErrors} />
+            </label>
+
+            <label className="auth-field">
+              <span>Valid ID (JPG, PNG or PDF)</span>
+              <div className="auth-input-wrapper auth-input-plain">
+                <input
+                  accept="image/jpeg,image/png,application/pdf"
+                  name="valid_id"
+                  {...fieldErrorProps('valid_id')}
+                  onChange={chooseDocument('valid_id')}
+                  required
+                  type="file"
+                />
+              </div>
+              <small className="register-field-hint">Upload one government-issued ID with your name clearly readable (max 5 MB).</small>
+              <RegistrationFieldError name="valid_id" errors={fieldErrors} />
+            </label>
+
+            <label className="auth-field">
+              <span>Photo of yourself (JPG, PNG or WebP)</span>
+              <div className="auth-input-wrapper auth-input-plain">
+                <input
+                  accept="image/jpeg,image/png,image/webp"
+                  name="photo"
+                  {...fieldErrorProps('photo')}
+                  onChange={chooseDocument('photo')}
+                  required
+                  type="file"
+                />
+              </div>
+              <small className="register-field-hint">A clear, recent photo of your face, so the reviewer can match you to your ID (max 5 MB).</small>
+              <RegistrationFieldError name="photo" errors={fieldErrors} />
             </label>
 
             </fieldset><fieldset className="register-fields" hidden={step !== 1} disabled={step !== 1}><legend className="sr-only">Barangay and address</legend>

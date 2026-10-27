@@ -1,6 +1,6 @@
 # Use-case working source
 
-Baseline: 25 October 2026, `130fe38`. The [SVG](Use-Case-Diagram.svg) groups current use cases by actor. This Mermaid view is an editable actor/action overview, not formal UML include/extend notation. Shared actors do not inherit every action from each other.
+Baseline: 25 October 2026, `130fe38`. The [SVG](../VMS%20FINAL%20DEFENSE%20PREPARATION/Use-Case-Diagram.svg) groups current use cases by actor. This Mermaid view is an editable actor/action overview, not formal UML include/extend notation. Shared actors do not inherit every action from each other.
 
 ```mermaid
 flowchart LR

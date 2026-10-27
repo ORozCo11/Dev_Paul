@@ -51,7 +51,12 @@ class AuthController extends Controller
                 },
             ],
             'barangay_name' => ['prohibited'],
+            // Proof of who is signing up, reviewed by whoever approves the account.
+            'valid_id' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'photo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ], [
+            'valid_id.required' => 'Please upload one valid government-issued ID.',
+            'photo.required' => 'Please upload a clear photo of yourself.',
             'name.regex' => 'Name may only contain letters.',
             'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
         ]);
@@ -121,6 +126,16 @@ class AuthController extends Controller
 
             return [$user, $isFirstForBarangay];
         });
+
+        // Kept on the private disk and only ever served to reviewers.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'registration_id_path')) {
+            $user->forceFill([
+                'registration_id_path' => $request->file('valid_id')->store('registration-documents', 'local'),
+                'registration_photo_path' => $request->file('photo')->store('registration-documents', 'local'),
+            ])->save();
+        } else {
+            \Illuminate\Support\Facades\Log::warning('Registration documents were not stored: run the pending migrations.');
+        }
 
         if ($isFirstForBarangay) {
             $barangayLabel = $user->barangay_name ?? $user->barangay?->name ?? 'their barangay';

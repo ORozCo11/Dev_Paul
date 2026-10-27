@@ -4,7 +4,7 @@ const browser=await chromium.launch({headless:true});
 const page=await browser.newPage({viewport:{width:1440,height:1000}});
 page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.log('PAGEERROR',e.message);});
 await page.goto('http://localhost:5173/login');
-await page.locator('input[name=email]').fill('impersonation@test.com');
+await page.locator('input[name=email]').fill('superadmin@demotest.com');
 await page.locator('input[name=password]').fill('test123');
 await page.getByRole('button',{name:'Sign in',exact:true}).click();
 await page.waitForURL('**/admin');

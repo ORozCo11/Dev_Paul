@@ -231,7 +231,7 @@ function resolveModuleGroups(user) {
 function defaultWorkflowStatuses(module, user) {
   if (module === 'tickets' && hasRole(user, 'Admin')) return ['Pending Approval', 'Active'];
   if (module === 'ticketWorkOrders') return [];
-  if (module === 'ticketVerifications') return ['Active', 'Pending'];
+  if (module === 'ticketVerifications') return ['Active', 'Pending', 'Verified'];
   if (module === 'schedules') return ['Pending Approval', 'Scheduled'];
   if (module === 'maintenanceStatus') return ['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification'];
   if (module === 'issues') return ['Pending', 'Under Review', 'In Maintenance'];
@@ -2084,13 +2084,17 @@ function Workspace() {
     return counts;
   };
 
+  // Issue Reports only lists pre-ticket reports, so the cards, chart and
+  // latest-reports card count the same set — otherwise they show data the
+  // table (correctly) doesn't.
+  const preTicketIssues = useMemo(() => (records.issues ?? []).filter(issueIsPreTicket), [records.issues]);
   const issueStats = useMemo(
-    () => countByValues(records.issues ?? [], (r) => r.status, ['Pending', 'Under Review', 'In Maintenance', 'Resolved']),
-    [records.issues]
+    () => countByValues(preTicketIssues, (r) => r.status, ['Pending', 'Under Review', 'In Maintenance', 'Resolved']),
+    [preTicketIssues]
   );
   const issueSeverityStats = useMemo(
-    () => countByValues(records.issues ?? [], (r) => r.severity_level, ['High', 'Medium', 'Low']),
-    [records.issues]
+    () => countByValues(preTicketIssues, (r) => r.severity_level, ['High', 'Medium', 'Low']),
+    [preTicketIssues]
   );
 
   const scheduleStats = useMemo(() => {
@@ -2108,7 +2112,8 @@ function Workspace() {
       (r) => r.status === 'Scheduled' && String(r.assigned_to) === String(user.id)
     ).length;
     const needsAttention = base['Pending Approval'] + base.Declined;
-    const closed = base.Cancelled + base.Completed - awaitingVerification;
+    // base.Completed already excludes rows awaiting verification (see scheduleStage).
+    const closed = base.Cancelled + base.Completed;
     // How soon each still-scheduled row is due — retained for row ordering
     // and future schedule views, while the summary stays intentionally compact.
     const urgency = { Overdue: 0, Due1to3: 0, Due4to7: 0, Due8plus: 0 };
@@ -3682,7 +3687,7 @@ function Workspace() {
                   ]}
                 />
               </div>
-              <LatestIssueCard issues={records.issues ?? []} />
+              <LatestIssueCard issues={preTicketIssues} />
               <section className="panel module-filter-panel issue-summary-filters">
                 <IssueFilterPanel
                   categories={lookups.categories}
@@ -4564,9 +4569,10 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           value={minIndex}
           aria-label="Minimum priority"
           aria-valuetext={labels[minIndex]}
-          // Separate coincident handles so either end can widen again.
+          // A handle dragged past the other pushes it along, so a coincident
+          // pair never gets stuck; the vertical offset keeps both grabbable.
           style={{ zIndex: 1, top: minIndex === maxIndex ? 'calc(50% - 10px)' : '50%' }}
-          onChange={(e) => onChange(Math.min(Number(e.target.value), maxIndex), maxIndex)}
+          onChange={(e) => { const next = Number(e.target.value); onChange(next, Math.max(next, maxIndex)); }}
         />
         <input
           type="range"
@@ -4578,7 +4584,7 @@ function DualRangeSlider({ labels, minIndex, maxIndex, onChange }) {
           aria-label="Maximum priority"
           aria-valuetext={labels[maxIndex]}
           style={{ zIndex: 2, top: minIndex === maxIndex ? 'calc(50% + 10px)' : '50%' }}
-          onChange={(e) => onChange(minIndex, Math.max(Number(e.target.value), minIndex))}
+          onChange={(e) => { const next = Number(e.target.value); onChange(Math.min(next, minIndex), next); }}
         />
       </div>
       <div className="dual-range-labels">
@@ -7273,23 +7279,6 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
               </section>
             )}
 
-            {vehicle && !showDomainPreview && !compactVehiclePreview && (
-              <section className="veh-card">
-                <div className="veh-card-head"><Icon name="clipboard" size={16} /><h4>Entry Summary</h4></div>
-                <dl className="veh-kv">
-                  {resolvedFields.filter((f) => f.name !== 'vehicle_id' && f.type !== 'file').map((f) => {
-                    const val = formSummaryValue(f, liveValues?.[f.name]);
-                    return (
-                      <div key={f.name}>
-                        <dt>{f.label}</dt>
-                        <dd className={val ? 'summary-val' : 'summary-empty'}>{val ?? '—'}</dd>
-                      </div>
-                    );
-                  })}
-                </dl>
-              </section>
-            )}
-
             {compactVehiclePreview && vehicleLocationCard}
 
           </div>
@@ -7766,11 +7755,11 @@ const ISSUE_STAT_CARDS = [
   { key: 'Resolved', label: 'Resolved', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
 ];
 
-// Keep the schedule overview to Total plus these three status groups.
+// Schedule overview: Total, Scheduled, Closed (done and verified) and Cancelled.
 const SCHEDULE_STAT_CARDS = [
   { key: 'Scheduled', label: 'Scheduled', icon: 'calendar', bg: '#dbeafe', color: '#1d4ed8' },
-  { key: 'AwaitingVerification', label: 'Awaiting Verification', icon: 'search', bg: '#fef9c3', color: '#854d0e' },
-  { key: 'Closed', label: 'Closed / Cancelled', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
+  { key: 'Completed', label: 'Closed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
+  { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#fee2e2', color: '#b91c1c' },
 ];
 
 const VEHICLE_STAT_CARDS = [
@@ -10952,7 +10941,7 @@ function TicketCorrectionForm({ ticket, lookups, onSubmit }) {
           <label><span>Work item {index + 1} *</span><input required maxLength={255} value={row.title} onChange={(event) => setRows((values) => values.map((value, i) => i === index ? { ...value, title: event.target.value } : value))} /></label>
           <label><span>Repair Type (optional)</span><CreatableSelect value={row.maintenance_type} options={lookups.maintenance_types ?? []} catalogEndpoint="/maintenance-types" newItemLabel="repair type" onChange={(value) => setRows((values) => values.map((item, i) => i === index ? { ...item, maintenance_type: value } : item))} /></label>
         </div>)}
-        {external && <><label><span>Reason for external work *</span><SearchableSelect required value={reason} onChange={(event) => setReason(event.target.value)}>{(lookups.external_reasons ?? []).map((value) => <option key={value} value={value}>{value}</option>)}</SearchableSelect></label><label><span>External work details *</span><textarea required rows={3} value={scope} onChange={(event) => setScope(event.target.value)} /></label></>}
+        {external && <><label><span>Reason for external work *</span><CreatableSelect required value={reason} onChange={setReason} options={lookups.external_reasons ?? []} placeholder="Select a reason or type to add new" newItemLabel="reason" catalogEndpoint="/external-reasons" /></label><label><span>External work details *</span><textarea required rows={3} value={scope} onChange={(event) => setScope(event.target.value)} /></label></>}
         <button className="primary-button" type="submit" disabled={busy}>{busy ? 'Submitting...' : 'Resubmit for Admin Review'}</button>
       </form>
     </section>
@@ -10961,7 +10950,7 @@ function TicketCorrectionForm({ ticket, lookups, onSubmit }) {
 
 // What a cannibalized / external-shop sub-issue actually involves — the
 // Admin's basis for approving it, shown wherever that sub-issue is reviewed.
-function RepairContextDetails({ si }) {
+function RepairContextDetails({ si, hideProposal = false }) {
   if (!si) return null;
   const rows = si.repair_type === 'cannibalized'
     ? [
@@ -10982,16 +10971,22 @@ function RepairContextDetails({ si }) {
         ['Returned', si.external_returned_at ? `${formatDate(si.external_returned_at)}${si.external_receiver?.name ? ` · received by ${si.external_receiver.name}` : ''}` : (si.external_sent_at ? 'Not yet returned' : null)],
         ['Actual Cost', si.external_actual_cost != null ? `₱${Number(si.external_actual_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : null],
         ['Shop Result', si.external_return_notes],
-        ['Estimated Cost', si.external_estimated_cost != null ? `₱${Number(si.external_estimated_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : null],
-        ['Details', si.external_work_scope],
+        ...(hideProposal ? [] : [
+          ['Estimated Cost', si.external_estimated_cost != null ? `₱${Number(si.external_estimated_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}` : null],
+          ['Details', si.external_work_scope],
+        ]),
       ]
       : [];
   const shown = rows.filter(([, v]) => v);
   if (!shown.length) return null;
+  const wide = new Set(['Shop Result', 'Details', 'Shop Address', 'Reason for Sending Out', 'Missing / Faulty Part', 'Part From Donor']);
   return (
-    <dl className="veh-kv" style={{ marginTop: 8, padding: '8px 10px', background: si.repair_type === 'cannibalized' ? '#fff7ed' : '#f5f3ff', borderRadius: 8, fontSize: '0.8rem' }}>
+    <dl className={`repair-context is-${si.repair_type}`}>
       {shown.map(([label, value]) => (
-        <div key={label}><dt>{label}</dt><dd style={{ whiteSpace: 'pre-wrap' }}>{value}</dd></div>
+        <div key={label} className={`repair-context-item${wide.has(label) ? ' is-wide' : ''}${label.includes('Cost') ? ' is-cost' : ''}`}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
       ))}
     </dl>
   );
@@ -11247,16 +11242,6 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
       <div className="subissue-editor-panel">
         <span className="subissue-editor-title">Add a specific problem</span>
         <label>
-          <span>Subissue</span>
-          <input
-            type="text"
-            placeholder="e.g. Low coolant level"
-            value={draft.title}
-            onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
-          />
-        </label>
-        <label style={{ marginTop: 10 }}>
           <span>Repair Type</span>
           <CreatableSelect
             value={draft.maintenance_type}
@@ -11265,6 +11250,16 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
             placeholder="Select a category or type to add new"
             newItemLabel="repair type"
             catalogEndpoint="/maintenance-types"
+          />
+        </label>
+        <label style={{ marginTop: 10 }}>
+          <span>Subissue</span>
+          <input
+            type="text"
+            placeholder="e.g. Low coolant level"
+            value={draft.title}
+            onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
           />
         </label>
         {mechanicOptions && (
@@ -11700,20 +11695,19 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                           <Icon name="vehicle" size={11} /> Donor: {si.source_vehicle.vehicle_name} ({si.source_vehicle.plate_number})
                         </span>
                       )}
-                      {si.external_vendor && (
+                      {si.external_vendor && si.warranty_until && (
                         <span className="subissue-meta-chip">
-                          <Icon name="clipboard" size={11} /> External Shop: {si.external_vendor}
-                          {si.warranty_until && ` (warranty until ${formatDate(si.warranty_until)})`}
+                          <Icon name="clipboard" size={11} /> Warranty until {formatDate(si.warranty_until)}
                         </span>
                       )}
-                      {si.maintenance_cost !== null && si.maintenance_cost !== undefined && (
+                      {si.repair_type !== 'external' && si.maintenance_cost !== null && si.maintenance_cost !== undefined && (
                         <strong className="subissue-meta-cost">₱{Number(si.maintenance_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
                       )}
                       {si.verification_verdict && <TicketStatusBadge value={si.verification_verdict} />}
                     </div>
                   )}
                   {si.verification_verdict === 'Rejected' && <div className="lr-alert lr-alert-warning" role="alert"><strong>Returned for rework</strong><p>{si.verification_notes || 'Review the failed work items before resubmitting.'}</p></div>}
-                  {open && <RepairContextDetails si={si} />}
+                  {open && <RepairContextDetails si={si} hideProposal />}
 
                   {onLogRepairs && canHandleExternal && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && (
                     <div className="subissue-head-right">
@@ -11743,7 +11737,6 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                   <div className="subissue-details" id={detailsId}>
                   {si.repair_logs && <RepairLogEntries text={si.repair_logs} compact />}
                   {!!si.external_cycles?.length && <details><summary>Earlier shop visits ({si.external_cycles.length})</summary>{si.external_cycles.map((cycle, index) => <p key={index}>Visit {index + 1}: {cycle.external_vendor} | sent {formatDate(cycle.external_sent_at)} | returned {formatDate(cycle.external_returned_at)} | {cycle.external_actual_cost == null ? 'Cost not recorded' : `PHP ${Number(cycle.external_actual_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}`} | {cycle.verification_notes}</p>)}</details>}
-                  {!!si.work_history?.length && <details><summary>Work and verification history</summary><ul>{si.work_history.map((event, index) => <li key={index}>{event.event} | {event.name} | {formatDate(event.at)}{event.details?.notes ? ` | ${event.details.notes}` : ''}{event.details?.reason ? ` | ${event.details.reason}` : ''}</li>)}</ul></details>}
                   {si.parts_used && (
                     <div className="subissue-field">
                       <span className="subissue-field-label">Parts Used</span>
@@ -12616,6 +12609,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
     setLiveValues((v) => ({
       ...v,
       entry_mode: value,
+      // Switching to in-house drops a vehicle that is currently at an external shop.
+      vehicle_id: value === 'in_house' && vehicleOptions.find((o) => String(o.vehicle_id) === String(v.vehicle_id))?.at_external_shop ? '' : v.vehicle_id,
       source_vehicle_id: '',
       external_vendor: '', external_reason: '', external_work_scope: '', external_shop_contact: '',
       external_sent_by: '', external_contact_person: '', external_estimated_cost: '', external_maintenance_type: '',
@@ -12807,7 +12802,8 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
               <span>Vehicle <span className="required-asterisk">*</span></span>
               <SearchableSelect required value={liveValues.vehicle_id ?? ''} onChange={(e) => setField('vehicle_id', e.target.value)}>
                 <option value="">Select a vehicle</option>
-                {vehicleOptions.map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}
+                {/* A vehicle already out at an external shop can't take an in-house repair. */}
+                {vehicleOptions.map((v) => { const atShop = isInHouse && Boolean(v.at_external_shop); return <option key={v.vehicle_id} value={v.vehicle_id} disabled={atShop}>{v.vehicle_name} ({v.plate_number}){atShop ? ' — at external shop' : ''}</option>; })}
               </SearchableSelect>
             </label>
             <div className={`ticket-preview-card ticket-preview-card--lg${selectedVehicle ? '' : ' is-empty'}`}>
@@ -12877,10 +12873,15 @@ function ProposeTicketPage({ onBack, ticketLookups, onProposeTicket, onCreated, 
             <div className="ticket-form-grid-2 ticket-external-grid">
               <label>
                 <span>Reason for Sending Out <span className="required-asterisk">*</span></span>
-                <SearchableSelect required value={liveValues.external_reason ?? ''} onChange={(e) => setField('external_reason', e.target.value)}>
-                  <option value="">{' '}</option>
-                  {(ticketLookups.external_reasons ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
-                </SearchableSelect>
+                <CreatableSelect
+                  required
+                  value={liveValues.external_reason ?? ''}
+                  onChange={(v) => setField('external_reason', v)}
+                  options={ticketLookups.external_reasons ?? []}
+                  placeholder="Select a reason or type to add new"
+                  newItemLabel="reason"
+                  catalogEndpoint="/external-reasons"
+                />
               </label>
               <label>
                 <span>Repair Type <small>(optional)</small></span>
@@ -13236,15 +13237,21 @@ function ReadinessCheckForm({ vehicle, onCancel, onSubmit }) {
     <div>
       {!eligibility && <p role="status">Checking readiness eligibility...</p>}
       {eligibility?.can_confirm_readiness === false && <p className="notice warning" role="alert">{eligibility.readiness_block_reason || 'Readiness cannot be confirmed until maintenance is completed and independently verified.'}</p>}
-      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.88rem', cursor: 'pointer' }}>
-        <input type="checkbox" disabled={blocked || submitting} checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} style={{ marginTop: 3 }} />
-        <span>I confirm I <strong>personally checked and operated</strong> this vehicle and it is ready to respond.</span>
-      </label>
+      {/* While maintenance is still ongoing there is nothing to confirm, so
+          the checkbox and Confirm button only appear once it's eligible. */}
+      {!blocked && (
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: '0.88rem', cursor: 'pointer' }}>
+          <input type="checkbox" disabled={submitting} checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} style={{ marginTop: 3 }} />
+          <span>I confirm I <strong>personally checked and operated</strong> this vehicle and it is ready to respond.</span>
+        </label>
+      )}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
-        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
-        <button type="button" className="primary-button" onClick={submit} disabled={blocked || !confirmed || submitting}>
-          {submitting ? 'Saving…' : 'Confirm Ready'}
-        </button>
+        <button type="button" className="ghost-button" onClick={onCancel}>{blocked ? 'Close' : 'Cancel'}</button>
+        {!blocked && (
+          <button type="button" className="primary-button" onClick={submit} disabled={!confirmed || submitting}>
+            {submitting ? 'Saving…' : 'Confirm Ready'}
+          </button>
+        )}
       </div>
     </div>
   );

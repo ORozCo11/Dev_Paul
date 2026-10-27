@@ -8,7 +8,7 @@ The Barangay VMS is a fleet management platform for a barangay's emergency respo
 
 It is explicitly **not** a dispatch/operations system, a document-compliance tracker, or a mileage-based service planner. Vehicle dispatch, the Dispatched badge/action, Usage Log and temporary-release feature have been removed. Availability, physical condition and verified readiness remain separate. Sending a vehicle to an external shop remains part of the repair workflow.
 
-See `System-Architecture.svg` for the component overview. For diagram revision, use [ERD.md](ERD.md), [Use-Case-Diagram.md](Use-Case-Diagram.md) and [requirements traceability](Requirements-Traceability.md). The ERD distinguishes logical associations from physical constraints.
+See [System-Architecture.svg](../VMS%20FINAL%20DEFENSE%20PREPARATION/System-Architecture.svg) for the component overview. For diagram revision, use [ERD.md](ERD.md), [Use-Case-Diagram.md](Use-Case-Diagram.md) and [requirements traceability](Requirements-Traceability.md). The ERD distinguishes logical associations from physical constraints.
 
 ## 2. Tech stack
 
@@ -119,7 +119,7 @@ Use [the current document index](README.md) to choose the right reference.
 - [System-Audit-2026-10-24.md](System-Audit-2026-10-24.md): current open findings and retest criteria.
 - [Ticket process review](Ticket-Process-Review-2026-10-24.md): field review, reproduced ticket workflow gaps and proposed improvements.
 - [The presentation with examples](VMS-Evidence-and-Defense-Review-With-Examples.pptx): defense preparation and follow-along cases.
-- [System-Architecture.svg](System-Architecture.svg), [ERD.svg](ERD.svg) and [Use-Case-Diagram.svg](Use-Case-Diagram.svg): diagrams.
+- [System-Architecture.svg](../VMS%20FINAL%20DEFENSE%20PREPARATION/System-Architecture.svg), [ERD.svg](../VMS%20FINAL%20DEFENSE%20PREPARATION/ERD.svg) and [Use-Case-Diagram.svg](../VMS%20FINAL%20DEFENSE%20PREPARATION/Use-Case-Diagram.svg): diagrams.
 - [Historical archive](../docs/archive/vms/README.md): earlier role decisions, audit passes, UI changes, geographic evidence and superseded exports. These describe earlier revisions.
 - Root [README.md](../README.md): project setup and technical overview. The root `docs/` folder also contains earlier manuals and QA material.
 

@@ -16784,3 +16784,87 @@ html .maintenance-record-source .maintenance-schedule { background: #ede9fe; bor
 @media (max-width: 720px) {
   .form-grid-2col.wizard-photo-location-grid .smart-form { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Cannibalized / external repair summary inside a sub-issue card. */
+.repair-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 10px 0 0; padding: 0; overflow: hidden; border: 1px solid #ddd6fe; border-radius: 10px; background: #faf8ff; }
+.repair-context.is-cannibalized { border-color: #fed7aa; background: #fffaf5; }
+.repair-context-item { margin: 0; padding: 9px 12px; min-width: 0; border-right: 1px solid #ede9fe; border-bottom: 1px solid #ede9fe; }
+.repair-context.is-cannibalized .repair-context-item { border-color: #ffedd5; }
+.repair-context-item.is-wide { grid-column: 1 / -1; border-right: 0; }
+.repair-context-item dt { margin: 0 0 2px; color: #64748b; font-size: 0.68rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.repair-context-item dd { margin: 0; color: #0f172a; font-size: 0.84rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+.repair-context-item.is-cost dd { color: #15803d; font-weight: 800; }
+html .subissue-meta-chip { padding: 3px 9px; border: 1px solid #e2e8f0; border-radius: 999px; background: #fff; font-weight: 600; }
+
+/* Maintenance Schedules: every status badge sits on one centre axis (extra
+   tags like OVERDUE stack beneath it), and action icons share one left edge
+   instead of drifting with how many buttons a row has. */
+html .schedule-table-status { flex-direction: column; gap: 4px; }
+html .schedule-action-cell { width: 92px; min-width: 92px; }
+html .schedule-table-actions { justify-content: center; }
+html .schedule-table-actions .sch-card-actions { justify-content: flex-start; width: 78px; }
+
+/* Confirmation dialogs: Cancel is red and the confirming action green, the
+   same on every page. Destructive confirmations keep their own red button, so
+   Cancel turns neutral there to stay distinguishable. */
+html .confirm-dialog-actions .ghost-button { background:#dc2626 !important; border-color:#dc2626 !important; color:#fff !important; }
+html .confirm-dialog-actions .ghost-button:hover:not(:disabled) { background:#b91c1c !important; border-color:#b91c1c !important; }
+html .confirm-dialog-actions .primary-button { background:#16a34a !important; border-color:#16a34a !important; color:#fff !important; }
+html .confirm-dialog-actions .primary-button:hover:not(:disabled) { background:#15803d !important; border-color:#15803d !important; }
+html .confirm-dialog-actions.is-danger .ghost-button { background:#e2e8f0 !important; border-color:#cbd5e1 !important; color:#334155 !important; }
+html .confirm-dialog-actions.is-danger .ghost-button:hover:not(:disabled) { background:#cbd5e1 !important; }
+html .confirm-dialog-actions.is-danger .danger-button { background:#dc2626 !important; border-color:#dc2626 !important; color:#fff !important; }
+
+/* Report preview header bar. */
+html .report-preview-toolbar { background:#2563eb; border-bottom-color:#1d4ed8; }
+html .report-preview-toolbar strong { color:#fff; }
+html .report-preview-toolbar span { color:#dbeafe; }
+html .report-preview-toolbar .ghost-button { background:#fff; border-color:#fff; color:#1d4ed8; }
+
+/* Creatable dropdowns (repair type, location, vehicle type…) get the same
+   chevron the searchable dropdowns have, so they read as dropdowns too. */
+.creatable-select::after { content:''; position:absolute; right:14px; top:calc(50% - 5px); width:6px; height:6px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg); pointer-events:none; opacity:.6; z-index:1; }
+.creatable-select > input { padding-right:34px; text-overflow:ellipsis; }
+
+/* Phones: the auth pages fade up instead of sliding in from the side, which
+   briefly widened the page and made it pan horizontally. */
+@media (max-width: 767px) {
+  .auth-page-shell.slide-in { animation-name: pageFadeUp; }
+  @keyframes pageFadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+}
+
+/* Phones: filter rows are a tidy two-column grid (label and Filter button on
+   their own full-width rows), and list-panel header bars bleed edge to edge. */
+@media (max-width: 767px) {
+  html .panel > .panel-header-bar { max-width: none; width: auto; }
+  html .filter-bar-container { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; align-items: end; }
+  html .filter-bar-container > .filter-label { grid-column: 1 / -1; }
+  html .filter-bar-container > .filter-date-group { min-width: 0; width: 100%; }
+  html .filter-bar-container > :not(.filter-date-group):not(.filter-label) { grid-column: 1 / -1; min-width: 0; }
+  html .filter-bar-container .filter-select,
+  html .filter-bar-container .multi-select-dropdown,
+  html .filter-bar-container .multi-select-trigger,
+  html .filter-bar-container .date-filter-input { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+  html .filter-bar-container > .filter-apply-btn { width: 100%; height: 42px; }
+}
+
+/* Phones: inline issue filters (Report Vehicle Issue, Maintenance Tickets) were
+   squeezed into one row; they become a two-column grid with a full-width button. */
+@media (max-width: 767px) {
+  html .issue-filter-panel.is-inline { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px 12px; align-items: end; }
+  html .issue-filter-panel.is-inline .filter-date-group { flex: none; width: 100%; min-width: 0; }
+  html .issue-filter-panel.is-inline .filter-date-group > span { white-space: normal; font-size: .7rem; }
+  html .issue-filter-panel.is-inline > :not(.filter-date-group) { grid-column: 1 / -1; }
+  html .issue-filter-panel.is-inline .issue-filter-apply-btn.is-inline { width: 100%; height: 42px; }
+}
+
+/* Phones: key dates read as one label/value row each instead of two cramped columns. */
+@media (max-width: 767px) {
+  html .vehicle-profile-page .vehicle-profile-keydates { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 767px) {
+  html .filter-bar-container .workflow-status-controls,
+  html .filter-bar-container .workflow-status-controls .filter-date-group { width: 100%; min-width: 0; }
+  html .filter-bar-container .workflow-status-controls .multi-select-trigger { width: 100%; }
+}

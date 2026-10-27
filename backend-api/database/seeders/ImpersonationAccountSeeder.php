@@ -15,7 +15,7 @@ class ImpersonationAccountSeeder extends Seeder
             return;
         }
 
-        User::updateOrCreate(['email' => 'impersonation@test.com'], [
+        User::updateOrCreate(['email' => 'superadmin@demotest.com'], [
             'name' => 'Account Switcher', 'password' => Hash::make('test123'),
             'role' => 'Impersonator', 'roles' => ['Impersonator'],
             'barangay_id' => null, 'city_id' => null, 'barangay_name' => null,

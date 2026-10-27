@@ -33,7 +33,7 @@ Points to explain:
 
 ## Use-case diagrams
 
-Actors are outside the system boundary; ellipses are capabilities inside it. Association lines show participation and have no workflow arrows. Actor rectangles use the UML actor stereotype. The Laravel scheduler is the external timing trigger for scheduled application commands. This view does not invent `include` or `extend` relationships from chronological order.
+Actors are outside the system boundary; ellipses are capabilities inside it. Association lines show participation and have no workflow arrows. Actor rectangles use the UML actor stereotype. The Laravel scheduler is the external timing trigger for scheduled application commands. The only `include`/`extend` links drawn are backed by a migrated result column: a failed condition check extends ticket proposal (`vehicle_condition_checks.resulting_ticket_id`), and the scheduler's conversion includes it (`vehicle_maintenance_schedules.resulting_ticket_id`). No others are inferred from chronological order.
 
 | Actor | Responsibility |
 |---|---|

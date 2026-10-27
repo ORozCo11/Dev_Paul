@@ -71,6 +71,14 @@ class TicketController extends Controller
         'Mechanic assessed and recommended external repair',
     ];
 
+    /** The user-growable list (external_reasons table); the built-in five until it exists. */
+    private function externalReasons(): array
+    {
+        return \Illuminate\Support\Facades\Schema::hasTable('external_reasons')
+            ? \Illuminate\Support\Facades\DB::table('external_reasons')->orderBy('name')->pluck('name')->all()
+            : self::EXTERNAL_REASONS;
+    }
+
     // ===================================================================
     // READ ENDPOINTS
     // ===================================================================
@@ -180,10 +188,16 @@ class TicketController extends Controller
     public function lookups(Request $request)
     {
         return response()->json([
+            // at_external_shop: an open ticket has work sent out and not yet
+            // returned, so the vehicle can't be proposed for in-house repair.
             'vehicles'              => Vehicle::whereNotIn('status', ['Inactive', 'Decommissioned'])
                 ->with('category:category_id,category_name')
+                ->select(['vehicle_id', 'vehicle_name', 'plate_number', 'status', 'condition', 'photo_url', 'brand', 'model', 'category_id', 'current_location'])
+                ->withExists(['tickets as at_external_shop' => fn ($tickets) => $tickets
+                    ->whereIn('status', ['Active', 'For Verification'])
+                    ->whereHas('subIssues', fn ($items) => $items->whereNotNull('external_sent_at')->whereNull('external_returned_at'))])
                 ->orderBy('vehicle_name')
-                ->get(['vehicle_id', 'vehicle_name', 'plate_number', 'status', 'condition', 'photo_url', 'brand', 'model', 'category_id', 'current_location']),
+                ->get(),
             // User carries no global scope — filter by barangay by hand,
             // or a ticket could get assigned to staff from another barangay.
             'custodians'            => User::where('barangay_id', $request->user()->barangay_id)->havingRole('Custodian')->orderBy('name')->get(['id', 'name', 'email', 'photo_url']),
@@ -200,7 +214,7 @@ class TicketController extends Controller
             // back except clicking the "Proposals" stat card specifically.
             'ticket_statuses'       => ['Pending Approval', 'Declined', 'Active', 'For Verification', 'Closed', 'Cancelled'],
             'sub_issue_statuses'    => ['Open', 'Under Repair', 'Pending Approval', 'For Inspection', 'For Confirmation', 'Done', 'Deferred'],
-            'external_reasons'      => self::EXTERNAL_REASONS,
+            'external_reasons'      => $this->externalReasons(),
         ]);
     }
 
@@ -530,7 +544,7 @@ class TicketController extends Controller
             'external_vendor'     => ['nullable', 'string', 'max:255'],
             // The basis for sending it out must be an objective reason Admin
             // can check, not a judgment call about the in-house mechanics.
-            'external_reason'     => ['nullable', 'required_if:entry_mode,external', Rule::in(self::EXTERNAL_REASONS)],
+            'external_reason'     => ['nullable', 'required_if:entry_mode,external', Rule::in($this->externalReasons())],
             'external_work_scope' => ['nullable', 'required_if:entry_mode,external', 'string', 'max:5000'],
             'external_shop_contact'   => ['nullable', 'string', 'max:255'],
             'external_sent_by'        => ['nullable', 'string', 'max:255'],
@@ -1377,7 +1391,7 @@ class TicketController extends Controller
             'sub_issues.*.title' => ['required', 'string', 'max:255'],
             'sub_issues.*.maintenance_type' => ['nullable', 'string', 'max:150'],
             'external_work_scope' => ['nullable', 'string', 'max:5000'],
-            'external_reason' => ['nullable', Rule::in(self::EXTERNAL_REASONS)],
+            'external_reason' => ['nullable', Rule::in($this->externalReasons())],
         ]);
         return DB::transaction(function () use ($request, $ticket, $data) {
             $ticket = $this->lockTicket($ticket, $request);
