@@ -110,9 +110,8 @@
 }
 .auth-page-nav a:hover { color: yellowgreen; text-decoration: underline; }
 .auth-page-nav a:active { transform: scale(0.94); }
-.auth-page-header-brand { transition: color 0.15s ease; }
-.auth-page-header-brand:hover .vms-wordmark,
-.auth-page-header-brand:hover .auth-page-header-subtext { color: yellowgreen; }
+/* The logo is a plain mark: no hover colour, no pointer cursor, not clickable. */
+.auth-page-header-brand { pointer-events: none; cursor: default; }
 .auth-page-header-login-btn {
   display: inline-flex;
   align-items: center;
@@ -3775,7 +3774,7 @@ table button.icon-btn svg,
   display: flex; align-items: center; justify-content: space-between;
   padding: 22px 28px 16px;
   border-bottom: 1px solid #e2e8f0;
-  position: sticky; top: 0; background: #fff; z-index: 1; border-radius: 18px 18px 0 0;
+  position: sticky; top: 0; background: #fff; z-index: 30; border-radius: 18px 18px 0 0;
 }
 .modal-header h3 { font-size: 1.15rem; font-weight: 800; color: #0f172a; }
 .modal-close-btn {
@@ -10578,25 +10577,13 @@ button.btn-view-action svg {
 .boundary-reference-label small { color: #475569; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
 .boundary-reference-label span { color: #475569; font-size: 11px; margin-top: 2px; }
 .boundary-map-details { position: absolute; top: 12px; right: 12px; z-index: 1000; width: 270px; max-width: calc(100% - 24px); border: 1px solid #cbd5e1; border-radius: 9px; background: rgba(255, 255, 255, .97); color: #172554; box-shadow: 0 2px 8px #0f172a25; }
-.boundary-map-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; list-style: none; cursor: pointer; }
-.boundary-map-details summary::-webkit-details-marker { display: none; }
-.boundary-map-details summary:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; border-radius: 9px; }
+.boundary-map-heading { padding:10px 12px; }
 .boundary-map-identity { display: grid; gap: 2px; min-width: 0; }
 .boundary-map-identity > span { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #64748b; }
 .boundary-map-identity > strong { font-size: 16px; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
 .boundary-map-identity > small { font-size: 11px; color: #475569; }
-.boundary-map-details-toggle { display: flex; align-items: center; gap: 5px; max-width: 78px; font-size: 10px; font-weight: 700; line-height: 1.4; color: #2563eb; }
-.boundary-map-details-toggle svg { flex-shrink: 0; transition: transform .15s ease; }
-.boundary-map-details[open] .boundary-map-details-toggle svg { transform: rotate(180deg); }
-.boundary-map-details-body { max-height: 230px; overflow-y: auto; padding: 12px; border-top: 1px solid #e2e8f0; }
-.boundary-map-details-body dl { display: grid; gap: 9px; margin: 0; }
-.boundary-map-details-body dt { color: #64748b; font-size: 10px; }
-.boundary-map-details-body dd { margin: 2px 0 0; color: #172554; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
-.boundary-map-details-body p { margin: 12px 0 0; color: #475569; font-size: 11px; line-height: 1.5; }
 @media (max-width: 700px) {
   .boundary-map-details { top: auto; bottom: 86px; left: 12px; right: auto; width: 220px; max-width: calc(100% - 24px); }
-  .boundary-map-details summary { flex-direction: column; align-items: stretch; gap: 6px; }
-  .boundary-map-details-toggle { max-width: none; justify-content: space-between; }
 }
 .location-density-basemap-toggle button.is-active {
   background: #2563eb;
@@ -14671,6 +14658,18 @@ html[data-theme="light"] .module-nav-group > button:not(.module-nav-section) {
 }
 .lr-side-actions .lr-submit,
 .lr-side-actions .lr-cancel { width: 100%; justify-content: center; }
+/* Submit / Cancel sit under the repair form on the left, side by side. */
+.lr-side-actions.lr-main-actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+.lr-side-actions.lr-main-actions .lr-hint,
+.lr-side-actions.lr-main-actions .lr-note { flex: 1 0 100%; margin: 0; }
+.lr-side-actions.lr-main-actions .lr-submit,
+.lr-side-actions.lr-main-actions .lr-cancel { width: auto; min-width: 150px; }
 
 /* Tablet / mobile — stack; the side column drops below the task, stops
    sticking, and the actions stay full-width at the end of the form. */
@@ -15725,6 +15724,9 @@ html .sch-card:hover { border-color: var(--schedule-color); }
 .cm-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
 .cm-table th { text-align: left; padding: 8px 10px; font-size: 0.68rem; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; border-bottom: 1px solid #e2e8f0; }
 .cm-table td { padding: 9px 10px; border-bottom: 1px solid #eef2f7; vertical-align: top; overflow-wrap: anywhere; }
+.cm-table .cm-actions-header, .cm-table .cm-actions-cell { width:128px; text-align:center; vertical-align:middle; }
+.cm-row-actions { display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; }
+.cm-row-actions .icon-btn { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; min-width:32px; padding:0; margin:0; }
 .cm-switch { align-self: flex-start; background: none; border: 0; padding: 0; color: var(--primary, #2563eb); text-decoration: underline; cursor: pointer; font-size: 0.8rem; }
 .cm-picker { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
 .cm-picker select { min-height: 38px; min-width: 220px; }
@@ -15734,6 +15736,7 @@ html .sch-card:hover { border-color: var(--schedule-color); }
   .cm-table tr { margin-bottom: 10px; padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 10px; }
   .cm-table td { border: 0; padding: 4px 0; display: flex; justify-content: space-between; gap: 12px; }
   .cm-table td::before { content: attr(data-label); font-size: 0.68rem; font-weight: 800; text-transform: uppercase; color: #64748b; }
+  .cm-table .cm-actions-cell { width:100%; text-align:left; }
 }
 .dp-form { display: flex; flex-direction: column; gap: 14px; }
 .dp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
@@ -15747,6 +15750,8 @@ html .sch-card:hover { border-color: var(--schedule-color); }
 /* Ticket personnel avatar group (Card + List views) */
 .tpa-row { margin-top: 8px; display: flex; justify-content: flex-end; min-height: 30px; align-items: center; }
 .tpa-group { display: inline-flex; align-items: center; }
+.assigned-personnel-names { display: inline-flex; flex-direction: column; gap: 4px; max-width: 100%; line-height: 1.5; vertical-align: middle; }
+.assigned-personnel-names > span { overflow-wrap: anywhere; }
 .tpa-avatar { position: relative; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px #bfdbfe; margin-left: -8px; background: #fff; flex-shrink: 0; cursor: default; outline: none; }
 .tpa-avatar:first-child { margin-left: 0; }
 .tpa-avatar img, .tpa-initials { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: flex; align-items: center; justify-content: center; }
@@ -16585,8 +16590,22 @@ html[data-theme="dark"] .ticket-reference-progress { color: var(--muted); }
   .ticket-reference-info p { font-size: .8rem; }
 }
 
-/* QA feedback stays in document flow so users can correct the form. */
-.qa-inline-error { display: flex; align-items: center; gap: 10px; padding: 12px; margin-bottom: 12px; border: 1px solid #ef4444; border-radius: 8px; color: var(--text); background: var(--surface, #fff); }
+/* Shared red validation style for inline messages and centered summaries. */
+.qa-inline-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--notice-error-border);
+  border-radius: 8px;
+  color: var(--notice-error-text);
+  background: var(--notice-error-bg);
+  text-align: left;
+}
+.qa-inline-error > .toast-notice-icon { flex-shrink: 0; margin-top: 2px; }
+.qa-inline-error .toast-notice-lines { flex: 1; min-width: 0; align-items: flex-start; text-align: left; }
+.qa-inline-error .toast-notice-close { position: static; flex-shrink: 0; margin-left: auto; color: inherit; }
 
 /* Keep the text and single calendar button inside one date control. */
 html[data-theme] .date-filter-input > .date-filter-input-text { width:0; flex:1 1 0; min-width:0; max-width:100%; border:0; border-radius:0; box-sizing:border-box; background:transparent !important; color:inherit !important; }
@@ -16897,3 +16916,130 @@ html .report-preview-toolbar .ghost-button { background:#fff; border-color:#fff;
 .support-success-again:hover { background: #dbeafe; }
 .support-success-again:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
 .sa-email-sent { display: inline-flex; align-items: center; justify-content: center; color: #16a34a; background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 10px; cursor: default; }
+
+/* Desktop: every filter row lines its Filter / Apply button up with the
+   controls (same height, same bottom edge) instead of floating above them. */
+@media (min-width: 768px) {
+  html .filter-bar-container { align-items: flex-end; }
+  html .filter-bar-container > .filter-label { align-self: flex-end; display: flex; align-items: center; height: 30px; }
+  html .filter-bar-container > .filter-apply-btn { height: 30px; padding: 0 18px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
+}
+
+/* Add Vehicle, step 3: the vehicle photo sits beside the file cabinet; the
+   Current Location dropdown and its map follow underneath at full width. */
+.form-grid-2col.wizard-photo-location-grid .smart-form { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 768px) {
+  .wizard-photo-location-grid .form-group:has(.file-cabinet) .form-group-body { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; align-items: stretch; }
+  .wizard-photo-location-grid .form-group:has(.file-cabinet) .form-group-body > label { grid-column: auto; min-width: 0; display: flex; flex-direction: column; }
+  .wizard-photo-location-grid .form-group:has(.file-cabinet) .vehicle-profile-photo { flex: none; height: 280px; min-height: 0; }
+  .wizard-photo-location-grid .form-group:has(.file-cabinet) .file-cabinet { flex: 1; min-height: 280px; }
+}
+
+/* A collapsed sub-issue shows only its title row (chevron, number, title, status);
+   everything else (mechanic, repair type, buttons, banners) appears when expanded. */
+html .subissue-card.is-collapsed > :not(.subissue-card-head) { display: none; }
+
+/* Header badges share one width (the widest label's) without clipping long labels. */
+html .ticket-detail-panel .ticket-hero-badges { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+html .ticket-detail-panel .ticket-hero-badges > span { width: auto; min-width: 0; height: auto; min-height: 30px; white-space: nowrap; }
+
+/* Form validation message — a centered overlay instead of an in-flow block, so
+   it never pushes sections around (it used to take a grid cell in the ticket
+   forms and drag "1. Choose a repair method" down the page). Click outside the
+   message to dismiss. */
+.form-feedback {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.35);
+}
+.form-feedback .qa-inline-error {
+  width: min(460px, 100%);
+  margin: 0;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3);
+}
+.ticket-create-form > .ticket-create-header { grid-row: 1; }
+.ticket-create-form > .ticket-method-section { grid-row: 2; }
+
+/* Add Vehicle, "Photo & Location": the vehicle photo and its file cabinet sit
+   side by side; the location dropdown and its map follow below, full width. */
+.smart-form .form-group--vehicle-profile > .form-group-body {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.smart-form .form-group--vehicle-profile > .form-group-body > * { grid-column: auto; min-width: 0; }
+.smart-form .form-group--current-location > .form-group-body { grid-template-columns: minmax(0, 1fr); }
+.wizard-photo-location-grid .vehicle-profile-photo { height: 280px; max-height: 280px; }
+.wizard-photo-location-grid .vehicle-profile-photo img { object-fit: contain; background: var(--surface-alt, #eff6ff); }
+.wizard-photo-location-grid .form-group--current-location .creatable-select > input { width: 100%; min-width: 0; box-sizing: border-box; }
+@media (max-width: 800px) {
+  .smart-form .form-group--vehicle-profile > .form-group-body { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* One focus look for every text field, dropdown and textarea in the app (the
+   Add Location style): a solid blue border with a soft outer ring. Fields that
+   sit inside a bordered wrapper (date picker text) keep the wrapper's own focus
+   outline instead. */
+html[data-theme] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]):not(.date-filter-input-text), select, textarea):focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb, 0 0 0 4px rgba(37, 99, 235, 0.18);
+}
+
+/* Cannibalization Management: one block per donor vehicle. */
+.cm-donor-block { display:grid; gap:12px; margin-top:18px; padding:14px; min-width:0; border:2px solid #93c5fd; border-left:5px solid #2563eb; border-radius:10px; background:var(--surface,#fff); }
+.cm-donor-heading { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding-bottom:12px; border-bottom:1px solid #bfdbfe; }
+.cm-donor-heading > strong { min-width:0; overflow-wrap:anywhere; color:var(--text-strong,#0f172a); font-size:.9rem; }
+.cm-donor-number { display:inline-flex; flex-shrink:0; padding:5px 10px; border-radius:6px; background:#2563eb; color:#fff; font-size:.76rem; font-weight:700; }
+.cm-section .cm-picker { margin-top:12px; padding:14px; border:2px dashed #93c5fd; border-radius:10px; background:var(--surface-2,#eff6ff); }
+.cm-picker > .lr-label, .cm-picker-hint { flex:1 0 100%; margin:0; }
+.cm-picker-hint { color:var(--text-muted,#64748b); font-size:.78rem; line-height:1.5; }
+
+/* Propose ticket: the open-report question comes before the rest of the form,
+   as one card centered in the space beside the vehicle card. */
+html .smart-form.ticket-create-form > .veh-card.ticket-open-reports { grid-column: 2; grid-row: 3; align-self: stretch; display: flex; align-items: center; justify-content: center; min-height: 360px; min-width: 0; }
+.ticket-open-reports-card { width: min(560px, 100%); display: grid; justify-items: center; gap: 10px; padding: 28px 24px; text-align: center; color: var(--primary, #2563eb); }
+.ticket-open-reports-card h4 { margin: 0; font-size: 1.1rem; color: var(--text-strong, #0f172a); }
+.ticket-open-reports-card p { margin: 0; max-width: 46ch; font-size: 0.88rem; }
+.ticket-open-reports-list { width: 100%; display: grid; gap: 8px; margin-top: 6px; text-align: left; }
+.ticket-open-reports-option { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: var(--text-strong, #0f172a); font: inherit; font-size: 0.9rem; text-align: left; cursor: pointer; }
+.ticket-open-reports-option:hover:not(:disabled) { border-color: #2563eb; background: #eff6ff; }
+.ticket-open-reports-option:disabled { opacity: 0.55; cursor: not-allowed; background: #f1f5f9; }
+.ticket-open-reports-dot { flex: 0 0 16px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid #94a3b8; }
+.ticket-open-reports-note { display: block; margin-top: 2px; color: #b45309; font-weight: 600; }
+@media (max-width: 900px) {
+  html .smart-form.ticket-create-form > .veh-card.ticket-open-reports { grid-column: 1; grid-row: 4; min-height: 0; }
+}
+
+/* Small label above each sidebar group, so the groups read as a sequence. */
+.module-nav-heading { margin: 4px 0 0; padding: 0 12px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: rgba(226, 232, 240, 0.6); }
+.sidebar.collapsed .module-nav-heading { display: none; }
+
+/* Vehicle profile photo: one clean, evenly framed picture (panel feedback: the old one looked stretched). */
+.vehicle-profile-overview .veh-info-photo {
+  height: auto; min-height: 0; max-height: 320px; aspect-ratio: 16 / 10;
+  border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; overflow: hidden;
+}
+.vehicle-profile-overview .veh-info-photo img,
+.vehicle-profile-overview .veh-info-photo .photo-cell,
+.vehicle-profile-overview .veh-info-photo .photo-thumb { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
+.vehicle-profile-overview .veh-info-photo-empty { border: 1px dashed #cbd5e1; background: #f8fafc; color: #64748b; }
+.module-nav-sub { padding-left: 2.1rem; font-size: 0.92em; }
+
+/* One plain sentence under the page title: what this page is for and what to do here. */
+.page-purpose { margin: 0 0 12px; padding: 0 2px; color: #475569; font-size: 0.92rem; line-height: 1.45; }
+
+.module-nav button .module-nav-chevron { margin-left: auto; display: inline-flex; flex: 0 0 auto; opacity: 0.7; }
+.module-nav-group + .module-nav-group { margin-top: 10px; }
+
+/* Sub-pages sit indented under View Vehicles (must outrank the generic nav button padding). */
+.module-nav button.module-nav-sub { padding-left: 34px; font-size: 0.85rem; min-height: 36px; }
+.module-nav button.module-nav-sub svg { width: 16px; height: 16px; }
+
+/* Indent wins over every theme/nav padding rule. */
+html .sidebar:not(.collapsed) .module-nav button.module-nav-sub { padding-left: 44px !important; }

@@ -62,7 +62,6 @@ export default function AuthHeader() {
             <Link to={dashboardPath} className="auth-page-header-login-btn">Back to Dashboard</Link>
           ) : (
             <>
-              <Link to="/register" className="auth-page-header-register-btn">Register</Link>
               <Link to="/login" className="auth-page-header-login-btn">Login</Link>
             </>
           )}

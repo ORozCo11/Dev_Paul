@@ -2,6 +2,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ticketTimeline } from './ticketTimeline.js';
 
+test('timeline shows the acting role without the impersonation preamble and preserves the audit record', () => {
+  const ticket = { ticket_id: 15, barangay_number: 2, activity: [{
+    log_id: 1, action: 'Propose Ticket', created_at: '2026-10-28T04:00:00Z',
+    user: { name: 'Riel Engana', role: 'Admin' }, role: 'Custodian',
+    details: '[Impersonated by account #8; reason: Account workspace access] Ticket #15 submitted for Admin review.',
+  }] };
+  const original = structuredClone(ticket);
+  const [event] = ticketTimeline(ticket);
+  assert.equal(event.details, 'Ticket #2 submitted for Admin review.');
+  assert.equal(event.by.name, 'Riel Engana');
+  assert.equal(event.role, 'Custodian');
+  assert.deepEqual(ticket, original);
+});
+
+test('ordinary action details and bracketed repair notes remain visible', () => {
+  const details = 'Repair logged [pump seal]: replaced seal. Reason: pressure leak.';
+  const [event] = ticketTimeline({ activity: [{
+    log_id: 1, action: 'Repairs Logged', created_at: '2026-10-28T04:00:00Z',
+    user: { name: 'Mechanic', role: 'Maintenance Personnel' }, details,
+  }] });
+  assert.equal(event.details, details);
+  assert.equal(event.role, 'Maintenance Personnel');
+});
+
 test('audit events retain repeated actions and actors in chronological order', () => {
   const events = ticketTimeline({ activity: [
     { log_id: 3, action: 'Work Order Reassigned', created_at: '2026-10-22T02:00:00Z', user: { name: 'Admin B' } },

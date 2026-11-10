@@ -137,7 +137,7 @@ class TicketWorkflowTest extends TestCase
 
         Sanctum::actingAs($mechanic, ['*']);
         foreach ($ticket->subIssues()->get() as $subIssue) {
-            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
                 'repair_logs' => 'Fixed it.',
             ])->assertOk();
         }
@@ -207,7 +207,7 @@ class TicketWorkflowTest extends TestCase
         $ticket = $this->activeTicket($this->vehicle(), ['Worn belt']);
         $sub = $ticket->subIssues->first();
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->post("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", [
+        $this->post("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             '_method' => 'PUT',
             'repair_logs' => 'Adjusted belt tension. No replacement parts needed.',
             'photos' => [UploadedFile::fake()->image('belt.jpg'), UploadedFile::fake()->create('report.pdf', 20, 'application/pdf')],
@@ -229,7 +229,7 @@ class TicketWorkflowTest extends TestCase
         $ticket = $this->activeTicket($this->vehicle(), ['Worn belt']);
         $sub = $ticket->subIssues->first();
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->post("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", [
+        $this->post("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             '_method' => 'PUT', 'repair_logs' => 'Adjusted belt tension.',
             'photos' => [UploadedFile::fake()->create('large.pdf', 8193, 'application/pdf'), UploadedFile::fake()->create('script.exe', 1)],
         ], ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors(['photos.0', 'photos.1']);
@@ -418,7 +418,7 @@ class TicketWorkflowTest extends TestCase
         $subIssue = $ticket->subIssues->first();
 
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->put("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+        $this->put("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Topped up coolant.',
             'photo' => UploadedFile::fake()->create('receipt.pdf', 100, 'application/pdf'),
         ])->assertOk();
@@ -851,7 +851,7 @@ class TicketWorkflowTest extends TestCase
         Sanctum::actingAs($this->mechanic, ['*']);
         $this->getJson('/api/dashboard')->assertOk()->assertJsonPath('badge_counts.ticketWorkOrders', 1);
 
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Topped up coolant.',
         ])->assertOk();
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
@@ -927,7 +927,7 @@ class TicketWorkflowTest extends TestCase
         $subIssue = $ticket->subIssues->first();
 
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Should be blocked.',
         ])->assertUnprocessable();
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertUnprocessable();
@@ -1113,7 +1113,7 @@ class TicketWorkflowTest extends TestCase
 
         Sanctum::actingAs($mechanic, ['*']);
 
-        return $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+        return $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Swapped in a part from another vehicle.',
             'repair_type' => 'cannibalized', 'part_needed' => 'Alternator', 'part_quantity' => 1,
             'source_vehicle_id' => $donorVehicle->vehicle_id,
@@ -1213,13 +1213,13 @@ class TicketWorkflowTest extends TestCase
     #[Test]
     public function an_unrelated_ticket_ending_does_not_touch_a_vehicle_that_was_never_taken_out_of_service(): void
     {
-        $vehicle = $this->vehicle(['status' => 'Available', 'condition' => 'Needs Inspection']);
+        $vehicle = $this->vehicle(['status' => 'Available', 'condition' => 'Needs Repair']);
         $ticket = $this->createTicket($vehicle); // Open, never touched
 
         Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("/api/tickets/{$ticket->ticket_id}/cancel", ['closing_notes' => 'Work cancelled for this test scenario.'])->assertOk();
 
-        $this->assertSame('Needs Inspection', $vehicle->fresh()->condition);
+        $this->assertSame('Needs Repair', $vehicle->fresh()->condition);
     }
 
     #[Test]
@@ -1246,7 +1246,7 @@ class TicketWorkflowTest extends TestCase
         $subIssue = $ticket->subIssues->first();
 
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Swapped it.', 'repair_type' => 'cannibalized', 'source_vehicle_id' => $vehicle->vehicle_id,
         ])->assertStatus(422);
     }
@@ -1257,7 +1257,7 @@ class TicketWorkflowTest extends TestCase
         $vehicle = $this->vehicle();
         $ticket = $this->activeTicket($vehicle, ['Alternator']);
         $subIssue = $ticket->subIssues->first();
-        $this->logCannibalizedRepair($ticket, $subIssue, $this->vehicle());
+        $this->logCannibalizedRepair($ticket, $subIssue, $this->vehicle(['status' => 'Decommissioned']));
 
         $newCustodian = User::factory()->create(['role' => 'Custodian']);
         Sanctum::actingAs($this->admin, ['*']);
@@ -1272,7 +1272,7 @@ class TicketWorkflowTest extends TestCase
     public function a_donor_part_goes_straight_to_verification_with_no_admin_approval(): void
     {
         $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
+        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle', 'status' => 'Decommissioned']);
         $ticket = $this->activeTicket($vehicle, ['Broken alternator']);
         $subIssue = $ticket->subIssues->first();
 
@@ -1283,14 +1283,11 @@ class TicketWorkflowTest extends TestCase
         $this->assertSame($donor->vehicle_id, $subIssue->source_vehicle_id);
         $this->assertSame('For Verification', $ticket->fresh()->status);
 
-        // The donor's side is still recorded, so the missing part is never invisible.
-        $this->assertNotNull($subIssue->cannibalization_issue_report_id);
-        $this->assertSame('Needs Inspection', $donor->fresh()->condition);
-        $this->assertDatabaseHas('vehicle_issue_reports', [
-            'issue_report_id' => $subIssue->cannibalization_issue_report_id,
-            'vehicle_id' => $donor->vehicle_id,
-            'status' => 'Pending',
-        ]);
+        // The donor's side is still visible: the part shows as missing on its profile, with no separate issue report.
+        $this->assertNull($subIssue->cannibalization_issue_report_id);
+        $this->assertDatabaseMissing('vehicle_issue_reports', ['vehicle_id' => $donor->vehicle_id]);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->assertNotEmpty($this->getJson("/api/vehicles/{$donor->vehicle_id}/missing-parts")->assertOk()->json());
 
         // …and the Custodian can verify and close it.
         Sanctum::actingAs($this->custodian, ['*']);
@@ -1302,13 +1299,13 @@ class TicketWorkflowTest extends TestCase
     public function a_donor_part_only_job_needs_no_repair_narrative_but_a_repair_still_does(): void
     {
         $vehicle = $this->vehicle();
-        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle']);
+        $donor = $this->vehicle(['vehicle_name' => 'Donor Vehicle', 'status' => 'Decommissioned']);
         $ticket = $this->activeTicket($vehicle, ['Broken alternator', 'Loose bolt']);
         [$partOnly, $repairOnly] = $ticket->subIssues->all();
 
         // Donor part only — no repair_logs sent at all.
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$partOnly->sub_issue_id}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$partOnly->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_type' => 'cannibalized', 'part_needed' => 'Gearbox',  'source_vehicle_id' => $donor->vehicle_id,
         ])->assertOk();
         $this->assertStringContainsString('Donor Vehicle', $partOnly->fresh()->repair_logs);
@@ -1317,7 +1314,7 @@ class TicketWorkflowTest extends TestCase
         $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$repairOnly->sub_issue_id}/log-repairs", [])->assertUnprocessable();
 
         // Repair + donor part together is fine too.
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$repairOnly->sub_issue_id}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$repairOnly->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Fitted the part and re-torqued.', 'repair_type' => 'cannibalized', 'part_needed' => 'Hose',  'source_vehicle_id' => $donor->vehicle_id,
         ])->assertOk();
         $this->assertSame('For Verification', $ticket->fresh()->status);

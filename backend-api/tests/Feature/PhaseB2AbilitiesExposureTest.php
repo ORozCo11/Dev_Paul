@@ -31,7 +31,7 @@ class PhaseB2AbilitiesExposureTest extends TestCase
 
         $abilities = $response->json('user.abilities');
         $this->assertIsArray($abilities);
-        $this->assertContains('vehicle.create', $abilities);
+        $this->assertContains('vehicle.edit', $abilities); $this->assertNotContains('vehicle.create', $abilities);
         $this->assertNotContains('ticket.inspect', $abilities);
     }
 

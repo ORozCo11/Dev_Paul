@@ -41,7 +41,7 @@ class SuperAdminRegressionFixesTest extends TestCase
     {
         $this->getJson('/api/superadmin/barangays')->assertOk()->assertJsonCount(0);
         $payload = ['city_id' => $this->barangay->city_id, 'barangay_id' => $this->barangay->id];
-        $this->postJson('/api/superadmin/barangays', $payload)->assertCreated()->assertJsonPath('has_registration_code', false);
+        $this->postJson('/api/superadmin/barangays', $payload)->assertCreated();
         $stamp = $this->barangay->fresh()->provisioned_at;
         $this->assertNotNull($stamp);
         $this->getJson('/api/superadmin/barangays')->assertOk()->assertJsonPath('0.id', $this->barangay->id);
@@ -91,7 +91,9 @@ class SuperAdminRegressionFixesTest extends TestCase
         VehicleMaintenanceSchedule::create(['vehicle_id' => $this->vehicle()->vehicle_id, 'maintenance_type' => 'Oil Change', 'scheduled_date' => now()->addWeek()->toDateString(), 'created_by' => $admin->id, 'assigned_to' => $mechanic->id, 'status' => 'Scheduled']);
         Sanctum::actingAs($admin, ['*']);
         $this->putJson("/api/users/{$mechanic->id}", ['roles' => ['Custodian']])->assertUnprocessable();
-        $this->putJson("/api/users/{$mechanic->id}", ['roles' => ['Custodian', 'Maintenance Personnel']])->assertOk();
+        // One role per account: a second role is rejected, and keeping the same role is fine.
+        $this->putJson("/api/users/{$mechanic->id}", ['roles' => ['Custodian', 'Maintenance Personnel']])->assertUnprocessable();
+        $this->putJson("/api/users/{$mechanic->id}", ['roles' => ['Maintenance Personnel']])->assertOk();
     }
 
     public function test_primary_role_can_be_retained_while_secondary_role_is_removed_when_no_open_work(): void
@@ -110,26 +112,6 @@ class SuperAdminRegressionFixesTest extends TestCase
         $this->getJson('/api/superadmin/activity-log?paginate=1&scope=superadmin')->assertOk()->assertJsonPath('total', 205);
         $this->getJson('/api/superadmin/activity-log?paginate=1&per_page=1000')->assertUnprocessable();
         $this->getJson('/api/superadmin/activity-log?paginate=1&page=0')->assertUnprocessable();
-    }
-
-    public function test_registration_codes_do_not_depend_on_boundary_review(): void
-    {
-        $geometry = ['type' => 'Polygon', 'coordinates' => [[[123, 10], [124, 10], [124, 11], [123, 10]]]];
-        $this->barangay->update(['boundary' => $geometry, 'boundary_status' => 'needs_review', 'boundary_source' => 'namria_hdx_reference_2025']);
-        $url = "/api/superadmin/barangays/{$this->barangay->id}/registration-code";
-        $this->getJson($url)->assertOk();
-        $this->barangay->update(['pending_boundary' => $geometry]);
-        $this->getJson($url)->assertOk();
-        $this->postJson($url.'/regenerate')->assertOk();
-        $this->assertSame($geometry, $this->barangay->fresh()->pending_boundary);
-        $this->barangay->update(['boundary' => null, 'pending_boundary' => null]);
-        $this->getJson($url)->assertOk();
-        $this->postJson($url.'/regenerate')->assertOk();
-        $this->assertNull($this->barangay->fresh()->boundary);
-        $custodian = $this->user(['Custodian']);
-        \Laravel\Sanctum\Sanctum::actingAs($custodian, ['*']);
-        $this->getJson($url)->assertForbidden();
-        $this->postJson($url.'/regenerate')->assertForbidden();
     }
 
     public function test_activity_search_preserves_literal_case_insensitive_substring_behavior(): void

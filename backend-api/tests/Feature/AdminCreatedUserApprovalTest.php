@@ -48,36 +48,6 @@ class AdminCreatedUserApprovalTest extends TestCase
     }
 
     #[Test]
-    public function an_admin_created_user_is_not_listed_as_pending_for_the_super_admin(): void
-    {
-        $staff = $this->createStaffAsAdmin();
-        $this->actAsSuperAdmin();
-
-        $ids = collect($this->getJson('/api/superadmin/pending-approvals')->assertOk()->json())->pluck('id');
-        $this->assertNotContains($staff->id, $ids);
-    }
-
-    #[Test]
-    public function the_super_admin_cannot_reject_an_active_account_even_without_an_approval_stamp(): void
-    {
-        $staff = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian'], 'is_active' => true, 'approved_at' => null]);
-        $this->actAsSuperAdmin();
-
-        $this->deleteJson("/api/superadmin/users/{$staff->id}/reject")->assertUnprocessable();
-        $this->assertNotNull($staff->fresh());
-    }
-
-    #[Test]
-    public function a_genuinely_pending_registration_can_still_be_rejected(): void
-    {
-        $pending = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'is_active' => false, 'approved_at' => null]);
-        $this->actAsSuperAdmin();
-
-        $this->deleteJson("/api/superadmin/users/{$pending->id}/reject")->assertOk();
-        $this->assertNull($pending->fresh());
-    }
-
-    #[Test]
     public function the_backfill_approves_existing_active_accounts_but_not_pending_registrations(): void
     {
         $active = User::factory()->create(['is_active' => true, 'approved_at' => null]);

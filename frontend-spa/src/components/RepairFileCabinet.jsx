@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from './Icon';
 
 const ACCEPT = '.jpg,.jpeg,.png,.pdf,.doc,.docx';
@@ -7,6 +8,8 @@ export default function RepairFileCabinet({ files, savedFiles = [], onChange, on
   const input = useRef(null);
   const [selected, setSelected] = useState([]);
   const [dragging, setDragging] = useState(false);
+  // In-app rename dialog (null when closed) instead of the browser's own prompt().
+  const [renaming, setRenaming] = useState(null);
   const previewFile = (file) => {
     const url = URL.createObjectURL(file);
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -24,10 +27,20 @@ export default function RepairFileCabinet({ files, savedFiles = [], onChange, on
     const index = selected[0];
     const file = files[index];
     const extension = file.name.match(/\.[^.]+$/)?.[0] || '';
-    const name = window.prompt('File name', file.name.slice(0, -extension.length));
-    if (!name?.trim()) return;
-    onChange(files.map((f, i) => i === index ? new File([f], name.trim().replace(/[\\/]/g, '-') + extension, { type: f.type, lastModified: f.lastModified }) : f));
+    setRenaming({ index, extension, name: file.name.slice(0, file.name.length - extension.length) });
   };
+  const confirmRename = () => {
+    const name = renaming?.name.trim().replace(/[\\/]/g, '-');
+    if (!name) return;
+    onChange(files.map((f, i) => i === renaming.index ? new File([f], name + renaming.extension, { type: f.type, lastModified: f.lastModified }) : f));
+    setRenaming(null);
+  };
+  useEffect(() => {
+    if (!renaming) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setRenaming(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [renaming]);
   return (
     <section className="repair-file-cabinet" aria-label="Repair evidence files">
       <header className="repair-file-cabinet-header">
@@ -48,6 +61,36 @@ export default function RepairFileCabinet({ files, savedFiles = [], onChange, on
       </button>
       <input ref={input} type="file" multiple accept={ACCEPT} className="lr-file-input" onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
       <p className="lr-hint">Repair evidence · up to 10 files, 8 MB each. Files upload when you submit the repair log.</p>
+      {renaming && createPortal(
+        <div className="confirm-overlay" onClick={() => setRenaming(null)}>
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-file-title" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-dialog-icon" aria-hidden="true"><Icon name="edit" size={22} /></div>
+            <div className="confirm-dialog-copy">
+              <p className="eyebrow">Rename file</p>
+              <h3 id="rename-file-title">File name</h3>
+              <p>Choose a clear name for this file. The file type ({renaming.extension || 'none'}) stays the same.</p>
+            </div>
+            <label className="auth-field">
+              <span>File name</span>
+              <div className="auth-input-wrapper auth-input-plain">
+                <input
+                  autoFocus
+                  type="text"
+                  value={renaming.name}
+                  onChange={(e) => setRenaming({ ...renaming, name: e.target.value })}
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmRename(); } }}
+                />
+              </div>
+            </label>
+            <div className="confirm-dialog-actions">
+              <button className="ghost-button" type="button" onClick={() => setRenaming(null)}>Cancel</button>
+              <button className="primary-button" type="button" disabled={!renaming.name.trim()} onClick={confirmRename}>Save name</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </section>
   );
 }

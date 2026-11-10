@@ -48,6 +48,9 @@ class FleetController extends Controller
     // older than this and the vehicle reads "stale — needs re-check".
     private const READINESS_FRESHNESS_HOURS = 24;
 
+    /** @var array<int,int>|null see blockingMissingVehicleIds() */
+    private ?array $blockingMissingIds = null;
+
     public function lookups(Request $request)
     {
         $this->syncVehicleStatuses();
@@ -58,9 +61,7 @@ class FleetController extends Controller
         $barangayId = $request->user()->barangay_id;
         return response()->json([
             'categories' => VehicleCategory::with('fields')->orderBy('category_name')->get(),
-            'vehicles' => Vehicle::with('category')->withExists([
-                'tickets as has_open_maintenance_ticket' => fn ($query) => $query->whereNotIn('status', ['Closed', 'Cancelled', 'Declined']),
-            ])->orderBy('vehicle_name')->get(),
+            'vehicles' => $this->vehiclesWithOpenTicket(),
             'issue_reports' => VehicleIssueReport::with('vehicle')
                 ->whereNot('status', 'Resolved')
                 ->latest('issue_report_id')
@@ -254,9 +255,9 @@ class FleetController extends Controller
             // Maintenance/Inactive) already shown as their own KPI tiles,
             // ordered by severity rather than alphabetically.
             'vehicles_by_condition' => Vehicle::query()
-                ->selectRaw('condition as label, count(*) as value')
+                ->selectRaw('`condition` as label, count(*) as value')
                 ->groupBy('condition')
-                ->orderByRaw("CASE condition
+                ->orderByRaw("CASE `condition`
                     WHEN 'Good' THEN 1
                     WHEN 'Needs Inspection' THEN 2
                     WHEN 'Needs Repair' THEN 3
@@ -309,7 +310,7 @@ class FleetController extends Controller
 
             // Final feature pass — Fleet Capability & Readiness Impact: the
             // same readiness/criticality signals above, rolled up to "which
-            // emergency capability is at risk right now" per Vehicle Type.
+            // emergency capability is at risk right now" per Vehicle Category.
             'capability_impact' => $this->capabilityImpact(),
 
             // Gap C — what's breaking most across the whole fleet (12 months).
@@ -483,6 +484,26 @@ class FleetController extends Controller
      * Gap A — a vehicle's "ready to respond" state. "Available" is necessary
      * but not sufficient: only a recent passing check makes it verified ready.
      */
+    /** Lookup list of vehicles, each with its newest open ticket (number and status) for Condition Monitoring. */
+    private function vehiclesWithOpenTicket()
+    {
+        $vehicles = Vehicle::with('category')->withExists([
+            'tickets as has_open_maintenance_ticket' => fn ($query) => $query->whereNotIn('status', ['Closed', 'Cancelled', 'Declined']),
+        ])->orderBy('vehicle_name')->get();
+
+        $open = MaintenanceTicket::whereNotIn('status', ['Closed', 'Cancelled', 'Declined'])
+            ->orderByDesc('ticket_id')
+            ->get(['ticket_id', 'barangay_number', 'vehicle_id', 'status'])
+            ->groupBy('vehicle_id');
+
+        return $vehicles->each(function (Vehicle $vehicle) use ($open) {
+            $ticket = $open->get($vehicle->vehicle_id)?->first();
+            $vehicle->open_ticket_id = $ticket?->ticket_id;
+            $vehicle->open_ticket_number = $ticket?->display_number;
+            $vehicle->open_ticket_status = $ticket?->status;
+        });
+    }
+
     private function responseReadinessState(Vehicle $vehicle, $latest): string
     {
         if (in_array($vehicle->status, ['Inactive', 'Decommissioned'], true)) {
@@ -491,11 +512,23 @@ class FleetController extends Controller
         if ($vehicle->status !== 'Available') {
             return 'in_maintenance';
         }
-        // Deliberately NOT gated on condition here — a vehicle can be
-        // Available with a lingering "Needs Repair" condition (see
-        // markVehicleAvailable's override for the emergency-dispatch case);
-        // whether it's actually ready to respond right now is decided by
-        // the readiness check itself, below.
+        $state = $this->readinessStateFromCheck($vehicle, $latest);
+        // A part taken off this vehicle that it cannot respond without (and that has not been put back).
+        if ($state === 'ready' && in_array((int) $vehicle->vehicle_id, $this->blockingMissingVehicleIds(), true)) {
+            return 'not_ready';
+        }
+        // A vehicle marked Needs Repair (an open repair proposal or issue, or an override
+        // that left it Available) reads as in maintenance, not "never checked", unless a
+        // fresh passing readiness check says otherwise.
+        if ($vehicle->condition === 'Needs Repair' && $state !== 'ready') {
+            return 'in_maintenance';
+        }
+
+        return $state;
+    }
+
+    private function readinessStateFromCheck(Vehicle $vehicle, $latest): string
+    {
         if (!$latest) {
             return 'unchecked';
         }
@@ -512,7 +545,7 @@ class FleetController extends Controller
     }
 
     /**
-     * Gap 1 — coverage grouped by vehicle type. A category whose ready count
+     * Gap 1 — coverage grouped by vehicle category. A category whose ready count
      * hits zero is a NO-COVERAGE alarm (e.g. the only ambulance is down).
      */
     /**
@@ -635,7 +668,7 @@ class FleetController extends Controller
     }
 
     /**
-     * Gap B — single-point-of-failure map. A vehicle type with at most ONE
+     * Gap B — single-point-of-failure map. A vehicle category with at most ONE
      * currently-READY unit is a standing risk (one breakdown from zero
      * coverage) — whether that's because only one unit exists at all, or
      * because several exist but all-but-one are already down for repair.
@@ -679,7 +712,7 @@ class FleetController extends Controller
     /**
      * Fleet Capability & Readiness Impact — final feature pass (2026-10-10).
      * Answers "what emergency capability is currently at risk?" at the
-     * Vehicle Type level, rather than making someone mentally aggregate the
+     * Vehicle Category level, rather than making someone mentally aggregate the
      * per-vehicle Criticality Watch themselves. Deliberately reuses
      * responseReadinessState() and effectiveCriticality() as the only two
      * primitives — no second readiness or criticality algorithm — and keeps
@@ -877,7 +910,7 @@ class FleetController extends Controller
         ]);
 
         $category = VehicleCategory::create($data);
-        $this->log($request, 'Add', 'Vehicle Categories', $category->category_id, "Added vehicle type {$category->category_name}");
+        $this->log($request, 'Add', 'Vehicle Categories', $category->category_id, "Added vehicle category {$category->category_name}");
 
         return response()->json($category, 201);
     }
@@ -899,7 +932,7 @@ class FleetController extends Controller
         ]);
 
         $category->update($data);
-        $this->log($request, 'Edit', 'Vehicle Categories', $category->category_id, "Updated vehicle type {$category->category_name}");
+        $this->log($request, 'Edit', 'Vehicle Categories', $category->category_id, "Updated vehicle category {$category->category_name}");
 
         return $category;
     }
@@ -921,7 +954,7 @@ class FleetController extends Controller
             'This category is still assigned to one or more vehicles.'
         );
 
-        $this->log($request, 'Delete', 'Vehicle Categories', $category->category_id, "Deleted vehicle type {$category->category_name}");
+        $this->log($request, 'Delete', 'Vehicle Categories', $category->category_id, "Deleted vehicle category {$category->category_name}");
         $category->delete();
 
         return response()->json(['message' => 'Vehicle category deleted.']);
@@ -933,17 +966,10 @@ class FleetController extends Controller
         $user = $request->user();
         $query = Vehicle::with(['category', 'archivedBy']);
 
-        // A pure Maintenance Personnel account only sees vehicles tied to
-        // their own assigned sub-issues or schedules — not the whole
-        // barangay fleet (VMS-IMPROVEMENT-PLAN.md Phase B3). No status filter on
-        // the assignment itself: they should still see a vehicle's past
-        // repairs after their work on it is done.
-        if ($user->hasRole('Maintenance Personnel') && !$user->hasAnyRole(['Admin', 'Custodian'])) {
-            $query->where(function ($scoped) use ($user) {
-                $scoped->orWhereHas('tickets.subIssues', fn ($q) => $q->where('assigned_mechanic_id', $user->id))
-                    ->orWhereHas('schedules', fn ($q) => $q->where('assigned_to', $user->id));
-            });
-        }
+        // Every role in the barangay sees the whole fleet here (the barangay
+        // scope on Vehicle already keeps other barangays out) — Maintenance
+        // Personnel and Custodians need to look up any vehicle, not only the
+        // ones assigned to them.
 
         if ($request->filled('q')) {
             $search = $request->string('q');
@@ -979,10 +1005,33 @@ class FleetController extends Controller
             ->get()
             ->groupBy('vehicle_id');
 
-        $vehicles->each(function (Vehicle $vehicle) use ($latestChecks, $openTicketsByVehicle) {
+        // Last time real maintenance work was finished on each vehicle (not the last
+        // readiness check) — the Not Ready to Respond list shows this date.
+        $lastMaintained = \App\Models\VehicleMaintenanceRecord::whereNotNull('date_completed')
+            ->selectRaw('vehicle_id, MAX(date_completed) as last_date')
+            ->groupBy('vehicle_id')
+            ->pluck('last_date', 'vehicle_id');
+
+        // Parts taken off a vehicle (cannibalization) that have not been put back yet.
+        $missingParts = $this->missingPartsByVehicle();
+        $minorParts = $this->minorMissingPartsByVehicle();
+        $missingItems = $this->missingPartRows()->groupBy('vehicle_id');
+
+        $vehicles->each(function (Vehicle $vehicle) use ($latestChecks, $openTicketsByVehicle, $lastMaintained, $missingParts, $minorParts, $missingItems) {
             $latest = $latestChecks->get($vehicle->vehicle_id);
+            $vehicle->missing_parts = $missingParts->get($vehicle->vehicle_id, collect())->values();
+            // Parts that are missing but do not stop the vehicle responding: shown as a note, never a block.
+            $vehicle->minor_missing_parts = $minorParts->get($vehicle->vehicle_id, collect())->values();
+            $vehicle->missing_part_items = $missingItems->get($vehicle->vehicle_id, collect())->values();
             $vehicle->readiness_state = $this->responseReadinessState($vehicle, $latest);
+            if ($vehicle->missing_parts->isNotEmpty() && $vehicle->readiness_state !== 'retired') {
+                $vehicle->readiness_state = 'not_ready';
+            }
             $vehicle->readiness_last_checked = $latest?->checked_at;
+            $vehicle->last_maintained_at = $lastMaintained->get($vehicle->vehicle_id);
+            $vehicle->not_ready_reason = $vehicle->missing_parts->isNotEmpty()
+                ? 'Missing part: '.$vehicle->missing_parts->implode(', ')
+                : $this->notReadyReason($vehicle, $openTicketsByVehicle->get($vehicle->vehicle_id)?->first());
 
             $openTickets = $openTicketsByVehicle->get($vehicle->vehicle_id) ?? collect();
             $vehicle->readiness_block_reason = $this->readinessBlockReason($vehicle, $openTickets->contains(fn ($ticket) => in_array($ticket->status, ['Active', 'For Verification'], true)));
@@ -1200,13 +1249,86 @@ class FleetController extends Controller
         });
     }
 
+    /**
+     * Parts taken off a vehicle (a cannibalized repair, or a recorded cannibalization) that have
+     * not been put back, as rows of ['vehicle_id', 'name', 'quantity', 'blocks', 'kind', 'id'].
+     * 'blocks' is the answer to "can the vehicle still respond without this part?" (true = it cannot).
+     */
+    private function missingPartRows(): \Illuminate\Support\Collection
+    {
+        $fromRepairs = \App\Models\DonorPart::query()
+            ->whereNull('restored_at')->whereNotNull('donor_vehicle_id')
+            ->get(['part_id', 'donor_vehicle_id', 'part_name', 'quantity', 'blocks_readiness'])
+            ->map(fn ($p) => ['vehicle_id' => (int) $p->donor_vehicle_id, 'name' => $p->part_name, 'quantity' => (int) $p->quantity, 'blocks' => (bool) $p->blocks_readiness, 'kind' => 'donor', 'id' => $p->part_id]);
+        $fromRecords = \App\Models\CannibalizationPart::query()
+            ->join('cannibalization_records', 'cannibalization_records.cannibalization_id', '=', 'cannibalization_parts.cannibalization_id')
+            ->whereNull('cannibalization_parts.restored_at')
+            ->get(['cannibalization_parts.part_id', 'cannibalization_records.source_vehicle_id', 'cannibalization_parts.part_name', 'cannibalization_parts.quantity', 'cannibalization_parts.blocks_readiness'])
+            ->map(fn ($p) => ['vehicle_id' => (int) $p->source_vehicle_id, 'name' => $p->part_name, 'quantity' => (int) $p->quantity, 'blocks' => (bool) $p->blocks_readiness, 'kind' => 'record', 'id' => $p->part_id]);
+
+        return $fromRepairs->concat($fromRecords)->values();
+    }
+
+    /** @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, string>> names of the missing parts that stop a vehicle responding, per vehicle id */
+    private function missingPartsByVehicle(): \Illuminate\Support\Collection
+    {
+        return $this->missingPartRows()->where('blocks', true)->groupBy('vehicle_id')->map(fn ($rows) => $rows->pluck('name')->unique()->values());
+    }
+
+    /** @return \Illuminate\Support\Collection<int, \Illuminate\Support\Collection<int, string>> names of the missing parts the vehicle can respond without, per vehicle id */
+    private function minorMissingPartsByVehicle(): \Illuminate\Support\Collection
+    {
+        return $this->missingPartRows()->where('blocks', false)->groupBy('vehicle_id')->map(fn ($rows) => $rows->pluck('name')->unique()->values());
+    }
+
+    /** Vehicle ids that cannot respond because a missing part blocks it; read once per request. */
+    private function blockingMissingVehicleIds(): array
+    {
+        return $this->blockingMissingIds ??= $this->missingPartsByVehicle()->keys()->map(fn ($id) => (int) $id)->all();
+    }
+
+    /** The parts a vehicle is missing, with what is needed to mark each one restored. */
+    public function missingParts(Request $request, Vehicle $vehicle)
+    {
+        // "Put back" only makes sense for a vehicle that is still in service; a retired donor's parts are simply used.
+        $canRestore = ! in_array($vehicle->status, ['Inactive', 'Decommissioned'], true);
+
+        return $this->missingPartRows()->where('vehicle_id', (int) $vehicle->vehicle_id)
+            ->map(fn ($row) => $row + ['can_restore' => $canRestore])->values();
+    }
+
+    /** One plain sentence on why a vehicle is not ready to respond; null when it is ready. */
+    private function notReadyReason(Vehicle $vehicle, $openTicket): ?string
+    {
+        return match ($vehicle->readiness_state) {
+            'ready' => null,
+            'retired' => 'Retired from the fleet',
+            'in_maintenance' => $openTicket
+                ? 'Under repair: '.($openTicket->ticket_title ?: 'open maintenance ticket')
+                : ($vehicle->status !== 'Available' ? $vehicle->status : 'Needs repair'),
+            'not_ready' => 'Failed its last readiness check',
+            'stale' => 'Readiness confirmation has expired',
+            default => 'Readiness has not been confirmed yet',
+        };
+    }
+
     private function readinessBlockReason(Vehicle $vehicle, bool $hasActiveTicket): ?string
     {
+        $missing = $this->missingPartsByVehicle()->get($vehicle->vehicle_id);
+        if ($missing && $missing->isNotEmpty()) {
+            return 'A part was taken from this vehicle ('.$missing->implode(', ').'). Put it back and mark it restored before confirming readiness.';
+        }
         if ($vehicle->status === 'Under Maintenance' || $hasActiveTicket) {
-            return 'Readiness cannot be confirmed while maintenance is ongoing. Finish the maintenance work and have the assigned Custodian independently verify the repairs so all active tickets are closed or the maintenance record is verified. Then personally check and operate the vehicle before confirming readiness.';
+            return 'Readiness cannot be confirmed while maintenance is ongoing. Finish the maintenance work and have the assigned Custodian independently verify the repairs so all active tickets are closed or the maintenance record is verified. Then confirm that the vehicle is ready to respond.';
         }
         if (in_array($vehicle->status, ['Inactive', 'Decommissioned'], true)) {
             return 'This vehicle is out of the fleet and cannot be readiness-checked.';
+        }
+        // A proposed or reported problem already marks the vehicle Needs Repair, so it
+        // cannot be attested as ready until that is resolved (repair verified, or the
+        // proposal/report dealt with).
+        if ($vehicle->condition === 'Needs Repair') {
+            return 'This vehicle is marked Needs Repair, so readiness cannot be confirmed. Resolve the open repair proposal or issue first, then check the vehicle again.';
         }
         return null;
     }
@@ -1218,8 +1340,9 @@ class FleetController extends Controller
         abort_if($blockedReason !== null, 422, $blockedReason);
 
         // Simplified per product direction: the readiness check is a plain
-        // attestation ("I confirm I personally checked and operated this
-        // vehicle"), not a checklist to fill in — if something's actually
+        // sign-off ("I confirm this vehicle is ready to respond"), not a
+        // checklist to fill in. The Maintenance Personnel does the testing; the
+        // Custodian does not have to operate the vehicle. If something's actually
         // wrong, the Custodian proposes a maintenance ticket instead of
         // confirming readiness. The checklist/all_passed columns stay (both
         // for historical pre-simplification checks and because other code
@@ -1234,7 +1357,7 @@ class FleetController extends Controller
         $check = VehicleReadinessCheck::create([
             'vehicle_id' => $vehicle->vehicle_id,
             'checked_by' => $request->user()->id,
-            'checklist'  => [['item' => 'Personally operated and confirmed ready to respond', 'passed' => true]],
+            'checklist'  => [['item' => 'Confirmed ready to respond', 'passed' => true]],
             'all_passed' => true,
             'notes'      => $data['notes'] ?? null,
             'checked_at' => now(),
@@ -1332,6 +1455,8 @@ class FleetController extends Controller
         return response()->json([
             'can_confirm_readiness' => $blockedReason === null,
             'readiness_block_reason' => $blockedReason,
+            // Parts taken from this vehicle that it can respond without: a note on the confirm screen, never a block.
+            'minor_missing_parts' => $this->minorMissingPartsByVehicle()->get($vehicle->vehicle_id, collect())->values(),
             'state'              => $this->responseReadinessState($vehicle, $latest),
             'last_checked'       => $latest?->checked_at,
             'latest_checklist'   => $latest?->checklist,
@@ -1731,7 +1856,7 @@ class FleetController extends Controller
             }
 
             $vehicle->update([
-                'condition' => 'Needs Inspection',
+                'condition' => 'Needs Repair',
             ]);
 
             $this->history($vehicle, 'Issue Reported', "{$data['issue_type']} was reported for {$vehicle->vehicle_name}.", 'vehicle_issue_reports', $issue->issue_report_id, $request);
@@ -1833,7 +1958,7 @@ class FleetController extends Controller
                     $vehicleUpdates['condition'] = 'Good';
                 } elseif ($status === 'Pending' || $status === 'Under Review') {
                     $vehicleUpdates['status'] = 'Available';
-                    $vehicleUpdates['condition'] = 'Needs Inspection';
+                    $vehicleUpdates['condition'] = 'Needs Repair';
                 }
 
                 if (!empty($vehicleUpdates)) {
@@ -1937,11 +2062,28 @@ class FleetController extends Controller
     {
         $this->requireAbility($request, 'issue.view');
 
-        return VehicleIssueReport::where('vehicle_id', $vehicle->vehicle_id)
+        $reports = VehicleIssueReport::where('vehicle_id', $vehicle->vehicle_id)
             ->whereNot('status', 'Resolved')
             ->with('reportedBy:id,name')
             ->orderByDesc('issue_report_id')
             ->get(['issue_report_id', 'issue_type', 'severity_level', 'status', 'reported_by', 'created_at']);
+
+        // A report can only belong to one open ticket — say which, so the ticket
+        // form can show it as already taken instead of failing on submit.
+        $ids = $reports->pluck('issue_report_id');
+        $owners = MaintenanceTicket::whereNotIn('status', ['Closed', 'Cancelled', 'Declined'])
+            ->where(fn ($q) => $q->whereIn('issue_report_id', $ids)
+                ->orWhereHas('subIssues', fn ($s) => $s->whereIn('issue_report_id', $ids)))
+            ->with('subIssues:sub_issue_id,ticket_id,issue_report_id')
+            ->get();
+
+        return $reports->map(function ($report) use ($owners) {
+            $owner = $owners->first(fn ($t) => (int) $t->issue_report_id === (int) $report->issue_report_id
+                || $t->subIssues->contains(fn ($s) => (int) $s->issue_report_id === (int) $report->issue_report_id));
+            $report->setAttribute('reserved_by_ticket', $owner?->display_number);
+
+            return $report;
+        })->values();
     }
 
     // File cabinet on a vehicle's profile page — deliberately separate from
@@ -2040,8 +2182,9 @@ class FleetController extends Controller
             'ticketSubIssue.ticket.originatingSchedule',
         ]);
 
-        // The ledger includes all repair sources within the vehicle's barangay.
-        // Personal history remains available through the explicit mine filter.
+        // Staff history is personal regardless of query parameters. Admins
+        // retain the complete barangay ledger across all repair sources.
+        $query->visibleTo($user);
         if ($request->boolean('mine')) {
             $query->where('maintenance_personnel_id', $user->id);
         }
@@ -2074,6 +2217,7 @@ class FleetController extends Controller
 
     public function showMaintenanceRecord(Request $request, VehicleMaintenanceRecord $record)
     {
+        abort_unless(VehicleMaintenanceRecord::visibleTo($request->user())->whereKey($record->getKey())->exists(), 404);
         return $record->load(['vehicle.category', 'sourceVehicle', 'issueReport', 'maintenancePersonnel', 'verifiedBy', 'confirmedBy', 'originatingSchedule', 'ticketSubIssue.ticket.originatingSchedule']);
     }
 
@@ -2411,7 +2555,7 @@ class FleetController extends Controller
                 ]);
             }
 
-            \App\Services\VehicleOperationalState::hold($record->vehicle, $passed ? 'Needs Inspection' : 'Needs Repair');
+            \App\Services\VehicleOperationalState::hold($record->vehicle, 'Needs Repair');
 
             $activity = $passed ? 'Repair Verification Passed' : 'Repair Verification Failed';
             $this->history($record->vehicle, $activity, "Custodian marked maintenance #{$record->maintenance_id} as {$data['verification_result']}.", 'vehicle_maintenance_records', $record->maintenance_id, $request);
@@ -3118,6 +3262,8 @@ class FleetController extends Controller
         $data = $request->validate([
             'date_completed'           => ['nullable', 'date', 'before_or_equal:' . now('Asia/Manila')->toDateString()],
             'maintenance_cost'         => ['nullable', 'numeric', 'min:0'],
+            // Names of the parts or materials used, joined with commas (optional).
+            'parts_used'               => ['nullable', 'string', 'max:1000'],
             'is_external'              => ['nullable', 'boolean'],
             'external_vendor'          => ['nullable', 'string', 'max:255'],
             'warranty_until'           => ['nullable', 'date'],
@@ -3171,6 +3317,7 @@ class FleetController extends Controller
                 // problem_reason above, so it's not duplicated in both columns.
                 'action_taken'             => $data['notes'] ?? 'Preventive maintenance performed.',
                 'maintenance_cost'         => $data['maintenance_cost'] ?? null,
+                'parts_used'               => $data['parts_used'] ?? null,
                 'progress_status'          => 'For Verification',
                 'remarks'                  => "Completed from schedule #{$schedule->schedule_id} — awaiting Custodian verification.",
             ]);
@@ -3180,7 +3327,7 @@ class FleetController extends Controller
             // (storeMaintenanceRecord, verifyMaintenance, confirmMaintenance)
             // — a vehicle with a repair sitting in the Custodian's
             // verification queue should visibly show that, not look untouched.
-            \App\Services\VehicleOperationalState::hold($vehicle, 'Needs Inspection');
+            \App\Services\VehicleOperationalState::hold($vehicle, 'Needs Repair');
 
             // 2) Close the schedule — the CALENDAR task is done regardless of
             // how long the paperwork verification takes; recurrence below
@@ -3427,7 +3574,7 @@ class FleetController extends Controller
         ]);
 
         $rows = match ($data['report_type']) {
-            'Vehicle Type Report' => Vehicle::query()
+            'Vehicle Category Report' => Vehicle::query()
                 ->with('category')
                 ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $data['category_id']))
                 ->get(),
@@ -3490,7 +3637,7 @@ class FleetController extends Controller
     /**
      * The Add/Edit Vehicle rules, shared with the spreadsheet import so a bulk
      * row is held to exactly what the form enforces. $domain is the chosen
-     * Vehicle Type's domain (Land/Water).
+     * Vehicle Category's domain (Land/Water).
      */
     public function vehicleRules(string $domain, ?Vehicle $vehicle = null, ?VehicleCategory $category = null): array
     {
@@ -3527,9 +3674,9 @@ class FleetController extends Controller
             'vehicle_color' => ['required', 'string', 'max:255', new TextOnly],
             'current_location' => ['required', 'string', 'max:255', Rule::in(VehicleHub::pluck('name'))],
             'estimated_return_date' => ['nullable', 'date'],
-            'photo' => ['nullable', 'image', 'max:4096'],
+            'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'remarks' => ['nullable', 'string'],
-            // Admin-only override of the Vehicle Type's default (stripped for anyone else).
+            // Admin-only override of the Vehicle Category's default (stripped for anyone else).
             'criticality' => ['nullable', Rule::in([...self::CRITICALITY_LEVELS, 'Inherit'])],
         ];
     }
@@ -3560,7 +3707,7 @@ class FleetController extends Controller
         if (!$request->user()->hasRole('Admin')) {
             unset($data['criticality']);
         } elseif (($data['criticality'] ?? null) === 'Inherit') {
-            $data['criticality'] = null; // back to the Vehicle Type default
+            $data['criticality'] = null; // back to the Vehicle Category default
         }
 
         // Merge over existing values, then drop cleared (null) entries.
@@ -3694,10 +3841,10 @@ class FleetController extends Controller
                     }
                 } elseif (in_array($latestIssue->status, ['Pending', 'Under Review'], true) || ($latestIssue->status === 'In Maintenance' && $latestIssue->maintenanceTicket)) {
                     if (!$hasActiveMaintenance) {
-                        if ($vehicle->status === 'Under Maintenance' || $vehicle->condition !== 'Needs Inspection') {
+                        if ($vehicle->status === 'Under Maintenance' || $vehicle->condition !== 'Needs Repair') {
                             $vehicle->update([
                                 'status' => 'Available',
-                                'condition' => 'Needs Inspection',
+                                'condition' => 'Needs Repair',
                                 'estimated_return_date' => null,
                             ]);
                         }

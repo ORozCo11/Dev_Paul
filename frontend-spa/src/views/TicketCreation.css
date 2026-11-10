@@ -108,15 +108,28 @@ html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked=
 html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="false"]:hover { background:var(--entry-mode-color) !important; color:#fff !important; opacity:.82; }
 html[data-theme] .smart-form.ticket-create-form .ticket-method-tab[aria-checked="false"] > svg { color:#fff; }
 html .ticket-create-form > .ticket-create-header p { max-width:none; white-space:nowrap; overflow-x:auto; }
-html .ticket-create-form .ticket-preview-card--lg { flex-direction:column; align-items:stretch; padding:0; overflow:hidden; }
-html .ticket-create-form .ticket-preview-photo--lg { display:block; width:100%; height:auto; aspect-ratio:4 / 3; flex-basis:auto; object-fit:contain; border-radius:0; background:var(--surface-2,#f8fafc); }
+html .ticket-create-form .ticket-preview-card--lg { flex-direction:column; align-items:stretch; padding:0; margin-top:12px; overflow:hidden; border:1px solid #93c5fd; }
+html .ticket-create-form .ticket-preview-photo--lg { display:block; width:calc(100% - 24px); height:auto; margin:12px 12px 0; box-sizing:border-box; aspect-ratio:4 / 3; flex-basis:auto; object-fit:contain; border:2px solid #2563eb; border-radius:6px; background:var(--surface-2,#f8fafc); }
 html .ticket-create-form .ticket-preview-body--lg { padding:14px; width:100%; box-sizing:border-box; }
+html .ticket-create-form .ticket-vehicle-info-heading { margin:0 0 10px; font-size:.8rem; font-weight:700; color:var(--primary,#2563eb); }
+html .ticket-create-form .ticket-vehicle-info { margin:0; display:grid; gap:0; }
+html .ticket-create-form .ticket-vehicle-info > div { display:grid; grid-template-columns:80px minmax(0,1fr); gap:10px; align-items:start; padding:7px 0; border-bottom:1px solid var(--ticket-section-border,#dbe5f1); }
+html .ticket-create-form .ticket-vehicle-info > div:last-child { border-bottom:0; padding-bottom:0; }
+html .ticket-create-form .ticket-vehicle-info dt { font-size:.72rem; line-height:1.5; color:var(--text-muted,#64748b); }
+html .ticket-create-form .ticket-vehicle-info dd { margin:0; min-width:0; font-size:.76rem; line-height:1.5; font-weight:600; color:var(--text-strong,#0f172a); overflow-wrap:anywhere; }
 html .ticket-create-form .ticket-external-grid label:last-child { grid-column:auto; max-width:none; }
 .proposal-assignment-row { align-items:start; padding:0; margin-top:10px; }
 .ticket-process-hero--simple { grid-template-columns:minmax(0,1fr); }
 
 html .ticket-create-form > .ticket-create-header { min-width:0; max-width:100%; }
 html .ticket-create-form > .ticket-create-header p { max-width:100%; }
+
+/* Review existing reports beside the selected vehicle profile. */
+html .ticket-create-form > .ticket-report-choice { grid-column:2; grid-row:3; min-width:0; align-self:start; }
+html .ticket-create-form:has(> .ticket-report-choice) > .ticket-vehicle-section { grid-row:3; }
+@media (max-width:900px) {
+  html .ticket-create-form > .ticket-report-choice { grid-column:1; grid-row:4; }
+}
 
 /* Keep the vehicle panel aligned with the adjacent repair details. */
 @media (min-width: 901px) {

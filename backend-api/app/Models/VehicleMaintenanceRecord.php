@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasBarangayNumber;
 
 use App\Models\Concerns\ScopedThroughVehicle;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class VehicleMaintenanceRecord extends Model
@@ -58,6 +59,25 @@ class VehicleMaintenanceRecord extends Model
     // to every JSON response instead of making callers remember to ask for it.
     protected $appends = ['source'];
     protected $hidden = ['ticketSubIssue'];
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        if ($user->hasRole('Admin') || !$user->hasAnyRole(['Custodian', 'Maintenance Personnel'])) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $own) use ($user) {
+            if ($user->hasRole('Maintenance Personnel')) {
+                $own->orWhere('maintenance_personnel_id', $user->id);
+            }
+            if ($user->hasRole('Custodian')) {
+                $own->orWhere('verified_by', $user->id)
+                    ->orWhereHas('ticketSubIssue.ticket', fn (Builder $ticket) => $ticket->where('assigned_custodian_id', $user->id))
+                    ->orWhereHas('originatingSchedule', fn (Builder $schedule) => $schedule->where('created_by', $user->id))
+                    ->orWhereHas('issueReport', fn (Builder $report) => $report->where('reported_by', $user->id));
+            }
+        });
+    }
 
     public function ticketSubIssue()
     {

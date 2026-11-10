@@ -1,5 +1,7 @@
 # QA Run 1 findings: implementation and retest
 
+> **Superseded in part (28 October 2026):** "Admin handling approval/shop sending/return" is no longer the rule; Admin only approves, the ticket's Custodian handles the shop. See [Current-Revision-2026-10-28.md](Current-Revision-2026-10-28.md).
+
 Date: 25 October 2026 (Asia/Manila). Baseline: 2ccd7cf. This follow-up uses the user's 37-item summary plus direct source inspection. The original /mnt/user-data/outputs/VMS-QA-Audit-Report-Run1.md was not accessible in this Windows workspace. Browser checks use mocked synthetic API responses; PHP tests exercise actual controllers against isolated SQLite. These are different forms of evidence, not a production acceptance certificate.
 
 ## Disposition of all 37 findings

@@ -54,7 +54,7 @@ export default function Terms() {
         <TermsSection title="4. Role-Based Access Control">
           Access to system features is determined by your assigned role:
           <ul>
-            <li><strong>Super Admin</strong> — general platform oversight and cross-barangay administrative functions, including registration codes, concern reports, and user account management; does not access any barangay's specific fleet operational data (vehicles, tickets, or maintenance records)</li>
+            <li><strong>Super Admin</strong> — general platform oversight and cross-barangay administrative functions, including creating barangays and their Admin accounts, concern reports, and user account management; does not access any barangay's specific fleet operational data (vehicles, tickets, or maintenance records)</li>
             <li><strong>Admin</strong> — full access to all modules, user management, and system reports</li>
             <li><strong>Custodian</strong> — access to vehicle records, issue reporting, condition checks, location tracking, and maintenance scheduling</li>
             <li><strong>Maintenance Personnel</strong> — access to assigned maintenance tickets and work order records</li>

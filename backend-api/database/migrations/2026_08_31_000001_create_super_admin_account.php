@@ -31,6 +31,14 @@ return new class extends Migration
             return;
         }
 
+        // MySQL keeps the original enum('Admin','Custodian','Maintenance
+        // Personnel') on `role` until 2026_09_25_000001 widens it, so
+        // 'Super Admin' would be truncated. Widen it here first (that later
+        // migration is a harmless no-op change afterwards).
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE users MODIFY role VARCHAR(50) NOT NULL DEFAULT 'Custodian'");
+        }
+
         DB::table('users')->insert([
             'name' => 'Super Admin',
             'email' => 'superadmin@barangay.gov',

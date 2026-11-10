@@ -118,7 +118,7 @@ class MultiRoleTest extends TestCase
 
         // Juan (as Maintenance) logs the repair.
         Sanctum::actingAs($juan, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Refilled coolant, tested.',
         ])->assertOk();
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
@@ -160,7 +160,7 @@ class MultiRoleTest extends TestCase
         $subIssue = $ticket->subIssues->first();
 
         Sanctum::actingAs($juan, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Refilled coolant, tested.',
         ])->assertOk();
 
@@ -188,7 +188,7 @@ class MultiRoleTest extends TestCase
         $subIssue = $ticket->subIssues->first();
 
         Sanctum::actingAs($juan, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Refilled coolant, tested.',
         ])->assertOk();
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();

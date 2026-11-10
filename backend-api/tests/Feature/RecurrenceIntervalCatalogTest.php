@@ -34,13 +34,13 @@ class RecurrenceIntervalCatalogTest extends TestCase
         }
     }
 
-    public function test_operational_users_can_add_but_not_rename_or_delete(): void
+    public function test_operational_users_can_add_rename_and_delete(): void
     {
         foreach (['Custodian', 'Maintenance Personnel'] as $index => $role) {
             Sanctum::actingAs(User::factory()->create(['role' => $role]), ['*']);
             $id = $this->postJson('/api/recurrence-intervals', ['name' => 4 + $index])->assertCreated()->json('id');
-            $this->putJson("/api/recurrence-intervals/{$id}", ['name' => 8])->assertForbidden();
-            $this->deleteJson("/api/recurrence-intervals/{$id}")->assertForbidden();
+            $this->putJson("/api/recurrence-intervals/{$id}", ['name' => 8 + $index])->assertSuccessful();
+            $this->deleteJson("/api/recurrence-intervals/{$id}")->assertSuccessful();
         }
     }
 }

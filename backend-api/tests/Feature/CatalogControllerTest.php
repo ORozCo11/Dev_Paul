@@ -30,17 +30,18 @@ class CatalogControllerTest extends TestCase
     use RefreshDatabase;
 
     #[Test]
-    public function operational_roles_can_add_but_cannot_edit_or_delete_shared_catalogs(): void
+    public function operational_roles_can_add_edit_and_delete_shared_catalogs(): void
     {
         foreach (['Custodian', 'Maintenance Personnel'] as $role) {
             Sanctum::actingAs(User::factory()->create(['role' => $role]), ['*']);
-            foreach (['fault-categories', 'maintenance-types', 'reported-persons'] as $endpoint) {
+            // Naming who reported an issue follows issue.create, which only a Custodian holds.
+            foreach (array_filter(['fault-categories', 'maintenance-types', $role === 'Custodian' ? 'reported-persons' : null]) as $endpoint) {
                 $name = 'Dropdown ' . uniqid();
                 $created = $this->postJson('/api/' . $endpoint, ['name' => $name])->assertCreated();
                 $id = $created->json('id');
                 $this->putJson('/api/' . $endpoint . '/' . $id, ['name' => $name . ' renamed'])
-                    ->assertForbidden();
-                $this->deleteJson('/api/' . $endpoint . '/' . $id)->assertForbidden();
+                    ->assertSuccessful();
+                $this->deleteJson('/api/' . $endpoint . '/' . $id)->assertSuccessful();
             }
         }
     }

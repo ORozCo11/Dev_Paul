@@ -10,7 +10,6 @@ import {
   PAKNAAN_POLYGON,
 } from '../data/paknaanLocationDensity';
 import { BOUNDARY_REFERENCE_ATTRIBUTION, geoJsonToPolygons } from '../utils/boundary';
-import BoundaryReferenceLabel from './BoundaryReferenceLabel';
 import BoundaryMapDetails from './BoundaryMapDetails';
 
 // Normalizes a hub record from the Laravel `/hubs` API into the shape the map/UI expects.
@@ -39,13 +38,6 @@ function normalizeHub(record) {
 // lowest-risk swap rather than introducing a third tile source.
 const STREET_TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
 const STREET_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, HERE, Garmin, USGS, Intermap, and the GIS User Community';
-
-// Free satellite/aerial imagery (Esri World Imagery — no API key required),
-// with a transparent labels overlay so street/place names still show on top
-// of the imagery (a "hybrid" view, like Google's Satellite).
-const ESRI_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const ESRI_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
-const ESRI_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
 
 function escapeSvgText(value) {
   return String(value)
@@ -309,6 +301,7 @@ function LocationDensityMap({
   onHubsChange = null,
   onSummaryChange = null,
   canManageHubs = false,
+  canAddHub = false,
   // Navigates to the dedicated "Add Location" form page — Add Hub used to
   // start a click-the-map-to-pin mode right here, but that page already
   // does the same POST /hubs with a proper name/address form and its own
@@ -328,7 +321,6 @@ function LocationDensityMap({
   const [mapNotice, setMapNotice] = useState(null);
   const [resetViewRequest, setResetViewRequest] = useState(0);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [basemap, setBasemap] = useState('satellite'); // 'map' | 'satellite'
   const mapShellRef = useRef(null);
   const nameInputRef = useRef(null);
 
@@ -378,16 +370,6 @@ function LocationDensityMap({
       nameInputRef.current.focus();
     }
   }, [pendingLatLng]);
-
-  // Opens the same naming dialog without requiring a map click first — the
-  // lat/lng inputs in it start at the barangay's known center and are fully
-  // editable, so a location can be added by typing coordinates alone (e.g.
-  // copied from another map/GPS reading) instead of having to click the
-  // exact spot.
-  const openManualEntry = useCallback(() => {
-    setHubNameDraft('');
-    setPendingLatLng({ lat: PAKNAAN_CENTER.lat, lng: PAKNAAN_CENTER.lng });
-  }, []);
 
   const cancelNaming = useCallback(() => {
     setPendingLatLng(null);
@@ -566,17 +548,7 @@ function LocationDensityMap({
     <div className={`location-density-map-shell${isMaximized ? ' is-maximized' : ''}`} ref={mapShellRef}>
 
       <div className="location-density-toolbar">
-        <span className="location-density-hint">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          {canManageHubs
-            ? '"Add Hub" opens the add-location form, or use "By Coordinates" to type its name and lat/lng directly.'
-            : 'Hubs shown here are shared by every workspace user.'}
-        </span>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginLeft: 'auto' }}>
           {selectedVehicleId != null && (
             <button
               type="button"
@@ -605,7 +577,7 @@ function LocationDensityMap({
               Restore Hubs
             </button>
           )}
-          {canManageHubs && (
+          {(canManageHubs || canAddHub) && (
             <button
               type="button"
               className="location-density-btn is-primary"
@@ -616,22 +588,6 @@ function LocationDensityMap({
                 <circle cx="12" cy="9" r="2.5" fill="currentColor" stroke="none" />
               </svg>
               Add Hub
-            </button>
-          )}
-          {canManageHubs && (
-            <button
-              type="button"
-              className="location-density-btn is-secondary"
-              onClick={openManualEntry}
-              title="Type a name and coordinates instead of clicking the map"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="16" rx="2" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              By Coordinates
             </button>
           )}
           <button
@@ -733,31 +689,10 @@ function LocationDensityMap({
         zoom={16}
         zoomControl={false}
       >
-        {basemap === 'satellite' ? (
-          <>
-            <TileLayer attribution={`${ESRI_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} crossOrigin="anonymous" maxZoom={19} url={ESRI_IMAGERY_URL} />
-            <TileLayer attribution="" crossOrigin="anonymous" maxZoom={19} url={ESRI_LABELS_URL} />
-          </>
-        ) : (
-          <TileLayer attribution={`${STREET_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} crossOrigin="anonymous" maxZoom={19} url={STREET_TILE_URL} />
-        )}
-
-        {/* Map / Satellite base-layer toggle — floats over the map like Google.
-            Rendered inside the Leaflet container; disableClickPropagation keeps
-            clicks from panning the map underneath. */}
-        <div
-          className="location-density-basemap-toggle"
-          ref={(el) => { if (el) { L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); } }}
-        >
-          <button type="button" className={basemap === 'map' ? 'is-active' : ''} onClick={() => setBasemap('map')}>Map</button>
-          <button type="button" className={basemap === 'satellite' ? 'is-active' : ''} onClick={() => setBasemap('satellite')}>Satellite</button>
-        </div>
+        <TileLayer attribution={`${STREET_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} crossOrigin="anonymous" maxZoom={19} url={STREET_TILE_URL} />
         {boundaryPolygons.length > 0 && <BoundaryMapDetails
           name={barangayName}
           locality={boundaryOverride?.cityName}
-          verified={boundaryOverride?.verified === true}
-          source={boundaryOverride?.source}
-          psgcCode={boundaryOverride?.psgcCode}
         />}
         {/* Dark casing (halo) drawn UNDER the boundary so the yellow line pops
             on both the light street map and the dark satellite imagery. Each Polygon retains its shell and holes; islands render separately. */}
@@ -783,7 +718,6 @@ function LocationDensityMap({
             positions={ring}
           />
         ))}
-        <BoundaryReferenceLabel polygons={boundaryPolygons} label={barangayName} locality={boundaryOverride?.cityName} />
         {hubs.map((hub) => (
           <Marker
             icon={hubIcons[hub.id]}

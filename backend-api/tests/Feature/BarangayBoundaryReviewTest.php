@@ -47,32 +47,6 @@ class BarangayBoundaryReviewTest extends TestCase
     }
 
     #[Test]
-    public function uploaded_boundary_requires_confirmation_and_preserves_the_previous_geometry(): void
-    {
-        $barangay = $this->barangay();
-        $barangay->update(['psgc_code' => '0702222024', 'boundary' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]]]);
-        $old = $barangay->fresh()->boundary;
-        $replacement = ['type' => 'Polygon', 'coordinates' => [[[123.45, 9.81], [123.47, 9.81], [123.47, 9.83], [123.45, 9.81]]]];
-        Sanctum::actingAs($this->superAdmin, ['*']);
-        $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/candidate", ['geojson' => $replacement, 'source' => 'LGU approved map test', 'psgc_code' => $barangay->psgc_code])->assertOk();
-        $this->assertSame($old, $barangay->fresh()->boundary);
-        $this->assertSame($replacement, $barangay->fresh()->pending_boundary);
-        $this->postJson("/api/superadmin/barangays/{$barangay->id}/boundary/confirm")->assertOk();
-        $this->assertSame($replacement, $barangay->fresh()->boundary);
-        $this->assertSame($this->superAdmin->id, $barangay->fresh()->boundary_verified_by);
-        $this->getJson('/api/barangays/'.$barangay->id)->assertJsonPath('boundary_verified', true);
-        app(\App\Services\BarangayGeography::class)->attachBoundary($barangay->fresh());
-        $this->assertSame($replacement, $barangay->fresh()->boundary);
-        $this->postJson('/api/register', [
-            'name' => 'Future registrant', 'email' => 'future-boundary@example.com', 'password' => 'password123', 'password_confirmation' => 'password123',
-            'phone' => '09171234567', 'address' => 'Test Street', 'city_id' => $barangay->city_id, 'barangay_id' => $barangay->id,
-            'staff_code' => \App\Models\RegistrationSetting::for($barangay->id)->staff_code,
-        ])->assertCreated();
-        $this->assertSame($replacement, $barangay->fresh()->boundary);
-        $this->assertSame($this->superAdmin->id, $barangay->fresh()->boundary_verified_by);
-    }
-
-    #[Test]
     public function automatic_reference_cannot_become_verified_through_refresh_or_discard(): void
     {
         $barangay = $this->barangay();
@@ -261,37 +235,4 @@ class BarangayBoundaryReviewTest extends TestCase
         $this->assertNull($barangay->fresh()->pending_boundary);
     }
 
-    #[Test]
-    public function the_registration_code_response_includes_when_it_was_last_changed(): void
-    {
-        $barangay = $this->barangay();
-        $barangay->update(['boundary' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]]]);
-
-        Sanctum::actingAs($this->superAdmin, ['*']);
-        $first = $this->getJson("/api/superadmin/barangays/{$barangay->id}/registration-code")->assertOk();
-        $this->assertNotNull($first->json('updated_at'));
-
-        $second = $this->postJson("/api/superadmin/barangays/{$barangay->id}/registration-code/regenerate")->assertOk();
-        $this->assertNotNull($second->json('updated_at'));
-        $this->assertNotSame($first->json('staff_code'), $second->json('staff_code'));
-    }
-
-    #[Test]
-    public function registration_codes_are_available_while_a_boundary_is_awaiting_review(): void
-    {
-        $barangay = $this->barangay();
-        $barangay->update([
-            'boundary' => null,
-            'pending_boundary' => ['type' => 'Polygon', 'coordinates' => [$this->validRing()]],
-        ]);
-
-        Sanctum::actingAs($this->superAdmin, ['*']);
-
-        $this->getJson("/api/superadmin/barangays/{$barangay->id}/registration-code")
-            ->assertOk()
-            ->assertJsonStructure(['staff_code', 'updated_at']);
-        $this->postJson("/api/superadmin/barangays/{$barangay->id}/registration-code/regenerate")
-            ->assertOk()
-            ->assertJsonStructure(['staff_code', 'updated_at']);
-    }
 }

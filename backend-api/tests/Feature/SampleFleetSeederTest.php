@@ -101,7 +101,7 @@ class SampleFleetSeederTest extends TestCase
         Sanctum::actingAs($this->staff('admin'), ['*']);
         $this->getJson('/api/vehicles')->assertOk();
         $this->assertSame($before, $snapshot());
-        $this->assertDatabaseHas('vehicles', ['plate_number' => 'FDR-303', 'status' => 'Available', 'condition' => 'Needs Inspection', 'estimated_return_date' => null]);
+        $this->assertDatabaseHas('vehicles', ['plate_number' => 'FDR-303', 'status' => 'Available', 'condition' => 'Needs Repair', 'estimated_return_date' => null]);
         $this->assertDatabaseCount('vehicle_readiness_checks', 2);
     }
 
@@ -111,7 +111,7 @@ class SampleFleetSeederTest extends TestCase
         $ticket = MaintenanceTicket::where('status', 'Active')->with('subIssues')->firstOrFail();
         foreach ($ticket->subIssues as $line) {
             Sanctum::actingAs(User::findOrFail($line->assigned_mechanic_id), ['*']);
-            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$line->sub_issue_id}/log-repairs", ['repair_logs' => 'Sample repair completed and ready for testing.'])->assertOk();
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$line->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Sample repair completed and ready for testing.'])->assertOk();
         }
         $this->assertSame('For Verification', $ticket->fresh()->status);
 

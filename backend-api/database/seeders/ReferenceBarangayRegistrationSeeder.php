@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Barangay;
-use App\Models\RegistrationSetting;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -34,8 +33,6 @@ class ReferenceBarangayRegistrationSeeder extends Seeder
         }
 
         foreach ($barangays as $index => $barangay) {
-            RegistrationSetting::for($barangay->id);
-
             User::updateOrCreate(
                 ['email' => sprintf('boundary-qa-%02d@example.test', $index + 1)],
                 [
@@ -44,7 +41,6 @@ class ReferenceBarangayRegistrationSeeder extends Seeder
                     'role' => 'Admin',
                     'barangay_id' => $barangay->id,
                     'city_id' => $barangay->city_id,
-                    'barangay_name' => $barangay->name,
                     'is_active' => true,
                     'approved_at' => now(),
                 ],

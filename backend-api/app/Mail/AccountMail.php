@@ -13,6 +13,9 @@ class AccountMail extends Mailable
 {
     public function __construct(public User $user, public string $subjectLine, public string $template, public array $data = [])
     {
+        // The gear logo in the header band is embedded inline (cid:vms-gear)
+        // so it shows without the recipient having to "load images".
+        $this->withSymfonyMessage(fn ($message) => $message->embedFromPath(resource_path('mail/vms-gear.png'), 'vms-gear', 'image/png'));
     }
 
     /**
@@ -40,11 +43,9 @@ class AccountMail extends Mailable
 
         return new Content(markdown: 'emails.'.$this->template, with: $this->data + [
             'firstName' => explode(' ', trim($this->user->name))[0],
-            'place' => implode(', ', array_filter(['Barangay '.($barangay?->name ?? $this->user->barangay_name), $barangay?->city?->name, $barangay?->city?->province?->name])),
+            'place' => implode(', ', array_filter(['Barangay '.$barangay?->name, $barangay?->city?->name, $barangay?->city?->province?->name])),
+            // The sign-in link is always shown, including while VMS runs locally (FRONTEND_URL).
             'loginUrl' => "{$frontend}/login",
-            'registerUrl' => "{$frontend}/register",
-            // Link buttons only once VMS is deployed: a localhost link is dead on the recipient's device.
-            'showLinks' => ! in_array(parse_url($frontend, PHP_URL_HOST), ['localhost', '127.0.0.1', '::1'], true),
         ]);
     }
 }

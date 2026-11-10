@@ -16,7 +16,7 @@ class CannibalizationRecord extends Model
     protected $primaryKey = 'cannibalization_id';
 
     protected $fillable = [
-        'record_number', 'source_vehicle_id', 'destination_type', 'destination_vehicle_id', 'storage_location',
+        'record_number', 'source_vehicle_id', 'donor_type', 'ticket_id', 'destination_type', 'destination_vehicle_id', 'storage_location',
         'reason', 'source_reason', 'notes', 'recorded_by', 'performed_by_name', 'removed_at',
         'received_by_name', 'transferred_at', 'evidence_urls',
     ];
@@ -40,6 +40,12 @@ class CannibalizationRecord extends Model
     public function destinationVehicle()
     {
         return $this->belongsTo(Vehicle::class, 'destination_vehicle_id', 'vehicle_id');
+    }
+
+    /** The repair ticket these parts went into. */
+    public function ticket()
+    {
+        return $this->belongsTo(MaintenanceTicket::class, 'ticket_id', 'ticket_id');
     }
 
     public function recordedBy()

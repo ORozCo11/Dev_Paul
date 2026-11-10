@@ -24,8 +24,12 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // MySQL refuses to drop a table that other tables (e.g. notifications)
+        // still reference; the FKs re-attach to the rebuilt table by name.
+        Schema::disableForeignKeyConstraints();
         Schema::dropIfExists('ticket_archive_logs');
         Schema::dropIfExists('maintenance_tickets');
+        Schema::enableForeignKeyConstraints();
 
         Schema::create('maintenance_tickets', function (Blueprint $table) {
             $table->id('ticket_id');

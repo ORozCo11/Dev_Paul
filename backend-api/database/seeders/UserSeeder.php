@@ -114,7 +114,6 @@ class UserSeeder extends Seeder
                     'roles' => [$user['role']],
                     'barangay_id' => $user['barangay_id'],
                     'city_id' => $user['barangay_id'] ? $barangay?->city_id : null,
-                    'barangay_name' => $user['barangay_id'] ? $barangay?->name : null,
                     'address' => $user['barangay_id'] ? 'Paknaan, Mandaue City, Cebu' : null,
                     'photo_url' => isset($profilePhotos[$user['email']])
                         ? rtrim(config('app.url'), '/').'/mockups/profiles/'.$profilePhotos[$user['email']]

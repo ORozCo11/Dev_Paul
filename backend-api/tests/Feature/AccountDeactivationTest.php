@@ -110,7 +110,7 @@ class AccountDeactivationTest extends TestCase
         Sanctum::actingAs($admin, ['*']);
         $this->putJson("/api/users/{$admin->id}", [
             'name' => 'Updated Name',
-            'roles' => ['Admin', 'Custodian'],
+            'roles' => ['Admin'],
         ])->assertOk();
 
         $this->assertSame('Updated Name', $admin->fresh()->name);

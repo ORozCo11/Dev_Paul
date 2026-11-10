@@ -1,5 +1,11 @@
 import { ticketNumber } from './recordNumber.js';
 
+function timelineDetails(details, ticket) {
+  if (typeof details !== 'string') return details;
+  const text = details.replace(/^\[Impersonated by account #[^\]]*\]\s*/i, '');
+  return ticket.ticket_id == null ? text : text.replace(new RegExp(`Ticket #${ticket.ticket_id}(?!\\d)`, 'gi'), `Ticket #${ticketNumber(ticket)}`);
+}
+
 // Prefer the immutable audit trail: mutable status and updated_at cannot tell
 // when an earlier approval, reassignment, rejection, or repair actually happened.
 export function ticketTimeline(ticket) {
@@ -8,13 +14,14 @@ export function ticketTimeline(ticket) {
     label: entry.action,
     at: entry.created_at,
     by: entry.user,
+    role: entry.role ?? entry.user?.role,
     // Historical audit copy used the internal ID. Translate only this ticket's
     // reference for display, preserving the stored audit and its route identity.
-    details: ticket.ticket_id == null ? entry.details : entry.details?.replace(new RegExp(`Ticket #${ticket.ticket_id}(?!\\d)`, 'gi'), `Ticket #${ticketNumber(ticket)}`),
+    details: timelineDetails(entry.details, ticket),
     icon: /closed|verified/i.test(entry.action) ? 'checkCircle' : 'clipboard',
   }));
   const add = (id, label, at, by, icon = 'clipboard', dateOnly = false) => {
-    if (at) events.push({ id, label, at, by, icon, dateOnly });
+    if (at) events.push({ id, label, at, by, role: by?.role, icon, dateOnly });
   };
   if (!events.some((event) => /^(create|propose|auto-propose) ticket$/i.test(event.label))) {
     add('created', 'Created', ticket.created_at, ticket.created_by);

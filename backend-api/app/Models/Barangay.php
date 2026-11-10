@@ -37,11 +37,6 @@ class Barangay extends Model
         return $this->hasMany(User::class);
     }
 
-    public function registrationSetting()
-    {
-        return $this->hasOne(RegistrationSetting::class);
-    }
-
     /**
      * Barangays onboarded onto the platform: added by a Super Admin
      * (provisioned), already staffed, or created by hand. Reference-only

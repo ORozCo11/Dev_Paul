@@ -17,7 +17,7 @@ function paginationPageList(current, total) {
 }
 
 export default function PaginationControls({ page, setPage, pageSize, setPageSize, pageSizeOptions = [10, 25, 50, 100], totalPages, showPageSize = true }) {
-  if (totalPages <= 1 && (!showPageSize || pageSizeOptions.length <= 1)) return null;
+  if (totalPages <= 1) return null;
   const pageList = paginationPageList(page, totalPages);
   return (
     <nav className="table-pagination" aria-label="Pagination">

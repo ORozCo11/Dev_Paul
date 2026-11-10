@@ -63,7 +63,7 @@ class SpecPhase1RolesTest extends TestCase
     }
 
     #[Test]
-    public function admin_cannot_report_an_issue_but_custodian_and_maintenance_can(): void
+    public function only_a_custodian_can_report_an_issue_admin_and_maintenance_cannot(): void
     {
         $vehicle = $this->vehicle();
         $payload = [
@@ -78,7 +78,7 @@ class SpecPhase1RolesTest extends TestCase
         $this->postJson('/api/issues', $payload)->assertCreated();
 
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->postJson('/api/issues', $payload)->assertCreated();
+        $this->postJson('/api/issues', $payload)->assertForbidden();
     }
 
     #[Test]

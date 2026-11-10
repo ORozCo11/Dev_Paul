@@ -24,6 +24,10 @@ class TicketSubIssue extends Model
     }
 
     protected $fillable = [
+        'mechanic_tested_at',
+        'mechanic_tested_by',
+        'mechanic_test_notes',
+        'no_repair_needed',
         'external_cycles',
         'work_history',
         'ticket_id',
@@ -113,6 +117,8 @@ class TicketSubIssue extends Model
         'work_history' => 'array',
         'attachment_files' => 'array',
         'mechanic_assigned_at' => 'datetime',
+        'mechanic_tested_at' => 'datetime',
+        'no_repair_needed' => 'boolean',
         'verified_at'          => 'datetime',
         'confirmed_at'         => 'datetime',
         'warranty_until'       => 'date',

@@ -57,7 +57,7 @@ class DeleteTicketKeepsRepairWorkTest extends TestCase
     {
         $ticket = $this->activeTicket();
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$ticket->subIssues->first()->sub_issue_id}/log-repairs", ['repair_logs' => 'Replaced hose.'])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$ticket->subIssues->first()->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Replaced hose.'])->assertOk();
 
         Sanctum::actingAs($this->admin, ['*']);
         $this->deleteJson("/api/tickets/{$ticket->ticket_id}")->assertUnprocessable();

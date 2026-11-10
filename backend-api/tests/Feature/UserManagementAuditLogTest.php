@@ -60,19 +60,18 @@ class UserManagementAuditLogTest extends TestCase
     }
 
     #[Test]
-    public function resetting_a_users_password_is_logged_without_the_password_itself(): void
+    public function an_admin_cannot_set_or_reset_another_users_password(): void
     {
         $this->admin();
         $custodian = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
+        $before = $custodian->fresh()->password;
 
         $this->putJson("/api/users/{$custodian->id}", [
             'password' => 'brandNewSecret1',
             'password_confirmation' => 'brandNewSecret1',
-        ])->assertOk();
+        ])->assertStatus(422);
 
-        $log = ActivityLog::where('action', 'Edit')->where('module', 'Users')->firstOrFail();
-        $this->assertStringContainsString('password reset', $log->details);
-        $this->assertStringNotContainsString('brandNewSecret1', $log->details);
+        $this->assertSame($before, $custodian->fresh()->password);
     }
 
     #[Test]

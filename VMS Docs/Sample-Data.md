@@ -15,7 +15,9 @@ git pull --ff-only
 powershell -ExecutionPolicy Bypass -File .\setup-demo.ps1
 ```
 
-Prerequisites: PHP 8.3+ with the project's Composer extensions (including SQLite), Composer, and Node.js compatible with Vite 8 (20.19+ or 22.12+), with npm. The script uses `composer install` and `npm ci` with committed lockfiles; it creates missing configuration files and keys but preserves existing ones. It is safe to run again to reset the demo. If dependencies are already installed, use `-SkipInstall`.
+> **28 October 2026 - database change.** The application database is now **MySQL 8** (`barangay_vms_db`). On MySQL, create an empty `barangay_vms_db` schema, put your `DB_*` values in `backend-api/.env`, and run `php artisan migrate:fresh --seed` from `backend-api` (this recreates the sample fleet and accounts below). `setup-demo.ps1` and `php artisan demo:sync` still assume SQLite and `demo:sync` refuses to run on MySQL; the SQLite-specific wording below describes those two tools. Demo accounts created by seeders have normal passwords; only accounts an Admin creates in the app get a forced temporary password.
+
+Prerequisites: PHP 8.3+ with the project's Composer extensions (including SQLite for the tests and the legacy scripts), Composer, and Node.js compatible with Vite 8 (20.19+ or 22.12+), with npm. The script uses `composer install` and `npm ci` with committed lockfiles; it creates missing configuration files and keys but preserves existing ones. It is safe to run again to reset the demo. If dependencies are already installed, use `-SkipInstall`.
 
 On an already configured installation, including macOS/Linux, the backend-only equivalent is:
 
@@ -71,7 +73,7 @@ The existing Super Admin and account-switcher demo accounts remain available thr
 | INEM Portuguese Ambulance | INEM-112 | Ambulance | Available / Good with a fresh readiness pass and today's scheduled service. |
 | Rescue Response Ambulance | FDR-303 | Ambulance | Pending Approval: Justine proposes external-shop A/C diagnosis; Admin reviews it before work proceeds. |
 
-Vehicles with approved ongoing repairs are Under Maintenance / Needs Repair. The pending-proposal vehicle is Available / Needs Inspection with no passing readiness check; availability alone does not mean verified ready. These initial values match the vehicle list's normal state refresh. Availability, physical condition and verified readiness remain separate. Readiness passes expire normally after 24 hours. Re-seeding refreshes the two Good/Available vehicles' passes.
+Vehicles with approved ongoing repairs are Under Maintenance / Needs Repair. The pending-proposal vehicle is Available / Needs Repair with no passing readiness check; availability alone does not mean verified ready. These initial values match the vehicle list's normal state refresh. Availability, physical condition and verified readiness remain separate. Readiness passes expire normally after 24 hours. Re-seeding refreshes the two Good/Available vehicles' passes.
 
 ## Maintenance schedules
 

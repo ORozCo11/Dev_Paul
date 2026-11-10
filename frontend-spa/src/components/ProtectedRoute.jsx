@@ -2,6 +2,7 @@ import LoadingOverlay from './LoadingOverlay';
 import { useContext } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContextObject';
+import ChangePasswordRequired from './ChangePasswordRequired';
 
 export const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, token, loading } = useContext(AuthContext);
@@ -15,6 +16,12 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
   // If not logged in, redirect them immediately back to the main login portal
   if (!token) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // An account still on its Admin-set temporary password can do nothing else
+  // until it picks its own (impersonation sessions are exempt - see the API).
+  if (user?.must_change_password && !user?.is_impersonating) {
+    return <ChangePasswordRequired />;
   }
 
   // If logged in but lacks the required role, bounce them to an unauthorized alert view.

@@ -199,7 +199,7 @@ class TicketVolumeSmokeTest extends TestCase
         foreach (MaintenanceTicket::with('subIssues')->whereIn('ticket_id', $ticketIds)->get() as $ticket) {
             Sanctum::actingAs($this->mechanic, ['*']);
             foreach ($ticket->subIssues as $subIssue) {
-                $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", [
+                $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssue->sub_issue_id}/log-repairs", ['tested_ok' => true, 
                     'repair_logs' => 'Replaced front brake pads.',
                 ])->assertOk();
             }

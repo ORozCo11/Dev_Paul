@@ -78,7 +78,7 @@ class CustodianVerificationHandoffTest extends TestCase
     private function logRepair(MaintenanceTicket $ticket, int $subIssueId, ?User $mechanic = null): void
     {
         Sanctum::actingAs($mechanic ?? $this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssueId}/log-repairs", [
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$subIssueId}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Repaired.',
         ])->assertOk();
     }

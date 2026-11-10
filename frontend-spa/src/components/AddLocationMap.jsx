@@ -3,13 +3,10 @@ import { MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents } from '
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TouchMapGuard from './TouchMapGuard';
-import { BOUNDARY_REFERENCE_ATTRIBUTION } from '../utils/boundary';
-import BoundaryReferenceLabel from './BoundaryReferenceLabel';
-import BoundaryMapDetails from './BoundaryMapDetails';
+import { BOUNDARY_REFERENCE_ATTRIBUTION, isPointWithinBoundaryPolygons } from '../utils/boundary';
 
-const ESRI_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const ESRI_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
-const ESRI_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community';
+const STREET_TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const STREET_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, HERE, Garmin, OpenStreetMap contributors';
 
 // Same blue teardrop pin as VehicleLocationMap — not shared from there since
 // that component doesn't export it, and duplicating one small icon constant
@@ -71,23 +68,27 @@ function ResizeMapOnContainerResize() {
 // field), and re-centers itself when the parent moves the pin instead (the
 // admin typed an address that got geocoded). The service-area boundary is
 // drawn so it's obvious at a glance where a click will actually be accepted.
-export default function AddLocationMap({ marker, boundaryPolygons, boundaryLabel, boundaryVerified = false, onPick }) {
+export default function AddLocationMap({ marker, boundaryPolygons, onPick: onPickAnywhere, onOutside }) {
   const bounds = useMemo(() => boundaryPolygons.length ? L.latLngBounds(boundaryPolygons.flat(2)) : null, [boundaryPolygons]);
   if (!bounds) return <p role="status">The selected barangay has no boundary reference yet. Ask the system administrator to review its boundary before adding a location.</p>;
   const initialCenter = bounds.getCenter();
+  // A pin outside the barangay outline is refused: the marker stays where it was.
+  const onPick = (point) => {
+    if (isPointWithinBoundaryPolygons(point, boundaryPolygons)) onPickAnywhere(point);
+    else onOutside?.(point);
+  };
 
   return (
     <MapContainer
       center={[initialCenter.lat, initialCenter.lng]}
-      zoom={16}
+      zoom={17}
+      maxZoom={19}
       scrollWheelZoom
       className="add-location-map-canvas"
       attributionControl
     >
       <ResizeMapOnContainerResize />
-      <TileLayer url={ESRI_IMAGERY_URL} attribution={`${ESRI_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} maxZoom={19} crossOrigin="anonymous" />
-      <TileLayer url={ESRI_LABELS_URL} attribution="" maxZoom={19} crossOrigin="anonymous" />
-      <BoundaryMapDetails name={boundaryLabel} verified={boundaryVerified} />
+      <TileLayer url={STREET_TILE_URL} attribution={`${STREET_ATTRIBUTION} | ${BOUNDARY_REFERENCE_ATTRIBUTION}`} maxZoom={19} crossOrigin="anonymous" />
       <ClickToPick onPick={onPick} />
       {boundaryPolygons.map((ring, index) => (
         <Polygon
@@ -96,8 +97,15 @@ export default function AddLocationMap({ marker, boundaryPolygons, boundaryLabel
           pathOptions={{ color: '#facc15', fillColor: '#facc15', fillOpacity: 0.05, opacity: 1, weight: 3 }}
         />
       ))}
-      <BoundaryReferenceLabel polygons={boundaryPolygons} label={boundaryLabel} />
-      {marker && <Marker position={[marker.lat, marker.lng]} icon={pickPin} />}
+      {/* The pin can be dragged for a precise final position. */}
+      {marker && (
+        <Marker
+          position={[marker.lat, marker.lng]}
+          icon={pickPin}
+          draggable
+          eventHandlers={{ dragend: (event) => { const { lat, lng } = event.target.getLatLng(); if (isPointWithinBoundaryPolygons({ lat, lng }, boundaryPolygons)) onPickAnywhere({ lat, lng }); else { event.target.setLatLng([marker.lat, marker.lng]); onOutside?.({ lat, lng }); } } }}
+        />
+      )}
       <FlyToMarker marker={marker} />
       <TouchMapGuard />
     </MapContainer>

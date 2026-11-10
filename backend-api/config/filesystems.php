@@ -60,43 +60,6 @@ return [
             'report' => false,
         ],
 
-        /*
-         | Supabase Storage — S3-compatible bucket via the AWS SDK.
-         | Set FILESYSTEM_DISK=supabase in .env to use this as default.
-         */
-        'supabase' => [
-            'driver'                  => 's3',
-            'key'                     => env('SUPABASE_KEY'),
-            'secret'                  => env('SUPABASE_SECRET'),
-            'region'                  => env('SUPABASE_REGION', 'ap-southeast-1'),
-            'bucket'                  => env('SUPABASE_PRIVATE_BUCKET'),
-            'endpoint'                => env('SUPABASE_ENDPOINT'),
-            'url'                     => env('SUPABASE_URL'),
-            'use_path_style_endpoint' => true,
-
-            // Requires a private bucket; public-bucket ACLs cannot protect files.
-            'visibility'              => 'private',
-            'throw'                   => true,
-            'report'                  => false,
-
-            /*
-             | SSL verification for the HTTPS calls to Supabase.
-             |
-             | Many local PHP installs (especially on Windows) ship without a
-             | cURL CA bundle, which makes every upload fail with
-             | "cURL error 60: unable to get local issuer certificate" and
-             | silently fall back to local storage. Pointing the AWS client at
-             | a CA bundle committed to the repo makes uploads work on every
-             | machine without editing php.ini.
-             |
-             | Set SUPABASE_CA_BUNDLE in .env to override (e.g. on a server
-             | that already has a system CA bundle, set it to `true`).
-             */
-            'http' => [
-                'verify' => env('SUPABASE_CA_BUNDLE', base_path('certs/cacert.pem')),
-            ],
-        ],
-
     ],
 
     /*

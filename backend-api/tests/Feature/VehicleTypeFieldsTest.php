@@ -97,6 +97,7 @@ class VehicleTypeFieldsTest extends TestCase
         Sanctum::actingAs($this->admin, ['*']);
         $required = $this->addField();
         $this->addField(['label' => 'Ladder', 'field_type' => 'yes_no', 'is_required' => false, 'unit' => null]);
+        Sanctum::actingAs($this->custodian, ['*']);
 
         $this->postJson('/api/vehicles', $this->vehiclePayload())->assertUnprocessable()->assertJsonValidationErrors(['custom_fields.tank_capacity']);
         $this->postJson('/api/vehicles', $this->vehiclePayload(['custom_fields' => ['tank_capacity' => 'lots']]))->assertUnprocessable();
@@ -112,8 +113,11 @@ class VehicleTypeFieldsTest extends TestCase
     {
         Sanctum::actingAs($this->admin, ['*']);
         $field = $this->addField();
+        Sanctum::actingAs($this->custodian, ['*']);
         $created = $this->postJson('/api/vehicles', $this->vehiclePayload(['custom_fields' => ['tank_capacity' => 4000]]))->assertCreated()->json();
 
+
+        Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("/api/category-fields/{$field['field_id']}", ['label' => 'Tank Capacity', 'is_active' => false])->assertOk();
         // The type is immutable once created.
         $this->putJson("/api/category-fields/{$field['field_id']}", ['label' => 'Tank', 'field_type' => 'text'])->assertOk()->assertJsonPath('field_type', 'number');
@@ -121,6 +125,7 @@ class VehicleTypeFieldsTest extends TestCase
         $this->putJson("/api/vehicles/{$created['vehicle_id']}", $this->vehiclePayload(['vehicle_name' => 'Engine 1b']))->assertOk();
         $this->assertEquals(['tank_capacity' => '4000'], Vehicle::first()->custom_values);
 
+        Sanctum::actingAs($this->custodian, ['*']);
         $this->postJson('/api/vehicles', $this->vehiclePayload(['plate_number' => 'FIR 5678']))->assertCreated();
     }
 
@@ -129,7 +134,11 @@ class VehicleTypeFieldsTest extends TestCase
     {
         Sanctum::actingAs($this->admin, ['*']);
         $this->addField(['label' => 'Ladder', 'field_type' => 'yes_no', 'is_required' => false, 'unit' => null]);
-        $created = $this->postJson('/api/vehicles', $this->vehiclePayload(['cf_ladder' => 'Yes', 'criticality' => 'Critical']))->assertCreated()->json();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $created = $this->postJson('/api/vehicles', $this->vehiclePayload(['cf_ladder' => 'Yes']))->assertCreated()->json();
+        // The criticality override is set by the Admin, who edits but no longer registers vehicles.
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/vehicles/{$created['vehicle_id']}", $this->vehiclePayload(['cf_ladder' => 'Yes', 'criticality' => 'Critical']))->assertOk();
         $this->assertSame('Critical', Vehicle::first()->criticality);
 
         $this->putJson("/api/vehicles/{$created['vehicle_id']}", $this->vehiclePayload(['cf_ladder' => '__clear__', 'criticality' => 'Inherit']))->assertOk();
@@ -143,6 +152,7 @@ class VehicleTypeFieldsTest extends TestCase
         Sanctum::actingAs($this->admin, ['*']);
         $this->addField();
         $this->addField(['label' => 'Pump', 'field_type' => 'dropdown', 'is_required' => false, 'options' => ['Front', 'Rear'], 'unit' => null]);
+        Sanctum::actingAs($this->custodian, ['*']);
 
         $headers = ['Vehicle Name', 'Plate Number', 'Vehicle Type', 'Brand', 'Model', 'Year Model', 'Capacity', 'Fuel Type', 'Vehicle Color', 'Current Location', 'Tank Capacity', 'Pump'];
         $base = ['Engine', 'FIR 1111', 'Fire Truck', 'Isuzu', 'Giga', 2021, '6 pax', 'Diesel', 'Red', 'Main Depot'];

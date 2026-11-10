@@ -1,5 +1,7 @@
 # Role Audit — Barangay Fleet/Vehicle Management System
 
+> **Historical audit - superseded in part (28 October 2026).** This report describes the role model as it was when it was written. Since then: accounts hold **one** role (`user_roles`, the `users.roles` JSON column is gone, so the multi-role findings below no longer apply to new accounts); **Maintenance Personnel can no longer report vehicle issues** (`issue.create` is Custodian-only); Custodians gained Vehicle Types (view/add) and Vehicle Location (view, add/edit hubs) pages; Maintenance Personnel can view every barangay vehicle; the database is MySQL, not SQLite; and the sidebars are grouped Fleet / Monitoring / Repairs / Maintenance. For current behavior use `backend-api/config/permissions.php` and [VMS Docs/Current-Revision-2026-10-28.md](VMS%20Docs/Current-Revision-2026-10-28.md).
+
 Scope: `backend-api/` (Laravel) + `frontend-spa/` (React). This report describes what the code actually does, with file:line citations. Where something could not be verified from the code, it is marked **UNCLEAR** with the reason.
 
 Roles found in code: **Super Admin, Admin, Custodian, Maintenance Personnel.**

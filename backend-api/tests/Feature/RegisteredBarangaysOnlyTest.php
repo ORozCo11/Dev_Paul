@@ -31,14 +31,6 @@ class RegisteredBarangaysOnlyTest extends TestCase
         return collect($this->getJson('/api/superadmin/barangays')->assertOk()->json())->pluck('name')->sort()->values()->all();
     }
 
-    public function test_a_reference_barangay_with_only_a_pre_seeded_code_is_not_registered(): void
-    {
-        $seeded = $this->reference('Seeded Only', '9999900001');
-        RegistrationSetting::for($seeded->id);
-
-        $this->assertNotContains('Seeded Only', $this->listedNames());
-    }
-
     public function test_provisioned_staffed_and_manual_barangays_are_registered(): void
     {
         $this->reference('Provisioned', '9999900002')->update(['provisioned_at' => now()]);

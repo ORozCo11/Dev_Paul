@@ -85,7 +85,7 @@ class Vehicle extends Model
         return $this->hasMany(VehicleMaintenanceSchedule::class, 'vehicle_id', 'vehicle_id');
     }
 
-    // Admin's per-vehicle override, else the Vehicle Type's default.
+    // Admin's per-vehicle override, else the Vehicle Category's default.
     public function effectiveCriticality(): string
     {
         return $this->criticality ?: ($this->category?->default_criticality ?: 'Normal');

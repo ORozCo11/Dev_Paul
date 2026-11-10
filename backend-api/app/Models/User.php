@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasBarangayNumber;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,59 +25,39 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'must_change_password',
+        'temp_password_expires_at',
         'role',
         'roles',
         'phone',
         'address',
         'barangay_id',
         'city_id',
-        'barangay_name',
         'photo_url',
         'is_active',
         'approved_at',
         'can_register_vehicles',
-        'awaiting_staff_code',
-        'staff_code_sent_at',
     ];
 
-    // How long an emailed staff code stays usable before the registration expires.
-    public const STAFF_CODE_VALID_DAYS = 7;
+    // A temporary password emailed to a new account stops working after this long.
+    public const TEMP_PASSWORD_VALID_HOURS = 72;
 
     /**
      * The attributes that should be hidden for serialization.
      */
     protected $hidden = [
+        'roleRows',
         'password',
         'remember_token',
-        'registration_id_path',
-        'registration_photo_path',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
-        'roles'     => 'array',
+        'must_change_password' => 'boolean',
+        'temp_password_expires_at' => 'datetime',
         'approved_at' => 'datetime',
         'can_register_vehicles' => 'boolean',
-        'awaiting_staff_code' => 'boolean',
-        'staff_code_sent_at' => 'datetime',
     ];
-
-    public function staffCodeExpiresAt(): ?\Illuminate\Support\Carbon
-    {
-        return $this->staff_code_sent_at?->copy()->addDays(self::STAFF_CODE_VALID_DAYS);
-    }
-
-    public function staffCodeExpired(): bool
-    {
-        return $this->awaiting_staff_code && $this->staffCodeExpiresAt()?->isPast() === true;
-    }
-
-    /** Cancels an unclaimed first-Admin registration so the person can register again. */
-    public function expireRegistration(): void
-    {
-        \App\Mail\AccountMail::trySend($this, 'Your VMS registration has expired', 'expired', ['expiresAt' => $this->staffCodeExpiresAt()]);
-        $this->delete();
-    }
 
     // Matches the migration's DB-level default. Without this, a User
     // instance built in PHP without an explicit is_active (e.g. a factory
@@ -85,6 +66,67 @@ class User extends Authenticatable
     protected $attributes = [
         'is_active' => true,
     ];
+
+    /** Roles written through `$user->roles = [...]` are held here until the row is saved. */
+    protected ?array $pendingRoles = null;
+
+    protected static function booted(): void
+    {
+        static::saved(function (User $user) {
+            if ($user->pendingRoles === null) {
+                return;
+            }
+
+            $keep = $user->pendingRoles;
+            $user->pendingRoles = null;
+
+            $user->roleRows()->whereNotIn('role', $keep)->delete();
+            $existing = $user->roleRows()->pluck('role')->all();
+            foreach (array_diff($keep, $existing) as $role) {
+                $user->roleRows()->create(['role' => $role]);
+            }
+            $user->unsetRelation('roleRows');
+        });
+    }
+
+    /**
+     * `roles` used to be a column, so it appeared in every serialized user.
+     * Include it whenever the role rows are loaded; endpoints that return
+     * users to the frontend eager-load `roleRows`, while embedded users
+     * (a ticket's custodian, etc.) stay lean instead of costing a query each.
+     */
+    public function toArray()
+    {
+        $array = parent::toArray();
+
+        if ($this->relationLoaded('roleRows')) {
+            $array['roles'] = $this->roleRows->pluck('role')->all();
+        }
+
+        return $array;
+    }
+
+    /** One row per role the account holds (normalized from the old `roles` JSON column). */
+    public function roleRows()
+    {
+        return $this->hasMany(UserRole::class)->orderBy('id');
+    }
+
+    /**
+     * `roles` reads and writes the user_roles table as a plain array, so
+     * callers keep using `$user->roles` / `['roles' => [...]]` unchanged.
+     */
+    protected function roles(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->pendingRoles ?? ($this->exists ? $this->roleRows->pluck('role')->all() : []),
+            set: function ($value) {
+                $this->pendingRoles = array_values(array_unique(array_filter((array) $value)));
+
+                return [];
+            },
+        );
+    }
 
     public function barangay()
     {
@@ -137,8 +179,7 @@ class User extends Authenticatable
 
     /**
      * Match users who hold a given role either as their primary `role` or
-     * anywhere in their `roles` list. Uses a portable LIKE against the JSON
-     * text so it works identically on SQLite and Postgres (no JSON1 needed).
+     * in the user_roles table.
      *
      * This is a SQL-level mirror of hasRole()/allRoles() (PHP-level), kept
      * separate deliberately — a query scope filters rows at the database
@@ -153,7 +194,12 @@ class User extends Authenticatable
     {
         return $query->where(function ($q) use ($role) {
             $q->where('role', $role)
-              ->orWhere('roles', 'like', '%"' . $role . '"%');
+              ->orWhereExists(function ($sub) use ($role) {
+                  $sub->selectRaw('1')
+                      ->from('user_roles')
+                      ->whereColumn('user_roles.user_id', 'users.id')
+                      ->where('user_roles.role', $role);
+              });
         });
     }
 
@@ -197,10 +243,8 @@ class User extends Authenticatable
     public function canDo(string $ability): bool
     {
         if ($ability === 'impersonation.start') {
-            if ($this->role === 'Super Admin') {
-                return (bool) $this->is_active;
-            }
-
+            // Only the dedicated demo account switcher may impersonate. The real
+            // Super Admin cannot sign in as other accounts.
             return $this->is_active && $this->role === 'Impersonator'
                 && strtolower(trim($this->email)) === 'superadmin@demotest.com';
         }

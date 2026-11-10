@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\AuthorizesAbilities;
 use App\Http\Controllers\Concerns\GuardsLastAdmin;
 use App\Http\Controllers\Concerns\GuardsOpenWorkOnDeactivation;
+use App\Http\Controllers\Concerns\IssuesTemporaryPassword;
 use App\Http\Controllers\Concerns\UploadsImages;
 use App\Models\ActivityLog;
-use App\Models\RegistrationSetting;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -19,6 +20,7 @@ class UserController extends Controller
     use GuardsLastAdmin;
     use GuardsOpenWorkOnDeactivation;
     use AuthorizesAbilities;
+    use IssuesTemporaryPassword;
 
     private const ROLES = ['Admin', 'Custodian', 'Maintenance Personnel'];
 
@@ -72,7 +74,7 @@ class UserController extends Controller
     {
         $this->requireAbility($request, 'user.view', 'Only Admins can manage users.');
 
-        $query = User::where('barangay_id', $request->user()->barangay_id);
+        $query = User::with('roleRows')->where('barangay_id', $request->user()->barangay_id);
 
         if ($request->filled('q')) {
             $search = $request->string('q');
@@ -99,20 +101,21 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['required_without:roles', Rule::in(self::ROLES)],
-            'roles' => ['required_without:role', 'array', 'min:1'],
+            'roles' => ['required_without:role', 'array', 'min:1', 'max:1'],
             'roles.*' => [Rule::in(self::ROLES)],
             'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
-            'photo' => ['nullable', 'image', 'max:4096'],
+            'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
         ], [
             'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
         ]);
 
         $data = $this->normalizeRoles($request, $data);
-        $data['password'] = Hash::make($data['password']);
+        // The system makes the temporary password; the Admin never types or sees a chosen one.
+        $data['password'] = Hash::make(Str::random(40));
+        $data['must_change_password'] = true;
         $data['is_active'] = true;
         // Created by an Admin directly, so already approved — without this
         // stamp the account reads as a pending registration everywhere.
@@ -127,10 +130,13 @@ class UserController extends Controller
         unset($data['photo']);
 
         $user = User::create($data);
+        $plain = $this->issueTemporaryPassword($user);
+        $emailed = $this->emailCredentials($user, $plain, $request->user()->name);
 
         $this->log($request, 'Add', $user->id, "Created user \"{$user->name}\" ({$user->email}), role: " . implode('/', $user->roles ?? [$user->role]));
 
-        return response()->json($user, 201);
+        // The plain password is returned this once so it can be handed over in person if the email fails.
+        return response()->json($user->load('roleRows')->toArray() + ['temporary_password' => $plain, 'email_sent' => $emailed], 201);
     }
 
     public function update(Request $request, User $user)
@@ -138,16 +144,18 @@ class UserController extends Controller
         $this->requireAbility($request, 'user.edit', 'Only Admins can manage users.');
         $this->requireSameBarangay($request, $user);
 
+        // Passwords belong to their owners (Profile > Change Password); an Admin never sets or resets someone else's.
+        abort_if($request->filled('password') || $request->filled('password_confirmation'), 422, "An Admin cannot change another user's password. Each user changes their own under Profile.");
+
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'email' => ['sometimes', 'required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
-            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
             'role' => ['sometimes', 'required', Rule::in(self::ROLES)],
-            'roles' => ['sometimes', 'required', 'array', 'min:1'],
+            'roles' => ['sometimes', 'required', 'array', 'min:1', 'max:1'],
             'roles.*' => [Rule::in(self::ROLES)],
             'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
-            'photo' => ['nullable', 'image', 'max:4096'],
+            'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
         ], [
             'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
@@ -208,7 +216,22 @@ class UserController extends Controller
 
         $this->log($request, 'Edit', $user->id, "Updated user \"{$user->name}\"" . ($changeNotes ? ' (' . implode('; ', $changeNotes) . ')' : ''));
 
-        return $user->fresh();
+        return $user->fresh('roleRows');
+    }
+
+    /** Replaces a staff member's password with a new emailed temporary one (lost or expired credentials). */
+    public function resendCredentials(Request $request, User $user)
+    {
+        $this->requireAbility($request, 'user.edit', 'Only Admins can manage users.');
+        $this->requireSameBarangay($request, $user);
+        abort_if($user->id === $request->user()->id, 422, 'Use Change Password for your own account.');
+        abort_if($user->hasRole('Admin'), 403, 'Only the Super Admin can reset an Admin account.');
+
+        $plain = $this->issueTemporaryPassword($user);
+        $emailed = $this->emailCredentials($user, $plain, $request->user()->name);
+        $this->log($request, 'Edit', $user->id, "Sent new temporary credentials to \"{$user->name}\" ({$user->email}).");
+
+        return response()->json(['temporary_password' => $plain, 'email_sent' => $emailed, 'email' => $user->email]);
     }
 
     public function deactivate(Request $request, User $user)
@@ -264,20 +287,4 @@ class UserController extends Controller
         return response()->json(['message' => 'User activated.']);
     }
 
-    public function registrationSettings(Request $request)
-    {
-        $this->requireAbility($request, 'registration_code.view', 'Only Admins can manage users.');
-
-        return response()->json(['staff_code' => RegistrationSetting::for($request->user()->barangay_id)->staff_code]);
-    }
-
-    public function regenerateRegistrationCode(Request $request)
-    {
-        $this->requireAbility($request, 'registration_code.regenerate', 'Only Admins can manage users.');
-
-        $setting = RegistrationSetting::regenerateFor($request->user()->barangay_id);
-        $this->log($request, 'Edit', null, 'Regenerated the staff registration code for '.($request->user()->barangay?->name ?? 'this barangay').'.');
-
-        return response()->json(['staff_code' => $setting->staff_code]);
-    }
 }

@@ -9,16 +9,16 @@ import api from '../api/axios';
 
 const FAQ = [
   {
-    q: 'What happens after I register as the first barangay Admin?',
-    a: 'Your account stays inactive until a Super Admin approves it. Submission creates an in-app notification and a Pending Approvals entry; there is no email or SMS alert. You can leave the page. Coordinate with your barangay office so the platform administrator can verify your appointment through a trusted contact. The staff code alone does not prove authority. If you cannot reach them, report an access concern below with your barangay and contact details; never send passwords or registration codes. Support is a follow-up channel, not a replacement for approval.',
+    q: 'How do I get an account?',
+    a: 'There is no public registration. The LGU (Super Admin) creates your barangay and its Admin, who receives a temporary password by email. Each Admin then creates the Custodian and Maintenance accounts. You must change the temporary password at first sign-in, and it expires after 72 hours. If it expired or never arrived, ask whoever created your account to resend your credentials. Never send passwords through the support form.',
   },
   {
     q: 'How do I report a vehicle issue?',
     a: "As a Custodian, open Report Vehicle Issue to review issues and propose a maintenance ticket. Describe the problem and the planned repair. An Admin reviews the proposal and assigns the work. Maintenance Personnel can submit technical issue reports for a Custodian to review.",
   },
   {
-    q: "How do I approve a new staff registration, and what's the Staff Registration Code?",
-    a: 'As an Admin, go to Users to review pending registrations. The Staff Registration Code (also on the Users page) is what a barangay hands out to real staff so a stranger can\'t reach your approval queue — regenerate it any time from the same page if it leaks.',
+    q: 'How do I add a Custodian or Maintenance account?',
+    a: 'As an Admin, go to Users and create the account. The system emails a temporary password to the new user, who must change it at first sign-in.',
   },
   {
     q: 'How do I log completed repairs?',

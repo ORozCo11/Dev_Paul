@@ -9,22 +9,22 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Email link buttons point at the frontend; a localhost link is dead on the
- * recipient's phone, so buttons appear only once VMS has a real address.
+ * The credentials email always carries a link to the sign-in page, on the
+ * frontend address in FRONTEND_URL, including while VMS runs locally.
  */
 class AccountMailLinksTest extends TestCase
 {
     use RefreshDatabase;
 
     #[Test]
-    public function emails_have_no_link_buttons_while_the_frontend_is_local(): void
+    public function emails_show_the_sign_in_link_even_while_the_frontend_is_local(): void
     {
         config(['app.frontend_url' => 'http://localhost:5173']);
 
-        $html = (new AccountMail(User::factory()->create(), 'Active', 'activated'))->render();
+        $html = (new AccountMail(User::factory()->create(), 'Credentials', 'credentials', ['temporaryPassword' => 'Abcd2345Xy', 'createdBy' => 'Admin', 'expiresAt' => now()->addHours(72)]))->render();
 
-        $this->assertStringNotContainsString('Sign in to VMS', $html);
-        $this->assertStringNotContainsString('localhost:5173', $html);
+        $this->assertStringContainsString('Sign in to VMS', $html);
+        $this->assertStringContainsString('http://localhost:5173/login', $html);
     }
 
     #[Test]
@@ -32,7 +32,7 @@ class AccountMailLinksTest extends TestCase
     {
         config(['app.frontend_url' => 'https://vms.example.ph']);
 
-        $html = (new AccountMail(User::factory()->create(), 'Active', 'activated'))->render();
+        $html = (new AccountMail(User::factory()->create(), 'Credentials', 'credentials', ['temporaryPassword' => 'Abcd2345Xy', 'createdBy' => 'Admin', 'expiresAt' => now()->addHours(72)]))->render();
 
         $this->assertStringContainsString('Sign in to VMS', $html);
         $this->assertStringContainsString('https://vms.example.ph/login', $html);

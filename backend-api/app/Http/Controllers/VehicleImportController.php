@@ -38,7 +38,7 @@ class VehicleImportController extends Controller
     private const COLUMNS = [
         'vehicle_name'     => ['Vehicle Name', ['vehiclename', 'name']],
         'plate_number'     => ['Plate Number', ['platenumber', 'plate', 'plateno', 'identifier']],
-        'vehicle_type'     => ['Vehicle Type', ['vehicletype', 'type', 'category', 'vehiclecategory']],
+        'vehicle_type'     => ['Vehicle Category', ['vehicletype', 'type', 'category', 'vehiclecategory']],
         'brand'            => ['Brand', ['brand', 'make']],
         'model'            => ['Model', ['model']],
         'year_model'       => ['Year Model', ['yearmodel', 'year', 'modelyear']],
@@ -69,7 +69,7 @@ class VehicleImportController extends Controller
             $col++;
         }
         // One column per distinct active custom-field label; a row only uses
-        // the ones belonging to its own Vehicle Type.
+        // the ones belonging to its own Vehicle Category.
         $customNotes = [];
         foreach (VehicleCategory::with('fields')->orderBy('category_name')->get() as $category) {
             foreach ($category->fields->where('is_active', true) as $fld) {
@@ -91,7 +91,7 @@ class VehicleImportController extends Controller
             ['Columns marked * are required. Delete the sample row before uploading.'],
             ['Hull Material and Engine Type are required for Water vehicles only.'],
             [''],
-            ['Valid Vehicle Types'],
+            ['Valid Vehicle Categories'],
             ...VehicleCategory::orderBy('category_name')->pluck('category_name')->map(fn ($n) => [$n])->all(),
             [''],
             ['Valid Current Locations'],
@@ -100,7 +100,7 @@ class VehicleImportController extends Controller
             ['Valid Hull Materials'],
             ...array_map(fn ($n) => [$n], self::HULL_MATERIAL_OPTIONS),
             [''],
-            ['Custom field columns (fill in only for the Vehicle Types listed)'],
+            ['Custom field columns (fill in only for the Vehicle Categories listed)'],
             ...array_map(fn ($norm, $types) => [$norm . ' — ' . implode(', ', $types)], array_keys($customNotes), array_values($customNotes)),
         ]);
         $guide->getColumnDimension('A')->setWidth(70);
@@ -372,7 +372,7 @@ class VehicleImportController extends Controller
 
             $category = isset($values['vehicle_type']) ? $categories->get(mb_strtolower($values['vehicle_type'])) : null;
             if (($values['vehicle_type'] ?? null) !== null && !$category) {
-                $rowErrors[] = ['vehicle_type', "Unknown Vehicle Type \"{$values['vehicle_type']}\"."];
+                $rowErrors[] = ['vehicle_type', "Unknown Vehicle Category \"{$values['vehicle_type']}\"."];
             }
             if (isset($values['current_location'], $hubs[mb_strtolower($values['current_location'])])) {
                 $values['current_location'] = $hubs[mb_strtolower($values['current_location'])];
@@ -389,7 +389,7 @@ class VehicleImportController extends Controller
             unset($data['vehicle_type']);
             $data['category_id'] = $category?->category_id;
 
-            // Custom columns belong to the row's own Vehicle Type, matched by label.
+            // Custom columns belong to the row's own Vehicle Category, matched by label.
             $labelOf = [];
             $custom = [];
             foreach ($category?->fields->where('is_active', true) ?? [] as $fld) {
@@ -422,7 +422,7 @@ class VehicleImportController extends Controller
                     if ($category) {
                         $rowErrors[] = ['vehicle_type', $messages[0]];
                     } elseif (($values['vehicle_type'] ?? null) === null) {
-                        $rowErrors[] = ['vehicle_type', 'Vehicle Type is required.'];
+                        $rowErrors[] = ['vehicle_type', 'Vehicle Category is required.'];
                     }
                     continue;
                 }

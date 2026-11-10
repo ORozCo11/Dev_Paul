@@ -64,14 +64,14 @@ class QaRunOneTest extends TestCase
         $this->putJson($url, ['verification_result' => 'Passed', 'test_attested' => true])->assertOk();
         $this->assertTrue((bool) $record->fresh()->test_attested);
     }
-    public function test_operational_staff_can_add_but_not_rename_or_delete_shared_types(): void
+    public function test_operational_staff_can_add_rename_and_delete_shared_types(): void
     {
         foreach ([$this->custodian, $this->mechanic] as $actor) {
             Sanctum::actingAs($actor);
             $id = $this->postJson('/api/maintenance-types', ['name' => 'QA type '.$actor->id])->assertCreated()->json('id');
-            $this->putJson('/api/maintenance-types/'.$id, ['name' => 'Changed'])->assertForbidden();
-            $this->deleteJson('/api/maintenance-types/'.$id)->assertForbidden();
-            $this->assertDatabaseHas('maintenance_types', ['id' => $id, 'name' => 'QA type '.$actor->id]);
+            $this->putJson('/api/maintenance-types/'.$id, ['name' => 'Changed '.$actor->id])->assertSuccessful();
+            $this->deleteJson('/api/maintenance-types/'.$id)->assertSuccessful();
+            $this->assertDatabaseMissing('maintenance_types', ['id' => $id]);
         }
     }
     public function test_capacity_validation_rejects_negative_and_zero_but_accepts_positive(): void
@@ -137,7 +137,7 @@ class QaRunOneTest extends TestCase
         Sanctum::actingAs($this->custodian);
         $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness-check", ['confirmed' => true])->assertUnprocessable();
         Sanctum::actingAs($this->mechanic);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$ticket->subIssues[0]->sub_issue_id}/log-repairs", ['repair_logs' => 'Brake repaired'])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$ticket->subIssues[0]->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Brake repaired'])->assertOk();
         Sanctum::actingAs($this->custodian);
         $this->putJson("/api/tickets/{$ticket->ticket_id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertOk();
         $this->getJson("/api/vehicles/{$this->vehicle->vehicle_id}/readiness")->assertOk()->assertJsonPath('state', 'stale');
@@ -161,7 +161,7 @@ class QaRunOneTest extends TestCase
         $schedule = $this->schedule();
         Sanctum::actingAs($this->mechanic);
         $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete", [])->assertOk();
-        $this->assertSame('Needs Inspection', $this->vehicle->fresh()->condition);
+        $this->assertSame('Needs Repair', $this->vehicle->fresh()->condition);
         $this->assertSame('Under Maintenance', $this->vehicle->fresh()->status);
     }
     public function test_pending_proposal_does_not_claim_that_repairs_have_started(): void
@@ -169,7 +169,8 @@ class QaRunOneTest extends TestCase
         $ticket = $this->proposal();
         $this->assertSame('Under Review', $ticket->issueReport->status);
         \App\Services\VehicleOperationalState::refresh($this->vehicle);
-        $this->assertNotSame('Needs Repair', $this->vehicle->fresh()->condition);
+        // A pending proposal flags the vehicle but does not take it out of service.
+        $this->assertNotSame('Under Maintenance', $this->vehicle->fresh()->status);
     }
     public function test_safeguard_migration_rolls_down_and_up_without_losing_vehicles(): void
     {

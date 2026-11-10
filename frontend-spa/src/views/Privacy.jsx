@@ -46,7 +46,7 @@ export default function Privacy() {
             <li>Generating administrative reports for fleet management and audit purposes</li>
             <li>Maintaining an activity log for accountability and transparency</li>
           </ul>
-          Registration collects your name, contact details and personal address. Optional address suggestions are off by default. If you enable them, your typed address and selected barangay, city and province are sent through our server to Photon / OpenStreetMap for suggestions. Manual entry works without that lookup; map suggestions do not establish residency. Data is not sold or used for advertising. Configured hosting and storage providers process data to operate the system.
+          Account creation collects your name, contact details and personal address. Optional address suggestions are off by default. If you enable them, your typed address and selected barangay, city and province are sent through our server to Photon / OpenStreetMap for suggestions. Manual entry works without that lookup; map suggestions do not establish residency. Data is not sold or used for advertising. Configured hosting and storage providers process data to operate the system.
         </PolicySection>
 
         <PolicySection title="4. Data Storage and Security">
@@ -56,7 +56,7 @@ export default function Privacy() {
           authorized screens issue short-lived download links. Access is restricted by role-based permissions — Admin, Custodian, and
           Maintenance Personnel accounts each have distinct levels of access to a barangay's own
           fleet data. Super Admin accounts instead have general oversight and cross-barangay
-          administrative access (registration codes, concern reports, and user account
+          administrative access (barangay and Admin account creation, concern reports, and user account
           management) but do not access any barangay's specific fleet operational data, such as
           vehicles, tickets, or maintenance records. Passwords are
           encrypted using industry-standard hashing (bcrypt) and are never stored in plain text.

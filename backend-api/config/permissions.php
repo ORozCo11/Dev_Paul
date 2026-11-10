@@ -19,22 +19,22 @@ return [
     // data), needed by anyone viewing a vehicle with custom fields filled
     // in, not just whoever manages the type itself.
     'vehicle_type.view' => ['Admin', 'Custodian', 'Maintenance Personnel'],
-    'vehicle_type.create' => ['Admin'],
+    'vehicle_type.create' => ['Admin', 'Custodian'],
     'vehicle_type.edit' => ['Admin'],
     'vehicle_type.delete' => ['Admin'],
 
     // Vehicles
-    // Registration is a standard Admin/Custodian duty; editing remains Admin-only.
-    'vehicle.create' => ['Admin', 'Custodian'],
+    // Registering vehicles is the Custodian's duty only; the Admin edits and archives records.
+    'vehicle.create' => ['Custodian'],
     // Bulk import follows the same role eligibility as single registration.
-    'vehicle.import' => ['Admin', 'Custodian'],
+    'vehicle.import' => ['Custodian'],
     'vehicle.edit' => ['Admin'],
     'vehicle.archive' => ['Admin'],
     'vehicle.restore' => ['Admin'],
     'vehicle.decommission' => ['Admin'],
     'vehicle.readiness_check' => ['Custodian'],
     'vehicle.mark_available' => ['Admin', 'Custodian'],
-    'vehicle.update_location' => ['Admin'],
+    'vehicle.update_location' => ['Admin', 'Custodian'],
     // Custodian gets a "Vehicle History" sidebar entry (role-realignment
     // decision 13) — they're the ones day-to-day with the vehicle, so
     // reading its timeline isn't a management-only concern the way editing
@@ -47,8 +47,8 @@ return [
     'vehicle.request_inspection' => [],
 
     // Hubs
-    'hub.create' => ['Admin'],
-    'hub.edit' => ['Admin'],
+    'hub.create' => ['Admin', 'Custodian'],
+    'hub.edit' => ['Admin', 'Custodian'],
     'hub.delete' => ['Admin'],
 
     // Condition checks
@@ -63,9 +63,10 @@ return [
 
     // Issue reports
     'issue.view' => ['Admin', 'Custodian', 'Maintenance Personnel'],
-    // Admin does not originate reports (spec: Admin can view/manage them, and
-    // asks a Custodian to inspect via vehicle.request_inspection instead).
-    'issue.create' => ['Custodian', 'Maintenance Personnel'],
+    // Only a Custodian originates reports. Admin views/manages them and asks a
+    // Custodian to inspect (vehicle.request_inspection); Maintenance Personnel
+    // work from tickets and sub-issues, not from the issue-report list.
+    'issue.create' => ['Custodian'],
     // Maintenance Personnel can't create a ticket, but can ask the Custodian
     // to open one from a technical finding.
     'issue.recommend_ticket' => ['Maintenance Personnel'],
@@ -174,9 +175,11 @@ return [
     'subissue.assign_mechanic' => [],
     'subissue.reassign_mechanic' => [],
     'subissue.log_repair' => ['Maintenance Personnel'],
-    // Dispatching / receiving / writing up an EXTERNAL-shop repair that has no
-    // in-house mechanic. Admin records it (never the verifying Custodian).
-    'external.handle' => ['Admin'],
+    // Dispatching / receiving / writing up an EXTERNAL-shop repair. The ticket's
+    // Custodian logs the vehicle going out to the shop, receives it back, then
+    // tests it and closes the ticket by verifying; the Admin only approves the
+    // proposal and never handles the shop.
+    'external.handle' => ['Custodian'],
     // Cannibalization records: anyone on the barangay's repair side can record
     // and read them. There is no approval ability by design.
     'cannibalization.record' => ['Admin', 'Custodian', 'Maintenance Personnel'],
@@ -190,10 +193,6 @@ return [
     'subissue.reopen_confirmed' => ['Admin'],
     'subissue.defer' => [],
 
-    // Cannibalized-repair approval
-    'repair.approve_cannibalized' => ['Admin'],
-    'repair.reject_cannibalized' => ['Admin'],
-
     // Shared dropdown catalogs.
     // Operational users manage the shared issue and repair catalogs inline.
     'catalog.create' => ['Admin', 'Custodian', 'Maintenance Personnel'],
@@ -206,8 +205,6 @@ return [
     'user.edit' => ['Admin'],
     'user.deactivate' => ['Admin'],
     'user.activate' => ['Admin'],
-    'registration_code.view' => ['Admin'],
-    'registration_code.regenerate' => ['Admin'],
 
     // Impersonation
     'impersonation.start' => ['Impersonator'],
@@ -216,14 +213,10 @@ return [
     'barangay.view_all' => ['Super Admin'],
     'barangay.create' => ['Super Admin'],
     'barangay.refresh_boundary' => ['Super Admin'],
-    'barangay.view_registration_code' => ['Super Admin'],
-    'barangay.regenerate_registration_code' => ['Super Admin'],
     'user.view_all_platform' => ['Super Admin'],
-    'user.activate_platform' => ['Super Admin'],
     'user.deactivate_platform' => ['Super Admin'],
-    'user.reject' => ['Super Admin'],
-    'user.view_pending' => ['Super Admin'],
     'user.change_role_platform' => ['Super Admin'],
+    'user.create_admin_platform' => ['Super Admin'],
     'user.email_platform' => ['Super Admin'],
     'activity_log.view_platform' => ['Super Admin'],
     'concern_report.view' => ['Super Admin'],

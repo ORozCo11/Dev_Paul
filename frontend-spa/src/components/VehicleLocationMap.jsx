@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
-import { MapContainer, Marker, TileLayer, Tooltip, ZoomControl, useMap } from 'react-leaflet';
+import { useContext, useEffect, useMemo } from 'react';
+import { MapContainer, Marker, Polygon, TileLayer, Tooltip, ZoomControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TouchMapGuard from './TouchMapGuard';
+import { MapBoundaryContext } from '../context/MapBoundaryContext';
+import { BOUNDARY_REFERENCE_ATTRIBUTION, geoJsonToPolygons } from '../utils/boundary';
 
-const CARTO_TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const CARTO_ATTRIBUTION = '&copy; OpenStreetMap contributors &copy; CARTO';
-const ESRI_IMAGERY_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-const ESRI_LABELS_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
-const ESRI_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, Maxar, Earthstar Geographics';
+const CARTO_TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const CARTO_ATTRIBUTION = 'Tiles &copy; Esri — Source: Esri, HERE, Garmin, OpenStreetMap contributors';
 
 // A blue teardrop pin as a divIcon — avoids Leaflet's default-marker asset issue
 // under bundlers and matches the app's blue brand.
@@ -48,8 +47,20 @@ function ResizeMapOnContainerResize() {
   return null;
 }
 
+function BoundaryViewport({ polygons, lat, lng }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!polygons.length) return;
+    const bounds = L.latLngBounds(polygons.flat(2));
+    bounds.extend([Number(lat), Number(lng)]);
+    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 16 });
+  }, [map, polygons, lat, lng]);
+  return null;
+}
+
 export default function VehicleLocationMap({ lat, lng, label, scrollWheelZoom = false }) {
-  const [basemap, setBasemap] = useState('satellite'); // 'map' | 'satellite'
+  const boundary = useContext(MapBoundaryContext);
+  const polygons = useMemo(() => geoJsonToPolygons(boundary?.geometry), [boundary?.geometry]);
   const hasCoords = lat != null && lng != null && !Number.isNaN(Number(lat)) && !Number.isNaN(Number(lng));
 
   if (!hasCoords) {
@@ -65,7 +76,7 @@ export default function VehicleLocationMap({ lat, lng, label, scrollWheelZoom = 
       zoom={16}
       scrollWheelZoom={scrollWheelZoom}
       className="veh-map-canvas"
-      attributionControl={false}
+      attributionControl
       // The default top-left zoom control sat directly under the Map/
       // Satellite toggle below, making the +/- buttons unreachable —
       // moved to the opposite corner instead of just disabled.
@@ -73,21 +84,16 @@ export default function VehicleLocationMap({ lat, lng, label, scrollWheelZoom = 
     >
       <ZoomControl position="bottomright" />
       <ResizeMapOnContainerResize />
-      {basemap === 'satellite' ? (
-        <>
-          <TileLayer url={ESRI_IMAGERY_URL} attribution={ESRI_ATTRIBUTION} maxZoom={19} />
-          <TileLayer url={ESRI_LABELS_URL} attribution="" maxZoom={19} />
-        </>
-      ) : (
-        <TileLayer url={CARTO_TILE_URL} attribution={CARTO_ATTRIBUTION} />
-      )}
-      <div
-        className="location-density-basemap-toggle"
-        ref={(el) => { if (el) { L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); } }}
-      >
-        <button type="button" className={basemap === 'map' ? 'is-active' : ''} onClick={() => setBasemap('map')}>Map</button>
-        <button type="button" className={basemap === 'satellite' ? 'is-active' : ''} onClick={() => setBasemap('satellite')}>Satellite</button>
-      </div>
+      <BoundaryViewport polygons={polygons} lat={lat} lng={lng} />
+      <TileLayer url={CARTO_TILE_URL} attribution={`${CARTO_ATTRIBUTION}${polygons.length ? ` | ${BOUNDARY_REFERENCE_ATTRIBUTION}` : ''}`} />
+      {polygons.map((positions, index) => (
+        <Polygon key={`halo-${index}`} positions={positions} pathOptions={{ color: '#1e293b', weight: 6, opacity: 0.45, fill: false }} />
+      ))}
+      {polygons.map((positions, index) => (
+        <Polygon key={`boundary-${index}`} positions={positions} pathOptions={{ color: '#facc15', weight: 3, opacity: 1, fillColor: '#facc15', fillOpacity: 0.05 }}>
+          <Tooltip sticky>{boundary?.label ?? 'Barangay boundary'}</Tooltip>
+        </Polygon>
+      ))}
       <Marker position={center} icon={vehiclePin}>
         {label && (
           <Tooltip permanent direction="top">{label}</Tooltip>

@@ -5,18 +5,20 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\AuthorizesAbilities;
 use App\Http\Controllers\Concerns\GuardsLastAdmin;
 use App\Http\Controllers\Concerns\GuardsOpenWorkOnDeactivation;
+use App\Http\Controllers\Concerns\IssuesTemporaryPassword;
 use App\Mail\AccountMail;
 use App\Mail\ConcernReplyMail;
 use App\Models\ActivityLog;
 use App\Models\Barangay;
 use App\Models\ConcernReport;
-use App\Models\RegistrationSetting;
 use App\Models\User;
 use App\Services\BarangayGeography;
 use App\Services\PsgcRegions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
@@ -34,6 +36,7 @@ class SuperAdminController extends Controller
     use GuardsLastAdmin;
     use GuardsOpenWorkOnDeactivation;
     use AuthorizesAbilities;
+    use IssuesTemporaryPassword;
 
     private const ROLES = ['Admin', 'Custodian', 'Maintenance Personnel'];
 
@@ -71,7 +74,7 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'barangay.view_all', 'Only a Super Admin can perform this action.');
 
-        return Barangay::with(['city.province', 'registrationSetting'])
+        return Barangay::with(['city.province'])
             // A registration code on its own doesn't count: BarangaySeeder pre-issues
             // codes for all of Mandaue City, and those barangays were never onboarded.
             ->registered()
@@ -110,7 +113,6 @@ class SuperAdminController extends Controller
                     // added via storeBarangay() below, nobody's registered
                     // there, and no boundary polygon has been matched/drawn
                     // for it.
-                    'has_registration_code' => $b->registrationSetting !== null,
                     'has_boundary' => (bool) $b->boundary_present,
                     // Final stabilization — a real status instead of a bare
                     // boolean. 'needs_review' is derived from a pending match
@@ -147,8 +149,7 @@ class SuperAdminController extends Controller
         $query = $this->registeredLocations($data)
             ->select(['barangays.id', 'barangays.name', 'barangays.psgc_code', 'barangays.city_id', 'cities.name as located_city', 'cities.code as located_city_code', 'cities.province_id as located_province_id', 'provinces.name as located_province'])
             ->selectRaw('CASE WHEN barangays.boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
-            ->selectRaw('CASE WHEN barangays.pending_boundary IS NULL THEN 0 ELSE 1 END AS pending_present')
-            ->withExists('registrationSetting as code_issued');
+            ->selectRaw('CASE WHEN barangays.pending_boundary IS NULL THEN 0 ELSE 1 END AS pending_present');
         if (!empty($data['barangay_id'])) $query->where('barangays.id', $data['barangay_id']);
         if (($search = trim($data['q'] ?? '')) !== '') {
             $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search)).'%';
@@ -174,7 +175,6 @@ class SuperAdminController extends Controller
                     'province_name' => $b->located_province,
                     'region_code' => $region,
                     'region_name' => PsgcRegions::name($region),
-                    'has_registration_code' => (bool) $b->code_issued,
                     'has_boundary' => (bool) $b->boundary_present,
                     'has_pending_boundary' => (bool) $b->pending_present,
                 ];
@@ -262,7 +262,6 @@ class SuperAdminController extends Controller
             'staff_count' => $barangay->users_count,
             'has_active_admin' => $barangay->active_admin_count > 0,
             'sole_active_admin' => $barangay->active_admin_count === 1,
-            'has_registration_code' => $barangay->registrationSetting()->exists(),
             'psgc_code' => $barangay->psgc_code,
             'has_boundary' => $barangay->boundary !== null,
             'boundary_status' => $this->boundaryStatus($barangay),
@@ -642,7 +641,7 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'user.view_all_platform', 'Only a Super Admin can perform this action.');
 
-        $query = User::with('barangay.city.province');
+        $query = User::with(['barangay.city.province', 'roleRows']);
 
         if ($request->filled('q')) {
             // Escape LIKE wildcards so "%" and "_" match literally, same as activityLog().
@@ -658,9 +657,6 @@ class SuperAdminController extends Controller
             'roles' => $u->roles,
             'is_active' => $u->is_active,
             'approved_at' => $u->approved_at,
-            'awaiting_staff_code' => $u->awaiting_staff_code,
-            'staff_code_sent_at' => $u->staff_code_sent_at,
-            'staff_code_expires_at' => $u->staffCodeExpiresAt(),
             'barangay_id' => $u->barangay_id,
             'barangay_name' => $u->barangay?->name,
             'city_name' => $u->barangay?->city?->name,
@@ -668,79 +664,68 @@ class SuperAdminController extends Controller
         ]);
     }
 
-    public function activateUser(Request $request, User $user)
-    {
-        $this->requireAbility($request, 'user.activate_platform', 'Only a Super Admin can perform this action.');
-
-        // A first Administrator only ever becomes active by entering their
-        // emailed staff code (AuthController::activateWithStaffCode). Approving
-        // one records the review and nothing more — activating here is what
-        // let approved first Admins sign in without ever entering the code.
-        if ($user->awaiting_staff_code) {
-            $user->update(['approved_at' => $user->approved_at ?? now()]);
-            $this->log($request, 'Approve', "Approved {$user->name} ({$user->email}) as first Administrator; awaiting their staff registration code.");
-
-            return response()->json(['message' => "{$user->name} is approved. Email their staff registration code from Users; they must enter it to activate their account."]);
-        }
-
-        $user->update(['is_active' => true, 'approved_at' => $user->approved_at ?? now()]);
-        $this->log($request, 'Activate', "Activated {$user->name} ({$user->email}).");
-
-        return response()->json(['message' => "{$user->name} is approved and can now sign in."]);
-    }
-
-    /**
-     * Emails a waiting first Administrator their barangay's staff code.
-     * Sending again restarts the User::STAFF_CODE_VALID_DAYS window. The
-     * send happens before anything is saved, so a mail failure leaves the
-     * account exactly as it was.
-     */
-    public function sendStaffCode(Request $request, User $user)
-    {
-        $this->requireAbility($request, 'user.email_platform', 'Only a Super Admin can perform this action.');
-        abort_unless($user->awaiting_staff_code && !$user->is_active, 422, 'This account is not waiting for a staff registration code.');
-
-        $barangay = $user->barangay;
-        $code = RegistrationSetting::for($user->barangay_id)->staff_code;
-        $sentAt = now();
-        $this->sendMail($user, new AccountMail($user, "Your VMS Staff Registration Code for Barangay {$barangay?->name}", 'staff-code', [
-            'code' => $code,
-            'expiresAt' => $sentAt->copy()->addDays(User::STAFF_CODE_VALID_DAYS),
-        ]));
-
-        // Sending the code is the Super Admin's review too; the account still waits for the code.
-        $user->update(['staff_code_sent_at' => $sentAt, 'approved_at' => $user->approved_at ?? $sentAt]);
-        if ($barangay) $this->markProvisioned($barangay);
-        $this->log($request, 'Edit', "Emailed the staff registration code to {$user->name} ({$user->email}).");
-
-        return response()->json(['message' => "Staff registration code sent to {$user->email}.", 'staff_code_sent_at' => $sentAt, 'staff_code_expires_at' => $user->staffCodeExpiresAt()]);
-    }
-
-    /**
-     * A message from the Super Admin to any account, optionally carrying
-     * the current staff code of the account's barangay — read here, never
-     * taken from the request.
-     */
+    /** A plain message from the Super Admin to any account. */
     public function emailUser(Request $request, User $user)
     {
         $this->requireAbility($request, 'user.email_platform', 'Only a Super Admin can perform this action.');
         $data = $request->validate([
             'subject' => ['required', 'string', 'max:150'],
             'message' => ['required', 'string', 'max:5000'],
-            'include_staff_code' => ['sometimes', 'boolean'],
         ]);
-        $withCode = $request->boolean('include_staff_code');
-        $mailData = ['body' => $data['message']];
-        if ($withCode) {
-            abort_unless($user->barangay_id, 422, 'This account is not assigned to a barangay, so it has no staff registration code.');
-            $mailData['code'] = RegistrationSetting::for($user->barangay_id)->staff_code;
-        }
 
-        $this->sendMail($user, new AccountMail($user, $data['subject'], 'message', $mailData));
-        $this->log($request, 'Edit', "Emailed {$user->name} ({$user->email}): {$data['subject']}"
-            .($withCode ? ". Included the staff registration code for {$user->barangay?->name}." : ''));
+        $this->sendMail($user, new AccountMail($user, $data['subject'], 'message', ['body' => $data['message']]));
+        $this->log($request, 'Edit', "Emailed {$user->name} ({$user->email}): {$data['subject']}");
 
         return response()->json(['message' => "Email sent to {$user->email}."]);
+    }
+
+    /**
+     * Creates the one Admin of a barangay. The system makes the temporary
+     * password and emails it; the Admin replaces it at first sign-in.
+     */
+    public function storeAdmin(Request $request, Barangay $barangay)
+    {
+        $this->requireAbility($request, 'user.create_admin_platform', 'Only a Super Admin can perform this action.');
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
+        ], ['phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).']);
+        abort_if(
+            User::where('barangay_id', $barangay->id)->havingRole('Admin')->exists(),
+            422,
+            "Barangay {$barangay->name} already has an Admin. A barangay can only have one Admin."
+        );
+
+        $admin = User::create($data + [
+            'password' => Hash::make(Str::random(40)),
+            'role' => 'Admin',
+            'roles' => ['Admin'],
+            'barangay_id' => $barangay->id,
+            'city_id' => $barangay->city_id,
+            'is_active' => true,
+            'approved_at' => now(),
+            'can_register_vehicles' => false,
+        ]);
+        $plain = $this->issueTemporaryPassword($admin);
+        $emailed = $this->emailCredentials($admin, $plain, $request->user()->name);
+        $this->markProvisioned($barangay);
+        $this->log($request, 'Add', "Created the Admin {$admin->name} ({$admin->email}) for barangay {$barangay->name}.");
+
+        return response()->json(['id' => $admin->id, 'name' => $admin->name, 'email' => $admin->email, 'temporary_password' => $plain, 'email_sent' => $emailed], 201);
+    }
+
+    /** New emailed temporary password for any account (lost or expired credentials). */
+    public function resendCredentials(Request $request, User $user)
+    {
+        $this->requireAbility($request, 'user.create_admin_platform', 'Only a Super Admin can perform this action.');
+        abort_if($user->id === $request->user()->id, 422, 'Use Change Password for your own account.');
+
+        $plain = $this->issueTemporaryPassword($user);
+        $emailed = $this->emailCredentials($user, $plain, $request->user()->name);
+        $this->log($request, 'Edit', "Sent new temporary credentials to {$user->name} ({$user->email}).");
+
+        return response()->json(['temporary_password' => $plain, 'email_sent' => $emailed, 'email' => $user->email]);
     }
 
     private function sendMail(User $user, AccountMail $mail): void
@@ -768,77 +753,6 @@ class SuperAdminController extends Controller
     }
 
     /**
-     * Rejects a registration that was never approved — deletes the account
-     * outright rather than just deactivating it, since a rejected signup
-     * (e.g. someone who wasn't actually the barangay's real first Admin)
-     * has no legitimate record worth keeping around in an inactive state.
-     * Deliberately refuses to touch anyone who was EVER approved (even if
-     * later deactivated) — that path only goes through deactivateUser().
-     */
-    /** Streams an applicant's ID or photo to a reviewer; these files are never public. */
-    public function registrationDocument(Request $request, User $user, string $type)
-    {
-        $this->requireAbility($request, 'user.view_pending', 'Only a Super Admin can perform this action.');
-        abort_unless(in_array($type, ['id', 'photo'], true), 404);
-        $path = $type === 'id' ? $user->registration_id_path : $user->registration_photo_path;
-        abort_unless($path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path), 404, 'No document was submitted.');
-        $this->log($request, 'View', "Viewed the registration {$type} of {$user->name} ({$user->email}).");
-
-        return \Illuminate\Support\Facades\Storage::disk('local')->response($path, null, ['Cache-Control' => 'private, no-store']);
-    }
-
-    public function rejectUser(Request $request, User $user)
-    {
-        $this->requireAbility($request, 'user.reject', 'Only a Super Admin can perform this action.');
-        // An approved first Admin who never entered their code was never live, so it can still be rejected.
-        abort_if($user->is_active || ($user->approved_at !== null && !$user->awaiting_staff_code), 422, 'This account is active or was already approved at some point — deactivate it instead of rejecting.');
-
-        foreach ([$user->registration_id_path, $user->registration_photo_path] as $document) {
-            if ($document) \Illuminate\Support\Facades\Storage::disk('local')->delete($document);
-        }
-        $name = $user->name;
-        $email = $user->email;
-        // A courtesy note so the applicant knows why and how to try again; a mail outage must not block the rejection.
-        AccountMail::trySend($user, 'Update on your VMS registration', 'rejected');
-        $user->delete();
-        $this->log($request, 'Delete', "Rejected pending registration for {$name} ({$email}).");
-
-        return response()->json(['message' => 'Registration rejected.']);
-    }
-
-    /**
-     * The specific queue this role exists to guard: every account still
-     * waiting on approval, newest first. Not just first-for-barangay Admins
-     * (an Admin can, in principle, sit unapproved if a barangay's own Admin
-     * never got around to reviewing them) — but Super Admin approving a
-     * pending Admin is the case that closes the registration hole.
-     */
-    public function pendingApprovals(Request $request)
-    {
-        $this->requireAbility($request, 'user.view_pending', 'Only a Super Admin can perform this action.');
-
-        return User::with('barangay.city.province')
-            ->whereNull('approved_at')
-            ->where('is_active', false)
-            ->orderByDesc('created_at')
-            ->get()
-            ->map(fn ($u) => [
-                'id' => $u->id,
-                'name' => $u->name,
-                'email' => $u->email,
-                'role' => $u->role,
-                'phone' => $u->phone,
-                'has_valid_id' => (bool) $u->registration_id_path,
-                'has_photo' => (bool) $u->registration_photo_path,
-                'created_at' => $u->created_at,
-                'barangay_id' => $u->barangay_id,
-                'barangay_name' => $u->barangay?->name ?? $u->barangay_name,
-                'city_name' => $u->barangay?->city?->name,
-                'province_name' => $u->barangay?->city?->province?->name,
-            ]);
-    }
-
-    /**
      * Change a user's role — also how an orphaned barangay gets recovered:
      * pick an existing user there and set their role to Admin.
      */
@@ -854,6 +768,8 @@ class SuperAdminController extends Controller
             'preserve_roles' => ['sometimes', 'boolean'],
         ]);
         abort_if($request->boolean('preserve_roles') && $data['role'] !== 'Admin', 422, 'Existing roles can only be preserved when promoting an Administrator.');
+        // Orphan recovery is the one exception to one-role-per-account: a Custodian or mechanic with open
+        // work who is promoted to Admin keeps the old role until that work is finished.
         $roles = $request->boolean('preserve_roles') ? array_values(array_unique([...$user->allRoles(), 'Admin'])) : [$data['role']];
 
         if ($data['role'] !== 'Admin') {
@@ -865,36 +781,7 @@ class SuperAdminController extends Controller
         $user->update(['role' => $data['role'], 'roles' => $roles]);
         $this->log($request, 'Edit', "Changed {$user->name}'s roles to ".implode(', ', $roles)." (primary: {$data['role']}).");
 
-        return $user->fresh();
-    }
-
-    public function registrationCode(Request $request, Barangay $barangay)
-    {
-        $this->requireAbility($request, 'barangay.view_registration_code', 'Only a Super Admin can perform this action.');
-
-        $setting = RegistrationSetting::for($barangay->id);
-        $this->markProvisioned($barangay);
-        if ($setting->wasRecentlyCreated) {
-            $this->log($request, 'Create', "Issued the staff registration code for {$barangay->name}.");
-        }
-
-        return response()->json(['staff_code' => $setting->staff_code, 'created_at' => $setting->created_at, 'updated_at' => $setting->updated_at]);
-    }
-
-    public function regenerateRegistrationCode(Request $request, Barangay $barangay)
-    {
-        $this->requireAbility($request, 'barangay.regenerate_registration_code', 'Only a Super Admin can perform this action.');
-
-        // Optional so existing callers keep working; the portal sends the
-        // version it is showing so a code someone else just changed is
-        // never silently replaced.
-        $data = $request->validate(['expected_updated_at' => ['nullable', 'date']]);
-        $setting = RegistrationSetting::regenerateFor($barangay->id, isset($data['expected_updated_at']) ? Carbon::parse($data['expected_updated_at']) : null);
-        abort_if($setting === null, 409, 'This registration code was changed by someone else a moment ago. Reload it to see the current code before regenerating.');
-        $this->markProvisioned($barangay);
-        $this->log($request, 'Edit', "Regenerated the staff registration code for {$barangay->name}.");
-
-        return response()->json(['staff_code' => $setting->staff_code, 'created_at' => $setting->created_at, 'updated_at' => $setting->updated_at]);
+        return $user->fresh('roleRows');
     }
 
     /**

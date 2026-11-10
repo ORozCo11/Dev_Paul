@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\Barangay;
 use App\Models\City;
-use App\Models\RegistrationSetting;
 use Illuminate\Database\Seeder;
 
 class BarangaySeeder extends Seeder
@@ -63,8 +62,7 @@ class BarangaySeeder extends Seeder
         foreach (self::BARANGAYS as $name) {
             $barangay = Barangay::firstOrCreate(['name' => $name, 'city_id' => $mandaueCityId]);
 
-            $code = RegistrationSetting::for($barangay->id)->staff_code;
-            $this->command?->info("{$name}: {$code}");
+            $this->command?->info("Barangay: {$barangay->name}");
         }
     }
 }

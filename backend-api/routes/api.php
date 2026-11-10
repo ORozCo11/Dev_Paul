@@ -32,15 +32,9 @@ Route::get('/files/{file}', [\App\Http\Controllers\ManagedFileController::class,
 // Rate-limited to blunt credential brute-forcing: 10 attempts/min per IP.
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
 
-// Self-registration — rate-limited to blunt scripted account-creation spam.
-Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
-// A first Administrator's sign-in plus the staff code a Super Admin emailed them.
-Route::post('/activate-account', [AuthController::class, 'activateWithStaffCode'])->middleware('throttle:10,1');
-// Read-only lookup used interactively while filling the registration form —
-// no credentials involved, but still throttled so it can't be used to
-// cheaply enumerate which barangays already have an Admin.
+// Accounts are created by a Super Admin (for barangay Admins) or a barangay Admin
+// (for staff); there is no public sign-up.
 Route::get('/address-suggestions', [\App\Http\Controllers\AddressSuggestionController::class, 'index'])->middleware('throttle:20,1');
-Route::get('/registration-status', [AuthController::class, 'registrationStatus'])->middleware('throttle:20,1');
 
 // Cascading Province -> City/Municipality -> Barangay lists for the
 // registration form's address fields.
@@ -79,6 +73,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
         // this route is "who am I", the one place the frontend actually
         // needs the list (VMS-IMPROVEMENT-PLAN.md Phase B2).
         return array_merge($user->toArray(), [
+            'barangay_name' => $user->barangay?->name,
             'abilities' => $user->getAbilities(),
             'is_impersonating' => $user->currentAccessToken()?->name === 'impersonation_token',
         ]);
@@ -111,6 +106,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::post('/external-reasons', [CatalogController::class, 'storeExternalReason']);
     Route::put('/external-reasons/{reason}', [CatalogController::class, 'updateExternalReason']);
     Route::delete('/external-reasons/{reason}', [CatalogController::class, 'destroyExternalReason']);
+    Route::get('/part-names', [CatalogController::class, 'partNames']);
+    Route::post('/part-names', [CatalogController::class, 'storePartName']);
+    Route::put('/part-names/{part}', [CatalogController::class, 'updatePartName']);
+    Route::delete('/part-names/{part}', [CatalogController::class, 'destroyPartName']);
     Route::get('/recurrence-intervals', [CatalogController::class, 'recurrenceIntervals']);
     Route::post('/recurrence-intervals', [CatalogController::class, 'storeRecurrenceInterval']);
     Route::put('/recurrence-intervals/{interval}', [CatalogController::class, 'updateRecurrenceInterval']);
@@ -156,11 +155,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::get('/users', [UserController::class, 'index']);
     Route::post('/users', [UserController::class, 'store']);
     Route::put('/users/{user}', [UserController::class, 'update']);
+    Route::post('/users/{user}/resend-credentials', [UserController::class, 'resendCredentials'])->middleware('throttle:10,1');
     Route::put('/users/{user}/deactivate', [UserController::class, 'deactivate']);
     Route::put('/users/{user}/activate', [UserController::class, 'activate']);
 
-    Route::get('/registration-settings', [UserController::class, 'registrationSettings']);
-    Route::post('/registration-settings/regenerate', [UserController::class, 'regenerateRegistrationCode'])->middleware('throttle:10,1');
 
     /*
     |--------------------------------------------------------------------------
@@ -173,17 +171,12 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::get('/superadmin/barangays/search', [SuperAdminController::class, 'searchBarangays']);
     Route::get('/superadmin/barangays/locations', [SuperAdminController::class, 'barangayLocations']);
     Route::post('/superadmin/barangays', [SuperAdminController::class, 'storeBarangay']);
+    Route::post('/superadmin/barangays/{barangay}/admin', [SuperAdminController::class, 'storeAdmin'])->middleware('throttle:20,1');
+    Route::post('/superadmin/users/{user}/resend-credentials', [SuperAdminController::class, 'resendCredentials'])->middleware('throttle:10,1');
     Route::get('/superadmin/users', [SuperAdminController::class, 'users']);
-    Route::get('/superadmin/pending-approvals', [SuperAdminController::class, 'pendingApprovals']);
-    Route::put('/superadmin/users/{user}/activate', [SuperAdminController::class, 'activateUser']);
     Route::put('/superadmin/users/{user}/deactivate', [SuperAdminController::class, 'deactivateUser']);
-    Route::delete('/superadmin/users/{user}/reject', [SuperAdminController::class, 'rejectUser']);
     Route::put('/superadmin/users/{user}/role', [SuperAdminController::class, 'updateUserRole']);
-    Route::get('/superadmin/users/{user}/registration-document/{type}', [SuperAdminController::class, 'registrationDocument']);
-    Route::post('/superadmin/users/{user}/send-staff-code', [SuperAdminController::class, 'sendStaffCode'])->middleware('throttle:10,1');
     Route::post('/superadmin/users/{user}/email', [SuperAdminController::class, 'emailUser'])->middleware('throttle:10,1');
-    Route::get('/superadmin/barangays/{barangay}/registration-code', [SuperAdminController::class, 'registrationCode']);
-    Route::post('/superadmin/barangays/{barangay}/registration-code/regenerate', [SuperAdminController::class, 'regenerateRegistrationCode'])->middleware('throttle:10,1');
     Route::post('/superadmin/barangays/{barangay}/boundary/refresh', [SuperAdminController::class, 'refreshBarangayBoundary']);
     Route::post('/superadmin/barangays/{barangay}/boundary/confirm', [SuperAdminController::class, 'confirmBarangayBoundary']);
     Route::post('/superadmin/barangays/{barangay}/boundary/candidate', [SuperAdminController::class, 'uploadBoundaryCandidate']);
@@ -290,13 +283,12 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::delete('/tickets/{ticket}/sub-issues/{subIssue}/donor-parts/{part}', [TicketController::class, 'deleteDonorPart']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/external-sent', [TicketController::class, 'markExternalSent']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/external-returned', [TicketController::class, 'markExternalReturned']);
+    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/no-repair-needed', [TicketController::class, 'noRepairNeeded']);
     Route::post('/tickets/{ticket}/sub-issues', [TicketController::class, 'addSubIssue']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}', [TicketController::class, 'updateSubIssue']);
     Route::delete('/tickets/{ticket}/sub-issues/{subIssue}', [TicketController::class, 'deleteSubIssue']);
 
     // Phase 3.5 — Admin: Approve or reject a cannibalized repair
-    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/approve-cannibalization', [TicketController::class, 'approveCannibalization']);
-    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/reject-cannibalization', [TicketController::class, 'rejectCannibalization']);
 
     // Phase 4 Tier 1 — Custodian: Verify a sub-issue's repair
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/verify', [TicketController::class, 'verifyRepair']);
@@ -326,12 +318,18 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     // can be reopened. Archive deletion retains the snapshot for recovery.
     Route::get('/ticket-archives', [TicketController::class, 'archives']);
     Route::delete('/ticket-archives/{archive}', [TicketController::class, 'deleteArchive']);
+    Route::put('/ticket-archives/{archive}/unarchive', [TicketController::class, 'unarchive']);
     Route::put('/ticket-archives/{archive}/restore', [TicketController::class, 'restoreArchive'])->withTrashed();
     // Cannibalization: direct, final records of parts moved between vehicles
     // (no approval step, and deliberately no update/delete routes).
     Route::get('/cannibalizations', [CannibalizationController::class, 'index']);
     Route::get('/cannibalizations/{id}', [CannibalizationController::class, 'show']);
     Route::post('/cannibalizations', [CannibalizationController::class, 'store']);
+    Route::put('/cannibalization-parts/{part}/restore', [CannibalizationController::class, 'restorePart']);
+    Route::put('/donor-parts/{part}/restore', [CannibalizationController::class, 'restoreDonorPart']);
+    Route::put('/cannibalization-parts/{part}/readiness', [CannibalizationController::class, 'updatePartReadiness']);
+    Route::put('/donor-parts/{part}/readiness', [CannibalizationController::class, 'updateDonorPartReadiness']);
+    Route::get('/vehicles/{vehicle}/missing-parts', [FleetController::class, 'missingParts']);
     Route::put('/ticket-archives/{archive}/reopen', [TicketController::class, 'reopenArchive']);
 
     // Notifications API

@@ -40,6 +40,8 @@ class DonorPartsCrudTest extends TestCase
             'brand' => 'Isuzu', 'model' => 'FTR', 'year_model' => 2019, 'capacity' => '5000 L', 'vehicle_color' => 'Red', 'current_location' => 'Depot']);
         $this->vehicle = $make('Repair Truck', 'REP 1001');
         $this->donor = $make('Donor Truck', 'DON 2002');
+        // Parts are only taken from vehicles that are no longer in use.
+        $this->donor->update(['status' => 'Decommissioned']);
     }
 
     /** An Active in-house ticket with one sub-issue, returns [ticketId, subIssueId, base url]. */
@@ -68,10 +70,26 @@ class DonorPartsCrudTest extends TestCase
 
         $this->postJson("{$base}/donor-parts", $this->part())->assertUnprocessable();            // no donor yet
         $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->vehicle->vehicle_id])->assertUnprocessable(); // itself
-        $this->donor->update(['status' => 'Inactive']);
-        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertUnprocessable();   // retired
-        $this->donor->update(['status' => 'Available']);
         $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk()->assertJsonPath('repair_type', 'cannibalized');
+    }
+
+    #[Test]
+    public function a_part_that_is_still_missing_from_the_donor_cannot_be_taken_again_until_restored(): void
+    {
+        [, , $base] = $this->ticket();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk();
+
+        $first = $this->postJson("{$base}/donor-parts", $this->part(['part_name' => 'Transmission', 'quantity' => 1]))->assertCreated()->json('part_id');
+
+        // Same part again (any capitalisation) is refused while the first is still missing.
+        $this->postJson("{$base}/donor-parts", $this->part(['part_name' => 'transmission', 'quantity' => 1]))->assertUnprocessable();
+        // A different part is fine.
+        $this->postJson("{$base}/donor-parts", $this->part(['part_name' => 'Radiator', 'quantity' => 1]))->assertCreated();
+
+        // Once it has been put back, it can be taken again.
+        \Illuminate\Support\Facades\DB::table('ticket_sub_issue_donor_parts')->where('part_id', $first)->update(['restored_at' => now()]);
+        $this->postJson("{$base}/donor-parts", $this->part(['part_name' => 'Transmission', 'quantity' => 1]))->assertCreated();
     }
 
     #[Test]
@@ -118,6 +136,41 @@ class DonorPartsCrudTest extends TestCase
     }
 
     #[Test]
+    public function an_empty_donor_can_be_removed_and_replaced_without_leaving_cannibalized_repair(): void
+    {
+        [$tid, , $base] = $this->ticket();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk();
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => null, 'keep_cannibalized' => true])
+            ->assertOk()->assertJsonPath('source_vehicle_id', null)->assertJsonPath('repair_type', 'cannibalized');
+        $this->postJson("{$base}/donor-parts", $this->part())->assertUnprocessable();
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk();
+        $this->postJson("{$base}/donor-parts", $this->part())->assertCreated();
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => null, 'keep_cannibalized' => true])->assertUnprocessable();
+        $sub = $this->getJson("/api/tickets/{$tid}")->assertOk()->json('sub_issues.0');
+        $this->assertSame($this->donor->vehicle_id, $sub['source_vehicle_id']);
+        $this->assertCount(1, $sub['donor_parts']);
+    }
+
+    #[Test]
+    public function replacing_an_empty_primary_donor_keeps_the_other_donors_parts(): void
+    {
+        [$tid, , $base] = $this->ticket();
+        $second = $this->donor->replicate();
+        $second->vehicle_name = 'Second Donor';
+        $second->plate_number = 'DON 3003';
+        $second->save();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk();
+        $this->postJson("{$base}/donor-parts", $this->part(['donor_vehicle_id' => $second->vehicle_id]))->assertCreated();
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $second->vehicle_id])->assertOk();
+        $sub = $this->getJson("/api/tickets/{$tid}")->assertOk()->json('sub_issues.0');
+        $this->assertSame($second->vehicle_id, $sub['source_vehicle_id']);
+        $this->assertCount(1, $sub['donor_parts']);
+        $this->assertSame($second->vehicle_id, $sub['donor_parts'][0]['donor_vehicle_id']);
+    }
+
+    #[Test]
     public function only_the_assigned_mechanic_can_change_parts_and_other_barangays_cannot_reach_them(): void
     {
         [, , $base] = $this->ticket();
@@ -141,30 +194,27 @@ class DonorPartsCrudTest extends TestCase
     }
 
     #[Test]
-    public function submitting_needs_a_part_then_locks_them_and_files_one_donor_report_listing_all(): void
+    public function submitting_needs_a_part_then_locks_them_and_lists_them_as_missing_on_the_donor(): void
     {
         [$tid, $sid, $base] = $this->ticket();
         Sanctum::actingAs($this->mechanic, ['*']);
         $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk();
 
-        // no parts yet -> cannot submit, and no donor consequences happen
-        $this->putJson("{$base}/log-repairs", ['repair_type' => 'cannibalized', 'source_vehicle_id' => $this->donor->vehicle_id])->assertUnprocessable();
+        // no parts yet -> cannot submit, and nothing happens to the donor
+        $this->putJson("{$base}/log-repairs", ['tested_ok' => true, 'repair_type' => 'cannibalized', 'source_vehicle_id' => $this->donor->vehicle_id])->assertUnprocessable();
         $this->assertSame(0, VehicleIssueReport::where('vehicle_id', $this->donor->vehicle_id)->count());
-        $this->assertNotSame('Needs Inspection', $this->donor->fresh()->condition);
 
-        // adding / editing parts alone has no donor consequence either
         $partId = $this->postJson("{$base}/donor-parts", $this->part())->assertCreated()->json('part_id');
         $this->postJson("{$base}/donor-parts", $this->part(['part_name' => 'Hose', 'quantity' => 1]))->assertCreated();
+
+        $this->putJson("{$base}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Fitted both parts.'])->assertOk();
+
+        // No issue report is filed any more and the donor's condition is left alone; the parts are
+        // simply listed as missing on the donor, and the ticket moved on.
         $this->assertSame(0, VehicleIssueReport::where('vehicle_id', $this->donor->vehicle_id)->count());
-
-        $this->putJson("{$base}/log-repairs", ['repair_logs' => 'Fitted both parts.'])->assertOk();
-
-        // exactly one report on the donor, naming every part; ticket moved on
-        $reports = VehicleIssueReport::where('vehicle_id', $this->donor->vehicle_id)->get();
-        $this->assertCount(1, $reports);
-        $this->assertStringContainsString('2 x Brake caliper', $reports->first()->issue_description);
-        $this->assertStringContainsString('1 x Hose', $reports->first()->issue_description);
-        $this->assertSame('Needs Inspection', $this->donor->fresh()->condition);
+        $this->assertNotSame('Needs Repair', $this->donor->fresh()->condition);
+        $missing = $this->getJson("/api/vehicles/{$this->donor->vehicle_id}/missing-parts")->assertOk()->json();
+        $this->assertEqualsCanonicalizing(['Brake caliper', 'Hose'], array_column($missing, 'name'));
         $this->assertSame('For Verification', MaintenanceTicket::find($tid)->status);
 
         // the parts are now protected history
@@ -174,13 +224,39 @@ class DonorPartsCrudTest extends TestCase
     }
 
     #[Test]
+    public function only_a_vehicle_that_is_no_longer_in_use_can_be_a_donor(): void
+    {
+        [, , $base] = $this->ticket();
+        $this->donor->update(['status' => 'Available']);
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])
+            ->assertUnprocessable()->assertJsonFragment(['message' => 'Donor Truck is still in use. Parts can only be taken from a retired (decommissioned) vehicle.']);
+
+        $this->donor->update(['status' => 'Inactive']);
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk();
+    }
+
+    #[Test]
+    public function a_retired_vehicle_can_be_a_donor_and_its_parts_never_block_anything(): void
+    {
+        [, , $base] = $this->ticket();
+        $this->donor->update(['status' => 'Decommissioned']);
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk();
+
+        // even if the form says "blocks", a retired donor is already out of the fleet
+        $this->postJson("{$base}/donor-parts", $this->part(['blocks_readiness' => true]))
+            ->assertCreated()->assertJsonPath('blocks_readiness', false);
+    }
+
+    #[Test]
     public function existing_single_part_data_is_kept_and_costs_stay_separate(): void
     {
         [$tid, , $base] = $this->ticket();
         Sanctum::actingAs($this->mechanic, ['*']);
 
         // legacy client path: one inline part, plus ordinary purchased parts and cost
-        $this->putJson("{$base}/log-repairs", [
+        $this->putJson("{$base}/log-repairs", ['tested_ok' => true, 
             'repair_logs' => 'Swapped it.', 'repair_type' => 'cannibalized', 'source_vehicle_id' => $this->donor->vehicle_id,
             'part_needed' => 'Radiator', 'part_quantity' => 2, 'part_condition' => 'Good',
             'parts_used' => 'Coolant', 'maintenance_cost' => 500,
@@ -191,5 +267,36 @@ class DonorPartsCrudTest extends TestCase
         $this->assertSame(2, $sub['donor_parts'][0]['quantity']);
         $this->assertSame('Coolant', $sub['parts_used'], 'purchased materials are untouched');
         $this->assertEquals(500, $sub['maintenance_cost'], 'donor parts never add to the cost');
+    }
+
+    #[Test]
+    public function a_repair_can_take_parts_from_several_donors_and_each_lists_its_own_missing_parts(): void
+    {
+        [$tid, , $base] = $this->ticket();
+        $cat = VehicleCategory::first();
+        $second = Vehicle::create(['vehicle_name' => 'Second Donor', 'plate_number' => 'DON 3003', 'category_id' => $cat->category_id,
+            'brand' => 'Isuzu', 'model' => 'FTR', 'year_model' => 2018, 'capacity' => '5000 L', 'vehicle_color' => 'Red', 'current_location' => 'Depot']);
+        $second->update(['status' => 'Decommissioned']);
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/donor", ['source_vehicle_id' => $this->donor->vehicle_id])->assertOk();
+
+        // a part with no donor named belongs to the first donor; another donor can be named
+        $this->postJson("{$base}/donor-parts", $this->part())->assertCreated()->assertJsonPath('donor_vehicle_id', $this->donor->vehicle_id);
+        $this->postJson("{$base}/donor-parts", $this->part(['part_name' => 'Hose', 'donor_vehicle_id' => $second->vehicle_id]))
+            ->assertCreated()->assertJsonPath('donor_vehicle_id', $second->vehicle_id);
+        // the repaired vehicle itself can never be a donor
+        $this->postJson("{$base}/donor-parts", $this->part(['donor_vehicle_id' => $this->vehicle->vehicle_id]))->assertUnprocessable();
+
+        $parts = $this->getJson("/api/tickets/{$tid}")->assertOk()->json('sub_issues.0.donor_parts');
+        $this->assertSame(['Donor Truck', 'Second Donor'], array_column(array_column($parts, 'donor_vehicle'), 'vehicle_name'));
+
+        $this->putJson("{$base}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Fitted both parts.'])->assertOk();
+
+        // each donor lists only its own parts as missing; no issue reports are filed
+        $first = $this->getJson("/api/vehicles/{$this->donor->vehicle_id}/missing-parts")->json();
+        $other = $this->getJson("/api/vehicles/{$second->vehicle_id}/missing-parts")->json();
+        $this->assertSame(['Brake caliper'], array_column($first, 'name'));
+        $this->assertSame(['Hose'], array_column($other, 'name'));
+        $this->assertSame(0, VehicleIssueReport::whereIn('vehicle_id', [$this->donor->vehicle_id, $second->vehicle_id])->count());
     }
 }

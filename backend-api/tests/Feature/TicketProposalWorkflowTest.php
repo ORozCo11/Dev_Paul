@@ -522,6 +522,10 @@ class TicketProposalWorkflowTest extends TestCase
         ];
         $this->postJson('/api/tickets/propose', $payload)->assertStatus(422);
 
+        // an in-service vehicle cannot be the donor; only a retired one can
+        $this->postJson('/api/tickets/propose', $payload + ['source_vehicle_id' => $donor->vehicle_id])->assertStatus(422);
+        $donor->update(['status' => 'Decommissioned']);
+
         $ticket = $this->propose($vehicle, [
             'entry_mode' => 'cannibalized', 'source_vehicle_id' => $donor->vehicle_id,
             'sub_issues' => [['title' => 'Alternator', 'part_missing' => 'Alternator', 'part_needed' => 'Alternator']],
@@ -570,9 +574,9 @@ class TicketProposalWorkflowTest extends TestCase
             $this->assertDatabaseHas('notifications', ['user_id' => $mechanic->id, 'type' => 'ticket_assigned']);
             Sanctum::actingAs($mechanic, ['*']);
             $other = $subs[1 - $index];
-            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$other->sub_issue_id}/log-repairs", ['repair_logs' => 'Wrong work order'])->assertForbidden();
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$other->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Wrong work order'])->assertForbidden();
             $sub = $subs[$index];
-            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['repair_logs' => 'Repaired and tested', 'repair_type' => 'in_house'])->assertOk();
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Repaired and tested', 'repair_type' => 'in_house'])->assertOk();
             $this->assertSame($index === 0 ? 'Active' : 'For Verification', $ticket->fresh()->status);
         }
         Sanctum::actingAs($this->custodian, ['*']);
@@ -582,7 +586,7 @@ class TicketProposalWorkflowTest extends TestCase
             Sanctum::actingAs($mechanic, ['*']);
             $this->getJson('/api/dashboard')->assertOk()->assertJsonPath('badge_counts.ticketWorkOrders', 1);
             $sub = $subs[$index];
-            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['repair_logs' => 'Retested repair', 'repair_type' => 'in_house'])->assertOk();
+            $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Retested repair', 'repair_type' => 'in_house'])->assertOk();
         }
         // A dual-role repairer remains barred from verifying their own work
         // even when there is no single ticket-level mechanic.

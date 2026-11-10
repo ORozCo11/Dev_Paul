@@ -89,7 +89,7 @@ class VehicleImportTest extends TestCase
     #[Test]
     public function a_valid_xlsx_previews_without_inserting_then_imports_on_confirm_and_logs_it(): void
     {
-        Sanctum::actingAs($this->admin, ['*']);
+        Sanctum::actingAs($this->custodian, ['*']);
         $res = $this->preview($this->xlsx([$this->row(), $this->row(['Vehicle Name' => 'Ambulance Two', 'Plate Number' => 'ABC 5678'])]))->assertCreated();
         $res->assertJsonPath('total_rows', 2)->assertJsonPath('valid_rows', 2)->assertJsonPath('error_rows', 0);
         $this->assertSame(0, Vehicle::count());
@@ -104,7 +104,7 @@ class VehicleImportTest extends TestCase
         $this->assertSame('Available', $v->status);
         $this->assertDatabaseHas('vehicle_histories', ['vehicle_id' => $v->vehicle_id, 'activity_type' => 'Vehicle Added']);
         $this->assertSame(1, ActivityLog::where('action', 'Import')->where('module', 'Vehicle Management')->count());
-        $this->assertDatabaseHas('vehicle_imports', ['id' => $id, 'user_id' => $this->admin->id, 'file_name' => 'vehicles.xlsx', 'imported_rows' => 2]);
+        $this->assertDatabaseHas('vehicle_imports', ['id' => $id, 'user_id' => $this->custodian->id, 'file_name' => 'vehicles.xlsx', 'imported_rows' => 2]);
 
         // A confirmed import can't be replayed.
         $this->postJson("/api/vehicle-imports/{$id}/commit")->assertUnprocessable();
@@ -124,7 +124,7 @@ class VehicleImportTest extends TestCase
     {
         Vehicle::create(['vehicle_name' => 'Old', 'plate_number' => 'OLD 1111', 'category_id' => VehicleCategory::first()->category_id, 'brand' => 'x', 'model' => 'x', 'year_model' => 2020, 'capacity' => '1', 'vehicle_color' => 'x', 'current_location' => 'Main Depot', 'barangay_id' => $this->barangayId]);
 
-        Sanctum::actingAs($this->admin, ['*']);
+        Sanctum::actingAs($this->custodian, ['*']);
         $res = $this->preview($this->xlsx([
             $this->row(),                                                             // row 2 valid
             $this->row(['Plate Number' => 'ABC 1234', 'Vehicle Name' => 'Dup']),      // row 3 duplicate plate in file
@@ -151,7 +151,7 @@ class VehicleImportTest extends TestCase
     #[Test]
     public function water_vehicles_require_hull_and_engine_like_the_add_form(): void
     {
-        Sanctum::actingAs($this->admin, ['*']);
+        Sanctum::actingAs($this->custodian, ['*']);
         $headers = [...self::HEADERS, 'Hull Material', 'Engine Type'];
         $res = $this->preview($this->xlsx([$this->row(['Vehicle Type' => 'Rescue Boat'])], $headers))->assertCreated();
         $res->assertJsonPath('error_rows', 1);
@@ -186,13 +186,13 @@ class VehicleImportTest extends TestCase
     #[Test]
     public function another_barangays_import_cannot_be_confirmed_or_read_and_locations_are_scoped(): void
     {
-        Sanctum::actingAs($this->admin, ['*']);
+        Sanctum::actingAs($this->custodian, ['*']);
         $id = $this->preview($this->xlsx([$this->row()]))->assertCreated()->json('id');
 
         $province = Province::first();
         $city = City::create(['province_id' => $province->id, 'code' => 'OTHC', 'name' => 'Other City']);
         $otherBarangay = Barangay::create(['name' => 'Other Barangay', 'city_id' => $city->id])->id;
-        $outsider = User::factory()->create(['role' => 'Admin', 'roles' => ['Admin'], 'barangay_id' => $otherBarangay]);
+        $outsider = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian'], 'barangay_id' => $otherBarangay]);
 
         Sanctum::actingAs($outsider, ['*']);
         $this->postJson("/api/vehicle-imports/{$id}/commit")->assertNotFound();
@@ -205,7 +205,7 @@ class VehicleImportTest extends TestCase
     #[Test]
     public function empty_malformed_wrong_type_and_oversized_files_are_rejected(): void
     {
-        Sanctum::actingAs($this->admin, ['*']);
+        Sanctum::actingAs($this->custodian, ['*']);
 
         $this->preview($this->xlsx([]))->assertUnprocessable();                       // headers only
         $this->preview($this->csv([], ['Foo', 'Bar']))->assertUnprocessable();        // no data/required columns
@@ -242,7 +242,7 @@ class VehicleImportTest extends TestCase
     #[Test]
     public function a_failure_finishing_an_import_rolls_back_its_vehicles_and_preserves_the_upload(): void
     {
-        Sanctum::actingAs($this->admin, ['*']);
+        Sanctum::actingAs($this->custodian, ['*']);
         $id = $this->preview($this->csv([$this->row()]))->assertCreated()->json('id');
         $import = VehicleImport::findOrFail($id);
         $path = $import->stored_path;

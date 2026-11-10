@@ -50,7 +50,7 @@ class SubIssueRemovalAdvanceTest extends TestCase
         [$repaired, $leftover] = MaintenanceTicket::findOrFail($ticketId)->subIssues()->orderBy('sub_issue_id')->get()->all();
 
         Sanctum::actingAs($mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticketId}/sub-issues/{$repaired->sub_issue_id}/log-repairs", ['repair_logs' => 'Replaced hose.'])->assertOk();
+        $this->putJson("/api/tickets/{$ticketId}/sub-issues/{$repaired->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Replaced hose.'])->assertOk();
         $this->assertSame('Active', MaintenanceTicket::findOrFail($ticketId)->status);
 
         Sanctum::actingAs($custodian, ['*']);

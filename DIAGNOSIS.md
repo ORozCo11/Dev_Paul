@@ -7,20 +7,17 @@ A teammate cloned the repo, got the backend running, but:
 - Their login credentials are **not the same** as the ones on the original machine.
 - The login page sometimes shows: **"Unable to sign in. Please check your connection and try again."**
 
-They concluded: *"The SQLite database only works on your computer because it's already set up there — the data is separated."*
+They concluded: *"The database only works on your computer because it's already set up there — the data is separated."*
 
 ## Root cause
 
-That conclusion is **half right**. The problem is the SQLite **data**, not the backend code. But the database being separate per machine is **by design and correct** — it is not something to "fix" by sharing a file.
+That conclusion is **half right**. The problem is the local database **data**, not the backend code. But the database being separate per machine is **by design and correct** — it is not something to "fix" by sharing a file.
 
 Two independent things are happening:
 
-### 1. The SQLite file is never in the repo (correct behavior)
+### 1. The database is never in the repo (correct behavior)
 
-- [`backend-api/database/.gitignore`](backend-api/database/.gitignore) ignores `*.sqlite*`.
-- The root [`.gitignore`](.gitignore) also lists `/database/database.sqlite`.
-
-So `database.sqlite` is **never committed**. Cloning gives you an empty database with no accounts. This is the standard Laravel workflow — you never share the raw DB file.
+The application database is **MySQL 8** (`barangay_vms_db`, configured in each machine's git-ignored `backend-api/.env`). The rows live in that machine's own MySQL server and are never committed. (Before 28 October the local database was a SQLite file; that file was also git-ignored.) Cloning gives you an empty database with no accounts. This is the standard Laravel workflow — you never share the raw database.
 
 ### 2. Accounts come from the seeder, not the DB file
 
@@ -45,7 +42,8 @@ Plain `php artisan serve` defaults to port **8000**, so the backend must be star
 From `backend-api/`:
 
 ```bash
-# Rebuild the database with the standard accounts
+# Make sure MySQL is running, the barangay_vms_db schema exists and .env has your DB_* values,
+# then rebuild the database with the standard accounts
 php artisan migrate:fresh --seed
 
 # Start the backend on the port the frontend expects
@@ -56,6 +54,8 @@ Then log in with `admin@barangay.gov` / `admin123`.
 
 ## Takeaways
 
-- **Never** commit or share `database.sqlite`, and never create accounts by hand.
+- **Never** commit or share a database dump or `.env`, and never create the standard accounts by hand.
 - Every machine gets identical schema **and** accounts from `php artisan migrate:fresh --seed`.
 - Always run the backend on **port 8001**, or the login page shows the connection error.
+
+> Updated 28 October 2026 for MySQL. Accounts created by an Admin in the app have a temporary password and must change it at first sign-in; the three seeded accounts above do not.

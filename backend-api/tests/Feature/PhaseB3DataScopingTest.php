@@ -183,22 +183,24 @@ class PhaseB3DataScopingTest extends TestCase
     // =======================================================================
 
     #[Test]
-    public function custodian_and_maintenance_personnel_can_both_file_an_issue_report(): void
+    public function only_a_custodian_can_file_an_issue_report_not_maintenance_personnel(): void
     {
         $vehicle = $this->vehicle();
+        $payload = [
+            'vehicle_id' => $vehicle->vehicle_id,
+            'issue_type' => 'Flat tire',
+            'issue_description' => 'Reported via regression check.',
+            'severity_level' => 'Low',
+        ];
 
-        foreach ([$this->custodian, $this->mechanic] as $reporter) {
-            Sanctum::actingAs($reporter, ['*']);
-            $this->postJson('/api/issues', [
-                'vehicle_id' => $vehicle->vehicle_id,
-                'issue_type' => 'Flat tire',
-                'issue_description' => 'Reported via final-validation regression check.',
-                'severity_level' => 'Low',
-            ])->assertCreated();
-        }
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson('/api/issues', $payload)->assertCreated();
+
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->postJson('/api/issues', $payload)->assertForbidden();
 
         $this->assertDatabaseHas('vehicle_issue_reports', ['reported_by' => $this->custodian->id]);
-        $this->assertDatabaseHas('vehicle_issue_reports', ['reported_by' => $this->mechanic->id]);
+        $this->assertDatabaseMissing('vehicle_issue_reports', ['reported_by' => $this->mechanic->id]);
     }
 
     #[Test]
@@ -359,7 +361,7 @@ class PhaseB3DataScopingTest extends TestCase
 
     // =======================================================================
     // GET /maintenance-records — Maintenance Personnel's "Maintenance
-    // Records" ledger includes all sources in their barangay; mine remains explicit.
+    // Records" ledger includes only their own repairs across all sources.
     // =======================================================================
 
     #[Test]
@@ -372,7 +374,7 @@ class PhaseB3DataScopingTest extends TestCase
         $direct=VehicleMaintenanceRecord::create(['vehicle_id'=>$vehicle->vehicle_id,'maintenance_type'=>'Scheduled inspection','problem_reason'=>'Routine inspection','progress_status'=>'Completed','is_external'=>true]);
         VehicleMaintenanceSchedule::create(['vehicle_id'=>$vehicle->vehicle_id,'maintenance_type'=>'Pump repair','scheduled_date'=>'2026-10-01','created_by'=>$this->admin->id,'resulting_ticket_id'=>$ticket->ticket_id]);
         VehicleMaintenanceSchedule::create(['vehicle_id'=>$vehicle->vehicle_id,'maintenance_type'=>'Inspection','scheduled_date'=>'2026-10-01','created_by'=>$this->admin->id,'resulting_maintenance_id'=>$direct->maintenance_id]);
-        Sanctum::actingAs($this->mechanic,['*']);
+        Sanctum::actingAs($this->admin,['*']);
         $rows=collect($this->getJson('/api/maintenance-records')->assertOk()->json())->keyBy('maintenance_id');
         $this->assertSame('Scheduled Maintenance',$rows[$converted->maintenance_id]['source']);
         $this->assertSame('Scheduled Maintenance',$rows[$direct->maintenance_id]['source']);
@@ -380,7 +382,7 @@ class PhaseB3DataScopingTest extends TestCase
     }
 
     #[Test]
-    public function maintenance_personnel_sees_barangay_ledger_with_optional_own_record_filter(): void
+    public function maintenance_personnel_sees_only_their_own_records_even_without_the_mine_filter(): void
     {
         $vehicle = $this->vehicle();
         VehicleMaintenanceRecord::create([
@@ -399,22 +401,77 @@ class PhaseB3DataScopingTest extends TestCase
         Sanctum::actingAs($this->mechanic, ['*']);
         VehicleMaintenanceRecord::create(['vehicle_id'=>$vehicle->vehicle_id,'maintenance_type'=>'Shop Service','problem_reason'=>'Shop repair','is_external'=>true]);
         $response = $this->getJson('/api/maintenance-records')->assertOk();
-        $this->assertCount(3, $response->json());
+        $this->assertCount(1, $response->json());
+        $this->assertSame('Oil Change', $response->json('0.maintenance_type'));
+        $this->getJson('/api/maintenance-records?mine=0')->assertOk()->assertJsonCount(1);
         $this->getJson('/api/maintenance-records?mine=1')->assertOk()->assertJsonCount(1)->assertJsonPath('0.maintenance_type','Oil Change');
         $otherBarangay = Barangay::create(['name'=>'Other ledger barangay','city_id'=>$this->cityId]);
         $otherVehicle = $this->vehicle();
         $otherVehicle->update(['barangay_id'=>$otherBarangay->id]);
-        VehicleMaintenanceRecord::create(['vehicle_id'=>$otherVehicle->vehicle_id,'maintenance_type'=>'Private other barangay repair','problem_reason'=>'Outside tenant']);
-        $this->getJson('/api/maintenance-records')->assertOk()->assertJsonCount(3);
+        VehicleMaintenanceRecord::create(['vehicle_id'=>$otherVehicle->vehicle_id,'maintenance_type'=>'Private other barangay repair','problem_reason'=>'Outside tenant','maintenance_personnel_id'=>$this->mechanic->id]);
+        $this->getJson('/api/maintenance-records')->assertOk()->assertJsonCount(1);
+    }
+
+    #[Test]
+    public function custodians_only_see_records_linked_to_their_own_work(): void
+    {
+        $vehicle = $this->vehicle();
+        $otherCustodian = $this->user('Custodian');
+        $record = fn (array $fields = []) => VehicleMaintenanceRecord::create(array_merge([
+            'vehicle_id' => $vehicle->vehicle_id, 'maintenance_type' => 'Repair', 'problem_reason' => 'Test repair',
+        ], $fields));
+        $verified = $record(['verified_by' => $this->custodian->id]);
+        $sub = $this->subIssue($this->ticket($vehicle, $this->custodian->id), $this->mechanic->id);
+        $assigned = $record(['ticket_sub_issue_id' => $sub->sub_issue_id]);
+        $scheduled = $record();
+        VehicleMaintenanceSchedule::create([
+            'vehicle_id' => $vehicle->vehicle_id, 'maintenance_type' => 'Scheduled service',
+            'scheduled_date' => now()->toDateString(), 'created_by' => $this->custodian->id,
+            'resulting_maintenance_id' => $scheduled->maintenance_id,
+        ]);
+        $other = $record(['verified_by' => $otherCustodian->id, 'maintenance_personnel_id' => $this->otherMechanic->id]);
+
+        Sanctum::actingAs($this->custodian, ['*']);
+        $ids = collect($this->getJson('/api/maintenance-records?mine=0')->assertOk()->json())->pluck('maintenance_id')->all();
+        $this->assertEqualsCanonicalizing([$verified->maintenance_id, $assigned->maintenance_id, $scheduled->maintenance_id], $ids);
+        foreach ([$verified, $assigned, $scheduled] as $own) {
+            $this->getJson('/api/maintenance-records/'.$own->maintenance_id)->assertOk();
+        }
+        $this->getJson('/api/maintenance-records/'.$other->maintenance_id)->assertNotFound();
+    }
+
+    #[Test]
+    public function maintenance_personnel_cannot_open_another_users_record_by_id(): void
+    {
+        $vehicle = $this->vehicle();
+        $own = VehicleMaintenanceRecord::create(['vehicle_id' => $vehicle->vehicle_id, 'maintenance_type' => 'Own repair', 'problem_reason' => 'Test', 'maintenance_personnel_id' => $this->mechanic->id]);
+        $other = VehicleMaintenanceRecord::create(['vehicle_id' => $vehicle->vehicle_id, 'maintenance_type' => 'Other repair', 'problem_reason' => 'Test', 'maintenance_personnel_id' => $this->otherMechanic->id]);
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->getJson('/api/maintenance-records/'.$own->maintenance_id)->assertOk();
+        $this->getJson('/api/maintenance-records/'.$other->maintenance_id)->assertNotFound();
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->getJson('/api/maintenance-records')->assertOk()->assertJsonCount(2);
+        $this->getJson('/api/maintenance-records/'.$other->maintenance_id)->assertOk();
+    }
+
+    #[Test]
+    public function dual_role_staff_see_the_union_of_their_own_repairs_and_verifications(): void
+    {
+        $dual = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian', 'Maintenance Personnel'], 'barangay_id' => $this->barangayId, 'is_active' => true]);
+        $vehicle = $this->vehicle();
+        foreach ([['maintenance_personnel_id' => $dual->id], ['verified_by' => $dual->id], ['maintenance_personnel_id' => $this->otherMechanic->id]] as $fields) {
+            VehicleMaintenanceRecord::create(array_merge(['vehicle_id' => $vehicle->vehicle_id, 'maintenance_type' => 'Repair', 'problem_reason' => 'Test'], $fields));
+        }
+        Sanctum::actingAs($dual, ['*']);
+        $this->getJson('/api/maintenance-records')->assertOk()->assertJsonCount(2);
     }
 
     // =======================================================================
-    // GET /vehicles — Maintenance scoped to vehicles tied to their own
-    // assigned sub-issues or schedules
+    // GET /vehicles — all vehicles in the same barangay remain visible.
     // =======================================================================
 
     #[Test]
-    public function maintenance_personnel_sees_only_vehicles_tied_to_their_own_assigned_work(): void
+    public function maintenance_personnel_sees_every_vehicle_in_the_barangay(): void
     {
         $ownVehicle = $this->vehicle();
         $ticket = $this->ticket($ownVehicle);
@@ -437,7 +494,7 @@ class PhaseB3DataScopingTest extends TestCase
 
         $this->assertTrue($ids->contains($ownVehicle->vehicle_id));
         $this->assertTrue($ids->contains($scheduledVehicle->vehicle_id));
-        $this->assertFalse($ids->contains($unrelatedVehicle->vehicle_id));
+        $this->assertTrue($ids->contains($unrelatedVehicle->vehicle_id));
     }
 
     #[Test]
@@ -456,28 +513,4 @@ class PhaseB3DataScopingTest extends TestCase
     // barangay's own existing Admin(s), not just Super Admins
     // =======================================================================
 
-    #[Test]
-    public function an_ordinary_staff_registration_notifies_the_barangays_existing_admins(): void
-    {
-        Barangay::findOrFail($this->barangayId)->update(['psgc_code' => '0102801001']);
-        $setting = RegistrationSetting::for($this->barangayId);
-
-        $this->postJson('/api/register', [
-            'name' => 'New Custodian',
-            'email' => 'new-custodian@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
-            'phone' => '09171234567',
-            'address' => '123 Test St',
-            'city_id' => $this->cityId,
-            'barangay_id' => $this->barangayId,
-            'staff_code' => $setting->staff_code,
-            'requested_role' => 'Custodian',
-        ])->assertCreated();
-
-        $this->assertDatabaseHas('notifications', [
-            'user_id' => $this->admin->id,
-            'type' => 'pending_staff_approval',
-        ]);
-    }
 }

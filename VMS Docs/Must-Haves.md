@@ -1,8 +1,37 @@
 # Barangay VMS — Must-Haves and Requirement Alignment
 
-Reviewed **25 October 2026** against integrated revision `130fe38` on `dev-paul`. See [current revision notes](Current-Revision-2026-10-25.md) for current behavior, audit disposition and verification limits. The supplied academic baseline remains unchanged.
+Updated **28 October 2026** against the working tree on `dev-paul` (after `20449a7`). See [the 28 October revision notes](Current-Revision-2026-10-28.md) first, then [the 25 October notes](Current-Revision-2026-10-25.md), for current behavior, audit disposition and verification limits. The supplied academic baseline remains unchanged.
 
 Status key: **Implemented** means an identifiable code path exists; it does not claim deployment acceptance. **Verify in deployment** means credentials, storage, or an end-to-end acceptance check is still needed. **Open finding** means a confirmed defect prevents acceptance of the affected control. **Role alignment** means the capability exists but the responsible role differs from the supplied baseline and should be reviewed with the adviser.
+
+## Final-defense must-haves (28 October 2026)
+
+The capabilities a panel should see working, with how to show each one and where it lives. Roles are the four in `backend-api/config/permissions.php`; each account holds **one** role. Demo accounts and sample data: [Sample-Data.md](Sample-Data.md).
+
+| # | Must-have | How to demonstrate it | Where it lives |
+|---|---|---|---|
+| 1 | **Registration and approval** | Register a new staff account (valid ID + photo + barangay staff code); show it inactive; approve it as the barangay Admin. For a barangay's first Admin, show the Super Admin pending queue and the emailed staff code that the Admin enters at sign-in. | Public `/register`; Users (Admin); Super Admin Pending Approvals; `AuthController`, `SuperAdminController`, `RegistrationSetting` |
+| 2 | **Four roles, one role per account, least privilege** | Sign in as each role and show the different sidebars; try a forbidden action (e.g. Maintenance Personnel cannot report an issue; the API returns 403). | `config/permissions.php`; `modulesByRole` in `Workspace.jsx`; `user_roles` table |
+| 3 | **Admin-created accounts with a temporary password** | Admin adds a user: a random temporary password is pre-filled (Regenerate available). Sign in as that user: the forced "Set your own password" modal appears and nothing else works until it is changed. | Users > Add User; `ChangePasswordRequired.jsx`; `users.must_change_password`; `EnsureUserIsActive` |
+| 4 | **Vehicle registry** | Add a land and a water vehicle through the 3-step wizard (photo, documents, location); a new vehicle is Available / Good. Admin edits, archives, decommissions and restores. | Vehicle Management (Admin) / View Vehicles (Custodian, Maintenance Personnel); `FleetController` |
+| 5 | **Vehicle types and locations** | Admin manages types and hubs; Custodian views types and adds a type or a hub (no delete); Maintenance Personnel see all barangay vehicles. | Vehicle Types, Vehicle Location; `HubController`, `FleetController`; `vehicle_type.*`, `hub.*` |
+| 6 | **Condition monitoring that updates itself** | Propose a ticket on a Good vehicle and watch Condition Monitoring flip it to Needs Repair; after verified closure the vehicle returns to service. | Condition Monitoring; `conditionMonitoring.js`; `TicketController` |
+| 7 | **Issue reporting (Custodian only)** | Custodian reports an issue with photos. Show that Admin and Maintenance Personnel have no Report action. | Report Vehicle Issue; `issue.create`; `vehicle_issue_reports` |
+| 8 | **Ticket proposal with open-report linking** | Custodian starts a proposal on a vehicle that has open reports: only the "open reports" card shows; a report held by another ticket is greyed out; choose "None of these" to continue. | Report Vehicle Issue > propose; `ProposeTicketPage`; `GET /vehicles/{id}/open-issues` |
+| 9 | **Approval workflow** | Admin reviews the proposal (default list: Proposals + Active), edits, assigns a mechanic per sub-issue, approves, declines or requests corrections. No direct ticket creation. | Maintenance Tickets; `ticket.approve/decline/request_corrections` |
+| 10 | **Repair recording** | Mechanic opens My Work Orders and uses Record Repair Work: Standard Repair or Uses Parts From Another Vehicle, parts, evidence files; attachments then show on the ticket (View attachments). | My Work Orders; `LogRepairsPage`, `RepairFileCabinet`; `TicketController::logRepairs` |
+| 11 | **Cannibalization from several donors** | In one repair add two donor vehicles (already-used vehicles are greyed out), each with parts; submit and show one issue report and a Needs Repair flag per donor. | Cannibalization Management; `ticket_sub_issue_donor_parts.donor_vehicle_id` |
+| 12 | **External-shop repair** | Custodian proposes an external repair, Admin only approves it; the Custodian logs the vehicle sent to the shop and its return, tests it and closes the ticket by verifying (or returns it for rework). | Ticket details; `external.handle` |
+| 13 | **Independent verification and closure** | The assigned Custodian verifies (personal-test attestation) or returns the work for rework; approval closes the ticket; self-verification is refused. The ticket list shows the Title and Repair Type columns. | My Tasks (Custodian); `ticket.verify` |
+| 14 | **Preventive maintenance** | Custodian books a schedule, Admin approves, the assigned mechanic completes it; recurring schedules renew; a due schedule becomes a ticket proposal. | Maintenance Schedule; `ConvertDueSchedulesToTickets` |
+| 15 | **Maintenance records ledger** | Show completed repairs by source (In-House Repair, Sent to External Shop, Maintenance Schedule). | Maintenance Records |
+| 16 | **History, reports and audit** | Vehicle History timeline; Admin generates reports and CSV; Activity Log shows who did what under which role. | Vehicle History, Reports, Activity Log |
+| 17 | **Role dashboards** | Admin decisions queue, Custodian verification/readiness, Maintenance Personnel personal workload. | Dashboard |
+| 18 | **Notifications and email** | Trigger a ticket event (in-app notification) and a registration event (email through Gmail SMTP with the VMS header logo and footer). | Notifications; `AccountMail`; `.env` `MAIL_*` |
+| 19 | **Super Admin platform portal** | Barangay creation, registration codes, boundary review, pending approvals, concern reports with email replies, platform activity log, impersonation. Super Admin sees no fleet data. | Super Admin workspace; `RestrictSuperAdminScope` |
+| 20 | **Data and file storage** | MySQL `barangay_vms_db` (47 tables); private Supabase Storage with signed links for photos, documents and evidence. | Backend `.env`; `ManagedFile`; ERD in the defense folder |
+
+Not in scope (do not claim them): dispatch, trips, Usage Log, direct Admin ticket creation, Admin verification of repairs, a self-service "forgot password" flow, and Maintenance Personnel issue reporting.
 
 ## Current scope and audit status - 25 October 2026
 
@@ -19,18 +48,18 @@ Use [Requirements-Traceability.md](Requirements-Traceability.md) for stable UC-0
 | Baseline requirement | Status | Current implementation / evidence |
 |---|---|---|
 | Web-based desktop platform | Implemented | React/Vite frontend and Laravel API; responsive layouts also support smaller screens. |
-| Admin, Custodian, and Maintenance Personnel access | Implemented; open findings | Central abilities in backend-api/config/permissions.php, backend role/ownership guards, frontend module gates. Multi-role accounts are supported. Issue-detail visibility and global catalog writes have open authorization findings (AUD-24-02/03). |
+| Admin, Custodian, and Maintenance Personnel access | Implemented; open findings | Central abilities in backend-api/config/permissions.php, backend role/ownership guards, frontend module gates. Each account holds one role (`user_roles`, at most one row). Issue-detail visibility and global catalog writes have open authorization findings (AUD-24-02/03). |
 | Organized, updated vehicle records | Implemented | FleetController vehicle endpoints, vehicle catalog and individual profiles, land/water type fields, photos and locations. |
 | Maintenance records and schedules | Implemented | FleetController record/schedule endpoints; ticket repairs, recurrence, approval and scheduled-to-ticket processing. |
 | Dashboard summaries of status and activities | Implemented; open finding | Distinct Admin decisions, Custodian inspection/verification, and personal Maintenance work dashboards. No invented trends or weather data. Readiness can remain fresh after parts removal; AUD-24-04 must be resolved. |
-| Secure cloud storage, backup and retrieval of images/files | Open finding; deployment checks | Private managed storage and five-minute signed links exist, but an unrelated profile response can sign an inaccessible same-barangay file (AUD-24-01). Successful uploads, retrieval, retention and recovery depend on deployment credentials and storage configuration; backup/recovery has not been demonstrated by this UI change. |
+| Secure cloud storage, backup and retrieval of images/files | Open finding; deployment checks (data is in MySQL `barangay_vms_db`) | Private managed storage and five-minute signed links exist, but an unrelated profile response can sign an inaccessible same-barangay file (AUD-24-01). Successful uploads, retrieval, retention and recovery depend on deployment credentials and storage configuration; backup/recovery has not been demonstrated by this UI change. |
 
 ## 2. Administrator requirements
 
 | Supplied requirement | Status | Current behavior |
 |---|---|---|
 | Manage all vehicle records | Implemented | Register, edit and archive barangay-scoped vehicles. Vehicle registration is a standard Custodian duty under the current permission map; the obsolete delegation checkbox has been removed. |
-| Manage vehicle categories/types | Open finding | Shared types and domains exist, but a barangay Admin can change types used by other barangays (AUD-24-03). |
+| Manage vehicle categories/types | Open finding | Admin creates, edits and deletes; Custodian can view and add. Shared types and domains exist, but a barangay Admin can change types used by other barangays (AUD-24-03). |
 | Update vehicle locations | Implemented | Vehicle locations and hub management with map views; occupied hubs cannot be deleted. |
 | Monitor conditions needing inspection/repair | Implemented | Vehicle condition/readiness views and fleet-condition analytics; recording physical condition checks is Custodian-only. |
 | Manage vehicle issue reports | Implemented | Review reports and linked tickets; dismiss obsolete reports with a reason. Custodians propose tickets. |
@@ -40,7 +69,7 @@ Use [Requirements-Traceability.md](Requirements-Traceability.md) for stable UC-0
 | Generate vehicle, issue, maintenance and history reports | Implemented; open finding | Reports module plus relevant CSV/print exports. Validate report formats and neutralize formula-leading cells in all CSV exports (AUD-24-05). |
 | Monitor logs and user activities | Implemented | Barangay-scoped activity log and platform-only Super Admin log. |
 | Dashboard summaries and recent updates | Implemented | Four primary KPIs, decisions queue, ticket workload, fleet condition and concise coverage warnings. Details are linked from the queue. |
-| Create user accounts | Implemented | Admin user.create permission and user-management flow; public signup additionally requires registration code and approval. |
+| Create user accounts | Implemented | Admin user.create permission; one role per account; a generated temporary password that the user must replace at first sign-in. Public signup additionally requires a registration code (except a barangay's first Admin), a valid ID and photo, and approval. |
 
 ## 3. Custodian requirements
 
@@ -48,33 +77,34 @@ Use [Requirements-Traceability.md](Requirements-Traceability.md) for stable UC-0
 |---|---|---|
 | View vehicle details and availability | Implemented; open finding | Vehicle catalog and profiles; availability, physical condition and verified readiness remain separate. A parts-removal event does not yet invalidate an earlier readiness pass (AUD-24-04). |
 | Search/filter vehicles | Implemented | Search, filters, table/card views and column controls. |
-| Report vehicle issues | Implemented | Issue reporting with category, severity, description and linked proposal flow. |
+| Report vehicle issues | Implemented (Custodian only) | Issue reporting with category, severity, description and linked proposal flow. The propose form asks about open reports first; reports already held by another ticket are greyed out. |
 | Upload issue photos | Verify in deployment | Issue-photo inputs/storage integration exist. Validate upload and authorized retrieval against configured cloud storage. |
 | Monitor submitted reports/status updates | Open finding | Lists apply ownership restrictions, but direct issue-detail requests expose another staff member's hidden report and linked ticket details (AUD-24-02). |
 | View ongoing/completed maintenance | Implemented | Maintenance ledger, ticket details, repair logs and verification history. |
 | Dashboard of available vehicles, issues and maintenance | Implemented with role focus | Verification, readiness and unresolved issue KPIs; one tasks queue, one condition chart and readiness by vehicle type. Availability is accessible from Vehicles. |
 
-Additional current responsibilities: propose maintenance tickets, record condition/readiness checks, book schedules, and independently verify completed repairs. Successful Custodian approval closes the ticket; Admin does not verify a repair.
+Additional current responsibilities: propose maintenance tickets, record condition/readiness checks, book schedules, view vehicle types and locations (add a type; add or edit a hub), log external-shop work (send to shop, receive back, rework), and independently verify completed repairs. Successful Custodian approval closes the ticket; Admin does not verify a repair.
 
 ## 4. Maintenance Personnel requirements
 
 | Supplied requirement | Status | Current behavior |
 |---|---|---|
-| View reported vehicle issues | Open finding | Own-report lists and assigned-ticket access exist, but direct issue-detail access bypasses the list restriction (AUD-24-02). |
+| View reported vehicle issues | Role alignment; open finding | Maintenance Personnel no longer file Issue Reports (Custodian only) and have no Issue Reports page; they see the problem through their assigned ticket and sub-issue. Direct issue-detail access still bypasses the list restriction (AUD-24-02). |
 | Add maintenance records | Implemented with scope | Record repair work on assigned sub-issues and use permitted maintenance-record actions. |
 | Update repair progress/completion | Implemented with scope | Assigned work logs and submission; a mechanic cannot independently verify or close their own repair. |
 | Manage maintenance schedules | Role alignment | View and perform assigned scheduled work. Booking/editing is Custodian-owned; approval/reassignment is Admin-owned. Current completion validation rejects future Philippine dates; AUD-24-06 retains target-environment acceptance checks. |
 | Add repair actions and remarks | Implemented | Repair log, parts, evidence, donor-part records and supporting notes. The current repair-log UI does not ask for Start/Completion dates. |
 | Monitor upcoming maintenance | Implemented | Personal upcoming/overdue schedule KPIs and assigned-work queue. |
 | View maintenance history | Implemented | Work tracker, completed repair history and permitted maintenance records. |
+| View vehicles | Implemented | View Vehicles shows every vehicle in the barangay, not only assigned ones. |
 | Dashboard of issues, records and vehicles needing attention | Implemented with personal scope | Three personal KPIs, assigned work, workload by actual ticket status and recent completed work. Fleet-wide analytics remain in authorized fleet modules. |
 
 ## 5. Current workflow and safeguards
 
 - [x] Ticket proposals enter Pending Approval. Custodian proposes; Admin reviews/assigns; Maintenance Personnel repairs; assigned Custodian verifies and closes, or returns the work with a reason.
 - [x] Self-verification is blocked server-side, including multi-role accounts. Reassign an independent Custodian when needed; there is no Admin verification fallback.
-- [x] Cannibalized repairs record donor vehicles and parts and generate donor follow-up issues. The current flow does not require the retired Admin cannibalization approval step.
-- [x] External-shop handling and verification duties are separated.
+- [x] Cannibalized repairs record one or more donor vehicles and their parts; since 10 November 2026 submitting no longer files an issue report or flags the donor; the parts show as missing on the donor and only a part it cannot respond without keeps it Not Ready. The current flow does not require the retired Admin cannibalization approval step.
+- [x] External-shop work: the Admin only approves; the ticket's Custodian logs send and return, then tests and closes. Mechanics who did repair work cannot verify it.
 - [x] Schedule bookings require approval; recurrence and schedule-to-ticket processing remain intact.
 - [x] Vehicle-rooted tenant scopes and the Super Admin fleet allowlist exist.
 - [ ] Close the issue-detail ownership, private-file signing and shared-catalog scope findings before treating access control as accepted (AUD-24-01/02/03).
@@ -82,7 +112,9 @@ Additional current responsibilities: propose maintenance tickets, record conditi
 - [x] Last-Admin and open-work deactivation guards remain enforced.
 - [x] The dedicated switcher uses authorized account candidates and an automatically recorded access description; production tokens expire after 30 minutes and writes are restricted server-side. Local development has explicit expiry/write exceptions.
 - [x] The account menu identifies the current user and role. Ordinary support sessions offer End Impersonation; the dedicated switcher retains its account picker. Ending calls the existing logout endpoint for token revocation and audit logging before restoring the original session.
-- [x] Registration retains first-Administrator versus ordinary staff approval routing, registration-code checks, and inactive-until-approved behavior.
+- [x] Registration retains first-Administrator versus ordinary staff approval routing, registration-code checks, valid-ID and photo upload, and inactive-until-approved behavior.
+- [x] Admin-created accounts start with a temporary password and `must_change_password`; the API refuses every request except sign-out, "who am I" and the password change until it is changed.
+- [x] One role per account; creating or updating a user with more than one role is rejected.
 
 ## 6. UI requirements delivered in this revision
 
@@ -99,7 +131,7 @@ Additional current responsibilities: propose maintenance tickets, record conditi
 
 **Historical verification record (24 October):** on revision `0027023`, the recorded full suite passed **480 backend tests (2,245 assertions)**; frontend lint, production build and targeted desktop/mobile merge checks passed. The 24 October investigation then reproduced the observed behavior with **six isolated API tests (36 assertions)** and a direct CSV-generation probe. Those investigation tests passed because they asserted the defective behavior; they are not evidence that the defects were fixed. No application fixes were made in this documentation update.
 
-**Acceptance remains open:** resolve AUD-24-01 through AUD-24-06, retain regression tests that reject the bypasses, repeat affected workflows, and perform target-deployment storage/recovery acceptance. SQLite removal-migration up/down/reapplication was verified on fresh and populated databases; other database engines were not exercised for that migration.
+**Acceptance remains open:** resolve AUD-24-01 through AUD-24-06, retain regression tests that reject the bypasses, repeat affected workflows, and perform target-deployment storage/recovery acceptance. The SQLite removal-migration up/down/reapplication was verified on fresh and populated SQLite databases (the application database is now MySQL).
 
 ### Historical verification notes - 15 to 21 October 2026
 
@@ -122,7 +154,7 @@ Regression audit, 15 October 2026: **397 backend tests passed (1,585 assertions)
 
 - [ ] Demonstrate cloud image/file upload, authorized retrieval, and backup/recovery in the target deployment.
 - [ ] Obtain adviser review of the role-alignment differences in sections 2 and 4. These notes record current behavior; they do not claim approval to amend the original baseline.
-- [ ] Complete user acceptance with representative accounts and real operational records, including an empty barangay and multi-role staff.
+- [ ] Complete user acceptance with representative accounts and real operational records, including an empty barangay and accounts that still carry two legacy roles.
 - [ ] Confirm required generated report layouts and exports against the academic submission requirements.
 - [ ] Maintain automated browser coverage for critical registration, verification and support flows. Backend feature tests exist in backend-api/tests/Feature; a passing frontend build alone is insufficient evidence of every workflow.
 

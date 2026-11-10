@@ -62,7 +62,7 @@ class ReopenedTicketMechanicTest extends TestCase
     {
         $ticket = $this->activeTicket();
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$ticket->subIssues->first()->sub_issue_id}/log-repairs", ['repair_logs' => 'Replaced hose.'])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$ticket->subIssues->first()->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Replaced hose.'])->assertOk();
 
         // What deleteTicket() archives for a ticket with real progress.
         $ticket = MaintenanceTicket::with('subIssues')->findOrFail($ticket->ticket_id);

@@ -24,7 +24,7 @@ class VehicleOperationalState
             $vehicle->update(['status' => 'Under Maintenance', 'condition' => $repair ? 'Needs Repair' : $vehicle->condition]);
         } elseif ($releaseIfIdle || $vehicle->status === 'Under Maintenance') {
             $hasIssue = VehicleIssueReport::where('vehicle_id', $vehicle->vehicle_id)->whereIn('status', ['Pending', 'Under Review', 'In Maintenance'])->exists();
-            $vehicle->update(['status' => 'Available', 'condition' => $hasIssue ? 'Needs Inspection' : 'Good', 'estimated_return_date' => null]);
+            $vehicle->update(['status' => 'Available', 'condition' => $hasIssue ? 'Needs Repair' : 'Good', 'estimated_return_date' => null]);
         }
     }
 

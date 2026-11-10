@@ -187,6 +187,57 @@ class CatalogController extends Controller
         return response()->noContent();
     }
 
+    public function partNames()
+    {
+        return DB::table('part_names')->orderBy('name')->get(['id', 'name']);
+    }
+
+    public function storePartName(Request $request)
+    {
+        $this->requireAbility($request, 'catalog.create');
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $name = trim((string) preg_replace('/\s+/', ' ', $data['name']));
+        $existing = DB::table('part_names')->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+        if (!$existing) {
+            DB::table('part_names')->insert(['name' => $name]);
+            $existing = DB::table('part_names')->where('name', $name)->first();
+        }
+
+        return response()->json($existing, 201);
+    }
+
+    public function updatePartName(Request $request, int $part)
+    {
+        $this->requireAbility($request, 'catalog.edit');
+        $current = DB::table('part_names')->where('id', $part)->first();
+        abort_unless($current, 404);
+        $data = $request->validate(['name' => ['required', 'string', 'max:255']]);
+        $newName = trim((string) preg_replace('/\s+/', ' ', $data['name']));
+        abort_if(DB::table('part_names')->whereRaw('LOWER(name) = ?', [mb_strtolower($newName)])->where('id', '!=', $part)->exists(), 422, "\"{$newName}\" already exists — pick a different name, or delete this one and use that instead.");
+
+        DB::transaction(function () use ($part, $current, $newName) {
+            DB::table('part_names')->where('id', $part)->update(['name' => $newName]);
+            DB::table('cannibalization_parts')->where('part_name', $current->name)->update(['part_name' => $newName]);
+            DB::table('ticket_sub_issue_donor_parts')->where('part_name', $current->name)->update(['part_name' => $newName]);
+        });
+
+        return DB::table('part_names')->where('id', $part)->first(['id', 'name']);
+    }
+
+    public function destroyPartName(Request $request, int $part)
+    {
+        $this->requireAbility($request, 'catalog.delete');
+        $current = DB::table('part_names')->where('id', $part)->first();
+        abort_unless($current, 404);
+        $this->abortIfInUse($current->name, [
+            'cannibalization record' => DB::table('cannibalization_parts')->where('part_name', $current->name)->count(),
+            'repair donor part' => DB::table('ticket_sub_issue_donor_parts')->where('part_name', $current->name)->count(),
+        ]);
+        DB::table('part_names')->where('id', $part)->delete();
+
+        return response()->noContent();
+    }
+
     public function recurrenceIntervals()
     {
         return DB::table('recurrence_intervals')->orderBy('name')->get();

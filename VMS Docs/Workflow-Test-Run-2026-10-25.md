@@ -1,5 +1,7 @@
 # Ticket and maintenance workflow test run - 25 October 2026
 
+> **Superseded in part (28 October 2026):** external-shop dispatch/return and the previous-handler restriction changed: the ticket's Custodian now handles the shop and may verify. See [Current-Revision-2026-10-28.md](Current-Revision-2026-10-28.md).
+
 Baseline: revision `37b25ba`, branch `test/ticket-maintenance-workflow-audit`.
 
 ## Result and limits

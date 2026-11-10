@@ -46,11 +46,12 @@ class TicketDecisionSafetyTest extends TestCase
     {
         $s=$t->subIssues[0];$base="/api/tickets/{$t->ticket_id}/sub-issues/{$s->sub_issue_id}";
         if($s->repair_type==='external') {
-            Sanctum::actingAs($this->admin,['*']);
+            Sanctum::actingAs($this->custodian,['*']);
             $this->putJson("$base/external-sent",['external_vendor'=>'QA Shop','external_reason'=>'Warranty','external_work_scope'=>'Repair'])->assertOk();
             $this->putJson("$base/external-returned",['external_return_notes'=>'Done','external_actual_cost'=>12000])->assertOk();
-        } else Sanctum::actingAs($this->mechanic,['*']);
-        $this->putJson("$base/log-repairs",['repair_logs'=>'Actual paid repair','maintenance_cost'=>500])->assertOk();
+        }
+        Sanctum::actingAs($this->mechanic,['*']);
+        $this->putJson("$base/log-repairs",['tested_ok' => true, 'repair_logs'=>'Actual paid repair','maintenance_cost'=>500])->assertOk();
     }
     private function staleDecision(string $action,MaintenanceTicket $snapshot,array $data=[]): void
     {
@@ -246,7 +247,9 @@ class TicketDecisionSafetyTest extends TestCase
     {
         $t=$this->propose('external');$this->activate($t);
         $s=$t->subIssues[0];
+        Sanctum::actingAs($this->custodian,['*']);
         $this->putJson("/api/tickets/{$t->ticket_id}/sub-issues/{$s->sub_issue_id}/external-sent",['external_vendor'=>'QA Shop','external_reason'=>'Warranty','external_work_scope'=>'Repair'])->assertOk();
+        Sanctum::actingAs($this->admin,['*']);
         $this->putJson("/api/tickets/{$t->ticket_id}/cancel",['closing_notes'=>'Stop work'])->assertUnprocessable();
         $this->assertSame('Active',$t->fresh()->status);
         $this->assertSame('Under Maintenance',$this->vehicle->fresh()->status);

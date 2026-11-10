@@ -1,5 +1,7 @@
 # Current implementation ? 25 October 2026
 
+> **Partly superseded by [Current-Revision-2026-10-28.md](Current-Revision-2026-10-28.md)** (MySQL, one role per account, Custodian-only issue reporting, temporary passwords, several donor vehicles, new sidebar groups). Read that note first.
+
 Reviewed against revision `130fe38` on `dev-paul`. At review time, `origin/WelcomePage-remove-media-icons` points to the same commit. Branch names do not describe separate versions when their commit IDs match.
 
 ## Subsequent Jake branch integration

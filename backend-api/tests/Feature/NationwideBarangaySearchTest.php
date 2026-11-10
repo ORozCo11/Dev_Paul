@@ -58,7 +58,6 @@ class NationwideBarangaySearchTest extends TestCase
         $this->assertSame('13', $makati['region_code']);
         $this->assertSame('NCR', $makati['region_name']);
         $this->assertSame('1376020020', $makati['psgc_code']);
-        $this->assertArrayHasKey('has_registration_code', $makati);
         $this->assertArrayHasKey('has_boundary', $makati);
         $this->assertArrayHasKey('has_pending_boundary', $makati);
         $this->assertArrayNotHasKey('staff_code', $makati);

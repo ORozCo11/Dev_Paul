@@ -1,5 +1,7 @@
 # Ticket process review — 24 October 2026
 
+> **Superseded in part (28 October 2026):** external-shop send/return/rework is now logged by the ticket's Custodian (not an Admin handler), who then tests and closes the ticket by verifying. See [Current-Revision-2026-10-28.md](Current-Revision-2026-10-28.md).
+
 Reviewed application revision: `9314091`. The original findings below describe that revision. The implementation follow-up at the end records the subsequent fixes and verification; this is not a claim of production acceptance.
 
 ## Overall assessment

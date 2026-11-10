@@ -53,7 +53,7 @@ class VehicleValidationTest extends TestCase
 
     private function actingAsAdmin(): User
     {
-        $admin = User::factory()->create(['role' => 'Admin']);
+        $admin = User::factory()->create(['role' => 'Custodian']);
         Sanctum::actingAs($admin, ['*']);
 
         return $admin;

@@ -23,6 +23,7 @@ import { FogIcon } from '@solar-icons/react/linear/fog';
 import { Grid2x2Icon } from '@solar-icons/react/linear/grid-2x2';
 import { GripVerticalIcon } from '@solar-icons/react/linear/grip-vertical';
 import { HamburgerMenuIcon } from '@solar-icons/react/linear/hamburger-menu';
+import { HistoryIcon } from '@solar-icons/react/linear/history';
 import { InfoCircleIcon } from '@solar-icons/react/linear/info-circle';
 import { KeyIcon } from '@solar-icons/react/linear/key';
 import { LetterIcon } from '@solar-icons/react/linear/letter';
@@ -32,6 +33,7 @@ import { MagnifierIcon } from '@solar-icons/react/linear/magnifier';
 import { MapPointIcon } from '@solar-icons/react/linear/map-point';
 import { PenIcon } from '@solar-icons/react/linear/pen';
 import { SettingsIcon } from '@solar-icons/react/linear/settings';
+import { ShopIcon } from '@solar-icons/react/linear/shop';
 import { SledgehammerIcon } from '@solar-icons/react/linear/sledgehammer';
 import { SunIcon } from '@solar-icons/react/linear/sun';
 import { TicketIcon } from '@solar-icons/react/linear/ticket';
@@ -77,8 +79,10 @@ const ICONS = {
   ticket: TicketIcon,
   pin: MapPointIcon,
   gear: SettingsIcon,
+  shop: ShopIcon,
   users: UsersGroupTwoRoundedIcon,
   document: DocumentTextIcon,
+  history: HistoryIcon,
   sun: SunIcon,
   cloudSun: CloudSunIcon,
   cloudFog: FogIcon,
@@ -249,6 +253,21 @@ const PATHS = {
       <line x1="3" y1="6" x2="3.01" y2="6" />
       <line x1="3" y1="12" x2="3.01" y2="12" />
       <line x1="3" y1="18" x2="3.01" y2="18" />
+    </>
+  ),
+  // Sidebar: Reports is a bar chart, Activity Log a pulse line, so the two
+  // no longer share the same document glyph.
+  chart: (
+    <>
+      <path d="M3 3v18h18" />
+      <rect x="7" y="12" width="3" height="6" rx="0.5" />
+      <rect x="12" y="8" width="3" height="10" rx="0.5" />
+      <rect x="17" y="5" width="3" height="13" rx="0.5" />
+    </>
+  ),
+  activity: (
+    <>
+      <path d="M3 12h4l3-8 4 16 3-8h4" />
     </>
   ),
   // Table "Choose Columns" toolbar button â€” three vertical panes inside a

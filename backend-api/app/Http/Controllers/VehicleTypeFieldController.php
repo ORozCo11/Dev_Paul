@@ -11,8 +11,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 /**
- * Admin-managed custom fields per Vehicle Type. Gated by the existing
- * vehicle_type.* abilities — it is the same "maintain vehicle types" job.
+ * Admin-managed custom fields per Vehicle Category. Gated by the existing
+ * vehicle_type.* abilities — it is the same "maintain vehicle categories" job.
  * Fields are archived (is_active=false), never deleted, so vehicles keep the
  * values they already hold.
  */
@@ -47,7 +47,7 @@ class VehicleTypeFieldController extends Controller
             'key' => $key,
             'sort_order' => ($category->fields()->max('sort_order') ?? 0) + 1,
         ]);
-        $this->log($request, 'Add', "Added custom field \"{$field->label}\" to vehicle type {$category->category_name}", $field->field_id);
+        $this->log($request, 'Add', "Added custom field \"{$field->label}\" to vehicle category {$category->category_name}", $field->field_id);
 
         return response()->json($field, 201);
     }
@@ -60,7 +60,7 @@ class VehicleTypeFieldController extends Controller
         unset($data['field_type']);
 
         $field->update($data);
-        $this->log($request, 'Edit', "Updated custom field \"{$field->label}\" on vehicle type {$field->category->category_name}", $field->field_id);
+        $this->log($request, 'Edit', "Updated custom field \"{$field->label}\" on vehicle category {$field->category->category_name}", $field->field_id);
 
         return $field->fresh();
     }

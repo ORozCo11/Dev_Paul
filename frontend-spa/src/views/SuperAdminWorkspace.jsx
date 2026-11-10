@@ -15,7 +15,7 @@ import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import { AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge, SuccessCelebration } from '../components/SuperAdminUI';
 import { geoJsonToPolygons } from '../utils/boundary';
-import { ActivityLogTab, PendingApprovalsTab, PlatformOverview, RegistrationCodesTab, UsersTab } from './SuperAdminPanels';
+import { ActivityLogTab, CreateAdminDrawer, CredentialsDialog, PlatformOverview, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
 import SupportCenterTab from './SupportCenterTab';
 
@@ -28,17 +28,14 @@ import SupportCenterTab from './SupportCenterTab';
 
 // Flat platform navigation preserves the existing module keys.
 const TABS = [
-  ['dashboard', 'Dashboard'], ['barangays', 'Barangay Management'], ['pending', 'Pending Approvals'],
-  ['users', 'Users'], ['codes', 'Registration Codes'], ['activity', 'Activity Log'],
-  ['support', 'Support Center'],
+  ['dashboard', 'Dashboard'], ['barangays', 'Barangay Management'], ['users', 'Users'],
+  ['activity', 'Activity Log'], ['support', 'Support Center'],
 ];
 
 const TAB_DESCRIPTIONS = {
   dashboard: 'Manage barangays, user accounts, and platform administration.',
-  barangays: 'Manage registered barangays and their platform configuration.',
-  pending: 'Review account requests and keep every barangay properly staffed.',
+  barangays: 'Manage registered barangays, create their Administrators, and review boundaries.',
   users: 'Manage platform users, roles, and account availability by location.',
-  codes: 'View and regenerate staff registration codes for registered barangays.',
   activity: 'A chronological record of platform and Super Admin activity.',
   settings: 'Manage your Super Admin account settings and security.',
   support: 'Review and manage concerns submitted through the public Support Center.',
@@ -58,9 +55,7 @@ function UsersIcon() {
 const TAB_ICONS = {
   barangays: <Icon name="pin" size={18} className="nav-icon" />,
   dashboard: <Icon name="grid" size={18} className="nav-icon" />,
-  pending: <Icon name="clipboard" size={18} className="nav-icon" />,
   users: <UsersIcon />,
-  codes: <Icon name="key" size={18} className="nav-icon" />,
   activity: <Icon name="clipboard" size={18} className="nav-icon" />,
   settings: <Icon name="key" size={18} className="nav-icon" />,
   support: <Icon name="mail" size={18} className="nav-icon" />,
@@ -101,7 +96,9 @@ function ProfileMenu({ user, open, setOpen, onOpenSettings, onLogout }) {
   );
 }
 
-function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, showAddForm, onCloseAdd, onRegistrationCode, onRequestConfirmation }) {
+const apiError = (error, fallback) => { const data = error.response?.data; return (data?.errors && Object.values(data.errors)[0]?.[0]) || data?.message || fallback; };
+
+function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, showAddForm, onCloseAdd, onCreateAdmin, onRequestConfirmation }) {
   const [activeFilter, setActiveFilter] = useState(initialFilter || 'all');
   const [search, setSearch] = useState('');
   const [provinceFilter, setProvinceFilter] = useState('');
@@ -113,6 +110,7 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const setManagingId = (id) => navigate(id == null ? '/superadmin/barangays' : `/superadmin/barangays/${id}`);
   const [pickedUserId, setPickedUserId] = useState('');
   const [reviewingBoundary, setReviewingBoundary] = useState(null);
+  const [creatingFor, setCreatingFor] = useState(null);
   const orphaned = barangays.filter((b) => !b.has_active_admin);
   const provinceOptions = [...new Set(barangays.map((b) => b.province_name).filter(Boolean))].sort();
   const cities = [...new Set(barangays.filter((b) => !provinceFilter || b.province_name === provinceFilter).map((b) => b.city_name).filter(Boolean))].sort();
@@ -120,13 +118,16 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const filtered = barangays.filter((b) => (activeFilter === 'all' || activeFilter === 'active' && b.has_active_admin || activeFilter === 'orphaned' && !b.has_active_admin || activeFilter === 'boundary_review' && b.boundary_status === 'needs_review') && (!provinceFilter || b.province_name === provinceFilter) && (!cityFilter || b.city_name === cityFilter) && (!boundaryFilter || boundaryStatus(b) === boundaryFilter) && [b.name, b.city_name, b.province_name].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const managing = barangays.find((b) => String(b.id) === managingId);
   const candidates = managing ? users.filter((account) => account.barangay_id === managing.id) : [];
-  const waitingAdmins = candidates.filter((account) => account.awaiting_staff_code);
+  const adminBarangayIds = new Set(users.filter((account) => account.role === 'Admin').map((account) => account.barangay_id));
+  const activeCandidates = candidates.filter((account) => account.is_active);
+  const needsAdmin = (b) => !b.has_active_admin && !adminBarangayIds.has(b.id);
   const columns = [
+    { label: 'ID', key: 'id', className: 'cell-center' },
     { label: 'Barangay', render: (b) => <strong>{b.name}</strong> },
     { label: 'City / Province', render: (b) => <div className="sa-stacked"><strong>{b.city_name || 'Not specified'}</strong><span>{b.province_name || 'Not specified'}</span></div> },
     { label: 'Staff Count', key: 'staff_count' },
     { label: 'Administrator Status', render: (b) => <div className="sa-stacked"><StatusBadge value={b.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></div> },
-    { label: 'Actions', render: (b) => <button type="button" className="ghost-button" onClick={() => { setManagingId(b.id); setPickedUserId(''); }}>View / Manage</button> },
+    { label: 'Actions', render: (b) => <div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => { setManagingId(b.id); setPickedUserId(''); }}>View / Manage</button>{needsAdmin(b) && <button type="button" className="ghost-button sa-icon-button sa-icon-confirm" aria-label={`Create Admin for ${b.name}`} title="Create Admin" onClick={() => setCreatingFor(b)}><Icon name="plus" size={17} /></button>}</div> },
   ];
   return <div className="superadmin-tab">
     {showAddForm && <AddBarangayForm existingBarangayIds={barangays.map((b) => String(b.id))} onAdded={(created) => { onAddedBarangay(created); onCloseAdd(); }} onCancel={onCloseAdd} />}
@@ -139,12 +140,13 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
     {managing && <section className="sa-management-card sa-barangay-page">
       <header className="sa-barangay-page-header"><button type="button" className="ghost-button" onClick={() => setManagingId(null)}><Icon name="arrowLeft" size={15} />Back to Barangays</button><h2>{managing.name}</h2><p>{[managing.city_name, managing.province_name].filter(Boolean).join(', ')}</p></header>
       <div className="sa-barangay-page-grid">
-      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd>{waitingAdmins.length > 0 && <><dt>Admin awaiting code</dt><dd className="sa-waiting-admin">{waitingAdmins.map((account) => <span key={account.id}><button type="button" className="sa-text-button" onClick={() => navigate(`/superadmin/users?user=${account.id}`)}>{account.name}</button> <StatusBadge value={!account.approved_at ? 'Pending Approval' : account.staff_code_sent_at ? 'Code Sent' : 'Awaiting Code'} /></span>)}</dd></>}<dt>Registration code</dt><dd>{managing.has_registration_code ? 'On file' : 'Not generated yet'}</dd></dl>
-      <section className="sa-detail-section"><h3>Registration code</h3><p>View or regenerate this barangay's staff registration code.</p><button type="button" className="ghost-button" onClick={() => onRegistrationCode(managing)}><Icon name="key" size={15} />Manage Registration Code</button></section>
-      <section className="sa-detail-section sa-barangay-users"><h3>Users in this barangay</h3>{!candidates.length ? <p>No registered users yet.</p> : <ul className="sa-barangay-user-list">{candidates.map((account) => <li key={account.id}><div><strong>{account.name}</strong><span>{account.role}</span></div><StatusBadge value={account.is_active ? 'Active' : account.awaiting_staff_code ? (!account.approved_at ? 'Pending Approval' : account.staff_code_sent_at ? 'Code Sent' : 'Awaiting Code') : 'Inactive'} /></li>)}</ul>}</section>
-      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!candidates.length ? <p>No registered staff are available to promote. Share this barangay's registration code to begin onboarding.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities. An inactive account will also be approved and activated.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{candidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}{account.is_active ? '' : ' (inactive)'}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = candidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}${target.is_active ? '' : ' and activate their account'}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
+      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd></dl>
+      {needsAdmin(managing) && <section className="sa-detail-section"><h3>Create Admin</h3><p>This barangay has no Administrator yet. Create the one Admin who will manage its Custodian and Maintenance accounts. A temporary password is emailed to them.</p><button type="button" className="primary-button" onClick={() => setCreatingFor(managing)}><Icon name="plus" size={15} />Create Admin</button></section>}
+      <section className="sa-detail-section sa-barangay-users"><h3>Users in this barangay</h3>{!candidates.length ? <p>No users yet.</p> : <ul className="sa-barangay-user-list">{candidates.map((account) => <li key={account.id}><div><strong>{account.name}</strong><span>{account.role}</span></div><StatusBadge value={account.is_active ? 'Active' : 'Inactive'} /></li>)}</ul>}</section>
+      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!activeCandidates.length ? <p>No active staff are available to promote.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{activeCandidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = activeCandidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
       </div>
     </section>}
+    {creatingFor && <CreateAdminDrawer barangay={creatingFor} onClose={() => setCreatingFor(null)} onSubmit={async (b, form) => { const failure = await onCreateAdmin(b, form); if (!failure) setCreatingFor(null); return failure; }} />}
     {reviewingBoundary && <BoundaryReviewModal onSaved={onBoundarySaved} barangay={reviewingBoundary} onClose={() => setReviewingBoundary(null)} onConfirm={async () => { if (await onConfirmBoundary(reviewingBoundary)) setReviewingBoundary(null); }} onDiscard={async () => { if (await onDiscardBoundary(reviewingBoundary)) setReviewingBoundary(null); }} />}
   </div>;
 }
@@ -206,7 +208,7 @@ function AddBarangayForm({ existingBarangayIds, onAdded, onCancel }) {
       const res = await api.post('/superadmin/barangays', { city_id: cityId, barangay_id: barangayId });
       onAdded(res.data);
     } catch (err) {
-      setError(err.response?.data?.message ?? 'Something went wrong — please try again.');
+      setError(apiError(err, 'Could not add this barangay. Check the selection and try again.'));
     } finally {
       setSaving(false);
     }
@@ -216,7 +218,7 @@ function AddBarangayForm({ existingBarangayIds, onAdded, onCancel }) {
     <form className="location-form-panel superadmin-panel-spaced" onSubmit={submit}>
       <h3>Add Barangay</h3>
       <p className="muted superadmin-muted-block">
-        Adds the barangay to platform management. Staff registration codes are managed independently of map boundary review. Issuing a code does not verify a boundary or approve an applicant.
+        Adds the barangay to platform management. After adding it, create its Administrator from the barangay's row or detail page.
       </p>
       {error && <p className="muted" style={{ color: '#dc2626' }}>{error}</p>}
       {[provinceLookup, cityLookup, barangayLookup].filter((lookup) => lookup.error).map((lookup) => <p key={lookup.error} className="notice error" role="alert">{lookup.error} <button type="button" className="ghost-button" onClick={lookup.retry}>Retry lookup</button></p>)}
@@ -321,9 +323,9 @@ export default function SuperAdminWorkspace() {
     && (!location.pathname.split('/')[3] || activeTab === 'barangays' && /^\d+$/.test(location.pathname.split('/')[3]))
     && !location.pathname.split('/').slice(4).some(Boolean);
   const [barangayFilter, setBarangayFilter] = useState('all');
-  const [codeBarangay, setCodeBarangay] = useState(null);
+  const [credentials, setCredentials] = useState(null);
   const [showAddBarangay, setShowAddBarangay] = useState(false);
-  const navigateTab = (tab, filter) => { navigate(`/superadmin/${tab}`); setMobileNavOpen(false); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); if (tab === 'codes') setCodeBarangay(null); window.scrollTo({ top: 0, behavior: 'instant' }); };
+  const navigateTab = (tab, filter) => { navigate(`/superadmin/${tab}`); setMobileNavOpen(false); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); window.scrollTo({ top: 0, behavior: 'instant' }); };
   // Always starts expanded — a collapsed sidebar should only ever be a
   // deliberate, in-session choice (the toggle button), never the default a
   // returning user lands on.
@@ -357,7 +359,7 @@ export default function SuperAdminWorkspace() {
       await confirmDialog.onConfirm();
       setConfirmDialog(null);
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Something went wrong. Please try again.' });
+      setNotice({ type: 'error', text: apiError(error, 'That action could not be completed. Please try again.') });
     } finally {
       setConfirmBusy(false);
     }
@@ -365,13 +367,12 @@ export default function SuperAdminWorkspace() {
 
   const [barangays, setBarangays] = useState([]);
   const [users, setUsers] = useState([]);
-  const [pendingApprovals, setPendingApprovals] = useState([]);
   // Open concern reports, for the Support Center badge in the sidebar.
   const [openConcerns, setOpenConcerns] = useState(0);
-  const [resourceLoading, setResourceLoading] = useState({ barangays: true, users: true, pending: true });
+  const [resourceLoading, setResourceLoading] = useState({ barangays: true, users: true });
   const [resourceErrors, setResourceErrors] = useState({});
   const loadVersion = useRef(0);
-  const requiredResources = { dashboard: ['barangays', 'pending'], barangays: ['barangays', 'users'], pending: ['pending', 'barangays'], users: ['users'], codes: ['barangays'] };
+  const requiredResources = { dashboard: ['barangays'], barangays: ['barangays', 'users'], users: ['users'] };
   const loading = (requiredResources[activeTab] ?? []).some((key) => resourceLoading[key]);
   const loadError = (requiredResources[activeTab] ?? []).some((key) => resourceErrors[key]);
 
@@ -391,7 +392,6 @@ export default function SuperAdminWorkspace() {
     const resources = [
       ['barangays', '/superadmin/barangays', setBarangays],
       ['users', '/superadmin/users', setUsers],
-      ['pending', '/superadmin/pending-approvals', setPendingApprovals],
       ['concerns', '/superadmin/concern-reports', (rows) => setOpenConcerns(rows.filter((report) => !report.deleted_at && report.status === 'Open').length)],
     ];
     await Promise.allSettled(resources.map(async ([key, path, update]) => {
@@ -407,8 +407,6 @@ export default function SuperAdminWorkspace() {
       }
     }));
   }, []);
-
-  const refreshInBackground = useCallback(() => loadAll({ background: true }), [loadAll]);
 
   useEffect(() => {
     // loadAll awaits the API batch before updating React state.
@@ -433,7 +431,7 @@ export default function SuperAdminWorkspace() {
   }, []);
 
   // Computed once here and handed to both DashboardTab and UsersTab so the
-  // "Total Users"/"Pending Registrations" counts on the dashboard can never
+  // "Total Users" counts on the dashboard can never
   // drift from the "All Users" tab's own count badge — both read the same
   // Super-Admin-excluded list instead of each filtering independently.
   const visibleUsers = useMemo(() => users.filter((u) => u.role !== 'Super Admin'), [users]);
@@ -442,14 +440,11 @@ export default function SuperAdminWorkspace() {
     if (!target) return;
     try {
       await api.put(`/superadmin/users/${target.id}/role`, { role: 'Admin', preserve_roles: true });
-      if (!target.is_active || !target.approved_at) {
-        await api.put(`/superadmin/users/${target.id}/activate`);
-      }
       setNotice({ type: 'success', text: `${target.name} is now this barangay's Admin.` });
       await loadAll();
       return true;
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not promote this user.' });
+      setNotice({ type: 'error', text: apiError(error, 'Could not promote this user. Refresh the page and try again.') });
       return false;
     }
   };
@@ -472,7 +467,7 @@ export default function SuperAdminWorkspace() {
       await loadAll();
       return true;
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not confirm that boundary.' });
+      setNotice({ type: 'error', text: apiError(error, 'Could not confirm that boundary. Refresh the page and try again.') });
       return false;
     }
   };
@@ -484,7 +479,7 @@ export default function SuperAdminWorkspace() {
       await loadAll();
       return true;
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not discard that candidate boundary.' });
+      setNotice({ type: 'error', text: apiError(error, 'Could not discard that candidate boundary. Refresh the page and try again.') });
       return false;
     }
   };
@@ -497,55 +492,43 @@ export default function SuperAdminWorkspace() {
       await loadAll();
       return true;
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not change that role.' });
+      setNotice({ type: 'error', text: apiError(error, 'Could not change that role. Check the Administrator rules for this barangay and try again.') });
       return false;
     }
   };
 
   const toggleActive = async (targetUser) => {
     try {
-      await api.put(`/superadmin/users/${targetUser.id}/${targetUser.is_active ? 'deactivate' : 'activate'}`);
-      setNotice({ type: 'success', text: `${targetUser.name} is now ${targetUser.is_active ? 'inactive' : 'active'}.` });
+      await api.put(`/superadmin/users/${targetUser.id}/deactivate`);
+      setNotice({ type: 'success', text: `${targetUser.name} is now inactive.` });
       await loadAll();
       return true;
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not update that account.' });
+      setNotice({ type: 'error', text: apiError(error, 'Could not deactivate that account. Refresh the page and try again.') });
       return false;
     }
   };
 
-  const approvePending = async (approval) => {
+  const showCredentials = (data, title, lead) => setCredentials({ title, lead, email: data.email, temporary_password: data.temporary_password, email_sent: data.email_sent });
+
+  // Resolves to an error string (shown in the form) or undefined on success.
+  const createAdmin = async (barangay, form) => {
     try {
-      const { data } = await api.put(`/superadmin/users/${approval.id}/activate`);
-      setCelebration({ title: 'Approved', detail: data.message });
+      const { data } = await api.post(`/superadmin/barangays/${barangay.id}/admin`, form);
+      showCredentials({ ...data, email: data.email ?? form.email }, 'Admin created', 'Admin created.');
       await loadAll();
-      return true;
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not approve this account.' });
-      return false;
+      return apiError(error, 'Could not create the Admin. Check the email address and try again.');
     }
   };
 
-  const rejectPending = async (approval) => {
+  const resendCredentials = async (target) => {
     try {
-      await api.delete(`/superadmin/users/${approval.id}/reject`);
-      setNotice({ type: 'success', text: `${approval.name}'s registration was rejected.` });
-      await loadAll();
+      const { data } = await api.post(`/superadmin/users/${target.id}/resend-credentials`);
+      showCredentials({ ...data, email: data.email ?? target.email }, 'Credentials resent', 'New temporary password issued.');
       return true;
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not reject this account.' });
-      return false;
-    }
-  };
-
-  const sendStaffCode = async (target) => {
-    try {
-      const { data } = await api.post(`/superadmin/users/${target.id}/send-staff-code`);
-      setCelebration({ title: 'Email Sent', detail: data.message });
-      await loadAll();
-      return true;
-    } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not send the registration code.' });
+      setNotice({ type: 'error', text: apiError(error, `Could not resend credentials to ${target.name}. Try again.`) });
       return false;
     }
   };
@@ -556,7 +539,7 @@ export default function SuperAdminWorkspace() {
       setCelebration({ title: 'Email Sent', detail: data.message });
       return true;
     } catch (error) {
-      setNotice({ type: 'error', text: error.response?.data?.message ?? 'Could not send that email.' });
+      setNotice({ type: 'error', text: apiError(error, 'Could not send that email. Check the subject and message and try again.') });
       return false;
     }
   };
@@ -610,7 +593,7 @@ export default function SuperAdminWorkspace() {
         <aside className={`sidebar${isSidebarCollapsed ? ' collapsed' : ''}`} id="superadmin-sidebar">
           <nav className="module-nav" aria-label="Super Admin modules">
             {TABS.map(([key, label]) => <button key={key} type="button" aria-label={label} aria-current={key === activeTab ? 'page' : undefined} className={key === activeTab ? 'active' : ''} onClick={() => navigateTab(key)} title={label}>
-              {TAB_ICONS[key]}<span>{label}</span>{key === 'pending' && pendingApprovals.length > 0 && <span className="module-nav-badge">{pendingApprovals.length}</span>}{key === 'support' && openConcerns > 0 && <span className="module-nav-badge" aria-label={`${openConcerns} open concerns`}>{openConcerns > 99 ? '99+' : openConcerns}</span>}
+              {TAB_ICONS[key]}<span>{label}</span>{key === 'support' && openConcerns > 0 && <span className="module-nav-badge" aria-label={`${openConcerns} open concerns`}>{openConcerns > 99 ? '99+' : openConcerns}</span>}
             </button>)}
 
           </nav>
@@ -646,7 +629,7 @@ export default function SuperAdminWorkspace() {
             ) : loadError ? (
               <div className="sa-management-card"><p className="sa-load-error" role="alert">Data for this page could not be loaded. <button type="button" className="ghost-button" onClick={() => loadAll()}>Retry</button></p></div>
             ) : activeTab === 'dashboard' ? (
-              <PlatformOverview barangays={barangays} approvals={pendingApprovals} onNavigate={navigateTab} />
+              <PlatformOverview barangays={barangays} onNavigate={navigateTab} />
             ) : activeTab === 'barangays' ? (
               <BarangayManagementTab
                 onBoundarySaved={() => loadAll()}
@@ -654,7 +637,7 @@ export default function SuperAdminWorkspace() {
                 initialFilter={barangayFilter}
                 showAddForm={showAddBarangay}
                 onCloseAdd={() => setShowAddBarangay(false)}
-                onRegistrationCode={(barangay) => { navigateTab('codes'); setCodeBarangay(barangay); }}
+                onCreateAdmin={createAdmin}
                 onRequestConfirmation={setConfirmDialog}
                 barangays={barangays}
                 users={visibleUsers}
@@ -663,18 +646,8 @@ export default function SuperAdminWorkspace() {
                 onConfirmBoundary={confirmBoundary}
                 onDiscardBoundary={discardBoundary}
               />
-            ) : activeTab === 'pending' ? (
-              <PendingApprovalsTab
-                approvals={pendingApprovals}
-                barangays={barangays}
-                onApprove={approvePending}
-                onReject={rejectPending}
-                onRequestConfirmation={setConfirmDialog}
-              />
             ) : activeTab === 'users' ? (
-              <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onApprove={approvePending} onReject={rejectPending} onSendStaffCode={sendStaffCode} onSendEmail={sendEmail} onRequestConfirmation={setConfirmDialog} />
-            ) : activeTab === 'codes' ? (
-              <RegistrationCodesTab key={codeBarangay?.id ?? 'codes'} barangays={barangays} initialBarangay={codeBarangay} onRequestConfirmation={setConfirmDialog} setNotice={setNotice} onChanged={refreshInBackground} />
+              <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onResend={resendCredentials} onSendEmail={sendEmail} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
             ) : activeTab === 'support' ? (
@@ -687,6 +660,7 @@ export default function SuperAdminWorkspace() {
       </main>
 
       <WorkspaceFooter />
+      {credentials && <CredentialsDialog result={credentials} onClose={() => setCredentials(null)} />}
       <SuccessCelebration celebration={celebration} onDone={endCelebration} />
       <AdminConfirmDialog
         busy={confirmBusy}

@@ -59,17 +59,14 @@ class ImpersonationTest extends TestCase
     }
 
     #[Test]
-    public function super_admin_can_impersonate_staff_but_not_another_super_admin(): void
+    public function the_real_super_admin_cannot_impersonate_anyone(): void
     {
         $super = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
-        $other = User::factory()->create(['role' => 'Super Admin', 'roles' => ['Super Admin']]);
         $target = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian']]);
-        $this->assertContains('impersonation.start', $super->getAbilities());
+        $this->assertNotContains('impersonation.start', $super->getAbilities());
         Sanctum::actingAs($super, $super->allRoles());
-        $this->getJson('/api/impersonate/candidates')->assertOk()
-            ->assertJsonFragment(['id' => $target->id])->assertJsonMissing(['id' => $other->id]);
-        $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Investigate reported account issue'])->assertOk();
-        $this->postJson("/api/impersonate/{$other->id}", ['reason' => 'Attempt elevated access'])->assertForbidden();
+        $this->getJson('/api/impersonate/candidates')->assertForbidden();
+        $this->postJson("/api/impersonate/{$target->id}", ['reason' => 'Investigate reported account issue'])->assertForbidden();
     }
 
     #[Test]

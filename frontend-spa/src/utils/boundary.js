@@ -41,7 +41,9 @@ export function isPointWithinBoundaryPolygons(point, polygons) {
 
 export function isLocationPointAllowed(point, polygons, verified) {
   if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng) || Math.abs(point.lat) > 90 || Math.abs(point.lng) > 180) return false;
-  return !verified || isPointWithinBoundaryPolygons(point, polygons);
+  // Whenever the barangay has an outline, a pin must be inside it, reviewed or not.
+  if (polygons?.length) return isPointWithinBoundaryPolygons(point, polygons);
+  return !verified;
 }
 
 // Place a reference label inside the largest polygon, avoiding holes and

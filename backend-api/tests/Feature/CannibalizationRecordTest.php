@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\ActivityLog;
 use App\Models\CannibalizationRecord;
+use App\Models\MaintenanceTicket;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Models\VehicleCategory;
@@ -14,114 +15,213 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Cannibalization is a direct record, with no approval step: an authorized
- * user saves it and it is final, attributed to them, listed in the history of
- * both vehicles, with every part and quantity preserved.
+ * Cannibalization is a direct log with no approval step and no inventory: an authorized user
+ * records which part came off which vehicle (active or retired), how many, and the repair ticket it
+ * went into. For an active donor the person says whether it can still respond without the part;
+ * only a part it cannot respond without holds the vehicle back from being ready.
  */
 class CannibalizationRecordTest extends TestCase
 {
     use RefreshDatabase;
 
-    private Vehicle $source;
-    private Vehicle $dest;
+    private Vehicle $donor;
+    private Vehicle $repaired;
+    private User $admin;
+    private User $custodian;
+    private User $mechanic;
+    private int $ticketId;
 
     protected function setUp(): void
     {
         parent::setUp();
+        $this->admin = User::factory()->create(['role' => 'Admin']);
+        $this->custodian = User::factory()->create(['role' => 'Custodian']);
+        $this->mechanic = User::factory()->create(['role' => 'Maintenance Personnel']);
         $category = VehicleCategory::create(['category_name' => 'Fire Truck', 'description' => 'test']);
         $make = fn ($name, $plate) => Vehicle::create([
             'vehicle_name' => $name, 'plate_number' => $plate, 'category_id' => $category->category_id,
             'brand' => 'Isuzu', 'model' => 'FTR', 'year_model' => 2019, 'capacity' => '5000 L', 'vehicle_color' => 'Red', 'current_location' => 'Depot',
         ]);
-        $this->source = $make('Old Pumper', 'OLD 1001');
-        $this->dest = $make('Active Pumper', 'ACT 2002');
+        $this->donor = $make('Old Pumper', 'OLD 1001');
+        $this->repaired = $make('Active Pumper', 'ACT 2002');
+
+        // An open (Active) repair ticket on the vehicle that receives the parts.
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->ticketId = $this->postJson('/api/tickets/propose', [
+            'vehicle_id' => $this->repaired->vehicle_id, 'ticket_description' => 'Radiator leak', 'priority' => 'High',
+            'entry_mode' => 'in_house', 'sub_issues' => [['title' => 'Radiator']],
+        ])->assertCreated()->json('ticket_id');
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/tickets/{$this->ticketId}/approve", ['assigned_mechanic_id' => $this->mechanic->id])->assertOk();
     }
 
     private function payload(array $over = []): array
     {
         return array_merge([
-            'source_vehicle_id' => $this->source->vehicle_id,
-            'source_reason' => 'Unit is awaiting disposal; salvaging working parts.',
-            'destination_type' => 'vehicle',
-            'destination_vehicle_id' => $this->dest->vehicle_id,
-            'reason' => 'Active Pumper needs a radiator and two hoses now.',
-            'removed_at' => now()->subHour()->toDateTimeString(),
-            'received_by_name' => 'Jake Engana',
-            'transferred_at' => now()->toDateTimeString(),
+            'donor_type' => 'active',
+            'source_vehicle_id' => $this->donor->vehicle_id,
+            'ticket_id' => $this->ticketId,
             'parts' => [
-                ['part_name' => 'Radiator', 'quantity' => 1, 'unit' => 'pc', 'part_condition' => 'Good'],
-                ['part_name' => 'Hose', 'part_number' => 'H-22', 'quantity' => 2, 'unit' => 'pc'],
+                ['part_name' => 'Radiator', 'quantity' => 1, 'blocks_readiness' => true],
+                ['part_name' => 'Side mirror', 'quantity' => 2, 'blocks_readiness' => false],
             ],
         ], $over);
     }
 
-    #[Test]
-    public function an_authorized_user_records_a_transfer_directly_with_no_approval_step(): void
+    private function vehicleRow(Vehicle $vehicle): array
     {
-        $user = User::factory()->create(['role' => 'Maintenance Personnel']);
-        Sanctum::actingAs($user, ['*']);
+        return collect($this->getJson('/api/vehicles')->assertOk()->json())->firstWhere('vehicle_id', $vehicle->vehicle_id);
+    }
+
+    #[Test]
+    public function an_authorized_user_logs_parts_directly_with_no_approval_step(): void
+    {
+        Sanctum::actingAs($this->mechanic, ['*']);
 
         $res = $this->postJson('/api/cannibalizations', $this->payload())->assertCreated();
-        $res->assertJsonPath('record_number', 'CAN-0001')->assertJsonCount(2, 'parts');
-        $this->assertSame($user->id, $res->json('recorded_by.id'), 'the recorder is the signed-in user');
-        $this->assertSame($user->name, $res->json('performed_by_name'));
+        $res->assertJsonPath('record_number', 'CAN-0001')->assertJsonPath('donor_type', 'active')->assertJsonCount(2, 'parts');
+        $this->assertSame($this->mechanic->id, $res->json('recorded_by.id'), 'the recorder is the signed-in user');
         $this->assertArrayNotHasKey('status', $res->json(), 'there is no lifecycle/approval status');
 
         $record = CannibalizationRecord::with('parts')->first();
+        $this->assertSame($this->ticketId, (int) $record->ticket_id);
+        $this->assertSame($this->repaired->vehicle_id, (int) $record->destination_vehicle_id);
         $this->assertSame([1, 2], $record->parts->pluck('quantity')->all());
-        $this->assertSame('Needs Inspection', $this->source->fresh()->condition);
+        $this->assertSame([true, false], $record->parts->pluck('blocks_readiness')->all());
+        // Readiness comes from the missing parts only; the donor's condition is not changed.
+        $this->assertSame('Good', $this->donor->fresh()->condition);
     }
 
     #[Test]
     public function the_record_appears_in_both_vehicles_history_and_the_activity_log(): void
     {
-        Sanctum::actingAs(User::factory()->create(['role' => 'Admin']), ['*']);
+        Sanctum::actingAs($this->admin, ['*']);
         $id = $this->postJson('/api/cannibalizations', $this->payload())->assertCreated()->json('cannibalization_id');
 
-        $this->assertDatabaseHas('vehicle_histories', ['vehicle_id' => $this->source->vehicle_id, 'activity_type' => 'Parts Removed', 'related_record_id' => (string) $id]);
-        $this->assertDatabaseHas('vehicle_histories', ['vehicle_id' => $this->dest->vehicle_id, 'activity_type' => 'Parts Received', 'related_record_id' => (string) $id]);
+        $this->assertDatabaseHas('vehicle_histories', ['vehicle_id' => $this->donor->vehicle_id, 'activity_type' => 'Parts Removed', 'related_record_id' => (string) $id]);
+        $this->assertDatabaseHas('vehicle_histories', ['vehicle_id' => $this->repaired->vehicle_id, 'activity_type' => 'Parts Received', 'related_record_id' => (string) $id]);
         $this->assertTrue(ActivityLog::where('action', 'Cannibalization Recorded')->exists());
-        $this->assertStringContainsString('2 × Hose', VehicleHistory::where('vehicle_id', $this->source->vehicle_id)->first()->description);
+        $this->assertStringContainsString('2 × Side mirror', VehicleHistory::where('vehicle_id', $this->donor->vehicle_id)->first()->description);
     }
 
     #[Test]
-    public function storage_is_a_valid_destination_and_needs_a_location(): void
+    public function only_a_part_the_vehicle_cannot_respond_without_makes_it_not_ready(): void
     {
-        Sanctum::actingAs(User::factory()->create(['role' => 'Custodian']), ['*']);
-        $base = $this->payload(['destination_type' => 'storage', 'destination_vehicle_id' => null, 'storage_location' => null]);
-        $this->postJson('/api/cannibalizations', $base)->assertUnprocessable();
-        $this->postJson('/api/cannibalizations', array_merge($base, ['storage_location' => 'Parts room, Brgy Hall']))->assertCreated();
-        $this->assertDatabaseMissing('vehicle_histories', ['activity_type' => 'Parts Received']);
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => 'Side mirror', 'quantity' => 2, 'blocks_readiness' => false]]]))->assertCreated();
+
+        // A minor part: still able to confirm readiness, and the reason does not name it.
+        $row = $this->vehicleRow($this->donor);
+        $this->assertSame(['Side mirror'], $row['minor_missing_parts']);
+        $this->assertEmpty($row['missing_parts']);
+        $this->assertStringNotContainsString('Missing part', (string) $row['not_ready_reason']);
+        $this->assertNull($row['readiness_block_reason']);
+        // the confirm screen gets the same list as a note
+        $this->getJson("/api/vehicles/{$this->donor->vehicle_id}/readiness")->assertOk()->assertJsonPath('minor_missing_parts', ['Side mirror']);
+        $this->postJson("/api/vehicles/{$this->donor->vehicle_id}/readiness-check", ['confirmed' => true, 'all_passed' => true])->assertSuccessful();
+
+        // A part it cannot respond without: Not Ready, and readiness cannot be confirmed.
+        $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => 'Transmission', 'quantity' => 1, 'blocks_readiness' => true]]]))->assertCreated();
+        $row = $this->vehicleRow($this->donor);
+        $this->assertSame('not_ready', $row['readiness_state']);
+        $this->assertSame('Missing part: Transmission', $row['not_ready_reason']);
+        $this->assertStringContainsString('Transmission', $row['readiness_block_reason']);
+        $this->postJson("/api/vehicles/{$this->donor->vehicle_id}/readiness-check", ['confirmed' => true, 'all_passed' => true])->assertUnprocessable();
     }
 
     #[Test]
-    public function invalid_records_are_refused(): void
+    public function the_same_part_cannot_be_logged_again_until_it_is_put_back(): void
     {
-        Sanctum::actingAs(User::factory()->create(['role' => 'Admin']), ['*']);
+        Sanctum::actingAs($this->custodian, ['*']);
+        $partId = $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => 'Transmission', 'quantity' => 1]]]))
+            ->assertCreated()->json('parts.0.part_id');
 
-        // same vehicle as source and destination
-        $this->postJson('/api/cannibalizations', $this->payload(['destination_vehicle_id' => $this->source->vehicle_id]))->assertUnprocessable();
+        // any capitalisation or spacing is the same part
+        $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => '  transmission ', 'quantity' => 1]]]))
+            ->assertUnprocessable()->assertJsonFragment(['message' => 'transmission is already logged as removed from Old Pumper and has not been put back.']);
+        // the same part twice in one request
+        $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => 'Hose', 'quantity' => 1], ['part_name' => 'HOSE', 'quantity' => 1]]]))
+            ->assertUnprocessable();
+        $this->assertSame(1, CannibalizationRecord::count());
+
+        $this->putJson("/api/cannibalization-parts/{$partId}/restore")->assertOk();
+        $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => 'Transmission', 'quantity' => 1]]]))->assertCreated();
+    }
+
+    #[Test]
+    public function donor_type_must_match_the_vehicle_and_a_retired_donor_never_holds_anything_up(): void
+    {
+        Sanctum::actingAs($this->custodian, ['*']);
+        // an in-service vehicle cannot be logged as retired, and a retired one not as active
+        $this->postJson('/api/cannibalizations', $this->payload(['donor_type' => 'retired']))->assertUnprocessable();
+        $this->donor->update(['status' => 'Decommissioned']);
+        $this->postJson('/api/cannibalizations', $this->payload())->assertUnprocessable();
+
+        $res = $this->postJson('/api/cannibalizations', $this->payload(['donor_type' => 'retired', 'parts' => [['part_name' => 'Radiator', 'quantity' => 1, 'blocks_readiness' => true]]]))->assertCreated();
+        $res->assertJsonPath('donor_type', 'retired')->assertJsonPath('parts.0.blocks_readiness', false);
+
+        // nothing to put back on a retired vehicle, and nothing to correct
+        $partId = $res->json('parts.0.part_id');
+        $this->putJson("/api/cannibalization-parts/{$partId}/restore")->assertUnprocessable();
+        $this->putJson("/api/cannibalization-parts/{$partId}/readiness", ['blocks_readiness' => true])->assertUnprocessable();
+        $row = $this->getJson("/api/vehicles/{$this->donor->vehicle_id}/missing-parts")->assertOk()->json();
+        $this->assertFalse($row[0]['can_restore']);
+    }
+
+    #[Test]
+    public function the_ticket_is_required_and_must_be_open_and_the_donor_must_be_a_different_vehicle(): void
+    {
+        Sanctum::actingAs($this->admin, ['*']);
+
+        $this->postJson('/api/cannibalizations', collect($this->payload())->except('ticket_id')->all())->assertUnprocessable();
+        // the donor cannot be the vehicle being repaired
+        $this->postJson('/api/cannibalizations', $this->payload(['source_vehicle_id' => $this->repaired->vehicle_id]))->assertUnprocessable();
         // no parts / bad quantities
         $this->postJson('/api/cannibalizations', $this->payload(['parts' => []]))->assertUnprocessable();
         $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => 'Hose', 'quantity' => 0]]]))->assertUnprocessable();
-        $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => 'Hose', 'quantity' => -3]]]))->assertUnprocessable();
-        // installed before it was removed, or removed in the future
-        $this->postJson('/api/cannibalizations', $this->payload(['transferred_at' => now()->subDay()->toDateTimeString()]))->assertUnprocessable();
+        $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => '', 'quantity' => 1]]]))->assertUnprocessable();
+        // removed in the future
         $this->postJson('/api/cannibalizations', $this->payload(['removed_at' => now()->addDay()->toDateTimeString()]))->assertUnprocessable();
-        // archived destination
-        $this->dest->update(['status' => 'Inactive']);
+        // a closed ticket
+        MaintenanceTicket::whereKey($this->ticketId)->update(['status' => 'Closed']);
         $this->postJson('/api/cannibalizations', $this->payload())->assertUnprocessable();
 
         $this->assertSame(0, CannibalizationRecord::count());
     }
 
     #[Test]
-    public function a_vehicles_condition_is_never_upgraded_and_there_is_no_edit_or_delete(): void
+    public function the_can_it_still_respond_answer_can_be_corrected_by_the_logger_custodian_or_admin(): void
     {
-        $this->source->update(['condition' => 'Needs Repair']);
-        Sanctum::actingAs(User::factory()->create(['role' => 'Admin']), ['*']);
-        $id = $this->postJson('/api/cannibalizations', $this->payload())->assertCreated()->json('cannibalization_id');
-        $this->assertSame('Needs Repair', $this->source->fresh()->condition);
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $partId = $this->postJson('/api/cannibalizations', $this->payload(['parts' => [['part_name' => 'Side mirror', 'quantity' => 1, 'blocks_readiness' => false]]]))
+            ->assertCreated()->json('parts.0.part_id');
+
+        // the mechanic who logged it may correct it
+        $this->putJson("/api/cannibalization-parts/{$partId}/readiness", ['blocks_readiness' => true])->assertOk()->assertJsonPath('blocks_readiness', true);
+        $this->assertSame('not_ready', $this->vehicleRow($this->donor)['readiness_state']);
+
+        // another mechanic may not
+        Sanctum::actingAs(User::factory()->create(['role' => 'Maintenance Personnel']), ['*']);
+        $this->putJson("/api/cannibalization-parts/{$partId}/readiness", ['blocks_readiness' => false])->assertForbidden();
+
+        // the Custodian and the Admin may, and each change is written to the log and the vehicle history
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->putJson("/api/cannibalization-parts/{$partId}/readiness", ['blocks_readiness' => false])->assertOk();
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/cannibalization-parts/{$partId}/readiness", ['blocks_readiness' => true])->assertOk();
+        $this->assertSame(3, ActivityLog::where('action', 'Missing Part Updated')->count());
+        $this->assertSame(3, VehicleHistory::where('vehicle_id', $this->donor->vehicle_id)->where('activity_type', 'Missing Part Updated')->count());
+
+        $this->putJson("/api/cannibalization-parts/{$partId}/readiness", [])->assertUnprocessable();
+    }
+
+    #[Test]
+    public function a_saved_record_has_no_edit_or_delete_and_a_forged_recorder_is_ignored(): void
+    {
+        Sanctum::actingAs($this->custodian, ['*']);
+        $res = $this->postJson('/api/cannibalizations', $this->payload(['recorded_by' => $this->admin->id]))->assertCreated();
+        $this->assertSame($this->custodian->id, $res->json('recorded_by.id'));
+        $id = $res->json('cannibalization_id');
 
         $this->putJson("/api/cannibalizations/{$id}", ['reason' => 'x'])->assertStatus(405);
         $this->deleteJson("/api/cannibalizations/{$id}")->assertStatus(405);
@@ -129,14 +229,8 @@ class CannibalizationRecordTest extends TestCase
     }
 
     #[Test]
-    public function a_forged_recorder_is_ignored_and_super_admin_is_blocked(): void
+    public function super_admin_is_blocked(): void
     {
-        $user = User::factory()->create(['role' => 'Custodian']);
-        $other = User::factory()->create(['role' => 'Admin']);
-        Sanctum::actingAs($user, ['*']);
-        $res = $this->postJson('/api/cannibalizations', $this->payload(['recorded_by' => $other->id]))->assertCreated();
-        $this->assertSame($user->id, $res->json('recorded_by.id'));
-
         Sanctum::actingAs(User::factory()->create(['role' => 'Super Admin']), ['*']);
         $this->getJson('/api/cannibalizations')->assertForbidden();
         $this->postJson('/api/cannibalizations', $this->payload())->assertForbidden();

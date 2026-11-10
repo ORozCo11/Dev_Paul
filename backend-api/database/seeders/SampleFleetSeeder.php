@@ -217,7 +217,7 @@ class SampleFleetSeeder extends Seeder
         ])->save();
         $vehicle->update([
             'status' => $status === 'Pending Approval' ? 'Available' : 'Under Maintenance',
-            'condition' => $status === 'Pending Approval' ? 'Needs Inspection' : 'Needs Repair',
+            'condition' => 'Needs Repair',
             'estimated_return_date' => $status === 'Pending Approval' ? null : now()->addDays(2)->toDateString(),
         ]);
         $this->history($vehicle, 'Issue Reported', $summary, 'vehicle_issue_reports', $issue->issue_report_id, $custodian);

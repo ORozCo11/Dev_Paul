@@ -1,0 +1,160 @@
+/* Condition checks keep the assessment and its optional repair request in one flow. */
+html .condition-check-layout {
+  --condition-border: var(--border-subtle, #dce5f1);
+  --condition-surface: var(--surface, #fff);
+  --condition-muted: var(--text-muted, #64748b);
+  grid-template-columns: 270px minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  min-height: 0;
+}
+
+html .panel:has(> .condition-check-layout) {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+html .condition-check-layout .form-context-side { gap: 18px; }
+html .condition-check-layout .form-context-side > .veh-card {
+  margin: 0;
+  border: 1px solid var(--condition-border);
+  border-radius: 14px;
+  background: var(--condition-surface);
+  box-shadow: 0 3px 12px rgb(15 23 42 / 4%);
+  overflow: hidden;
+}
+html .condition-check-layout .veh-card-head {
+  padding: 15px 18px;
+  background: transparent;
+  border-bottom: 1px solid var(--condition-border);
+}
+html .condition-check-layout .veh-card-head h4 { font-size: .9rem; }
+html .condition-check-layout .form-context-photo { padding: 16px 16px 0; }
+html .condition-check-layout .form-context-photo img {
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border: 0;
+  border-radius: 9px;
+}
+html .condition-check-layout .form-context-side .veh-kv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+  margin: 0;
+  padding: 18px;
+}
+html .condition-check-layout .veh-kv > div { min-width: 0; }
+html .condition-check-layout .veh-kv dt { font-size: .65rem; color: var(--condition-muted); margin-bottom: 5px; }
+html .condition-check-layout .veh-kv dd { margin: 0; font-size: .8rem; overflow-wrap: anywhere; }
+html .condition-check-layout .form-context-map-inline { flex: none; }
+html .condition-check-layout .form-context-map-inline .veh-map-wrap { flex: none; min-height: 0; height: 200px; }
+html .condition-check-layout .form-context-empty { min-height: 250px; flex: none; }
+
+html .condition-check-layout .form-context-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+html .condition-check-layout .form-context-form > .smart-form {
+  padding: 22px;
+  margin: 0;
+  gap: 20px 18px;
+  border: 1px solid var(--condition-border);
+  border-radius: 14px;
+  background: var(--condition-surface);
+  box-shadow: 0 3px 12px rgb(15 23 42 / 4%);
+  box-sizing: border-box;
+}
+html .condition-check-layout .smart-form > h3 {
+  margin: 0 0 2px;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+html .condition-check-layout .smart-form input:not([type="checkbox"]),
+html .condition-check-layout .smart-form select { max-width: none; min-height: 42px; }
+html .condition-check-layout .form-context-form > .smart-form textarea { min-height: 100px; }
+html .condition-check-layout .form-context-form > .smart-form .form-actions {
+  margin-top: 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--condition-border);
+}
+
+html .condition-check-layout .ticket-embedded { min-width: 0; }
+html .condition-check-layout .condition-repair-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 0 2px;
+}
+html .condition-check-layout .condition-repair-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: var(--primary, #2563eb);
+  background: color-mix(in srgb, var(--primary, #2563eb) 10%, var(--condition-surface));
+}
+html .condition-check-layout .condition-repair-heading h3 { margin: 0 0 5px; font-size: 1rem; }
+html .condition-check-layout .condition-repair-heading p { margin: 0; color: var(--condition-muted); font-size: .8rem; line-height: 1.6; }
+
+/* Embedded proposals have no vehicle column: every section uses the available width. */
+html .condition-check-layout .ticket-embedded > .smart-form.ticket-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html .condition-check-layout .ticket-create-form > * { width: 100%; box-sizing: border-box; }
+html .condition-check-layout .ticket-create-form > .ticket-work-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+html .condition-check-layout .ticket-create-form .veh-card { border-radius: 14px; }
+html .condition-check-layout .ticket-create-form .veh-card-head { background: var(--condition-surface); padding: 16px 20px; }
+html .condition-check-layout .ticket-create-form .ticket-method-body,
+html .condition-check-layout .ticket-create-form .ticket-subissue-body,
+html .condition-check-layout .ticket-create-form .ticket-issue-fields,
+html .condition-check-layout .ticket-create-form .ticket-external-fields { padding: 20px; }
+html .condition-check-layout .ticket-create-form .ticket-section-help { margin: 0 0 16px; }
+html .condition-check-layout .ticket-create-form .entry-mode-toggle { max-width: none; gap: 16px; }
+html .condition-check-layout .ticket-create-form .ticket-method-tab { min-height: 48px; font-size: .85rem; }
+html .condition-check-layout .ticket-create-form .subissue-two-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+html .condition-check-layout .ticket-create-form .ticket-issue-fields { grid-template-columns: minmax(0, 1fr) 180px; }
+html .condition-check-layout .ticket-create-form .ticket-priority-field { grid-column: 2; }
+html .condition-check-layout .ticket-create-form .ticket-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin: 0;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--condition-border);
+}
+html .condition-check-layout .ticket-create-actions button { min-height: 44px; }
+
+@media (max-width: 1100px) {
+  html .condition-check-layout { grid-template-columns: 235px minmax(0, 1fr); gap: 18px; }
+  html .condition-check-layout .ticket-create-form .subissue-two-col,
+  html .condition-check-layout .ticket-create-form .ticket-issue-fields { grid-template-columns: minmax(0, 1fr); }
+  html .condition-check-layout .ticket-create-form .ticket-priority-field { grid-column: 1; }
+}
+@media (max-width: 800px) {
+  html .condition-check-layout { grid-template-columns: minmax(0, 1fr); }
+  html .condition-check-layout .form-context-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+}
+@media (max-width: 600px) {
+  html .condition-check-layout .form-context-side { grid-template-columns: minmax(0, 1fr); }
+  html .condition-check-layout .form-context-form > .smart-form { padding: 18px; grid-template-columns: minmax(0, 1fr); }
+  html .condition-check-layout .ticket-create-form .ticket-create-actions { flex-wrap: wrap; }
+  html .condition-check-layout .ticket-create-actions button { flex: 1 1 180px; min-width: 0; }
+}

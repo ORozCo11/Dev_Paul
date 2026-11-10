@@ -127,6 +127,7 @@ export default function SupportCenterTab({ onRequestConfirmation, onSuccess, onO
         emptyMessage={view === 'open' ? 'No open concerns' : 'No concern history yet'}
         emptyDescription={view === 'open' ? 'New reports will appear here when submitted through the Support Center.' : 'Resolved and deleted concerns will appear here.'}
         columns={[
+          { label: 'ID', key: 'id', className: 'cell-center' },
           { label: 'Concern', render: (report) => <><strong>#{report.id} · {typeOf(report)}</strong><div>{location(report) || 'Location not provided'}</div></> },
           { label: 'Reporter', render: (report) => report.reporter_name || 'Anonymous' },
           { label: 'Submitted', render: (report) => formatDate(report.created_at) },

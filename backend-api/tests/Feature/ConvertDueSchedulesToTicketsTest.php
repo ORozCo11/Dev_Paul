@@ -281,7 +281,7 @@ class ConvertDueSchedulesToTicketsTest extends TestCase
         $sub = $ticket->subIssues->first();
 
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['repair_logs' => 'Done.'])->assertOk();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$sub->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Done.'])->assertOk();
         $this->putJson("/api/tickets/{$ticket->ticket_id}/submit-for-verification", [])->assertOk();
 
         Sanctum::actingAs($this->custodian, ['*']);

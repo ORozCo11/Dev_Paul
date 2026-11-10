@@ -69,7 +69,7 @@ class MaintenanceTicket extends Model
         'returned_to_service' => 'boolean',
     ];
 
-    protected $appends = ['progress', 'days_open'];
+    protected $appends = ['progress', 'days_open', 'display_title'];
 
     // -------------------------------------------------------
     // Relationships
@@ -162,6 +162,22 @@ class MaintenanceTicket extends Model
      * signal that answers "how long has this been sitting?". Measured up
      * to now while live, or up to when it ended once Closed/Cancelled.
      */
+    /**
+     * The ticket title without the sub-issue summary it was generated with
+     * ("MT-0002 — BARKO — asda" → "MT-0002 — BARKO"). The stored title keeps
+     * the summary because duplicate/recurrence checks match on it; screens
+     * show this instead since sub-issues are listed on their own.
+     */
+    public function getDisplayTitleAttribute(): ?string
+    {
+        $title = $this->ticket_title;
+        if (is_string($title) && preg_match('/^(MT-\d+ — .+?) — .+$/u', $title, $m)) {
+            return $m[1];
+        }
+
+        return $title;
+    }
+
     public function getDaysOpenAttribute(): ?int
     {
         if (!$this->created_at) {

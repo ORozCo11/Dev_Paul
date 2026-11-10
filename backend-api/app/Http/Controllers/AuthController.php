@@ -7,7 +7,6 @@ use App\Http\Controllers\Concerns\UploadsImages;
 use App\Mail\AccountMail;
 use App\Models\ActivityLog;
 use App\Models\Barangay;
-use App\Models\RegistrationSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -16,205 +15,6 @@ use Illuminate\Validation\Rule;
 class AuthController extends Controller
 {
     use UploadsImages;
-
-    /**
-     * Register against a preloaded PSGC barangay ID. The barangay must belong
-     * to the selected city; free-text barangay creation is not a public flow.
-     * Staff need the barangay's staff code and await Admin approval; a first
-     * Administrator registers without one and activates with the code a
-     * Super Admin emails them (activateWithStaffCode).
-     */
-    public function register(Request $request)
-    {
-        $data = $request->validate([
-            // Letters, spaces, and the punctuation that legitimately shows up
-            // in PH names (hyphenated surnames, "Ñ", apostrophes, "Jr.").
-            'name' => ['required', 'string', 'max:255', 'regex:/^[A-Za-zÀ-ÖØ-öø-ÿ.\'\- ]+$/u'],
-            'email' => ['required', 'email', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            // PH mobile format: 09 + 9 digits = 11 digits total.
-            'phone' => ['required', 'regex:/^09[0-9]{9}$/'],
-            'address' => ['required', 'string', 'max:255'],
-            'city_id' => ['required', 'exists:cities,id', function ($attribute, $value, $fail) use ($request) {
-                if ($request->filled('province_id') && (int) \App\Models\City::find($value)?->province_id !== (int) $request->input('province_id')) {
-                    $fail('Selected city does not belong to the selected province.');
-                }
-            }],
-            'province_id' => ['nullable', 'exists:provinces,id'],
-            'barangay_id' => [
-                'required',
-                Rule::exists('barangays', 'id')->whereNotNull('psgc_code'),
-                function ($attribute, $value, $fail) use ($request) {
-                    if ($value && (int) Barangay::find($value)?->city_id !== (int) $request->input('city_id')) {
-                        $fail('Selected barangay does not belong to the selected city.');
-                    }
-                },
-            ],
-            'barangay_name' => ['prohibited'],
-            // Proof of who is signing up, reviewed by whoever approves the account.
-            'valid_id' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
-            'photo' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-        ], [
-            'valid_id.required' => 'Please upload one valid government-issued ID.',
-            'photo.required' => 'Please upload a clear photo of yourself.',
-            'name.regex' => 'Name may only contain letters.',
-            'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
-        ]);
-
-        $barangayId = $data['barangay_id'] ?? null;
-
-        // Everything from here on runs inside a transaction that locks the
-        // Barangay row: without it, two people registering for the same
-        // brand-new barangay within the same instant could both read "no
-        // admin yet" (a plain SELECT, not itself a lock) and both get
-        // created as that barangay's Admin. lockForUpdate() serializes any
-        // concurrent registration for the SAME barangay behind this one —
-        // registrations for a DIFFERENT barangay lock a different row and
-        // proceed independently.
-        [$user, $isFirstForBarangay] = DB::transaction(function () use ($data, $barangayId, $request) {
-            $barangay = Barangay::where('id', $barangayId)->lockForUpdate()->firstOrFail();
-            app(\App\Services\BarangayGeography::class)->attachBoundary($barangay);
-
-            // Deliberately unscoped (User carries no global scope) and looks
-            // across every barangay — this is the one place that's supposed to.
-            $isFirstForBarangay = !User::where('barangay_id', $barangayId)->exists();
-
-            // The first-for-this-barangay account has no role choice (it's
-            // always Admin) and no staff code yet: a Super Admin emails it
-            // the code after confirming the appointment, and the account
-            // stays locked until that code is entered (activateWithStaffCode).
-            $roleData = $request->validate([
-                'requested_role' => [$isFirstForBarangay ? 'nullable' : 'required', Rule::in(['Custodian', 'Maintenance Personnel'])],
-                'staff_code' => [$isFirstForBarangay ? 'nullable' : 'required', 'string'],
-            ], [
-                'requested_role.required' => 'Please select whether you are a Custodian or Maintenance Personnel.',
-                'staff_code.required' => 'Please enter the staff registration code given to you by your barangay office.',
-            ]);
-
-            abort_unless(
-                $isFirstForBarangay || hash_equals(RegistrationSetting::for($barangayId)->staff_code, strtoupper(trim($roleData['staff_code']))),
-                422,
-                'That staff registration code is not correct. Ask your barangay office for the current code.'
-            );
-
-            $role = $isFirstForBarangay ? 'Admin' : $roleData['requested_role'];
-
-            // Was: `is_active: $isFirstForBarangay` — the first person to
-            // register for a barangay went live instantly, with nobody ever
-            // reviewing them. The shared staff code only proves "someone
-            // handed me a code for this barangay," not "I'm the legitimate
-            // first Admin" — anyone holding that code could win the race.
-            // Every registrant, first-for-barangay or not, now starts
-            // inactive and waits for a human: Super Admin approves the
-            // first Admin per barangay (see SuperAdminController::
-            // pendingAdmins()); an existing Admin approves everyone after.
-            $user = User::create([
-                'name' => $data['name'],
-                'email' => $data['email'],
-                'password' => Hash::make($data['password']),
-                'phone' => $data['phone'],
-                'address' => $data['address'],
-                'city_id' => $data['city_id'],
-                'barangay_id' => $barangayId,
-                'barangay_name' => $barangay->name,
-                'role' => $role,
-                'roles' => [$role],
-                'is_active' => false,
-                'approved_at' => null,
-                'awaiting_staff_code' => $isFirstForBarangay,
-            ]);
-
-            return [$user, $isFirstForBarangay];
-        });
-
-        // Kept on the private disk and only ever served to reviewers.
-        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'registration_id_path')) {
-            $user->forceFill([
-                'registration_id_path' => $request->file('valid_id')->store('registration-documents', 'local'),
-                'registration_photo_path' => $request->file('photo')->store('registration-documents', 'local'),
-            ])->save();
-        } else {
-            \Illuminate\Support\Facades\Log::warning('Registration documents were not stored: run the pending migrations.');
-        }
-
-        if ($isFirstForBarangay) {
-            $barangayLabel = $user->barangay_name ?? $user->barangay?->name ?? 'their barangay';
-            $this->notifySuperAdmins(
-                'New barangay Admin awaiting a staff code',
-                "{$user->name} registered as the first Admin for {$barangayLabel}. Confirm the appointment, then email them the staff registration code from Users.",
-                'pending_admin_approval'
-            );
-            AccountMail::trySend($user, 'Welcome to VMS. Your account is waiting for approval', 'welcome');
-        } else {
-            // Every other registration is approved by the barangay's own
-            // Admin(s), who otherwise had no way to learn a pending account
-            // existed short of happening to open the Users module
-            // (VMS-IMPROVEMENT-PLAN.md Phase B6).
-            $this->notifyAdmins(
-                'New staff registration awaiting approval',
-                "{$user->name} registered as {$user->role} and is awaiting your approval before they can sign in.",
-                'pending_staff_approval',
-                $user->barangay_id
-            );
-        }
-
-        return response()->json([
-            'message' => $isFirstForBarangay
-                ? 'Registration submitted. Check your email: a Super Admin will send your staff registration code, which you enter after signing in to activate your account.'
-                : 'Registration submitted. An administrator must approve your account before you can sign in.',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-            ],
-        ], 201);
-    }
-
-    // Mirrors FleetController::notifyAdmins() — Super Admin is unscoped by
-    // barangay, so this reaches every Super Admin account platform-wide,
-    // not just one barangay's.
-    private function notifySuperAdmins(string $title, string $message, string $type): void
-    {
-        $superAdmins = User::havingRole('Super Admin')->get();
-        foreach ($superAdmins as $superAdmin) {
-            \App\Models\Notification::create([
-                'user_id' => $superAdmin->id,
-                'title' => $title,
-                'message' => $message,
-                'type' => $type,
-                'ticket_id' => null,
-            ]);
-        }
-    }
-
-    // Same shape as FleetController::notifyAdmins() / TicketController's own
-    // copy — a fourth near-identical instance rather than a new shared
-    // service, matching how the other two already coexist.
-    private function notifyAdmins(string $title, string $message, string $type, ?int $barangayId): void
-    {
-        $admins = User::where('barangay_id', $barangayId)->havingRole('Admin')->get();
-        foreach ($admins as $admin) {
-            \App\Models\Notification::create([
-                'user_id' => $admin->id,
-                'title' => $title,
-                'message' => $message,
-                'type' => $type,
-                'ticket_id' => null,
-            ]);
-        }
-    }
-
-    /** Side-effect-free first-Administrator preview for a selected reference ID. */
-    public function registrationStatus(Request $request)
-    {
-        $data = $request->validate([
-            'city_id' => ['required', 'exists:cities,id'],
-            'barangay_id' => ['required', Rule::exists('barangays', 'id')->where('city_id', $request->input('city_id'))->whereNotNull('psgc_code')],
-            'barangay_name' => ['prohibited'],
-        ]);
-        $isFirst = !User::where('barangay_id', $data['barangay_id'])->exists();
-        return response()->json(['is_first' => $isFirst]);
-    }
 
     /**
      * Handle stateless frontend login requests.
@@ -237,88 +37,18 @@ class AuthController extends Controller
             ], 401); // Returns 401 Unauthorized status code
         }
 
-        if (!$user->is_active && $user->awaiting_staff_code) {
-            // No token: the code window re-sends these credentials with the code.
+        if (!$user->is_active) {
+            return response()->json(['message' => 'This account has been deactivated. Contact your administrator.'], 403);
+        }
+
+        // A temporary password stops working after a few days; the person who
+        // created the account sends a fresh one instead of leaving it open.
+        if ($user->must_change_password && $user->temp_password_expires_at && $user->temp_password_expires_at->isPast()) {
             return response()->json([
-                'message' => $user->staff_code_sent_at
-                    ? 'Enter the staff registration code we emailed you to activate your account.'
-                    : 'Your account is waiting for a staff registration code from the Super Admin. We will email it to you.',
-                'awaiting_staff_code' => true,
-                'staff_code_sent' => $user->staff_code_sent_at !== null,
+                'message' => 'Your temporary password has expired. Ask your administrator to send you a new one.',
+                'code' => 'temporary_password_expired',
             ], 403);
         }
-
-        if (!$user->is_active) {
-            // approved_at is only ever set the moment an Admin (or, for a
-            // barangay's first-ever Admin, a Super Admin) first approves an
-            // account (UserController::activate / SuperAdminController::
-            // activateUser) — a still-NULL value means this account has
-            // never been approved yet at all (a brand-new registrant waiting
-            // in the queue), which reads very differently from an account an
-            // Admin actively deactivated after it was already in use. A
-            // pending Admin with no other active Admin in their barangay is
-            // specifically the case a Super Admin approves, not their own
-            // (nonexistent) barangay Admin — the message reflects who they're
-            // actually waiting on.
-            $awaitsSuperAdmin = $user->approved_at === null
-                && $user->role === 'Admin'
-                && !User::where('barangay_id', $user->barangay_id)->where('id', '!=', $user->id)
-                    ->havingRole('Admin')->where('is_active', true)->exists();
-
-            $message = $user->approved_at !== null
-                ? 'This account has been deactivated. Contact an administrator.'
-                : ($awaitsSuperAdmin
-                    ? 'Your account is still awaiting approval from a Super Admin, as the first Admin for your barangay.'
-                    : 'Your account is still awaiting approval from your barangay\'s Admin.');
-
-            return response()->json(['message' => $message], 403);
-        }
-
-        return $this->signedIn($user);
-    }
-
-    /**
-     * A first Administrator's activation: the same email and password as
-     * sign-in, plus the staff code a Super Admin emailed them. The code
-     * must be this barangay's current one and used within
-     * User::STAFF_CODE_VALID_DAYS of being sent; an expired registration
-     * is cancelled so the person can register again.
-     */
-    public function activateWithStaffCode(Request $request)
-    {
-        $data = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
-            'staff_code' => 'required|string',
-        ]);
-
-        $user = User::where('email', $data['email'])->first();
-        if (!$user || !Hash::check($data['password'], $user->password)) {
-            return response()->json(['message' => 'Invalid credentials provided. Please check your email or password.'], 401);
-        }
-        abort_unless($user->awaiting_staff_code && !$user->is_active, 422, 'This account is not waiting for a staff registration code.');
-        abort_unless($user->staff_code_sent_at, 422, 'Your staff registration code has not been sent yet. Please wait for the email from the Super Admin.');
-
-        if ($user->staffCodeExpired()) {
-            $user->expireRegistration();
-            return response()->json(['message' => 'Your staff registration code has expired and your registration was cancelled. Please register again.'], 410);
-        }
-
-        abort_unless(
-            hash_equals(RegistrationSetting::for($user->barangay_id)->staff_code, strtoupper(trim($data['staff_code']))),
-            422,
-            'That staff registration code is not correct. Check the code in your email and try again.'
-        );
-
-        $user->update(['is_active' => true, 'approved_at' => $user->approved_at ?? now(), 'awaiting_staff_code' => false]);
-        ActivityLog::create([
-            'user_id' => $user->id,
-            'role' => $user->role,
-            'action' => 'Activate',
-            'module' => 'Authentication',
-            'details' => "{$user->name} activated their account with the emailed staff registration code.",
-        ]);
-        AccountMail::trySend($user, 'Your VMS account is now active', 'activated');
 
         return $this->signedIn($user);
     }
@@ -339,6 +69,7 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role, // Primary role — drives the portal layout
+                'must_change_password' => (bool) $user->must_change_password,
                 'roles' => $user->allRoles(), // Every hat this account may wear
                 'abilities' => $user->getAbilities(), // Phase B2 — what the frontend gates on
             ]
@@ -357,12 +88,12 @@ class AuthController extends Controller
     {
         abort_unless($this->canImpersonate($request), 403, 'Sign in to the dedicated account switcher to impersonate an account.');
 
-        return User::with('barangay.city.province')
+        return User::with(['barangay.city.province', 'roleRows'])
             ->where('id', '!=', $request->user()->id)
             ->where('role', '!=', 'Impersonator')
             ->when($request->user()->hasRole('Super Admin'), fn ($q) => $q->where('role', '!=', 'Super Admin'))
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'role', 'roles', 'is_active', 'barangay_id'])
+            ->get(['id', 'name', 'email', 'role', 'is_active', 'barangay_id'])
             ->map(fn ($u) => [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -596,7 +327,7 @@ class AuthController extends Controller
             'email' => ['sometimes', 'required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
-            'photo' => ['nullable', 'image', 'max:4096'],
+            'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ], [
             'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
         ]);
@@ -636,8 +367,11 @@ class AuthController extends Controller
             ], 422);
         }
 
+        abort_if(Hash::check($data['new_password'], $request->user()->password), 422, 'Choose a new password that is different from the current one.');
+
         $request->user()->update([
             'password' => Hash::make($data['new_password']),
+            'must_change_password' => false,
         ]);
 
         $request->user()->tokens()->where('id', '!=', $request->user()->currentAccessToken()?->id)->delete();

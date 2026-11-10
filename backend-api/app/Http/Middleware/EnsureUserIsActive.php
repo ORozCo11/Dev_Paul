@@ -22,6 +22,19 @@ class EnsureUserIsActive
             abort(401, 'This account has been deactivated.');
         }
 
+        // A temporary password must be replaced before anything else works —
+        // only "who am I", sign-out and the password change itself are allowed.
+        // (Impersonation sessions are exempt: the Super Admin never has the
+        // person's password to change.)
+        if ($user && $user->must_change_password
+            && $user->currentAccessToken()?->name !== 'impersonation_token'
+            && ! $request->is('api/user', 'api/logout', 'api/profile/password')) {
+            return response()->json([
+                'message' => 'You must change your temporary password before continuing.',
+                'code' => 'password_change_required',
+            ], 403);
+        }
+
         return $next($request);
     }
 }

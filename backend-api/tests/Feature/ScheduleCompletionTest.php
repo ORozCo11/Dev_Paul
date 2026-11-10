@@ -85,6 +85,39 @@ class ScheduleCompletionTest extends TestCase
     }
 
     #[Test]
+    public function completing_a_schedule_saves_the_parts_used_and_the_total_cost_on_the_record(): void
+    {
+        $vehicle = $this->vehicle();
+        $schedule = $this->schedule($vehicle, ['assigned_to' => $this->mechanic->id]);
+
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete", [
+            'parts_used' => 'Engine oil, Oil filter',
+            'maintenance_cost' => '1250.50',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('vehicle_maintenance_records', [
+            'vehicle_id' => $vehicle->vehicle_id,
+            'parts_used' => 'Engine oil, Oil filter',
+            'maintenance_cost' => '1250.50',
+        ]);
+    }
+
+    #[Test]
+    public function completing_a_schedule_without_parts_or_cost_still_works(): void
+    {
+        $vehicle = $this->vehicle();
+        $schedule = $this->schedule($vehicle, ['assigned_to' => $this->mechanic->id]);
+
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete", [])->assertOk();
+
+        $record = VehicleMaintenanceRecord::where('vehicle_id', $vehicle->vehicle_id)->firstOrFail();
+        $this->assertNull($record->parts_used);
+        $this->assertNull($record->maintenance_cost);
+    }
+
+    #[Test]
     public function attaching_a_receipt_does_not_bypass_custodian_verification(): void
     {
         // Production-readiness final stabilization pass (2026-10-05, P0) —

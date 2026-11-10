@@ -48,7 +48,7 @@ return new class extends Migration
         // schedule-completion logic filters a vehicle's schedules by status
         // and scheduled_date together (overdue/upcoming/due-soon queries).
         Schema::table('vehicle_maintenance_schedules', function (Blueprint $table) {
-            $table->index(['vehicle_id', 'status', 'scheduled_date']);
+            $table->index(['vehicle_id', 'status', 'scheduled_date'], 'vms_vehicle_status_date_index');
         });
 
         // notifications — NotificationController lists/marks-read a user's
@@ -81,7 +81,7 @@ return new class extends Migration
         });
 
         Schema::table('vehicle_maintenance_schedules', function (Blueprint $table) {
-            $table->dropIndex(['vehicle_id', 'status', 'scheduled_date']);
+            $table->dropIndex('vms_vehicle_status_date_index');
         });
 
         Schema::table('notifications', function (Blueprint $table) {

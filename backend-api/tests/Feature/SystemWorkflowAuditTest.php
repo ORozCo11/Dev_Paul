@@ -137,25 +137,14 @@ class SystemWorkflowAuditTest extends TestCase
         $this->assertTrue($this->admin->fresh()->hasRole('Admin'));
     }
 
-    public function test_admin_created_accounts_are_approved_and_active_legacy_accounts_cannot_be_rejected(): void
-    {
-        Sanctum::actingAs($this->admin, ['*']);
-        $this->postJson('/api/users', ['name' => 'New Staff', 'email' => 'new-staff@test.invalid', 'password' => 'password123', 'password_confirmation' => 'password123', 'role' => 'Custodian'])->assertCreated()->assertJsonPath('is_active', true);
-        $this->assertNotNull(User::where('email', 'new-staff@test.invalid')->firstOrFail()->approved_at);
-        $legacy = $this->person('Custodian', ['approved_at' => null]);
-        Sanctum::actingAs($this->person('Super Admin', ['barangay_id' => null]), ['*']);
-        $this->deleteJson("/api/superadmin/users/{$legacy->id}/reject")->assertUnprocessable();
-        $ids = collect($this->getJson('/api/superadmin/pending-approvals')->assertOk()->json())->pluck('id');
-        $this->assertFalse($ids->contains($legacy->id));
-    }
-
-    public function test_password_resets_revoke_old_sessions(): void
+    public function test_credential_resends_revoke_old_sessions(): void
     {
         $this->custodian->createToken('old-session-one');
         $this->custodian->createToken('old-session-two');
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/users/{$this->custodian->id}", ['password' => 'newpassword123', 'password_confirmation' => 'newpassword123'])->assertOk();
+        $this->postJson("/api/users/{$this->custodian->id}/resend-credentials")->assertOk()->assertJsonStructure(['temporary_password', 'email_sent']);
         $this->assertSame(0, $this->custodian->tokens()->count());
+        $this->assertTrue($this->custodian->fresh()->must_change_password);
     }
 
     public function test_multi_mechanic_bulk_reassignment_notifies_all_outgoing_mechanics(): void
@@ -228,7 +217,7 @@ class SystemWorkflowAuditTest extends TestCase
         $ticket = $this->ticket();
         $line = $this->line($ticket, $this->mechanic, ['repair_type' => 'external', 'external_sent_at' => now()]);
         Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$line->sub_issue_id}/log-repairs", ['repair_type' => 'in_house', 'repair_logs' => 'Changed method'])->assertUnprocessable();
+        $this->putJson("/api/tickets/{$ticket->ticket_id}/sub-issues/{$line->sub_issue_id}/log-repairs", ['tested_ok' => true, 'repair_type' => 'in_house', 'repair_logs' => 'Changed method'])->assertUnprocessable();
         $this->assertSame('Under Repair', $line->fresh()->status);
     }
 

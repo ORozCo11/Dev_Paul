@@ -48,11 +48,13 @@ class TicketProcessIntegrityTest extends TestCase
 
     private function sentAndReturned(MaintenanceTicket $ticket): void
     {
-        Sanctum::actingAs($this->admin,['*']);
+        Sanctum::actingAs($this->custodian,['*']);
         $base=$this->path($ticket);
         $this->putJson("$base/external-sent",['external_vendor'=>'QA Shop','external_reason'=>'Parts or service only available from an authorized shop','external_work_scope'=>'Repair brakes'])->assertOk();
         $this->putJson("$base/external-returned",['external_return_notes'=>'Shop returned repaired vehicle','external_actual_cost'=>12000])->assertOk();
-        $this->putJson("$base/log-repairs",['repair_logs'=>'Shop repaired brakes','external_vendor'=>'Stale shop','warranty_until'=>'2040-01-01'])->assertOk();
+        Sanctum::actingAs($this->mechanic,['*']);
+        $this->putJson("$base/log-repairs",['tested_ok' => true, 'repair_logs'=>'Shop repaired brakes','external_vendor'=>'Stale shop','warranty_until'=>'2040-01-01'])->assertOk();
+        Sanctum::actingAs($this->custodian,['*']);
         $this->assertSame('QA Shop',$ticket->subIssues[0]->fresh()->external_vendor);
         $this->assertNull($ticket->subIssues[0]->fresh()->warranty_until);
     }
@@ -66,7 +68,10 @@ class TicketProcessIntegrityTest extends TestCase
     public function test_external_completion_requires_a_real_send_and_return(): void
     {
         $t=$this->active('external');
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'No logistics'])->assertUnprocessable();
+        Sanctum::actingAs($this->custodian,['*']);
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'No logistics'])->assertUnprocessable();
+        Sanctum::actingAs($this->custodian, ['*']);
         $this->assertSame('Active',$t->fresh()->status);
         $this->assertDatabaseCount('vehicle_maintenance_records',0);
     }
@@ -90,33 +95,41 @@ class TicketProcessIntegrityTest extends TestCase
         $this->getJson("/api/vehicles/{$this->vehicle->vehicle_id}/reliability")->assertOk()->assertJsonPath('total_spend',12000);
     }
 
-    public function test_external_rework_notifies_admin_preserves_cycle_and_accumulates_cost(): void
+    public function test_external_rework_notifies_custodian_preserves_cycle_and_accumulates_cost(): void
     {
         $t=$this->active('external');
         $this->sentAndReturned($t);
-        $before=Notification::where('user_id',$this->admin->id)->count();
+        $before=Notification::where('user_id',$this->custodian->id)->count();
+        $beforeAdmin=Notification::where('user_id',$this->admin->id)->count();
         Sanctum::actingAs($this->custodian,['*']);
         $this->putJson("/api/tickets/{$t->ticket_id}/verify",['verification_verdict'=>'Rejected','verification_notes'=>'Brakes still fail','failed_sub_issue_ids'=>[$t->subIssues[0]->sub_issue_id]])->assertOk();
-        $this->assertGreaterThan($before,Notification::where('user_id',$this->admin->id)->count());
-        Sanctum::actingAs($this->admin,['*']);
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Try skipping redo'])->assertUnprocessable();
+        // The rework goes back to the Custodian who handles the shop, not to the Admin.
+        $this->assertGreaterThan($before,Notification::where('user_id',$this->custodian->id)->count());
+        $this->assertSame($beforeAdmin,Notification::where('user_id',$this->admin->id)->count());
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Try skipping redo'])->assertUnprocessable();
+        Sanctum::actingAs($this->custodian, ['*']);
         $this->putJson($this->path($t).'/external-sent',['external_vendor'=>'QA Shop','external_reason'=>'Warranty','external_work_scope'=>'Redo brakes'])->assertOk();
         $s=$t->subIssues[0]->fresh();
         $this->assertCount(1,$s->external_cycles);
         $this->assertEquals(12000,$s->external_cycles[0]['external_actual_cost']);
         $this->assertNull($s->external_returned_at);
         $this->putJson($this->path($t).'/external-returned',['external_return_notes'=>'Warranty repair returned','external_actual_cost'=>500])->assertOk();
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Corrected','maintenance_cost'=>1])->assertOk();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Corrected','maintenance_cost'=>1])->assertOk();
+        Sanctum::actingAs($this->custodian, ['*']);
         $this->approve($t);
         $this->assertEquals(12500,VehicleMaintenanceRecord::where('ticket_sub_issue_id',$s->sub_issue_id)->sole()->maintenance_cost);
     }
 
     public function test_unknown_external_invoice_stays_unknown_in_ledger_and_archive(): void
     {
-        $t=$this->active('external');$base=$this->path($t);
+        $t=$this->active('external');$base=$this->path($t);Sanctum::actingAs($this->custodian,['*']);
         $this->putJson("$base/external-sent",['external_vendor'=>'QA Shop','external_reason'=>'Warranty','external_work_scope'=>'Repair'])->assertOk();
         $this->putJson("$base/external-returned",['external_return_notes'=>'Invoice pending'])->assertOk();
-        $this->putJson("$base/log-repairs",['repair_logs'=>'Done'])->assertOk();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("$base/log-repairs",['tested_ok' => true, 'repair_logs'=>'Done'])->assertOk();
+        Sanctum::actingAs($this->custodian, ['*']);
         $this->approve($t);
         $this->assertNull(VehicleMaintenanceRecord::where('ticket_sub_issue_id',$t->subIssues[0]->sub_issue_id)->sole()->maintenance_cost);
         $this->assertNull(\App\Models\TicketArchiveLog::where('ticket_id',$t->ticket_id)->sole()->maintenance_cost);
@@ -124,10 +137,12 @@ class TicketProcessIntegrityTest extends TestCase
 
     public function test_no_charge_shop_return_is_zero_rather_than_unknown(): void
     {
-        $t=$this->active('external');$base=$this->path($t);
+        $t=$this->active('external');$base=$this->path($t);Sanctum::actingAs($this->custodian,['*']);
         $this->putJson("$base/external-sent",['external_vendor'=>'QA Shop','external_reason'=>'Warranty','external_work_scope'=>'Repair'])->assertOk();
         $this->putJson("$base/external-returned",['external_return_notes'=>'No charge','external_actual_cost'=>0])->assertOk();
-        $this->putJson("$base/log-repairs",['repair_logs'=>'Done under warranty'])->assertOk();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("$base/log-repairs",['tested_ok' => true, 'repair_logs'=>'Done under warranty'])->assertOk();
+        Sanctum::actingAs($this->custodian, ['*']);
         $this->approve($t);
         $this->assertEquals(0,VehicleMaintenanceRecord::where('ticket_sub_issue_id',$t->subIssues[0]->sub_issue_id)->sole()->maintenance_cost);
         $this->assertNotNull($t->subIssues[0]->fresh()->maintenance_cost);
@@ -137,7 +152,7 @@ class TicketProcessIntegrityTest extends TestCase
     {
         $t=$this->active('in_house',true);
         Sanctum::actingAs($this->mechanic,['*']);
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Brakes finished'])->assertOk();
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Brakes finished'])->assertOk();
         Sanctum::actingAs($this->admin,['*']);
         $third=User::factory()->create(['role'=>'Maintenance Personnel']);
         $this->putJson("/api/tickets/{$t->ticket_id}/assign-mechanic",['assigned_mechanic_id'=>$third->id,'sub_issue_ids'=>[$t->subIssues[1]->sub_issue_id],'reassign_reason'=>'Siren specialist'])->assertOk();
@@ -151,7 +166,7 @@ class TicketProcessIntegrityTest extends TestCase
     {
         $t=$this->active();
         Sanctum::actingAs($this->mechanic,['*']);
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Done'])->assertOk();
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Done'])->assertOk();
         Sanctum::actingAs($this->custodian,['*']);
         foreach([[],['verification_verdict'=>'Approved'],['verification_verdict'=>'Approved','test_attested'=>false],['test_attested'=>true]] as $payload) $this->putJson("/api/tickets/{$t->ticket_id}/verify",$payload)->assertUnprocessable();
         $this->assertSame('For Verification',$t->fresh()->status);
@@ -165,7 +180,7 @@ class TicketProcessIntegrityTest extends TestCase
         foreach([['repair_started_at'=>'2040-02-01','repair_completed_at'=>'2040-01-01'],['repair_started_at'=>'2020-02-01','repair_completed_at'=>'2020-01-01']] as $dates) $this->putJson($this->path($t).'/log-repairs',$dates+['repair_logs'=>'Done'])->assertUnprocessable();
         $this->assertSame('Under Repair',$t->subIssues[0]->fresh()->status);
         $this->assertDatabaseCount('vehicle_maintenance_records',0);
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Done'])->assertOk();
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Done'])->assertOk();
         $this->assertNotNull($t->subIssues[0]->fresh()->repair_completed_at);
     }
 
@@ -174,14 +189,14 @@ class TicketProcessIntegrityTest extends TestCase
         $t=$this->active('in_house',true);
         foreach([$this->mechanic,$this->other] as $i=>$mechanic) {
             Sanctum::actingAs($mechanic,['*']);
-            $this->putJson($this->path($t,$i).'/log-repairs',['repair_logs'=>'Finished own job'])->assertOk();
+            $this->putJson($this->path($t,$i).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Finished own job'])->assertOk();
         }
         Sanctum::actingAs($this->custodian,['*']);
         $this->putJson("/api/tickets/{$t->ticket_id}/verify",['verification_verdict'=>'Rejected','verification_notes'=>'Only brakes failed','failed_sub_issue_ids'=>[$t->subIssues[0]->sub_issue_id]])->assertOk();
         $this->assertSame('Under Repair',$t->subIssues[0]->fresh()->status);
         $this->assertSame('For Inspection',$t->subIssues[1]->fresh()->status);
         Sanctum::actingAs($this->mechanic,['*']);
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Fixed again'])->assertOk();
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Fixed again'])->assertOk();
         $this->assertSame('For Verification',$t->fresh()->status);
         $this->approve($t);
         $this->assertDatabaseCount('vehicle_maintenance_records',2);
@@ -209,7 +224,7 @@ class TicketProcessIntegrityTest extends TestCase
     {
         $t=$this->active();
         Sanctum::actingAs($this->mechanic,['*']);
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Shop did it','repair_type'=>'external','external_vendor'=>'Shop'])->assertUnprocessable();
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Shop did it','repair_type'=>'external','external_vendor'=>'Shop'])->assertUnprocessable();
         $this->putJson($this->path($t).'/external-sent',['external_vendor'=>'Shop','external_reason'=>'x','external_work_scope'=>'x'])->assertForbidden();
         $this->assertSame('in_house',$t->subIssues[0]->fresh()->repair_type);
     }
@@ -218,7 +233,7 @@ class TicketProcessIntegrityTest extends TestCase
     {
         $t=$this->active();
         Sanctum::actingAs($this->mechanic,['*']);
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Done'])->assertOk();
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Done'])->assertOk();
         $this->approve($t);
         $migration=require database_path('migrations/2026_10_24_000001_preserve_ticket_work_evidence.php');
         $migration->down();
@@ -235,7 +250,7 @@ class TicketProcessIntegrityTest extends TestCase
     {
         $t=$this->active();
         Sanctum::actingAs($this->mechanic,['*']);
-        $this->putJson($this->path($t).'/log-repairs',['repair_logs'=>'Done'])->assertOk();
+        $this->putJson($this->path($t).'/log-repairs',['tested_ok'=>true,'repair_logs'=>'Done'])->assertOk();
         Sanctum::actingAs($this->custodian,['*']);
         $this->putJson("/api/tickets/{$t->ticket_id}/verify",['verification_verdict'=>'Rejected','verification_notes'=>'Wrong ID','failed_sub_issue_ids'=>[999999]])->assertUnprocessable();
         $this->assertSame('For Verification',$t->fresh()->status);

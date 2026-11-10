@@ -59,7 +59,7 @@ These boundaries keep the system focused on **availability + maintenance**, whic
 | PHP | ^8.3 |
 | Laravel Framework | ^13.8 |
 | Auth | Laravel Sanctum ^4.3 (bearer tokens) |
-| Database | SQLite (local); Postgres-ready for deployment |
+| Database | **MySQL 8** (`barangay_vms_db`); automated tests use in-memory SQLite |
 | REPL | Laravel Tinker |
 | Cloud storage | Flysystem AWS S3 driver → Supabase Storage (S3-compatible), for private uploads and short-lived download links |
 | Testing | PHPUnit ^12.5 |
@@ -107,37 +107,41 @@ CAPSTONE PROJECT/
 
 ## Roles & Access
 
-The system has **three roles**. Each account has a **primary role** plus an optional set of **additional roles** (`users.roles`), so one person can wear several hats (e.g. a small barangay where one staffer is both Custodian and Maintenance Personnel). The sidebar a user sees is the **union** of every module across all their roles.
+The system has **three barangay roles** plus a platform-level **Super Admin**. Each account holds **exactly one** role (`users.role` plus one row in `user_roles`; the API rejects a second role), so staff who cover two jobs need two accounts. Older accounts that still carry two legacy roles keep working until an Admin edits them. Permissions come from `backend-api/config/permissions.php`.
 
 | Role | Responsibility |
 |---|---|
 | **Admin** | Reviews and approves/declines Custodian proposals, assigns/reassigns personnel, manages fleet/accounts, and handles justified decision-close. Admin does **not** create or verify ordinary repair tickets. Separate maintenance records retain Admin confirmation after Custodian verification. |
-| **Custodian** | Reports issues, is the **only** role that creates a Maintenance Ticket (by proposing one for Admin's approval), registers vehicles as a standard Custodian duty, and verifies a mechanic's completed repair. |
-| **Maintenance Personnel** (Mechanic) | Executes the actual repairs, logs work performed & parts used, and submits work orders for verification. |
+| **Custodian** | The **only** role that reports vehicle issues and the only role that creates a Maintenance Ticket (by proposing one for Admin's approval). Registers vehicles, views vehicle types (and adds one), views locations (and adds/edits hubs), and verifies a mechanic's completed repair. |
+| **Maintenance Personnel** (Mechanic) | Executes the actual repairs, logs work performed, parts, donor parts and evidence, completes assigned schedules, and can view every vehicle in the barangay. Cannot report issues or create tickets. |
 
-Permission checks use role membership (not just the primary role), so multi-role users are correctly allowed to act under any hat they hold.
+Permission checks use the account's role against `config/permissions.php`. Admin-created accounts get a temporary password and must set their own at first sign-in (the API refuses everything else until then).
 
 ---
 
 ## Modules by Role
 
 **Admin**
-- Dashboard · Issue Reports · Maintenance Tickets (Archives live inside this module now, not a separate row)
-- Vehicle Management · Vehicle Types · Vehicle Location · Vehicle Documents
-- Condition Monitoring · Maintenance Schedule · Maintenance Records
-- Users · Reports · Activity Log
+- Dashboard
+- Operations: Maintenance Tickets (Archives live inside this module) · Maintenance Schedule · Maintenance Records · Condition Monitoring
+- Fleet & Assets: Vehicle Management · Vehicle Types · Vehicle Location
+- Administration: Users · Reports · Activity Log
 
 **Custodian**
 - Dashboard
-- Vehicles: View Vehicles · Vehicle Documents · Vehicle History
-- Vehicle Operations: Report Vehicle Issue · My Tasks (Assigned Inspections / Repair Verification / Work Tracker, tabbed) · Condition Monitoring
+- Fleet: View Vehicles · Vehicle Types (view/add) · Vehicle Location (view; add/edit hubs)
+- Monitoring: Condition Monitoring · Vehicle History
+- Repairs: Report Vehicle Issue · My Tasks (Repair Verification / Work Tracker, tabbed)
 - Maintenance: Maintenance Schedule · Maintenance Records
 
 **Maintenance Personnel**
 - Dashboard
-- Maintenance: My Work Orders · Work Tracker · Maintenance Records · Maintenance Schedule
-- Issues: Vehicle Issues (their own reports, with a Report Technical Issue action inline)
-- Vehicles: View Vehicles (no Vehicle Documents access — repair evidence lives on the work order itself)
+- Fleet: View Vehicles (every vehicle in the barangay)
+- Repairs: My Work Orders (list or card view, with Archive)
+- Maintenance: Maintenance Schedule · Maintenance Records
+- No Issue Reports page and no Vehicle Documents page (repair evidence lives on the work order itself)
+
+Vehicle documents live on each vehicle's profile, not in the sidebar. The sidebar shows these group names as small labels.
 
 ---
 
@@ -150,11 +154,11 @@ Permission checks use role membership (not just the primary role), so multi-role
 
 ### The workflow
 
-1. **Report (Custodian or Maintenance Personnel).** Submit an issue with its vehicle, description, severity, and evidence. A mechanic can recommend a ticket to a Custodian.
-2. **Propose (Custodian).** Propose the repair, optionally linked to the report, as Pending Approval. Select in-house, cannibalized, or external-shop work and enter its work lines.
+1. **Report (Custodian).** Submit an issue with its vehicle, description, severity, and evidence. Only a Custodian reports issues.
+2. **Propose (Custodian).** Propose the repair as Pending Approval. If the vehicle has open issue reports the form first asks which one the repair is for (reports already held by another ticket are greyed out), or "None of these". Select in-house, cannibalized, or external-shop work and enter its work lines.
 3. **Approve and assign (Admin).** Review or decline the proposal. In-house repairs require a mechanic; external-shop work is approved without an in-house mechanic. Reassignment requires a reason.
-4. **Repair.** The assigned mechanic logs work and parts. For shop work, Admin records dispatch, return, and repair evidence. Completing all repair lines moves the whole ticket to For Verification and notifies its assigned Custodian.
-5. **Verify (assigned independent Custodian).** Approve the completed work to close the whole ticket automatically, or disapprove with a reason and return it for rework. Server-side guards prevent anyone who performed or handled the repair from verifying it, including multi-role accounts and previous mechanics. Reassign an independent Custodian when needed; there is no Admin verification fallback.
+4. **Repair.** The assigned mechanic logs work, parts and evidence on Record Repair Work (Standard Repair, or Uses Parts From Another Vehicle with one or more donor vehicles). For shop work (no in-house mechanic) the ticket's Custodian logs the vehicle sent to the shop and its return; the Admin does not handle the shop. Completing all repair lines moves the whole ticket to For Verification and notifies its assigned Custodian.
+5. **Verify (assigned independent Custodian).** Approve the completed work to close the whole ticket automatically, or disapprove with a reason and return it for rework. Server-side guards prevent a mechanic who did the repair (or any previous mechanic on the ticket) from verifying it. For external-shop work, the Custodian who logged the shop dispatch and return receives and tests the vehicle and may verify and close it. Reassign an independent Custodian when needed; there is no Admin verification fallback.
 
 Maintenance records created outside the ticket workflow have their own lifecycle: Custodian verification followed by Admin confirmation. Recurring schedule completion creates such a proof record and the next occurrence.
 
@@ -176,7 +180,7 @@ Closed tickets are locked in a permanent **Ticket Archive** audit log. An accide
 - Rich **vehicle profile page**: information, status & key dates, operational status, location map and documents/photos; repair history is available through Maintenance Records.
 
 ### Issue Reporting
-- Custodian and Maintenance Personnel can both report vehicle issues (severity-rated, with photo evidence); filing one lands on that report's own page with a **Create Maintenance Ticket** action right there for the Custodian — not back on a list to search for what was just submitted.
+- **Only a Custodian** can report vehicle issues (severity-rated, with photo evidence); filing one lands on that report's own page with a **Create Maintenance Ticket** action right there. Admin and Maintenance Personnel cannot report (API 403).
 
 ### Maintenance Records & Schedules
 - **Maintenance Records:** log external/historical/third-party maintenance and costs without running the full ticket workflow. Verify/confirm flow supported.
@@ -185,12 +189,12 @@ Closed tickets are locked in a permanent **Ticket Archive** audit log. An accide
   - **Complete & close the loop:** marking a schedule "Done" in one action records the proof-of-work maintenance record **and** auto-creates the next occurrence at *completed date + interval* if it recurs.
 
 ### Condition Monitoring
-- Records and filters vehicle condition checks over time (by category, condition, and date range).
+- Records and filters vehicle condition checks over time. New vehicles are Good; a vehicle shows Needs Repair as soon as a ticket exists for it; there is no manual Add button.
 
 ### Vehicle Location
 - **Leaflet map** of the barangay (Paknaan) showing **hubs** and how many vehicles are stationed at each.
 - **Map / Satellite** basemap toggle (Esri World Imagery, no API key) — defaults to **Satellite**.
-- Highlighted **Paknaan boundary** (high-visibility line), hub management (Admin can add/pin/remove hubs), focus-on-vehicle, fullscreen, and **Download Map** (PNG snapshot).
+- Highlighted **Paknaan boundary** (high-visibility line), hub management (Admin can add/pin/remove hubs; a Custodian can add hubs and edit locations), focus-on-vehicle, fullscreen, and **Download Map** (PNG snapshot).
 - A tabular **Location Record** with history.
 
 ### Vehicle History
@@ -203,7 +207,7 @@ Closed tickets are locked in a permanent **Ticket Archive** audit log. An accide
 - Report catalog with a generator and printable preview (browser print), with the supported export actions in each module.
 
 ### Users & Logs
-- User management (create, edit, activate/deactivate) with multi-role support.
+- User management (create with a temporary password, edit, activate/deactivate), one role per account.
 - Read-only **accountability logs** of user actions (paginated).
 
 ### UI/UX
@@ -233,7 +237,7 @@ Key Eloquent models (`backend-api/app/Models/`):
 
 | Model | Purpose |
 |---|---|
-| `User` | Accounts; `role` (primary) + `roles` (JSON, multi-role). |
+| `User` | Accounts; `role` (primary) plus one `UserRole` row (one role per account); `must_change_password` for Admin-created accounts. |
 | `Vehicle` | Fleet unit; availability, condition, domain/water fields, decommission fields, photo. |
 | `VehicleCategory` | Vehicle type + domain (land/water). |
 | `MaintenanceTicket` | The "Main Issue"; status, priority, recurrence, close/return-to-service. |
@@ -315,17 +319,25 @@ cd backend-api
 composer install
 cp .env.example .env          # then edit as needed
 php artisan key:generate
-php artisan migrate --seed     # creates SQLite DB + seeds accounts & mock data
+php artisan migrate --seed     # creates the MySQL tables + seeds accounts & mock data
 ```
 
 For an existing database, run `php artisan migrate` to apply updates. The barangay numbering migration assigns separate record and ticket numbers to each barangay while preserving database IDs and relationships. Each module starts at 1; deleted numbers are not reused.
 
 Local/testing sample data now contains **five Paknaan vehicles: two fire trucks and three ambulances**, six staff profiles using the supplied cat photos, three ongoing tickets and four maintenance schedules. To replace the earlier 15-vehicle demo without rebuilding the database, back up first, then run `php artisan db:seed --class=SampleFleetSeeder`. Each run resets work attached to the named demo vehicles and refreshes dates/readiness; it preserves unrelated users and vehicles. See [the sample-data guide](VMS%20Docs/Sample-Data.md) for accounts, workflow examples and reset boundaries.
 
-By default the app uses **SQLite** (`DB_CONNECTION=sqlite`). Create the file if it doesn't exist:
-```bash
-touch database/database.sqlite
+The app uses **MySQL 8**. Create an empty schema first (for example `CREATE DATABASE barangay_vms_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`), then set these in `backend-api/.env`:
 ```
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=barangay_vms_db
+DB_USERNAME=root
+DB_PASSWORD=<your MySQL password>
+```
+Each teammate runs their own MySQL; the database content is never committed. `php artisan migrate:fresh --seed` rebuilds the schema and the standard accounts. The automated tests do not need MySQL (they use in-memory SQLite). Note: `setup-demo.ps1` and `php artisan demo:sync` were written for SQLite; on MySQL use `migrate:fresh --seed` instead.
+
+Account emails use **Gmail SMTP**: set `MAIL_MAILER=smtp`, `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_USERNAME`, `MAIL_PASSWORD` (a Google App Password), `MAIL_FROM_ADDRESS` and `APP_NAME` in `.env`. With `MAIL_MAILER=log` emails are only written to `storage/logs/laravel.log`.
 
 Uploads use a **private Supabase bucket** configured by `SUPABASE_PRIVATE_BUCKET` and the `SUPABASE_*` credentials. The bucket must have public access disabled. Without a working private bucket, uploads fall back to `storage/app/private`; use persistent storage for this directory in deployment. Authorized API responses issue five-minute signed links, and the frontend renews links through an authenticated endpoint when opening saved files.
 
@@ -387,7 +399,10 @@ Feature tests live in `backend-api/tests/Feature/`:
 | `TicketWorkflowTest` | The full 5-phase ticket lifecycle, deferral, reassign, functional test, decision-close. |
 | `FleetIntelligenceTest` | Readiness, reliability, single-point-of-failure, failure patterns, decommission. |
 | `ScheduleCompletionTest` | Recurring PM + schedule/record close-the-loop. |
-| `MultiRoleTest` | Multi-role account permissions. |
+| `TemporaryPasswordTest` | Admin-created accounts must change the temporary password; everything else returns 403 until then. |
+| `DonorPartsCrudTest` | Donor parts, including several donor vehicles on one repair. |
+| `OpenIssuesReservedTest` | Open issue reports say which ticket already holds them. |
+| `MultiRoleTest` | Permissions for older accounts that still carry two roles. |
 | `VehicleValidationTest` | Vehicle field validation. |
 | `ImpersonationTest` | Dedicated-login permissions, cross-barangay account coverage, scope isolation, session restrictions and credentials. |
 | `SmokeTest` / `ExampleTest` | Baseline. |
@@ -411,7 +426,7 @@ npm run build
 Planned deployment topology (deferred):
 - **Frontend:** Vercel (Vite static build).
 - **Backend:** Render (Docker; PHP 8.4 image).
-- **Database:** managed **Postgres** (Supabase), seeded fresh via the seeders.
+- **Database:** MySQL 8 (the development database is `barangay_vms_db`); the production host and engine are not decided yet, so verify migrations on the target engine before deploying. Seed fresh via the seeders.
 - **Storage:** Supabase Storage for photos/attachments.
 
 Set production env values (`APP_ENV=production`, `APP_DEBUG=false`, database credentials, `SUPABASE_*`, and the SPA's `VITE_API_BASE_URL`) accordingly.
@@ -460,3 +475,7 @@ Registration address suggestions use [Photon](https://github.com/komoot/photon) 
 ## Current documentation ? 25 October 2026
 
 See [current revision notes](VMS%20Docs/Current-Revision-2026-10-25.md) for integrated behavior at `130fe38`, audit disposition, setup after pulling and verification limits. The maintained overview, capabilities and requirements Markdown have been reconciled; existing exported PDFs, slides and diagrams have not been regenerated.
+
+## Current documentation - 28 October 2026
+
+See [the 28 October revision notes](VMS%20Docs/Current-Revision-2026-10-28.md) for what changed after 25 October: MySQL, one role per account, Custodian-only issue reporting, temporary-password accounts, several donor vehicles per repair, the open-report step in the propose form, new sidebar groups and Gmail email. Where they differ, they supersede the 25 October notes and the older sections of this file. The role, sidebar, workflow and feature sections above were updated to match; `VMS Docs/Must-Haves.md` is the defense must-have list.
