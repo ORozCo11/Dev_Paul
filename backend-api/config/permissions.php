@@ -170,11 +170,13 @@ return [
     // Only Admin may change an active ticket's sub-issues; Custodians propose and verify.
     'subissue.manage' => ['Admin'],
     'subissue.log_repair' => ['Maintenance Personnel'],
-    // Dispatching / receiving / writing up an EXTERNAL-shop repair. The ticket's
-    // Custodian logs the vehicle going out to the shop, receives it back, then
-    // tests it and closes the ticket by verifying; the Admin only approves the
-    // proposal and never handles the shop.
+    // EXTERNAL-shop repair. The ticket's Custodian hands the vehicle to the shop
+    // (external.handle). When it comes back, the Maintenance Personnel named as
+    // shop tester receives it, tests it and writes the repair up
+    // (external.receive); the Custodian then only verifies. The Admin approves
+    // the proposal and names the tester, and never handles the shop.
     'external.handle' => ['Custodian'],
+    'external.receive' => ['Maintenance Personnel'],
     // Cannibalization records: anyone on the barangay's repair side can record
     // and read them. There is no approval ability by design.
     'cannibalization.record' => ['Admin', 'Custodian', 'Maintenance Personnel'],

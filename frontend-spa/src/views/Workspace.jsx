@@ -86,6 +86,8 @@ const modulesByRole = {
       ['vehicles', 'View Vehicles'],
       ['vehiclesReady', 'Ready to Respond'],
       ['vehiclesNotReady', 'Not Ready to Respond'],
+      // The Custodian's work queue for recording a Readiness Check (moved off the Not Ready page).
+      ['vehiclesReadiness', 'Readiness Check'],
       ['locations', 'Vehicle Location'],
     ] },
     // 'myTasks' is a tabbed container (Repair Verification / Work Tracker) around shared ticket data.
@@ -99,9 +101,8 @@ const modulesByRole = {
   ],
   'Maintenance Personnel': [
     { section: null, items: [['dashboard', 'Dashboard']] },
-    // The mechanic only needs the vehicles that are waiting on work (and the missing parts to mark restored).
+    // The mechanic works from their own tickets; a barangay-wide list of unready vehicles only repeated them.
     { section: 'Work', icon: 'wrench', items: [
-      ['vehiclesNotReady', 'Vehicles Needing Work'],
       ['ticketWorkOrders', 'My Work Orders'],
       // The mechanic completes scheduled maintenance (e.g. oil changes) from here.
       ['schedules', 'Maintenance Schedule'],
@@ -409,11 +410,13 @@ const moduleIcons = {
 // Sidebar and page-heading icons share the Solar Linear catalogue used by the
 // rest of the application, keeping this navigation flat and outline-only.
 const MAINTENANCE_SUBPAGES = ['tickets', 'schedules', 'maintenance'];
+// Sidebar sub-pages of View Vehicles -> the ?view= value each one opens.
+const VEHICLE_SUBPAGE_VIEWS = { vehiclesReady: 'ready', vehiclesNotReady: 'notready', vehiclesReadiness: 'readiness' };
 // The sidebar shows the short names under the Maintenance folder; the page itself keeps the full name.
 const MAINTENANCE_PAGE_TITLES = { tickets: 'Repair Tickets', schedules: 'Maintenance Schedule', maintenance: 'Maintenance Records' };
 const moduleIconNames = {
   maintenanceGroup: 'wrench',
-  dashboard: 'grid', vehicles: 'vehicle', vehiclesReady: 'checkCircle', vehiclesNotReady: 'alert', categories: 'list', locations: 'pin',
+  dashboard: 'grid', vehicles: 'vehicle', vehiclesReady: 'checkCircle', vehiclesNotReady: 'alert', vehiclesReadiness: 'checkCircle', categories: 'list', locations: 'pin',
   conditions: 'checkCircle', issues: 'alert', maintenance: 'document',
   maintenanceStatus: 'checkCircle', maintenanceLedger: 'document', schedules: 'calendar',
   tickets: 'ticket', ticketArchives: 'archive', reportOrPropose: 'alert',
@@ -478,7 +481,7 @@ function Workspace() {
   // falls back to plain "{Module Name}" with no breadcrumb line above it.
   // View Vehicles sub-pages: ?module=vehicles&view=ready | notready
   const vehicleViewParam = new URLSearchParams(location.search).get('view');
-  const vehicleView = vehicleViewParam === 'ready' ? 'ready' : vehicleViewParam === 'notready' ? 'notready' : 'all';
+  const vehicleView = ['ready', 'notready', 'readiness'].includes(vehicleViewParam) ? vehicleViewParam : 'all';
   const subPageTitle =
     (isNewVehiclePage && 'Add Vehicle')
     || (vehicleProfileId && 'Vehicle Profile')
@@ -692,17 +695,19 @@ function Workspace() {
   // deliberate, in-session choice (the toggle button), never the default a
   // returning user lands on.
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  // View Vehicles' sub-pages can be folded away with the chevron.
-  const [vehicleNavOpen, setVehicleNavOpen] = useState(true);
-  const [maintNavOpen, setMaintNavOpen] = useState(true);
-  // Both dropdowns are open by default. Folding one (row or chevron) only lasts while you stay on that
-  // page: opening any other page opens both again, so they are never found folded.
+  // Groups with sub-pages (View Vehicles, Maintenance) start collapsed (sub-pages hidden, right arrow); the
+  // arrow or the group's row opens them. A group is shown open only while the current page is inside it, so
+  // the active sub-page is never hidden: on load and on every page change each group opens iff it holds the page.
+  const inVehicleGroup = breadcrumbModule === 'vehicles';
+  const inMaintGroup = MAINTENANCE_SUBPAGES.includes(breadcrumbModule);
+  const [vehicleNavOpen, setVehicleNavOpen] = useState(inVehicleGroup);
+  const [maintNavOpen, setMaintNavOpen] = useState(inMaintGroup);
   const navPageKey = `${breadcrumbModule}|${breadcrumbModule === 'vehicles' ? vehicleView : ''}`;
   const [previousNavPageKey, setPreviousNavPageKey] = useState(navPageKey);
   if (previousNavPageKey !== navPageKey) {
     setPreviousNavPageKey(navPageKey);
-    setVehicleNavOpen(true);
-    setMaintNavOpen(true);
+    setVehicleNavOpen(inVehicleGroup);
+    setMaintNavOpen(inMaintGroup);
   }
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -1809,11 +1814,10 @@ function Workspace() {
       });
     }
 
-    if (activeModule === 'vehicles' && vehicleView !== 'all') {
-      result = result.filter((row) => row.readiness_state !== 'retired' && ((row.readiness_state === 'ready') === (vehicleView === 'ready')));
-    }
-
-    if (activeModule === 'vehicles' && vehicleView !== 'all') {
+    if (activeModule === 'vehicles' && vehicleView === 'readiness') {
+      // Every vehicle still in the fleet can be checked, ready or not (a ready one is simply re-confirmed).
+      result = result.filter((row) => row.readiness_state !== 'retired');
+    } else if (activeModule === 'vehicles' && vehicleView !== 'all') {
       result = result.filter((row) => row.readiness_state !== 'retired' && ((row.readiness_state === 'ready') === (vehicleView === 'ready')));
     }
 
@@ -2470,9 +2474,9 @@ function Workspace() {
     // whichever tab was last open.
     if (key === 'maintenanceGroup') {
       setActiveModule('tickets');
-    } else if (key === 'vehiclesReady' || key === 'vehiclesNotReady') {
+    } else if (VEHICLE_SUBPAGE_VIEWS[key]) {
       setActiveModuleState('vehicles');
-      navigate(`${roleRoutes[user.role]}?module=vehicles&view=${key === 'vehiclesReady' ? 'ready' : 'notready'}`);
+      navigate(`${roleRoutes[user.role]}?module=vehicles&view=${VEHICLE_SUBPAGE_VIEWS[key]}`);
     } else if (key === 'myTasks') {
       setMyTasksTab(myTasksLastTab);
     } else if (key === 'maintenanceLedger') {
@@ -2539,7 +2543,7 @@ function Workspace() {
               const renderItem = ([key, label]) => {
                 const badgeCount = badgeCountFor(key);
                 // Only a sub-page when the role also has the View Vehicles parent; otherwise it is a plain menu item.
-                const isVehicleSub = (key === 'vehiclesReady' || key === 'vehiclesNotReady') && modules.some(([k]) => k === 'vehicles');
+                const isVehicleSub = Boolean(VEHICLE_SUBPAGE_VIEWS[key]) && modules.some(([k]) => k === 'vehicles');
                 // The two sub-pages drop down under View Vehicles; the chevron folds them away.
                 if (isVehicleSub && !vehicleNavOpen) return null;
                 // Same idea for the Admin's Maintenance folder.
@@ -2549,7 +2553,7 @@ function Workspace() {
                 const parentOpen = key === 'vehicles' ? vehicleNavOpen : maintNavOpen;
                 const toggleParent = () => (key === 'vehicles' ? setVehicleNavOpen : setMaintNavOpen)((open) => !open);
                 const isActive = key === 'maintenanceGroup' ? false : key === 'vehicles' ? (breadcrumbModule === 'vehicles' && vehicleView === 'all')
-                  : (key === 'vehiclesReady' || key === 'vehiclesNotReady') ? (breadcrumbModule === 'vehicles' && vehicleView === (key === 'vehiclesReady' ? 'ready' : 'notready'))
+                  : VEHICLE_SUBPAGE_VIEWS[key] ? (breadcrumbModule === 'vehicles' && vehicleView === VEHICLE_SUBPAGE_VIEWS[key])
                   : key === navModule;
                 return (
                   <button
@@ -2558,6 +2562,9 @@ function Workspace() {
                     onClick={() => {
                       // Clicking a group's own item never folds it (that only hid the sub-pages when someone clicked
                       // View Vehicles to get back to the list). Only the little arrow folds a group.
+                      // A collapsed group opens (and goes to its page). Clicking the row of a group that is open and
+                      // already showing that page folds it again, like the arrow does.
+                      if (isParent && parentOpen && isActive) { toggleParent(); return; }
                       if (key === 'vehicles') setVehicleNavOpen(true);
                       if (key === 'maintenanceGroup') setMaintNavOpen(true);
                       goToModule(key);
@@ -2646,7 +2653,7 @@ function Workspace() {
                     isn't a literal sidebar item any more so moduleLabel
                     couldn't resolve it; breadcrumbModule already maps those
                     to the merged entry's own key/label for exactly this. */}
-                <h2>{subPageTitle ?? (breadcrumbModule === 'vehicles' && vehicleView !== 'all' ? (vehicleView === 'ready' ? 'Ready to Respond Vehicles' : (modules.some(([k]) => k === 'vehicles') ? 'Not Ready to Respond Vehicles' : 'Vehicles Needing Work')) : (modules.some(([k]) => k === 'maintenanceGroup') && MAINTENANCE_PAGE_TITLES[navModule]) || moduleLabel(modules, navModule))}</h2>
+                <h2>{subPageTitle ?? (breadcrumbModule === 'vehicles' && vehicleView !== 'all' ? (vehicleView === 'ready' ? 'Ready to Respond Vehicles' : vehicleView === 'readiness' ? 'Readiness Check' : (modules.some(([k]) => k === 'vehicles') ? 'Not Ready to Respond Vehicles' : 'Vehicles Needing Work')) : (modules.some(([k]) => k === 'maintenanceGroup') && MAINTENANCE_PAGE_TITLES[navModule]) || moduleLabel(modules, navModule))}</h2>
               </div>
             </div>
           )}
@@ -2873,6 +2880,7 @@ function Workspace() {
               hubs={allHubs}
               wrapperClassName="schedule-entry-form"
               compactVehiclePreview
+              hideLocationMap
               onDirty={() => setHasUnsavedChanges(true)}
             />
           ) : viewIssueId ? (
@@ -3076,6 +3084,24 @@ function Workspace() {
     // Same thin-wrapper approach as My Tasks above — `activeModule` is
     // still literally 'maintenanceStatus'/'maintenance', this only decides
     // whether to also show the tab bar above that unchanged module.
+    // Condition Monitoring (Custodian) holds two lists: the condition checks and the maintenance schedules they
+    // booked. The tabs say so, since there is no separate sidebar entry for schedules.
+    const monitoringTabBar = hasMonitoringNav && (activeModule === 'conditions' || activeModule === 'schedules') && (
+      <div className="locations-tab-bar" role="tablist" aria-label="Condition Monitoring">
+        {[['conditions', 'Condition Records'], ['schedules', 'Maintenance Schedules']].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={activeModule === key}
+            className={`locations-tab-button ${activeModule === key ? 'active' : ''}`}
+            onClick={() => { if (activeModule !== key) returnToModule(key); }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    );
     const showMaintenanceLedgerContainer = hasMaintenanceLedgerNav && (
       activeModule === 'maintenanceStatus' || activeModule === 'maintenance'
     );
@@ -3121,6 +3147,7 @@ function Workspace() {
         all: 'Every vehicle in the barangay. Open a vehicle to see its full information.',
         ready: 'Vehicles that are ready to respond right now.',
         notready: 'Vehicles that are not ready to respond, why, and when they were last maintained.',
+        readiness: 'Every vehicle in the fleet. Record a Readiness Check once a vehicle has been looked at and is ready to respond; the button is greyed out, with the reason, while it cannot be confirmed.',
       };
       return (
         <ModulePanel
@@ -3152,7 +3179,7 @@ function Workspace() {
           }
         >
           <div className="panel-header-bar">
-            <h3>{vehicleView === 'ready' ? 'Ready to Respond' : vehicleView === 'notready' ? 'Not Ready to Respond' : 'All Vehicles'} <span className="count-badge">{visibleRows.length}</span></h3>
+            <h3>{vehicleView === 'ready' ? 'Ready to Respond' : vehicleView === 'notready' ? 'Not Ready to Respond' : vehicleView === 'readiness' ? 'Readiness Check' : 'All Vehicles'} <span className="count-badge">{visibleRows.length}</span></h3>
             <LocalSearchInput
               value={searchQuery}
               onChange={setSearchQuery}
@@ -3463,6 +3490,7 @@ function Workspace() {
             </div>
           }
         >
+            {monitoringTabBar}
             <div className="panel-header-bar">
               <h3>Condition Records <span className="count-badge">{conditionRows.length}</span></h3>
               <LocalSearchInput
@@ -3771,6 +3799,7 @@ function Workspace() {
             />
           }
         >
+          {monitoringTabBar}
           <div className="panel-header-bar schedule-panel-header">
             <div className="schedule-panel-heading">
               <div><h3>Maintenance Schedules</h3><p>Upcoming, overdue, and completed maintenance activities.</p></div>
@@ -6825,7 +6854,7 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
   );
 }
 
-function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, layoutClassName = '', formTitle = '', onDirty, showDomainPreview = false, categoryVehicleCount = null, compactVehiclePreview = false, reserveVehiclePreview = false, belowForm, hideActions }) {
+function FormPage({ description, onBack, fields, initialValues, onSubmit, submitLabel, contextVehicles, hubs, warnEndpoint, warnRender, reviewStep = false, wrapperClassName, layoutClassName = '', formTitle = '', onDirty, showDomainPreview = false, categoryVehicleCount = null, compactVehiclePreview = false, reserveVehiclePreview = false, hideLocationMap = false, belowForm, hideActions }) {
   // Scoped to this exact route (new-X vs. editing record #N are different
   // paths) so a form's in-progress values survive clicking a "view" link
   // (e.g. the selected vehicle/custodian's name) and coming Back, instead of
@@ -6924,7 +6953,7 @@ function FormPage({ description, onBack, fields, initialValues, onSubmit, submit
     </section>
   ) : null;
 
-  const vehicleLocationCard = vehicle && !showDomainPreview ? (
+  const vehicleLocationCard = vehicle && !showDomainPreview && !hideLocationMap ? (
     <section className="veh-card form-context-map-inline">
       <div className="veh-card-head"><Icon name="pin" size={16} /><h4>{vehicle.current_location ?? 'Location unknown'}</h4></div>
       <div className="veh-map-wrap form-context-map-expanded">
@@ -7368,7 +7397,6 @@ function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = fal
     { label: 'Vehicle', name: 'vehicle_id', options: vehicleOptions(lookups), required: true, type: 'select', group: '1. Vehicle & maintenance' },
     { label: 'Maintenance Type', name: 'maintenance_type', options: lookups.maintenance_types, required: true, type: 'creatable-select', newItemLabel: 'maintenance type', catalogEndpoint: '/maintenance-types', group: '1. Vehicle & maintenance' },
     { label: 'Scheduled Date', name: 'scheduled_date', required: true, type: 'date', group: '2. Date & recurrence' },
-    { label: 'Scheduled Time', name: 'scheduled_time', type: 'time', group: '2. Date & recurrence' },
     // Recurring PM: completing this schedule auto-creates the next at the chosen
     // interval. Left blank = one-time (the default "Select" option).
     {
@@ -7670,9 +7698,9 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
     { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.plate_number },
     { key: 'category', label: 'Category', render: (row) => row.category?.category_name ?? 'Unassigned' },
   ];
-  if (view === 'notready') {
+  if (view === 'notready' || view === 'readiness') {
     columns.push(
-      { key: 'reason', label: 'Reason Not Ready', render: (row) => row.not_ready_reason ?? '-' },
+      { key: 'reason', label: view === 'readiness' ? 'Readiness Status' : 'Reason Not Ready', render: (row) => (view === 'readiness' && row.readiness_state === 'ready' ? 'Ready to respond' : (row.not_ready_reason ?? '-')) },
       // The last time maintenance work was finished, not the last readiness check.
       { key: 'last_maintained', label: 'Last Maintained', className: 'cell-center', render: (row) => (row.last_maintained_at ? <DateBadge value={row.last_maintained_at} /> : 'Never') },
     );
@@ -7722,30 +7750,41 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
   // column even though they can't edit/restore/archive vehicles.
   const canCheckReadiness = canDo(user, 'vehicle.readiness_check') && !!onReadinessCheck;
   if (view === 'notready') {
-    // Not Ready is a look-up with two actions: open the repair ticket holding the vehicle, and (for the
-    // Custodian) record the Readiness Check. The check button is greyed out, with the reason, while the
-    // vehicle cannot be confirmed yet (for example an open ticket).
+    // Not Ready is a look-up: its only action opens the repair ticket holding the vehicle. The Readiness
+    // Check itself is recorded from the Readiness Check sub-page.
     columns.push({
       key: 'action',
       label: 'Action',
       locked: true,
       className: 'cell-center',
       render: (row) => {
-        const hasTicket = Boolean(row.open_ticket_id && onViewTicket);
-        const showCheck = canCheckReadiness && !['Inactive', 'Decommissioned'].includes(row.status);
-        if (!hasTicket && !showCheck) return null;
+        if (!(row.open_ticket_id && onViewTicket)) return null;
         return (
           <div className="row-actions">
-            {hasTicket ? (
-              <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.open_ticket_id })} type="button" title={`View Ticket #${row.open_ticket_number ?? row.open_ticket_id}`} aria-label={`View Ticket #${row.open_ticket_number ?? row.open_ticket_id}`}><Icon name="ticket" size={14} /></button>
-            ) : (canCheckReadiness ? <span className="icon-btn-spacer" aria-hidden="true" /> : null)}
-            {showCheck && (
-              <button className={`icon-btn ${row.can_confirm_readiness === false ? 'readiness-check-blocked' : 'btn-confirm-action'}`} onClick={() => onReadinessCheck(row)} type="button" title={row.readiness_block_reason || 'Record Readiness Check'} aria-label="Record Readiness Check"><Icon name={row.can_confirm_readiness === false ? 'alert' : 'checkCircle'} size={14} /></button>
-            )}
+            <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.open_ticket_id })} type="button" title={`View Ticket #${row.open_ticket_number ?? row.open_ticket_id}`} aria-label={`View Ticket #${row.open_ticket_number ?? row.open_ticket_id}`}><Icon name="ticket" size={14} /></button>
           </div>
         );
       },
     });
+  } else if (view === 'readiness') {
+    // The Custodian's queue. The check button is greyed out, with the reason, while the vehicle cannot be
+    // confirmed yet (for example an open ticket).
+    if (canCheckReadiness) {
+      columns.push({
+        key: 'action',
+        label: 'Action',
+        locked: true,
+        className: 'cell-center',
+        render: (row) => {
+          if (['Inactive', 'Decommissioned'].includes(row.status)) return null;
+          return (
+            <div className="row-actions">
+              <button className={`icon-btn ${row.can_confirm_readiness === false ? 'readiness-check-blocked' : 'btn-confirm-action'}`} onClick={() => onReadinessCheck(row)} type="button" title={row.readiness_block_reason || 'Record Readiness Check'} aria-label="Record Readiness Check"><Icon name={row.can_confirm_readiness === false ? 'alert' : 'checkCircle'} size={14} /></button>
+            </div>
+          );
+        },
+      });
+    }
   } else if (view !== 'ready' && (canEditVehicle || canRestoreVehicle || canArchiveVehicle || !!onViewTicket)) {
     // (Ready to Respond has no Action column: it is only a look-up, like Not Ready.)
     columns.push({
@@ -9568,9 +9607,9 @@ function flattenSubIssueRows(tickets, mechanicId = null, includeShopTests = fals
   const rows = [];
   (tickets ?? []).forEach((ticket) => {
     (ticket.sub_issues ?? []).forEach((subIssue) => {
-      // Work that came back from an outside shop is tested by Maintenance Personnel.
+      // Work handed to an outside shop is received back and tested by the named Maintenance Personnel.
       const awaitingShopTest = includeShopTests && subIssue.repair_type === 'external' && !subIssue.assigned_mechanic_id
-        && !!subIssue.external_returned_at && subIssue.status === 'Under Repair'
+        && !!subIssue.external_sent_at && subIssue.status === 'Under Repair'
         && (!subIssue.external_tester_id || !mechanicId || String(subIssue.external_tester_id) === String(mechanicId));
       if (mechanicId && subIssue.assigned_mechanic_id !== mechanicId && !awaitingShopTest) return;
       rows.push({
@@ -10926,10 +10965,11 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                   {si.verification_verdict === 'Rejected' && <div className="lr-alert lr-alert-warning" role="alert"><strong>Returned for rework</strong><p>{si.verification_notes || 'Review the failed work items before resubmitting.'}</p></div>}
                   {open && <RepairContextDetails si={si} hideProposal hideDonor />}
 
-                  {onLogRepairs && canHandleExternal && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && (
+                  {/* The Custodian only hands the vehicle to the shop; the shop tester (Maintenance Personnel) receives it back and tests it. */}
+                  {onLogRepairs && canHandleExternal && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && (!si.external_sent_at || si.verification_verdict === 'Rejected') && (
                     <div className="subissue-head-right">
                       <button className="primary-button" type="button" onClick={() => onLogRepairs(ticket, si)}>
-                        <Icon name="vehicle" size={14} /> {si.verification_verdict === 'Rejected' ? 'Record shop rework' : !si.external_sent_at ? 'Send to shop' : !si.external_returned_at ? 'Record return' : 'Record service report'}
+                        <Icon name="vehicle" size={14} /> {si.verification_verdict === 'Rejected' ? 'Record shop rework' : 'Send to shop'}
                       </button>
                     </div>
                   )}
@@ -13462,10 +13502,11 @@ function CannibalizationManagement({ ticket, vehicleOptions, onChanged, notify }
 }
 
 function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty, onExternalSend, onExternalReturn, onNoRepair, onReturnToAdmin, isMechanic = false, onDonorChanged, notify }) {
-  const [chosenRepairType, setChosenRepairType] = useState('');
-  // The Maintenance Personnel tests the vehicle after the work; the Custodian only verifies later.
-  const [testedOk, setTestedOk] = useState(false);
-  const [testNotes, setTestNotes] = useState('');
+  // A repair can be a standard repair, use parts from another vehicle, or both. "Both" is recorded as a
+  // cannibalized repair that also carries the mechanic's own work and purchased parts.
+  const [doesStandard, setDoesStandard] = useState(false);
+  const [usesDonorParts, setUsesDonorParts] = useState(false);
+  const chosenRepairType = usesDonorParts ? 'cannibalized' : (doesStandard ? 'in_house' : '');
   const [noRepairOpen, setNoRepairOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnReason, setReturnReason] = useState('');
@@ -13512,12 +13553,12 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
       return;
     }
     if (submittingRepair || needsShopCycle) return;
-    if (!testedOk) {
-      notify?.({ type: 'error', text: 'Confirm that you tested the vehicle after the work before submitting.' });
-      return;
-    }
     if (repairType === 'cannibalized' && !(ticket.donor_parts ?? []).length) {
       notify?.({ type: 'error', text: 'Add at least one donor part before submitting a cannibalized repair.' });
+      return;
+    }
+    if (repairType !== 'external' && doesStandard && !repairLogs.trim()) {
+      notify?.({ type: 'error', text: 'Describe the work performed for the standard repair.' });
       return;
     }
     const namedParts = parts.filter((p) => p.name.trim());
@@ -13530,7 +13571,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
       repair_type: repairType || undefined,
       source_vehicle_id: repairType === 'cannibalized' ? ticket.source_vehicle_id : undefined,
       tested_ok: true,
-      test_notes: testNotes.trim() || undefined,
     }); } finally { setSubmittingRepair(false); }
   };
 
@@ -13541,7 +13581,24 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   // mechanic, so what differs is where the parts come from.
   const REPAIR_METHOD_CHOICE = {
     in_house: { label: 'Standard Repair', hint: 'Your own mechanic, using bought or on-hand parts.' },
-    cannibalized: { label: 'Uses Parts From Another Vehicle', hint: 'Cannibalization: parts taken from a donor vehicle.' },
+    cannibalized: { label: 'Uses Parts From Another Vehicle', hint: 'Cannibalization: parts taken from a retired donor vehicle. Tick both when the job also needs your own work.' },
+  };
+  const toggleMethod = async (kind) => {
+    if (methodBusy) return;
+    const nextStandard = kind === 'in_house' ? !doesStandard : doesStandard;
+    const nextDonor = kind === 'cannibalized' ? !usesDonorParts : usesDonorParts;
+    setMethodBusy(true);
+    try {
+      if (nextDonor !== (ticket.repair_type === 'cannibalized')) {
+        await api.put(`/tickets/${ticket.ticket_id}/sub-issues/${ticket.sub_issue_id}/donor`, { source_vehicle_id: null, keep_cannibalized: nextDonor });
+        await onDonorChanged();
+      }
+      setDoesStandard(nextStandard);
+      setUsesDonorParts(nextDonor);
+      onDirty?.();
+    } catch (error) {
+      notify?.({ type: 'error', text: describeError(error, 'Could not change the repair method.') });
+    } finally { setMethodBusy(false); }
   };
   const idBase = `lr-${ticket.sub_issue_id ?? ticket.ticket_id}`;
   const workDescription = ticket.work_order_notes ?? ticket.ticket_description;
@@ -13609,41 +13666,31 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             <div className="lr-field">
               <span className="lr-label" id={`${idBase}-type`}>Repair Method</span>
               {ticket.repair_type === 'external' ? <p className="lr-readonly">{REPAIR_TYPE_LABEL.external}</p> : (
-                <div className="lr-method-choices" role="radiogroup" aria-labelledby={`${idBase}-type`}>
-                {['in_house', 'cannibalized'].map((next) => (
-                <button key={next} type="button" role="radio" aria-checked={chosenRepairType === next} className={`lr-method-choice${chosenRepairType === next ? ' is-selected' : ''}`} disabled={methodBusy} onClick={async () => {
-                  if (!next || methodBusy) return;
-                  setMethodBusy(true);
-                  try {
-                    if (next !== ticket.repair_type) {
-                      await api.put(`/tickets/${ticket.ticket_id}/sub-issues/${ticket.sub_issue_id}/donor`, { source_vehicle_id: null, keep_cannibalized: next === 'cannibalized' });
-                      await onDonorChanged();
-                    }
-                    setChosenRepairType(next);
-                    onDirty?.();
-                  } catch (error) {
-                    notify?.({ type: 'error', text: describeError(error, 'Could not change the repair method.') });
-                  } finally { setMethodBusy(false); }
-                }}>
+                <div className="lr-method-choices" role="group" aria-labelledby={`${idBase}-type`}>
+                {['in_house', 'cannibalized'].map((next) => {
+                  const selected = next === 'in_house' ? doesStandard : usesDonorParts;
+                  return (
+                <button key={next} type="button" role="checkbox" aria-checked={selected} className={`lr-method-choice${selected ? ' is-selected' : ''}`} disabled={methodBusy} onClick={() => toggleMethod(next)}>
                   <span className="lr-method-check" aria-hidden="true" />
                   <span className="lr-method-text">
                     <strong>{REPAIR_METHOD_CHOICE[next].label}</strong>
                     <small>{REPAIR_METHOD_CHOICE[next].hint}</small>
                   </span>
                 </button>
-                ))}
+                  );
+                })}
                 </div>
               )}
             </div>
 
             <div className="lr-field">
-              <label className="lr-label" htmlFor={`${idBase}-work`}>Work Performed {repairType !== 'cannibalized' && <abbr className="required-asterisk" title="required">*</abbr>}</label>
+              <label className="lr-label" htmlFor={`${idBase}-work`}>Work Performed {(doesStandard || !repairType) && <abbr className="required-asterisk" title="required">*</abbr>}</label>
               <textarea
                 id={`${idBase}-work`}
                 className="lr-textarea"
-                required={repairType !== 'cannibalized'}
+                required={doesStandard || !repairType}
                 rows={4}
-                placeholder={repairType === 'cannibalized' ? 'Optional — add repair details if you also repaired something (a part-only job can leave this blank).' : 'Describe what you repaired, what you found, what you replaced, adjustments made, and testing performed.'}
+                placeholder={repairType === 'cannibalized' && !doesStandard ? 'Optional — add repair details if you also repaired something (a part-only job can leave this blank).' : 'Describe what you repaired, what you found, what you replaced, adjustments made, and testing performed.'}
                 value={repairLogs}
                 onChange={(e) => { setRepairLogs(e.target.value); onDirty?.(); }}
               />
@@ -13657,7 +13704,9 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
           {repairType === 'external' && onExternalSend && (
             <section className="lr-group" aria-labelledby={`${idBase}-shop`}>
               <h4 className="lr-section-label" id={`${idBase}-shop`}>External Shop</h4>
-              {(!ticket.external_sent_at || ticket.verification_verdict === 'Rejected') ? (
+              {(!ticket.external_sent_at || ticket.verification_verdict === 'Rejected') ? (isMechanic ? (
+                <p className="lr-note">{ticket.verification_verdict === 'Rejected' ? 'This repair was returned for rework. ' : ''}Waiting for the Custodian to hand the vehicle to the shop. You will receive it back, test it and write the repair up.</p>
+              ) : (
                 <>
                   <div className="lr-two-col">
                     <div className="lr-field">
@@ -13699,9 +13748,11 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                     Mark as Sent to Shop
                   </button>
                 </>
-              ) : !ticket.external_returned_at ? (
+              )) : !ticket.external_returned_at ? (!isMechanic ? (
+                <p className="lr-note">Sent to <strong>{ticket.external_vendor}</strong> on {formatDate(ticket.external_sent_at)}. The Maintenance Personnel{ticket.external_tester?.name ? ` (${ticket.external_tester.name})` : ''} receives it back and tests it; you verify the result afterwards.</p>
+              ) : (
                 <>
-                  <p className="lr-note">Sent to <strong>{ticket.external_vendor}</strong> on {formatDate(ticket.external_sent_at)} — waiting for it to come back.</p>
+                  <p className="lr-note">Sent to <strong>{ticket.external_vendor}</strong> on {formatDate(ticket.external_sent_at)}. When it comes back, receive it here, then test it and write the repair up.</p>
                   <div className="lr-field">
                     <label className="lr-label" htmlFor={`${idBase}-rn`}>Result / Condition on Return <abbr className="required-asterisk" title="required">*</abbr></label>
                     <textarea id={`${idBase}-rn`} className="lr-textarea" rows={2} value={returnForm.external_return_notes} onChange={(e) => setReturnForm({ ...returnForm, external_return_notes: e.target.value })} />
@@ -13723,17 +13774,17 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                     disabled={shopBusy || !returnForm.external_return_notes.trim()}
                     onClick={async () => { if (shopBusy) return; setShopBusy(true); try { await onExternalReturn(ticket, Object.fromEntries(Object.entries(returnForm).filter(([, v]) => String(v).trim() !== ''))); } finally { setShopBusy(false); } }}
                   >
-                    Mark as Returned
+                    Mark as Received
                   </button>
                 </>
-              ) : (
+              )) : (
                 <p className="lr-note">Returned from <strong>{ticket.external_vendor}</strong> on {formatDate(ticket.external_returned_at)}. {ticket.external_return_notes}</p>
               )}
             </section>
           )}
 
           {awaitingShopReturn && (
-            <p className="lr-note">Evidence, parts and dates apply once the vehicle is back from the shop — mark it Returned above when it comes in.</p>
+            <p className="lr-note">Evidence, parts and dates apply once the vehicle is back from the shop — mark it Received above when it comes in.</p>
           )}
 
           <div className="lr-side-actions lr-main-actions">
@@ -13743,21 +13794,13 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             {needsShopCycle && <p className="lr-note">{ticket.verification_verdict === 'Rejected' ? 'Record a new shop visit and return for this rejected repair.' : 'Send to the shop and mark returned before submitting.'}</p>}
             {isMechanic ? (
               <>
-                <label className="lr-field lr-test-confirm" style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                  <input type="checkbox" checked={testedOk} onChange={(e) => { setTestedOk(e.target.checked); onDirty?.(); }} />
-                  <span>I tested the vehicle after the work and it is working. <abbr className="required-asterisk" title="required">*</abbr></span>
-                </label>
-                <div className="lr-field lr-test-notes">
-                  <label className="lr-label" htmlFor={`${idBase}-tn`}>Test notes (optional)</label>
-                  <textarea id={`${idBase}-tn`} className="lr-textarea" rows={2} placeholder="e.g. Test drive 5 km, brakes firm, no noise." value={testNotes} onChange={(e) => { setTestNotes(e.target.value); onDirty?.(); }} />
-                </div>
-                <button className="primary-button lr-submit" type="submit" disabled={needsShopCycle || submittingRepair || shopBusy || !testedOk}>{submittingRepair ? 'Submitting...' : 'Submit Repair Log'}</button>
+                <button className="primary-button lr-submit" type="submit" disabled={needsShopCycle || submittingRepair || shopBusy}>{submittingRepair ? 'Submitting...' : 'Submit Repair Log'}</button>
               </>
             ) : (
-              <p className="lr-note">{ticket.external_returned_at ? 'The vehicle is back from the shop. A Maintenance Personnel will test it and submit it. You will verify it afterwards.' : 'Record the hand-over to the shop and its return here. A Maintenance Personnel tests the vehicle when it is back.'}</p>
+              <p className="lr-note">{ticket.external_returned_at ? 'The vehicle is back from the shop. A Maintenance Personnel will test it and submit it. You will verify it afterwards.' : 'Record the hand-over to the shop here. The Maintenance Personnel receives the vehicle back and tests it.'}</p>
             )}
             {isMechanic && onNoRepair && repairType !== 'external' && (
-              <div className="lr-field lr-no-repair">
+              <div className={`lr-field lr-no-repair${noRepairOpen ? ' is-open' : ''}`}>
                 {!noRepairOpen
                   ? <button type="button" className="ghost-button" onClick={() => setNoRepairOpen(true)}>No repair needed</button>
                   : (
@@ -13773,7 +13816,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
               </div>
             )}
             {isMechanic && onReturnToAdmin && (
-              <div className="lr-field lr-no-repair">
+              <div className={`lr-field lr-no-repair${returnOpen ? ' is-open' : ''}`}>
                 {!returnOpen
                   ? <button type="button" className="ghost-button" onClick={() => setReturnOpen(true)}>Return to Admin</button>
                   : (
@@ -13921,13 +13964,6 @@ function ticketTableColumns(onViewTicket, onChangeVisibility, { repairAction = f
   const columns = [
     { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => <div className={`ticket-list-identity ${ticketStatusClass(r.status)}`}><strong>{ticketNumber(r)}</strong><small className="muted">{(r.updated_at ?? r.created_at) ? new Date(r.updated_at ?? r.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '-'}</small></div> },
     { key: 'created', label: 'Date Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
-    { key: 'next_step', label: 'Next Step', className: 'cell-center', render: (r) => {
-      const stage = ticketWorkflowStage(r);
-      if (stage) return <span className="ticket-next-step-badge" style={{ color: TICKET_STAGE_STYLE[stage.tone].color, background: TICKET_STAGE_STYLE[stage.tone].bg }}>{stage.label}</span>;
-      // Tickets with no stage left still say something, so the cell is never blank.
-      const text = ({ Closed: 'No action needed', Cancelled: 'No action needed', Declined: 'No action needed', 'Pending Approval': 'Awaiting Admin approval' })[r.status];
-      return text ? <span className="ticket-next-step-badge" style={{ color: TICKET_STAGE_STYLE.info.color, background: TICKET_STAGE_STYLE.info.bg }}>{text}</span> : '—';
-    } },
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     {
       key: 'title',
@@ -13946,7 +13982,9 @@ function ticketTableColumns(onViewTicket, onChangeVisibility, { repairAction = f
     { key: 'personnel', label: 'Assigned To', render: (r) => <AssignedPersonnelNames ticket={r} /> },
     { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <span className="ticket-list-actions"><button type="button" className="icon-btn btn-view-action" title={repairAction ? 'Open work order' : 'View ticket'} aria-label={`${repairAction ? 'Open work order for ticket' : 'View ticket'} ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name={repairAction ? 'wrench' : 'eye'} size={16} /></button>{onChangeVisibility && <button type="button" className={`icon-btn ${r.hidden_from_list ? 'btn-reopen-action' : 'btn-archive-action'}`} title={r.hidden_from_list ? 'Restore to my list' : 'Hide from my list; repair tracking continues'} aria-label={`${r.hidden_from_list ? 'Restore' : 'Hide'} ticket ${ticketNumber(r)} ${r.hidden_from_list ? 'to' : 'from'} my list`} onClick={(e) => { e.stopPropagation(); onChangeVisibility(r, !r.hidden_from_list); }}><Icon name={r.hidden_from_list ? 'undo' : 'archive'} size={16} /></button>}</span> },
   ];
-  const order = ['ticket_id', 'created', 'vehicle_image', 'title', 'repair_source', 'priority', 'status', 'personnel', 'next_step', 'actions'];
+  // No Next Step column anywhere (the status says where a ticket is), and the mechanic's work-order list
+  // has no vehicle photo either (the title already names the vehicle and plate).
+  const order = ['ticket_id', 'created', ...(repairAction ? [] : ['vehicle_image']), 'title', 'repair_source', 'priority', 'status', 'personnel', 'actions'];
   return order.map((key) => columns.find((column) => column.key === key));
 }
 

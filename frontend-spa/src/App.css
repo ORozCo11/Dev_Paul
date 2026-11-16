@@ -17097,3 +17097,10 @@ html[data-theme] .table-shell:not(.is-compact) tbody td {
   padding-right: 38px;
   text-overflow: ellipsis;
 }
+
+/* Repair log actions: Submit, Cancel, No repair needed and Return to Admin share one row; a button that
+   opens its own form takes the full width, and the disabled Submit stays readable. */
+.lr-side-actions.lr-main-actions > .lr-no-repair { flex: 0 0 auto; align-items: center; }
+.lr-side-actions.lr-main-actions > .lr-no-repair.is-open { flex: 1 0 100%; align-items: flex-start; }
+.lr-side-actions.lr-main-actions .lr-no-repair .ghost-button { white-space: nowrap; }
+.lr-side-actions.lr-main-actions .lr-submit:disabled { opacity: .7; }

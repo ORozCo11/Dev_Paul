@@ -95,3 +95,17 @@ Custodian records a Condition Check = Good
    -> Confirm: report closed, Needs Repair cleared, vehicle released, a Readiness Check can now be recorded
 ```
 Only the Custodian can do this; Admin and mechanic cannot record condition checks. A vehicle with a live (pending or active) ticket still cannot take a new check.
+
+## 8. External-shop repair: who does what (16 November 2026)
+
+```
+Custodian inspects, proposes an external-shop repair (shop, reason, scope, estimate)
+   -> Admin approves and names the SHOP TESTER (a Maintenance Personnel)
+   -> Custodian records the vehicle SENT to the shop
+   -> the shop repairs it
+   -> the shop tester RECEIVES it back (return notes, actual cost, warranty) and TESTS it
+   -> the shop tester submits the repair log (the test is confirmed by submitting)
+   -> Custodian VERIFIES (does not drive or test) -> ticket closes
+Rework: the Custodian sends it out again; the same tester receives and tests it.
+```
+The Custodian can no longer record the return (`external.receive` is Maintenance Personnel only, and only the named tester). The tester sees the work in My Work Orders as soon as it is sent.

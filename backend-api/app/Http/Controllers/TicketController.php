@@ -96,9 +96,10 @@ class TicketController extends Controller
                 if ($user->hasRole('Maintenance Personnel')) {
                     $scoped->orWhere('assigned_mechanic_id', $user->id)
                         ->orWhereHas('subIssues', fn ($q) => $q->where('assigned_mechanic_id', $user->id))
-                        // Shop work that is back and waiting for a Maintenance Personnel to test it.
+                        // Shop work that has been handed to the shop: the named shop tester receives it back and tests it.
                         ->orWhereHas('subIssues', fn ($q) => $q->where('repair_type', 'external')->whereNull('assigned_mechanic_id')
-                            ->whereNotNull('external_returned_at')->where('status', 'Under Repair'));
+                            ->whereNotNull('external_sent_at')->where('status', 'Under Repair')
+                            ->where(fn ($who) => $who->where('external_tester_id', $user->id)->orWhereNull('external_tester_id')));
                 }
             });
         }
@@ -137,7 +138,8 @@ class TicketController extends Controller
                 && ((int) $ticket->assigned_mechanic_id === (int) $user->id
                     || $ticket->subIssues()->where('assigned_mechanic_id', $user->id)->exists()
                     || $ticket->subIssues()->where('repair_type', 'external')->whereNull('assigned_mechanic_id')
-                        ->whereNotNull('external_returned_at')->where('status', 'Under Repair')->exists());
+                        ->whereNotNull('external_sent_at')->where('status', 'Under Repair')
+                        ->where(fn ($who) => $who->where('external_tester_id', $user->id)->orWhereNull('external_tester_id'))->exists());
 
             abort_unless($isAssignedCustodian || $isAssignedMechanic, 403, 'You are not assigned to this ticket.');
         }
@@ -1671,10 +1673,11 @@ class TicketController extends Controller
 
     /**
      * The assigned mechanic may always act on their own work order. An
-     * EXTERNAL-shop work order with no in-house mechanic is handled by the
-     * ticket's own Custodian (ability external.handle): they log the vehicle
-     * going to the shop and receiving it back, then test it and close the
-     * ticket by verifying. The Admin only approves the proposal.
+     * EXTERNAL-shop work order has no in-house mechanic: the ticket's own
+     * Custodian hands the vehicle to the shop (external.handle); when it comes
+     * back the named shop tester (Maintenance Personnel) receives it, tests it
+     * and writes the repair up, and the Custodian only verifies. The Admin
+     * only approves the proposal and names the tester.
      */
     private function authorizeWorkOrderActor(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue): void
     {
@@ -1749,7 +1752,7 @@ class TicketController extends Controller
         return $subIssue->fresh();
     }
 
-    /** The shop returns it; the mechanic records the outcome before writing up the repair. */
+    /** The shop returns it; the Maintenance Personnel who will test it receives it and records the outcome. */
     public function markExternalReturned(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
         return DB::transaction(function () use ($request, $ticket, $subIssue) {
@@ -1763,8 +1766,15 @@ class TicketController extends Controller
     private function markExternalReturnedLocked(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
         $this->assertBelongsToTicket($ticket, $subIssue);
-        $this->requireAbility($request, 'external.handle');
-        abort_unless((int) $ticket->assigned_custodian_id === (int) $request->user()->id, 403, 'Only the Custodian assigned to this ticket can record the shop handling.');
+        // The vehicle comes back to the Maintenance Personnel who will test it (the named shop tester), not to the
+        // Custodian: they know the vehicle, so they receive it, test it and write the repair up. The Custodian only
+        // verifies afterwards.
+        $this->requireAbility($request, 'external.receive');
+        abort_if(
+            $subIssue->external_tester_id && (int) $subIssue->external_tester_id !== (int) $request->user()->id,
+            403,
+            'This vehicle is received and tested by ' . ($subIssue->externalTester?->name ?? 'the named Maintenance Personnel') . '.'
+        );
         abort_unless($subIssue->repair_type === 'external' && $subIssue->status === 'Under Repair', 422, 'Only unfinished external work can be received.');
         abort_unless($subIssue->external_sent_at, 422, 'This repair has not been sent out yet.');
         abort_if($subIssue->external_returned_at, 422, 'This repair has already been marked returned.');

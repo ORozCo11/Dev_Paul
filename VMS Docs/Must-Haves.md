@@ -21,7 +21,7 @@ The capabilities a panel should see working, with how to show each one and where
 | 9 | **Approval workflow** | Admin reviews the proposal (default list: Proposals + Active), edits, assigns a mechanic per sub-issue, approves, declines or requests corrections. No direct ticket creation. | Maintenance Tickets; `ticket.approve/decline/request_corrections` |
 | 10 | **Repair recording** | Mechanic opens My Work Orders and uses Record Repair Work: Standard Repair or Uses Parts From Another Vehicle, parts, evidence files; attachments then show on the ticket (View attachments). | My Work Orders; `LogRepairsPage`, `RepairFileCabinet`; `TicketController::logRepairs` |
 | 11 | **Cannibalization from several donors** | In one repair add two donor vehicles (already-used vehicles are greyed out), each with parts; submit and show one issue report and a Needs Repair flag per donor. | Cannibalization Management; `ticket_sub_issue_donor_parts.donor_vehicle_id` |
-| 12 | **External-shop repair** | Custodian proposes an external repair, Admin only approves it; the Custodian logs the vehicle sent to the shop and its return, tests it and closes the ticket by verifying (or returns it for rework). | Ticket details; `external.handle` |
+| 12 | **External-shop repair** | Custodian proposes an external repair, Admin only approves it; the Custodian logs the vehicle sent to the shop; the named Maintenance Personnel receives it back and tests it; the Custodian then verifies and closes the ticket (or returns it for rework). | Ticket details; `external.handle`, `external.receive` |
 | 13 | **Independent verification and closure** | The assigned Custodian verifies (personal-test attestation) or returns the work for rework; approval closes the ticket; self-verification is refused. The ticket list shows the Title and Repair Type columns. | My Tasks (Custodian); `ticket.verify` |
 | 14 | **Preventive maintenance** | Custodian books a schedule, Admin approves, the assigned mechanic completes it; recurring schedules renew; a due schedule becomes a ticket proposal. | Maintenance Schedule; `ConvertDueSchedulesToTickets` |
 | 15 | **Maintenance records ledger** | Show completed repairs by source (In-House Repair, Sent to External Shop, Maintenance Schedule). | Maintenance Records |
@@ -83,7 +83,7 @@ Use [Requirements-Traceability.md](Requirements-Traceability.md) for stable UC-0
 | View ongoing/completed maintenance | Implemented | Maintenance ledger, ticket details, repair logs and verification history. |
 | Dashboard of available vehicles, issues and maintenance | Implemented with role focus | Verification, readiness and unresolved issue KPIs; one tasks queue, one condition chart and readiness by vehicle type. Availability is accessible from Vehicles. |
 
-Additional current responsibilities: propose maintenance tickets, record condition/readiness checks, book schedules, view vehicle types and locations (add a type; add or edit a hub), log external-shop work (send to shop, receive back, rework), and independently verify completed repairs. Successful Custodian approval closes the ticket; Admin does not verify a repair.
+Additional current responsibilities: propose maintenance tickets, record condition/readiness checks, book schedules, view vehicle types and locations (add a type; add or edit a hub), hand external-shop work to the shop (and send it again for rework), and independently verify completed repairs. Successful Custodian approval closes the ticket; Admin does not verify a repair.
 
 ## 4. Maintenance Personnel requirements
 
@@ -104,7 +104,7 @@ Additional current responsibilities: propose maintenance tickets, record conditi
 - [x] Ticket proposals enter Pending Approval. Custodian proposes; Admin reviews/assigns; Maintenance Personnel repairs; assigned Custodian verifies and closes, or returns the work with a reason.
 - [x] Self-verification is blocked server-side, including multi-role accounts. Reassign an independent Custodian when needed; there is no Admin verification fallback.
 - [x] Cannibalized repairs record one or more donor vehicles and their parts; since 10 November 2026 submitting no longer files an issue report or flags the donor; the parts show as missing on the donor and only a part it cannot respond without keeps it Not Ready. The current flow does not require the retired Admin cannibalization approval step.
-- [x] External-shop work: the Admin only approves; the ticket's Custodian logs send and return, then tests and closes. Mechanics who did repair work cannot verify it.
+- [x] External-shop work: the Admin only approves; the ticket's Custodian logs the send; the named Maintenance Personnel receives it back and tests it; the Custodian verifies and closes. Mechanics who did repair work cannot verify it.
 - [x] Schedule bookings require approval; recurrence and schedule-to-ticket processing remain intact.
 - [x] Vehicle-rooted tenant scopes and the Super Admin fleet allowlist exist.
 - [ ] Close the issue-detail ownership, private-file signing and shared-catalog scope findings before treating access control as accepted (AUD-24-01/02/03).

@@ -48,6 +48,7 @@ class TicketDecisionSafetyTest extends TestCase
         if($s->repair_type==='external') {
             Sanctum::actingAs($this->custodian,['*']);
             $this->putJson("$base/external-sent",['external_vendor'=>'QA Shop','external_reason'=>'Warranty','external_work_scope'=>'Repair'])->assertOk();
+            Sanctum::actingAs($this->mechanic,['*']); // the shop tester receives it back
             $this->putJson("$base/external-returned",['external_return_notes'=>'Done','external_actual_cost'=>12000])->assertOk();
         }
         Sanctum::actingAs($this->mechanic,['*']);

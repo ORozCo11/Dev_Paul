@@ -78,7 +78,7 @@ class ExternalShopTicketTest extends TestCase
     }
 
     #[Test]
-    public function the_custodian_records_dispatch_and_return_under_their_own_identity_then_verifies_and_closes(): void
+    public function the_custodian_sends_it_out_the_mechanic_receives_and_tests_it_and_the_custodian_verifies_and_closes(): void
     {
         $id = $this->propose('external');
         Sanctum::actingAs($this->admin, ['*']);
@@ -96,15 +96,17 @@ class ExternalShopTicketTest extends TestCase
         $this->assertSame($this->custodian->name, $sub->external_sent_by);
         $this->assertSame($this->custodian->id, (int) $sub->external_handled_by);
 
-        $this->putJson("{$base}/external-returned", ['external_return_notes' => 'Back, road-tested by shop.', 'external_actual_cost' => 12000])->assertOk();
-        $this->assertSame($this->custodian->id, (int) $sub->fresh()->external_received_by);
+        // The Custodian cannot receive it: the Maintenance Personnel who will test it does.
+        $this->putJson("{$base}/external-returned", ['external_return_notes' => 'x'])->assertForbidden();
 
         Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/external-returned", ['external_return_notes' => 'Back, road-tested by shop.', 'external_actual_cost' => 12000])->assertOk();
+        $this->assertSame($this->mechanic->id, (int) $sub->fresh()->external_received_by);
         $this->putJson("{$base}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Shop job order attached; transmission rebuilt.'])->assertOk();
         Sanctum::actingAs($this->custodian, ['*']);
         $this->assertSame('For Verification', MaintenanceTicket::find($id)->status);
 
-        // The Admin never verifies; the same Custodian who sent and received it tests it and closes the ticket.
+        // The Admin never verifies; the Custodian only verifies the mechanic's tested repair and closes the ticket.
         Sanctum::actingAs($this->admin, ['*']);
         $this->putJson("/api/tickets/{$id}/verify", [])->assertForbidden();
         Sanctum::actingAs($this->custodian, ['*']);
@@ -113,7 +115,7 @@ class ExternalShopTicketTest extends TestCase
     }
 
     #[Test]
-    public function the_admin_and_maintenance_personnel_cannot_handle_the_shop_only_a_custodian_can(): void
+    public function only_the_custodian_sends_it_out_and_only_the_mechanic_receives_it_back(): void
     {
         $id = $this->propose('external');
         Sanctum::actingAs($this->admin, ['*']);
@@ -122,21 +124,30 @@ class ExternalShopTicketTest extends TestCase
         $base = "/api/tickets/{$id}/sub-issues/{$sub->sub_issue_id}";
         $sent = ['external_vendor' => 'Shop', 'external_reason' => 'Parts or service only available from an authorized shop', 'external_work_scope' => 'x'];
 
-        foreach ([$this->admin, $this->mechanic] as $user) {
-            Sanctum::actingAs($user, ['*']);
-            $this->putJson("{$base}/external-sent", $sent)->assertForbidden();
-            $this->putJson("{$base}/external-returned", ['external_return_notes' => 'x'])->assertForbidden();
-        }
+        // Sending out is the Custodian's: Admin and mechanic cannot, and the Admin cannot receive it either.
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("{$base}/external-sent", $sent)->assertForbidden();
+        $this->putJson("{$base}/external-returned", ['external_return_notes' => 'x'])->assertForbidden();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/external-sent", $sent)->assertForbidden();
 
-        // Another Custodian of the same barangay cannot handle a ticket that is not theirs.
+        // Another Custodian of the same barangay cannot send a ticket that is not theirs, nor receive anything.
         $otherCustodian = User::factory()->create(['role' => 'Custodian', 'roles' => ['Custodian'], 'barangay_id' => $this->custodian->barangay_id]);
         Sanctum::actingAs($otherCustodian, ['*']);
         $this->putJson("{$base}/external-sent", $sent)->assertForbidden();
         $this->putJson("{$base}/external-returned", ['external_return_notes' => 'x'])->assertForbidden();
 
-        // The ticket's own Custodian can.
+        // The ticket's own Custodian sends it out but cannot receive it back.
         Sanctum::actingAs($this->custodian, ['*']);
         $this->putJson("{$base}/external-sent", $sent)->assertOk();
+        $this->putJson("{$base}/external-returned", ['external_return_notes' => 'x'])->assertForbidden();
+
+        // A different Maintenance Personnel than the named shop tester cannot receive it; the tester can.
+        $otherMechanic = User::factory()->create(['role' => 'Maintenance Personnel', 'roles' => ['Maintenance Personnel'], 'barangay_id' => $this->custodian->barangay_id]);
+        Sanctum::actingAs($otherMechanic, ['*']);
+        $this->putJson("{$base}/external-returned", ['external_return_notes' => 'x'])->assertForbidden();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/external-returned", ['external_return_notes' => 'Back and road-tested.'])->assertOk();
     }
 
     #[Test]

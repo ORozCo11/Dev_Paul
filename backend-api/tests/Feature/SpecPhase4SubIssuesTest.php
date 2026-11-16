@@ -147,9 +147,10 @@ class SpecPhase4SubIssuesTest extends TestCase
         $url = $this->url("/{$this->sub->sub_issue_id}");
 
         $this->sub->update(['repair_type' => 'external', 'assigned_mechanic_id' => null]);
-        // The ticket's Custodian (not the Admin) logs the shop send and return.
-        Sanctum::actingAs($this->custodian, ['*']);
+        // The ticket's Custodian (not the Admin) logs the shop send; the Maintenance Personnel receives it back.
+        Sanctum::actingAs($this->mechanic, ['*']);
         $this->putJson("{$url}/external-returned", ['external_return_notes' => 'x'])->assertUnprocessable(); // never sent
+        Sanctum::actingAs($this->custodian, ['*']);
         $this->putJson("{$url}/external-sent", ['external_vendor' => 'Joe Auto'])->assertUnprocessable();    // missing reason/scope
 
         $this->putJson("{$url}/external-sent", [
@@ -161,8 +162,9 @@ class SpecPhase4SubIssuesTest extends TestCase
         Sanctum::actingAs($this->custodian, ['*']);
         $this->putJson("{$url}/external-sent", ['external_vendor' => 'x', 'external_reason' => 'x', 'external_work_scope' => 'x'])->assertUnprocessable();
 
-        $this->putJson("{$url}/external-returned", ['external_return_notes' => 'Clutch replaced, tested.', 'external_actual_cost' => 4800])->assertOk();
+        $this->putJson("{$url}/external-returned", ['external_return_notes' => 'Custodian cannot receive it'])->assertForbidden();
         Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$url}/external-returned", ['external_return_notes' => 'Clutch replaced, tested.', 'external_actual_cost' => 4800])->assertOk();
         $this->putJson("{$url}/log-repairs", ['tested_ok' => true, 'repair_logs' => 'Back from shop.'])->assertOk();
         Sanctum::actingAs($this->custodian, ['*']);
         $this->assertSame('For Inspection', $this->sub->fresh()->status);
