@@ -23,6 +23,9 @@ class UserController extends Controller
     use IssuesTemporaryPassword;
 
     private const ROLES = ['Admin', 'Custodian', 'Maintenance Personnel'];
+    // An Admin only adds colleagues. The barangay's one Admin is created by the Super Admin, so a second one
+    // can never be made from the Users page.
+    private const CREATABLE_ROLES = ['Custodian', 'Maintenance Personnel'];
 
     /**
      * Cross-tenant guard for the User model, which — unlike Vehicle/Hub —
@@ -101,15 +104,17 @@ class UserController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
-            'role' => ['required_without:roles', Rule::in(self::ROLES)],
+            'role' => ['required_without:roles', Rule::in(self::CREATABLE_ROLES)],
             'roles' => ['required_without:role', 'array', 'min:1', 'max:1'],
-            'roles.*' => [Rule::in(self::ROLES)],
+            'roles.*' => [Rule::in(self::CREATABLE_ROLES)],
             'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
             'address' => ['nullable', 'string', 'max:255'],
             'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'can_register_vehicles' => ['sometimes', 'boolean'],
         ], [
             'phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).',
+            'role.in' => 'An Admin can only add Custodians and Maintenance Personnel. A barangay has one Admin, created by the Super Admin.',
+            'roles.*.in' => 'An Admin can only add Custodians and Maintenance Personnel. A barangay has one Admin, created by the Super Admin.',
         ]);
 
         $data = $this->normalizeRoles($request, $data);
@@ -162,6 +167,13 @@ class UserController extends Controller
         ]);
 
         $data = $this->normalizeRoles($request, $data);
+
+        // Nobody can be promoted to Admin from here: a barangay has one Admin, created by the Super Admin.
+        abort_if(
+            !$user->hasRole('Admin') && array_key_exists('roles', $data) && in_array('Admin', $data['roles'], true),
+            422,
+            'A barangay has one Admin, created by the Super Admin. An Admin cannot make another user an Admin.'
+        );
 
         // A sole Admin unchecking their own "Admin" role through this same
         // form (see deactivate()'s identical self-lockout guard below) would

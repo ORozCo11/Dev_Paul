@@ -27,11 +27,13 @@ function AccountCascade({ user, rootToken }) {
   const switchingRef = useRef(false);
   useEffect(() => {
     let current = true;
+    let timer = null;
     api.get('/impersonate/candidates', { headers: { Authorization: `Bearer ${rootToken}` } })
       .then(({ data }) => { if (current) setAccounts(data); })
-      .catch(() => { if (current) setError('Account controls could not be loaded. Please retry.'); })
+      // No error banner: a failed load (usually a brief rate limit) is retried quietly a couple of times.
+      .catch(() => { if (current && retry < 2) timer = setTimeout(() => { if (current) setRetry((value) => value + 1); }, 4000); })
       .finally(() => { if (current) setLoading(false); });
-    return () => { current = false; };
+    return () => { current = false; if (timer) clearTimeout(timer); };
   }, [rootToken, retry]);
   const provinceAccounts = accounts.filter((account) => account.province_id != null && account.province_name);
   const currentAccount = provinceAccounts.find((account) => String(account.id) === String(user.id));
@@ -82,6 +84,6 @@ function AccountCascade({ user, rootToken }) {
       </SearchableSelect></div>
       <button className="account-impersonate-button" type="button" aria-busy={busy} disabled={loading || busy || !selectedUserId || selectedUserId === String(user.id)} onClick={() => switchUser(selectedUserId)}><span aria-live="polite">{busy ? 'Logging in...' : 'Impersonate'}</span></button>
     </div>
-    {error && <span className="account-cascade-error" role="alert">{error} {!accounts.length && <button type="button" onClick={() => { setLoading(true); setError(''); setRetry((value) => value + 1); }}>Retry</button>}</span>}
+    {error && <span className="account-cascade-error" role="alert">{error}</span>}
   </div>;
 }

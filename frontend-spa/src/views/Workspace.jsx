@@ -30,6 +30,7 @@ import { geocodeAddress, reverseGeocode } from '../utils/geocode';
 import { calendarDate } from '../utils/adminDate';
 import { completedMaintenanceRecords, maintenanceSourceBucket, maintenanceSourceLabel } from '../utils/maintenanceGroups';
 import { currentCondition } from '../utils/conditionMonitoring';
+import { DonutChart, HorizontalBarChart, ColumnChart, StackedBarChart } from '../components/charts';
 import { didRepairWorkOn } from '../utils/ticketVerification';
 
 const FormNoticeContext = createContext(null);
@@ -84,10 +85,10 @@ const modulesByRole = {
     { section: null, items: [['dashboard', 'Dashboard'], ['conditions', 'Condition Monitoring']] },
     { section: 'Fleet', icon: 'vehicle', items: [
       ['vehicles', 'View Vehicles'],
+      // The Custodian's work queue for recording a Readiness Check: first under View Vehicles, above the two look-up pages.
+      ['vehiclesReadiness', 'Readiness Check'],
       ['vehiclesReady', 'Ready to Respond'],
       ['vehiclesNotReady', 'Not Ready to Respond'],
-      // The Custodian's work queue for recording a Readiness Check (moved off the Not Ready page).
-      ['vehiclesReadiness', 'Readiness Check'],
       ['locations', 'Vehicle Location'],
     ] },
     // 'myTasks' is a tabbed container (Repair Verification / Work Tracker) around shared ticket data.
@@ -203,7 +204,7 @@ function defaultWorkflowStatuses(module, user) {
   // other status boxes to see declined, closed, cancelled or for-verification.
   if (module === 'tickets' && hasRole(user, 'Admin')) return ['Pending Approval', 'Active'];
   if (module === 'ticketWorkOrders') return [];
-  if (module === 'ticketVerifications') return ['Active', 'Pending', 'Verified'];
+  if (module === 'ticketVerifications') return ['Proposals', 'Active', 'Pending', 'Verified'];
   if (module === 'schedules') return ['Pending Approval', 'Scheduled'];
   if (module === 'maintenanceStatus') return ['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification'];
   if (module === 'issues') return ['Pending', 'Under Review', 'In Maintenance'];
@@ -1765,7 +1766,7 @@ function Workspace() {
     : activeModule === 'ticketVerifications'
       ? (records[activeModule] ?? []).filter((t) => (
           String(t.assigned_custodian_id) === String(user.id)
-          && ['Active', 'For Verification', 'Closed'].includes(t.status)
+          && MY_TASK_STATUSES.includes(t.status)
         ))
       : activeModule === 'maintenance' ? completedMaintenanceRows : records[activeModule] ?? []), [activeModule, records, user, completedMaintenanceRows]);
   const visibleRows = useMemo(() => {
@@ -2174,12 +2175,10 @@ function Workspace() {
     // this Custodian's own tickets ("My Tickets": Active through Closed).
     const rows = (records.ticketVerifications ?? []).filter((t) => (
       String(t.assigned_custodian_id) === String(user.id)
-      && ['Active', 'For Verification', 'Closed'].includes(t.status)
+      && MY_TASK_STATUSES.includes(t.status)
     ));
-    const active = rows.filter((r) => r.status === 'Active').length;
-    const pending = rows.filter((r) => r.status === 'For Verification').length;
-    const verified = rows.filter((r) => r.status === 'Closed').length;
-    return { total: rows.length, Active: active, Pending: pending, Verified: verified };
+    const count = (status) => rows.filter((r) => r.status === status).length;
+    return { total: rows.length, Proposals: count('Pending Approval'), Active: count('Active'), Pending: count('For Verification'), Verified: count('Closed'), Declined: count('Declined'), Cancelled: count('Cancelled') };
   }, [records.ticketVerifications, user.id]);
 
 
@@ -2302,6 +2301,80 @@ function Workspace() {
   const userColumnChooser = useColumnChooser('vms_user_columns_s2', userColumnDefs, ['id', 'phone']);
 
   const locationColumnChooser = useColumnChooser('vms_location_columns_s2', locationTableColumns, ['id', 'plate', 'address_area', 'updated_by', 'time']);
+
+  // Graphs for the header of the pages that did not have one.
+  const pageCharts = useMemo(() => {
+    const day = 24 * 60 * 60 * 1000;
+    const within = (value, days) => value && Date.now() - new Date(value).getTime() < days * day;
+    const countBy = (rows, keyOf) => { const map = new Map(); rows.forEach((row) => { const key = keyOf(row); if (key) map.set(key, (map.get(key) ?? 0) + 1); }); return [...map.entries()]; };
+    const perDay = (rows, field, days = 7) => Array.from({ length: days }, (_, i) => {
+      const date = new Date(Date.now() - (days - 1 - i) * day);
+      const count = rows.filter((row) => row[field] && new Date(row[field]).toDateString() === date.toDateString()).length;
+      return { label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: count, color: CHART.blue };
+    });
+    const fleet = (records.vehicles ?? []).filter((row) => row.readiness_state !== 'retired');
+    const ready = fleet.filter((row) => row.readiness_state === 'ready');
+    const notReady = fleet.filter((row) => row.readiness_state !== 'ready');
+    // Condition Monitoring does not load the vehicle list itself; the shared lookup carries each vehicle's condition.
+    const inService = (lookups.vehicles ?? []).filter((row) => !['Inactive', 'Decommissioned'].includes(row.status));
+    const histories = records.histories ?? [];
+    const logs = records.logs ?? [];
+    const archives = records.ticketArchives ?? [];
+    const users = records.users ?? [];
+    const categories = records.categories ?? [];
+
+    const withTicket = notReady.filter((row) => row.open_ticket_id).length;
+    const noTicketRepair = notReady.filter((row) => !row.open_ticket_id && row.condition === 'Needs Repair').length;
+    const missing = notReady.filter((row) => !row.open_ticket_id && row.missing_parts?.length).length;
+    const stale = notReady.filter((row) => !row.open_ticket_id && row.condition !== 'Needs Repair' && !row.missing_parts?.length && row.readiness_state === 'stale').length;
+    const unchecked = Math.max(0, notReady.length - withTicket - noTicketRepair - missing - stale);
+    const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - (5 - i)); return d; });
+
+    return {
+      ready: { title: 'Ready vehicles by category', note: `${ready.length} ready now`, type: 'bar', data: countBy(ready, (row) => row.category?.category_name ?? 'Unassigned').map(([label, value]) => ({ label, value })) },
+      notready: {
+        title: 'Why vehicles are not ready', note: `${notReady.length} not ready`, type: 'donut', center: notReady.length, centerSub: 'Not ready',
+        data: [
+          { label: 'Under repair (ticket)', value: withTicket, color: CHART.blue }, { label: 'Needs repair, no ticket', value: noTicketRepair, color: CHART.red },
+          { label: 'Missing part', value: missing, color: CHART.amber }, { label: 'Check expired', value: stale, color: CHART.purple }, { label: 'Not checked yet', value: unchecked, color: CHART.grey },
+        ],
+      },
+      readiness: {
+        title: 'Readiness at a glance', note: `${fleet.length} vehicles`, type: 'stacked',
+        data: [
+          { label: 'Checked', value: ready.length, color: CHART.green },
+          { label: 'Ready to check', value: fleet.filter((row) => row.readiness_state !== 'ready' && row.can_confirm_readiness !== false).length, color: CHART.blue },
+          { label: 'Ongoing ticket', value: fleet.filter((row) => row.can_confirm_readiness === false && row.open_ticket_id).length, color: CHART.amber },
+          { label: 'Needs repair', value: fleet.filter((row) => row.can_confirm_readiness === false && !row.open_ticket_id).length, color: CHART.red },
+        ],
+      },
+      conditions: {
+        title: 'Fleet condition', note: `${inService.length} vehicles in service`, type: 'donut', center: inService.length, centerSub: 'Vehicles',
+        data: [
+          { label: 'Good', value: inService.filter((row) => row.condition === 'Good').length, color: CHART.green },
+          { label: 'Needs repair', value: inService.filter((row) => row.condition === 'Needs Repair').length, color: CHART.red },
+        ],
+      },
+      categories: { title: 'Vehicles per category', note: `${categories.length} categories`, type: 'column', data: categories.map((row) => ({ label: row.category_name, value: row.vehicles_count ?? 0 })) },
+      users: {
+        title: 'People by role', note: `${users.length} users`, type: 'donut', center: users.length, centerSub: 'Users',
+        data: [
+          { label: 'Admin', value: users.filter((row) => row.role === 'Admin').length, color: CHART.purple },
+          { label: 'Custodian', value: users.filter((row) => row.role === 'Custodian').length, color: CHART.green },
+          { label: 'Maintenance Personnel', value: users.filter((row) => row.role === 'Maintenance Personnel').length, color: CHART.blue },
+        ],
+      },
+      histories: { title: 'Vehicle activity, last 7 days', note: `${histories.filter((row) => within(row.created_at, 7)).length} events`, type: 'column', data: perDay(histories, 'created_at') },
+      logs: {
+        title: 'Most active people', note: `${logs.length} entries`, type: 'bar',
+        data: countBy(logs, (row) => row.user?.name ?? row.user_name ?? 'System').sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, value]) => ({ label, value })),
+      },
+      archives: {
+        title: 'Archived tickets per month', note: `${archives.length} archived`, type: 'column',
+        data: months.map((d) => ({ label: d.toLocaleDateString('en-US', { month: 'short' }), value: archives.filter((row) => row.archived_at && new Date(row.archived_at).getFullYear() === d.getFullYear() && new Date(row.archived_at).getMonth() === d.getMonth()).length, color: CHART.green })),
+      },
+    };
+  }, [records.vehicles, records.histories, records.logs, records.ticketArchives, records.users, records.categories, lookups.vehicles]);
 
   // The soonest open schedule (waiting for approval, or approved) for each vehicle.
   const nextScheduleByVehicle = useMemo(() => {
@@ -2641,7 +2714,7 @@ function Workspace() {
               date) — this generic icon+title bar would just repeat "Dashboard"
               redundantly above it, so it's skipped for that one page only. */}
           {(activeModule !== 'dashboard' || isOnSpecialPage) && (
-            <div className="page-heading-row">
+            <div className="page-heading-row vms-banner">
               <span className="page-heading-icon">{renderModuleIcon(navModule)}</span>
               <div className="page-heading-text">
                 {subPageTitle && !isProfilePage && (
@@ -3161,7 +3234,7 @@ function Workspace() {
               activeFilter={filterStatus}
               onFilterChange={setFilterStatus}
             />
-          ) : undefined}
+          ) : <PageChart spec={pageCharts[vehicleView]} />}
           filterBar={
             <FilterBar
               categories={lookups.categories}
@@ -3232,6 +3305,7 @@ function Workspace() {
       return (
         <ModulePanel
           description="The kinds of vehicles you have, for example Fire Truck or Rescue Boat. Add a category before registering a vehicle of that kind."
+          statCards={<PageChart spec={pageCharts.categories} />}
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
@@ -3267,6 +3341,7 @@ function Workspace() {
       return (
         <ModulePanel
           description="The people who can sign in to your barangay. Add a user and the system emails them a temporary password."
+          statCards={<PageChart spec={pageCharts.users} />}
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
@@ -3429,6 +3504,7 @@ function Workspace() {
       return (
         <ModulePanel
           description="Your vehicles and their latest condition. For each one you can view it, plan maintenance such as an oil change, or do a condition check. If a check finds it needs repair, the repair request opens right there."
+          statCards={<PageChart spec={pageCharts.conditions} />}
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label">
@@ -3839,6 +3915,7 @@ function Workspace() {
       return (
         <ModulePanel
           description="Everything that happened to each vehicle, in order. Read only."
+          statCards={<PageChart spec={pageCharts.histories} />}
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
@@ -3936,7 +4013,7 @@ function Workspace() {
 
     if (activeModule === 'logs') {
       return (
-        <ModulePanel description="Who did what in the system. Read only.">
+        <ModulePanel description="Who did what in the system. Read only." statCards={<PageChart spec={pageCharts.logs} />}>
           <div className="panel-header-bar">
             <h3>Activity Log <span className="count-badge">{visibleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -4065,6 +4142,7 @@ function Workspace() {
       return (
         <ModulePanel
           description="Closed tickets, and deleted records you can restore."
+          statCards={<PageChart spec={pageCharts.archives} />}
           filterBar={
             <div className="filter-bar-container" style={{ flexWrap: 'wrap', gap: '8px 12px', alignItems: 'center' }}>
               <div className="filter-label"><span>Vehicle:</span></div>
@@ -6805,7 +6883,8 @@ function UserFormPage({ initialValues, isEditing, onBack, onSubmit, submitLabel,
           <h3 className="fx-section-title">Roles and Permissions</h3>
           <p className="fx-hint">Each account has one role. Choose the role this person will work under.</p>
           <div className="fx-roles" role="radiogroup" aria-label="Role">
-            {USER_ROLE_CARDS.map((r) => {
+            {/* Admin is only listed when editing an Admin: a barangay has one Admin, made by the Super Admin. */}
+            {USER_ROLE_CARDS.filter((r) => r.value !== 'Admin' || values.roles.includes('Admin')).map((r) => {
               const checked = values.roles.includes(r.value);
               return (
                 <label key={r.value} className={`fx-role${checked ? ' is-selected' : ''}`}>
@@ -7595,7 +7674,9 @@ const TICKET_STAT_CARDS = [
 // Submitted = repair logged, waiting on the Custodian (For Verification),
 // Completed = verified and closed. Total is every ticket assigned to them.
 const WORK_ORDER_BUCKET_STATUS = { Pending: 'Active', Submitted: 'For Verification', Completed: 'Closed' };
-const VERIFICATION_BUCKET_STATUS = { Active: 'Active', Pending: 'For Verification', Verified: 'Closed' };
+const VERIFICATION_BUCKET_STATUS = { Proposals: 'Pending Approval', Active: 'Active', Pending: 'For Verification', Verified: 'Closed', Declined: 'Declined', Cancelled: 'Cancelled' };
+// Every ticket of the Custodian's own that My Tasks can list: proposals through closed, declined and cancelled.
+const MY_TASK_STATUSES = ['Pending Approval', 'Active', 'For Verification', 'Closed', 'Declined', 'Cancelled'];
 const TICKET_WORK_ORDER_STAT_CARDS = [
   { key: 'Pending', label: 'Pending', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
   { key: 'Submitted', label: 'Submitted', icon: 'search', bg: '#ede9fe', color: '#7c3aed' },
@@ -7606,10 +7687,37 @@ const TICKET_WORK_ORDER_STAT_CARDS = [
 // queue (For Verification tickets), same term the Dashboard's own stat uses
 // for it; the old label read as just another ticket-status bucket instead
 // of the one that needs this Custodian's action.
+// Header graph for the pages that had none: each page gets the chart that suits its data (see pageCharts).
+const CHART = { green: '#16a34a', blue: '#2563eb', amber: '#f59e0b', red: '#dc2626', purple: '#7c3aed', grey: '#94a3b8' };
+function PageChart({ spec }) {
+  if (!spec) return null;
+  const { title, note, type, data, center } = spec;
+  const total = data.reduce((sum, row) => sum + (Number(row.value) || 0), 0);
+  return (
+    <section className="panel page-chart-panel" aria-label={title}>
+      <div className="page-chart-head"><h3>{title}</h3>{note && <span>{note}</span>}</div>
+      {type === 'donut' && (
+        <div className="page-chart-donut">
+          <DonutChart segments={data} centerLabel={center ?? total} centerSubLabel={spec.centerSub ?? 'Total'} />
+          <ul className="page-chart-legend">
+            {data.map((row) => <li key={row.label}><span style={{ background: row.color }} />{row.label}<strong>{row.value}</strong></li>)}
+          </ul>
+        </div>
+      )}
+      {type === 'stacked' && <StackedBarChart segments={data} />}
+      {type === 'bar' && <HorizontalBarChart rows={data} />}
+      {type === 'column' && <ColumnChart rows={data} />}
+    </section>
+  );
+}
+
 const TICKET_VERIFICATION_STAT_CARDS = [
+  { key: 'Proposals', label: 'Proposals', icon: 'clipboard', bg: '#fef3c7', color: '#92400e' },
   { key: 'Active', label: 'Active', icon: 'wrench', bg: '#dbeafe', color: '#1e40af' },
   { key: 'Pending', label: 'To Verify', icon: 'checkCircle', bg: '#fef3c7', color: '#d97706' },
   { key: 'Verified', label: 'Verified', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
+  { key: 'Declined', label: 'Declined', icon: 'close', bg: '#fee2e2', color: '#dc2626' },
+  { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#f1f5f9', color: '#475569' },
 ];
 
 // My Tasks -> History: a closed book, not a live board — every bucket here
@@ -7624,11 +7732,13 @@ const WORK_TRACKER_STAT_CARDS = [
 // module's table, matching the Vehicle Management stat cards exactly.
 // `cards` is [{ key, label, icon, bg, color }]; `counts` maps key -> number;
 // clicking a card toggles `activeFilter` via `onFilterChange`.
-function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFilter, onFilterChange, gridClassName = '', readOnly = false }) {
+function ModuleStatCards({ totalLabel = 'Total', total, cards: allCards, counts, activeFilter, onFilterChange, gridClassName = '', readOnly = false }) {
+  // At most four cards in a row (the total plus three): the rest stay available in the page's Status filter.
+  const cards = allCards.slice(0, 3);
   if (readOnly) return (
     <section className={`metric-grid stat-one-line ${gridClassName}`} aria-label="Status summary" style={{ marginBottom: 16, '--stat-cols': cards.length + 1 }}>
       {[{ key: 'total', label: totalLabel, icon: 'grid', bg: '#dbeafe', color: '#1d4ed8' }, ...cards].map(({ key, label, icon, bg, color }) => (
-        <div key={key} className="metric-card metric-card-iconic ticket-summary-metric">
+        <div key={key} className="metric-card metric-card-iconic ticket-summary-metric" style={{ '--accent': color }}>
           <span className="metric-card-icon" style={{ background: bg, color }}><Icon name={icon} size={18} /></span>
           <div className="metric-card-body"><span>{label}</span><strong>{key === 'total' ? total : counts[key] ?? 0}</strong></div>
         </div>
@@ -7644,6 +7754,7 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFil
         className={`metric-card metric-card-iconic stat-filter-card${isTotalActive ? ' is-active' : ''}`}
         style={{
           cursor: 'pointer',
+          '--accent': '#1d4ed8',
           boxShadow: isTotalActive ? '0 0 0 2px #2563eb' : undefined,
         }}
         onClick={() => onFilterChange(isFilterMulti ? [] : '')}
@@ -7671,6 +7782,7 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards, counts, activeFil
             className={`metric-card metric-card-iconic stat-filter-card${isActive ? ' is-active' : ''}`}
             style={{
               cursor: 'pointer',
+              '--accent': color,
               boxShadow: isActive ? `0 0 0 2px ${color}` : undefined,
             }}
             onClick={() => onFilterChange(isActive ? (isMulti ? [] : '') : (isMulti ? [key] : key))}
@@ -7777,9 +7889,17 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
         className: 'cell-center',
         render: (row) => {
           if (['Inactive', 'Decommissioned'].includes(row.status)) return null;
+          // Already checked (a fresh passing check): show a tick in place of the button.
+          if (row.readiness_state === 'ready') {
+            return (
+              <div className="row-actions">
+                <span className="readiness-checked-pill" title={`Readiness checked${row.readiness_last_checked ? ` on ${formatDate(row.readiness_last_checked)}` : ''}`}><Icon name="checkCircle" size={14} /> Checked</span>
+              </div>
+            );
+          }
           return (
             <div className="row-actions">
-              <button className={`icon-btn ${row.can_confirm_readiness === false ? 'readiness-check-blocked' : 'btn-confirm-action'}`} onClick={() => onReadinessCheck(row)} type="button" title={row.readiness_block_reason || 'Record Readiness Check'} aria-label="Record Readiness Check"><Icon name={row.can_confirm_readiness === false ? 'alert' : 'checkCircle'} size={14} /></button>
+              <button className={`readiness-text-btn ${row.can_confirm_readiness === false ? `is-blocked ${row.open_ticket_id ? 'is-ticket' : (row.missing_parts?.length ? 'is-part' : 'is-repair')}` : 'is-ready'}`} onClick={() => onReadinessCheck(row)} type="button" title={row.readiness_block_reason || 'Record Readiness Check'} aria-label="Record Readiness Check">{row.can_confirm_readiness === false ? (row.open_ticket_id ? 'Ongoing ticket' : (row.missing_parts?.length ? 'Missing part' : 'Needs repair')) : 'Check'}</button>
             </div>
           );
         },
@@ -12944,20 +13064,16 @@ function CustodianVerificationModule({
   }, [onViewTicket, onViewVehicle]);
   const ticketColumns = useMemo(() => ticketTableColumns(viewTicket), [viewTicket]);
   const ticketColumnChooser = useColumnChooser('vms_my_ticket_list_columns_v2', ticketColumns);
-  const panelTitle = activeFilter.length !== 1 ? 'My Tickets' : activeFilter.includes('Active')
-    ? 'Active Tickets'
-    : activeFilter.includes('Verified')
-      ? 'Verified Repairs'
-      : activeFilter.includes('Pending')
-        ? 'Pending Verifications'
-        : 'My Tickets';
-  const emptyStateText = activeFilter.length !== 1 ? 'No tickets match the selected statuses.' : activeFilter.includes('Active')
-    ? 'No tickets currently active.'
-    : activeFilter.includes('Verified')
-      ? 'No repairs verified yet.'
-      : activeFilter.includes('Pending')
-        ? 'No repairs pending your verification.'
-        : 'No tickets yet — once the Admin approves a proposal, it will show up here.';
+  const onlyFilter = activeFilter.length === 1 ? activeFilter[0] : null;
+  const panelTitle = ({ Proposals: 'Proposals', Active: 'Active Tickets', Verified: 'Verified Repairs', Pending: 'Pending Verifications', Declined: 'Declined Proposals', Cancelled: 'Cancelled Tickets' })[onlyFilter] ?? 'My Tickets';
+  const emptyStateText = ({
+    Proposals: 'No proposals waiting for the Admin.',
+    Active: 'No tickets currently active.',
+    Verified: 'No repairs verified yet.',
+    Pending: 'No repairs pending your verification.',
+    Declined: 'No declined proposals.',
+    Cancelled: 'No cancelled tickets.',
+  })[onlyFilter] ?? (activeFilter.length ? 'No tickets match the selected statuses.' : 'No tickets yet — once you propose a repair it will show up here.');
 
 
   return (

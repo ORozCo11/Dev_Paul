@@ -17104,3 +17104,71 @@ html[data-theme] .table-shell:not(.is-compact) tbody td {
 .lr-side-actions.lr-main-actions > .lr-no-repair.is-open { flex: 1 0 100%; align-items: flex-start; }
 .lr-side-actions.lr-main-actions .lr-no-repair .ghost-button { white-space: nowrap; }
 .lr-side-actions.lr-main-actions .lr-submit:disabled { opacity: .7; }
+
+/* Readiness Check page: a vehicle that is already checked shows a green "Checked" pill instead of the check button. */
+.readiness-checked-pill { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+html[data-theme="dark"] .readiness-checked-pill { background: rgba(34, 197, 94, .2); color: #86efac; }
+
+/* Readiness Check page: text buttons instead of icons. "Check" records the check; "Blocked" explains why it cannot yet. */
+html .readiness-text-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 78px; min-height: 0; height: auto; padding: 6px 14px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; white-space: nowrap; cursor: pointer; box-shadow: none; }
+html .readiness-text-btn.is-ready { background: #16a34a !important; color: #fff !important; border: 1px solid #16a34a !important; }
+html .readiness-text-btn.is-ready:hover { background: #15803d !important; border-color: #15803d !important; }
+html .readiness-text-btn.is-blocked { background: #f1f5f9 !important; color: #64748b !important; border: 1px solid #cbd5e1 !important; }
+html .readiness-text-btn.is-blocked:hover { background: #e2e8f0 !important; }
+html[data-theme="dark"] .readiness-text-btn.is-blocked { background: rgba(148, 163, 184, .15) !important; color: #cbd5e1 !important; border-color: rgba(148, 163, 184, .35) !important; }
+/* Each reason has its own colour, like the status badges: ongoing ticket = blue, needs repair = red, missing part = amber. */
+html .readiness-text-btn.is-ticket { background: #dbeafe !important; color: #1e40af !important; border-color: #93c5fd !important; }
+html .readiness-text-btn.is-repair { background: #fee2e2 !important; color: #b91c1c !important; border-color: #fca5a5 !important; }
+html .readiness-text-btn.is-part { background: #fef3c7 !important; color: #92400e !important; border-color: #fcd34d !important; }
+html .readiness-text-btn.is-ticket:hover { background: #bfdbfe !important; }
+html .readiness-text-btn.is-repair:hover { background: #fecaca !important; }
+html .readiness-text-btn.is-part:hover { background: #fde68a !important; }
+html[data-theme="dark"] .readiness-text-btn.is-ticket { background: rgba(59, 130, 246, .2) !important; color: #93c5fd !important; border-color: rgba(59, 130, 246, .4) !important; }
+html[data-theme="dark"] .readiness-text-btn.is-repair { background: rgba(239, 68, 68, .2) !important; color: #fca5a5 !important; border-color: rgba(239, 68, 68, .4) !important; }
+html[data-theme="dark"] .readiness-text-btn.is-part { background: rgba(245, 158, 11, .2) !important; color: #fcd34d !important; border-color: rgba(245, 158, 11, .4) !important; }
+
+/* Header graph on the list pages: a compact panel with the chart that suits the page. */
+.page-chart-panel { margin-bottom: 16px; padding: 14px 18px 12px; }
+.page-chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.page-chart-head h3 { margin: 0; font-size: 0.98rem; }
+.page-chart-head span { color: var(--text-muted, #64748b); font-size: 0.82rem; font-weight: 600; }
+.page-chart-panel .column-chart { height: 190px; }
+.page-chart-donut { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+.page-chart-donut .donut-chart { width: 150px; flex-shrink: 0; }
+.page-chart-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; flex: 1; min-width: 220px; }
+.page-chart-legend li { display: flex; align-items: center; gap: 10px; font-size: 0.88rem; font-weight: 600; }
+.page-chart-legend li > span { width: 11px; height: 11px; border-radius: 3px; flex-shrink: 0; }
+.page-chart-legend li > strong { margin-left: auto; }
+
+/* ---- Header polish: page banner, stat cards (max four) and the header graph ---------------------------------------- */
+html .page-heading-row.vms-banner {
+  margin: 14px 24px 0; padding: 16px 22px; gap: 16px; border: 0; border-radius: 16px;
+  background: linear-gradient(120deg, #1e3a8a 0%, #2563eb 62%, #3b82f6 100%);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.22);
+}
+html .page-heading-row.vms-banner h2 { color: #fff; font-size: 1.3rem; letter-spacing: -0.01em; }
+html .page-heading-row.vms-banner .breadcrumb-path { color: rgba(255, 255, 255, 0.78); font-size: 0.76rem; font-weight: 600; }
+html .page-heading-row.vms-banner .page-heading-icon { width: 44px; height: 44px; border-radius: 12px; background: rgba(255, 255, 255, 0.18); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); }
+html .page-heading-row.vms-banner .page-heading-icon .nav-icon, html .page-heading-row.vms-banner .page-heading-icon svg { width: 22px; height: 22px; stroke: #fff; color: #fff; }
+html[data-theme="dark"] .page-heading-row.vms-banner { background: linear-gradient(120deg, #172554 0%, #1e40af 70%, #2563eb 100%); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35); }
+
+html .metric-grid.stat-one-line { gap: 14px; }
+html .metric-grid.stat-one-line .metric-card-iconic {
+  gap: 14px; padding: 16px 18px; border-radius: 14px; border: 1px solid #e2e8f0; border-top: 4px solid var(--accent, #2563eb);
+  background: #fff; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06); text-align: left;
+}
+html .metric-grid.stat-one-line .metric-card-iconic:hover { transform: translateY(-2px); box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1); }
+html .metric-grid.stat-one-line .metric-card-iconic .metric-card-icon { width: 44px; height: 44px; border-radius: 12px; }
+html .metric-grid.stat-one-line .metric-card-iconic .metric-card-body span { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; margin-bottom: 2px; }
+html .metric-grid.stat-one-line .metric-card-iconic .metric-card-body strong { font-size: 1.85rem; font-weight: 800; line-height: 1.1; color: #0f172a; }
+html[data-theme="dark"] .metric-grid.stat-one-line .metric-card-iconic { background: #111827; border-color: #1f2937; border-top-color: var(--accent, #3b82f6); }
+html[data-theme="dark"] .metric-grid.stat-one-line .metric-card-iconic .metric-card-body strong { color: #f1f5f9; }
+
+html .page-chart-panel { border-radius: 16px; border: 1px solid #e2e8f0; border-top: 4px solid #2563eb; padding: 16px 20px 14px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06); }
+html .page-chart-head { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eef2f7; }
+html .page-chart-head h3 { font-size: 1.02rem; font-weight: 800; color: #0f172a; }
+html .page-chart-head span { padding: 3px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 0.78rem; font-weight: 700; }
+html[data-theme="dark"] .page-chart-panel { border-color: #1f2937; border-top-color: #3b82f6; }
+html[data-theme="dark"] .page-chart-head { border-bottom-color: #1f2937; }
+html[data-theme="dark"] .page-chart-head h3 { color: #f1f5f9; }
+html[data-theme="dark"] .page-chart-head span { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
