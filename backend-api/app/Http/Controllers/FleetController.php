@@ -46,7 +46,6 @@ class FleetController extends Controller
 
     // Gap A — a passed readiness check is only "fresh" for this many hours;
     // older than this and the vehicle reads "stale — needs re-check".
-    private const READINESS_FRESHNESS_HOURS = 24;
 
     /** @var array<int,int>|null see blockingMissingVehicleIds() */
     private ?array $blockingMissingIds = null;
@@ -195,8 +194,10 @@ class FleetController extends Controller
                     ? MaintenanceTicket::where('status', 'Pending Approval')->count()
                         + MaintenanceTicket::where('status', 'Closed')->where('closed_at', '>=', now()->subDays(14))->count()
                     : MaintenanceTicket::whereNotIn('status', ['Closed', 'Cancelled'])->count(),
-                'conditions' => VehicleConditionCheck::whereIn('condition_result', ['Needs Inspection', 'Needs Repair'])
-                    ->whereHas('vehicle', fn ($q) => $q->whereNotIn('status', ['Inactive', 'Decommissioned']))
+                // Vehicles that are Needs Repair right now (the Condition Monitoring page's own Needs Repair count). It
+                // used to count every Needs Repair check ever recorded, so it never dropped once a vehicle was fixed.
+                'conditions' => Vehicle::whereIn('condition', ['Needs Inspection', 'Needs Repair'])
+                    ->whereNotIn('status', ['Inactive', 'Decommissioned'])
                     ->count(),
                 // A mechanic's own badge only counts THEIR upcoming work, not
                 // the whole fleet's — same personalization pattern as the
@@ -539,9 +540,13 @@ class FleetController extends Controller
             return 'not_ready';
         }
 
-        return $latest->checked_at->gte(now()->subHours(self::READINESS_FRESHNESS_HOURS))
-            ? 'ready'
-            : 'stale';
+        return $this->readinessWithinLimit($latest->checked_at) ? 'ready' : 'stale';
+    }
+
+    /** A check stays good for the configured number of days (see config/vms.php); events invalidate it sooner. */
+    private function readinessWithinLimit($checkedAt): bool
+    {
+        return $checkedAt->gte(now()->subDays((int) config('vms.readiness_max_days', 7)));
     }
 
     /**
@@ -1407,7 +1412,7 @@ class FleetController extends Controller
 
         $latestCheck = $vehicle->readinessChecks()->orderByDesc('checked_at')->first();
         abort_unless(
-            $latestCheck && $latestCheck->all_passed && $latestCheck->checked_at->gte(now()->subHours(self::READINESS_FRESHNESS_HOURS)) && (!$vehicle->readiness_invalidated_at || $latestCheck->checked_at->gt($vehicle->readiness_invalidated_at)),
+            $latestCheck && $latestCheck->all_passed && $this->readinessWithinLimit($latestCheck->checked_at) && (!$vehicle->readiness_invalidated_at || $latestCheck->checked_at->gt($vehicle->readiness_invalidated_at)),
             422,
             'This vehicle needs a passing readiness check before it can be marked Available.'
         );
@@ -1460,7 +1465,7 @@ class FleetController extends Controller
             'state'              => $this->responseReadinessState($vehicle, $latest),
             'last_checked'       => $latest?->checked_at,
             'latest_checklist'   => $latest?->checklist,
-            'freshness_hours'    => self::READINESS_FRESHNESS_HOURS,
+            'freshness_days'     => (int) config('vms.readiness_max_days', 7),
             'active_ticket_id'   => $activeTicket?->ticket_id,
             'active_ticket_number' => $activeTicket?->display_number,
             'active_ticket_title' => $activeTicket?->ticket_title,
@@ -3242,158 +3247,6 @@ class FleetController extends Controller
 
         return $schedule->fresh(['vehicle.category', 'createdBy', 'assignedToUser']);
     }
-
-    /**
-     * Gap 2 — "close the loop" for a scheduled preventive maintenance in ONE
-     * action: mark the schedule Completed, create the linked maintenance
-     * record (so there's always proof of what was done), and — if the
-     * schedule is recurring — auto-create the next due date. Prevents the
-     * two old failure modes: a done PM stuck showing "overdue", and a
-     * forgotten next service.
-     */
-    public function completeSchedule(Request $request, VehicleMaintenanceSchedule $schedule)
-    {
-        return DB::transaction(function () use ($request, $schedule) {
-            $schedule = VehicleMaintenanceSchedule::whereKey($schedule->getKey())->lockForUpdate()->firstOrFail();
-            return $this->completeScheduleLocked($request, $schedule);
-        });
-    }
-
-    private function completeScheduleLocked(Request $request, VehicleMaintenanceSchedule $schedule)
-    {
-        $this->requireAbility($request, 'schedule.complete');
-        abort_if(in_array($schedule->vehicle->status, ['Inactive', 'Decommissioned'], true), 422, 'Cannot complete a schedule for a retired vehicle.');
-
-        abort_unless($schedule->status === 'Scheduled', 422, "Only a scheduled maintenance can be marked done. Current: {$schedule->status}.");
-
-        // Once ConvertDueSchedulesToTickets has turned this into a real
-        // ticket, THAT ticket is the live repair process — completing the
-        // schedule directly here would create a second, disconnected
-        // "proof of work" record for the same job. Close the ticket instead.
-        abort_if(
-            $schedule->resulting_ticket_id,
-            422,
-            "This schedule became Ticket #{$schedule->resulting_ticket_id} — complete the work there instead of on the schedule directly."
-        );
-
-        // A schedule is visible to every mechanic (it's a shared calendar), but
-        // only ONE of them should ever be able to act on it — otherwise two
-        // people can show up for the same job. Final senior system review
-        // (2026-10-05, §2) — Admin no longer gets a blanket override here;
-        // only the Maintenance Personnel this schedule is actually assigned
-        // to can complete it. Reassigning (schedule.reassign, Admin-only)
-        // changes who this check allows immediately, since it reads
-        // assigned_to live — that's how Admin hands off a stuck schedule now,
-        // instead of completing it themselves.
-        abort_unless(
-            $schedule->assigned_to && (int) $schedule->assigned_to === (int) $request->user()->id,
-            403,
-            $schedule->assigned_to
-                ? 'This schedule is assigned to another mechanic.'
-                : 'This schedule has no assigned mechanic yet — ask an Admin to assign it before marking it done.'
-        );
-
-        $data = $request->validate([
-            'date_completed'           => ['nullable', 'date', 'before_or_equal:' . now('Asia/Manila')->toDateString()],
-            'maintenance_cost'         => ['nullable', 'numeric', 'min:0'],
-            // Names of the parts or materials used, joined with commas (optional).
-            'parts_used'               => ['nullable', 'string', 'max:1000'],
-            'is_external'              => ['nullable', 'boolean'],
-            'external_vendor'          => ['nullable', 'string', 'max:255'],
-            'warranty_until'           => ['nullable', 'date'],
-            'receipt'                  => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:8192'],
-            'notes'                    => ['nullable', 'string'],
-        ]);
-
-        if ($request->hasFile('receipt')) {
-            $data['receipt_url'] = $this->storeUploadedImage($request->file('receipt'), 'maintenance-receipts');
-        }
-        unset($data['receipt']);
-
-        $completedDate = $data['date_completed'] ?? now()->toDateString();
-        // Only the assigned Maintenance Personnel can reach this point now
-        // (see the abort_unless above) — they're always the performer, never
-        // a stand-in named by someone else.
-        $personnelId   = $request->user()->id;
-
-        // A receipt (external shop) or a photo of the finished work
-        // (in-house) can still be attached as evidence — it just never
-        // substitutes for the independent Custodian verification every
-        // maintenance path in this system requires (production-readiness
-        // audit, 2026-10-05, P0 — the old "receipt attached = instantly
-        // Completed" shortcut was removed here).
-        $result = DB::transaction(function () use ($schedule, $data, $request, $completedDate, $personnelId) {
-            $vehicle = $schedule->vehicle;
-
-            // 1) The record — proof of the work, in the unified ledger.
-            // Always goes to "For Verification", never straight to
-            // "Completed" — every maintenance path in this system requires
-            // an independent Custodian check before something counts as
-            // done, regardless of what evidence is attached.
-            $record = VehicleMaintenanceRecord::create([
-                'vehicle_id'               => $schedule->vehicle_id,
-                'maintenance_type'         => $schedule->maintenance_type,
-                // Was a hardcoded identical string on every schedule-derived
-                // record ("Scheduled preventive maintenance" x every row) —
-                // use the reason this specific schedule was created for, so
-                // it actually varies instead of just repeating maintenance_type
-                // in sentence form. Falls back to something that at least
-                // names the type when the schedule itself had no notes.
-                'problem_reason'           => $schedule->notes ?: "Routine {$schedule->maintenance_type} per maintenance schedule #{$schedule->schedule_id}.",
-                'date_started'             => $completedDate,
-                'date_completed'           => null,
-                'maintenance_personnel_id' => $personnelId,
-                'is_external'              => !empty($data['is_external']),
-                'external_vendor'          => $data['external_vendor'] ?? null,
-                'warranty_until'           => $data['warranty_until'] ?? null,
-                'receipt_url'              => $data['receipt_url'] ?? null,
-                // Completion-time notes only — schedule->notes now belongs to
-                // problem_reason above, so it's not duplicated in both columns.
-                'action_taken'             => $data['notes'] ?? 'Preventive maintenance performed.',
-                'maintenance_cost'         => $data['maintenance_cost'] ?? null,
-                'parts_used'               => $data['parts_used'] ?? null,
-                'progress_status'          => 'For Verification',
-                'remarks'                  => "Completed from schedule #{$schedule->schedule_id} — awaiting Custodian verification.",
-            ]);
-
-            // Keep the vehicle's status/condition in lockstep with the
-            // record, same as every other maintenance path
-            // (storeMaintenanceRecord, verifyMaintenance, confirmMaintenance)
-            // — a vehicle with a repair sitting in the Custodian's
-            // verification queue should visibly show that, not look untouched.
-            \App\Services\VehicleOperationalState::hold($vehicle, 'Needs Repair');
-
-            // 2) Close the schedule — the CALENDAR task is done regardless of
-            // how long the paperwork verification takes; recurrence below
-            // still fires on schedule, independent of that. Link to the
-            // record it produced so a completed row can show real
-            // completion detail and a "View Record" link instead of only
-            // ever showing the original scheduled_date.
-            $schedule->update(['status' => 'Completed', 'resulting_maintenance_id' => $record->maintenance_id]);
-
-            $this->notifyCustodians(
-                'Verification Required: Scheduled Maintenance',
-                "{$schedule->maintenance_type} for {$vehicle->vehicle_name} was logged as done — please verify.",
-                'maintenance_verification_needed',
-                $vehicle->barangay_id
-            );
-
-            // 3) If recurring, seed the next one at completed date + interval.
-            $next = $schedule->seedNextRecurrence($completedDate, $request->user()->id);
-
-            $this->history($vehicle, 'Preventive Maintenance Completed', "{$schedule->maintenance_type} completed for {$vehicle->vehicle_name}." . ($next ? " Next due {$next->scheduled_date}." : ''), 'vehicle_maintenance_schedules', $schedule->schedule_id, $request);
-            $this->log($request, 'Complete', 'Vehicle Maintenance Schedule', $schedule->schedule_id, "Completed schedule #{$schedule->schedule_id}" . ($next ? " (recurring — next #{$next->schedule_id})" : ''));
-
-            return ['record' => $record, 'next' => $next];
-        });
-
-        return response()->json([
-            'schedule' => $schedule->fresh(['vehicle.category', 'createdBy', 'assignedToUser', 'resultingMaintenance']),
-            'record'   => $result['record'],
-            'next'     => $result['next']?->load(['vehicle.category', 'createdBy', 'assignedToUser']),
-        ]);
-    }
-
     /**
      * VMS-IMPROVEMENT-PLAN.md Phase B5 — a purpose-built reassignment for
      * VehicleMaintenanceSchedule.assigned_to, the one assignment type that

@@ -115,7 +115,7 @@ export default function SupportCenterTab({ onRequestConfirmation, onSuccess, onO
     .filter((report) => [report.id, report.concern_type, report.province_name, report.city_name, report.barangay_name, report.description, report.reporter_name, report.reporter_contact].some((value) => String(value ?? '').toLowerCase().includes(query)));
 
   const footer = selected && <div className="sa-row-actions">{stateOf(selected) === 'Deleted'
-    ? <button type="button" className="primary-button" onClick={() => requestAction(selected, 'restore')}>Restore to Open</button>
+    ? <button type="button" className="success-button" onClick={() => requestAction(selected, 'restore')}>Restore to Open</button>
     : <><button type="button" className="primary-button" onClick={() => requestAction(selected, selected.status === 'Resolved' ? 'reopen' : 'resolve')}>{selected.status === 'Resolved' ? 'Reopen Report' : 'Mark Resolved'}</button><button type="button" className="ghost-button danger" onClick={() => requestAction(selected, 'delete')}>Delete Report</button></>}</div>;
 
   return <div className="superadmin-tab">

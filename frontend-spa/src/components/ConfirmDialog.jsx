@@ -16,6 +16,11 @@ export default function ConfirmDialog({ busy, dialog, onCancel, onConfirm }) {
 
   if (!dialog) return null;
 
+  // Approve / restore / confirm style actions are green; delete / decline / deactivate style actions are red.
+  // `variant: 'danger'` or 'primary' says it outright; otherwise the label decides.
+  const destructive = dialog.variant === 'danger'
+    || (dialog.variant == null && /delete|remove|decline|cancel|deactivate|discard|reject|archive|revoke|regenerate|disable|reset/i.test(`${dialog.confirmLabel ?? ''} ${dialog.title ?? ''}`));
+
   return (
     <div className="confirm-overlay" onClick={busy ? undefined : onCancel}>
       <section
@@ -37,12 +42,12 @@ export default function ConfirmDialog({ busy, dialog, onCancel, onConfirm }) {
           <h3 id="confirm-dialog-title">{dialog.title ?? 'Confirm Action'}</h3>
           <p>{dialog.message}</p>
         </div>
-        <div className={`confirm-dialog-actions${dialog.variant === 'primary' ? '' : ' is-danger'}`}>
-          <button className="ghost-button" disabled={busy} onClick={onCancel} type="button">
+        <div className={`confirm-dialog-actions${destructive ? ' is-danger' : ''}`}>
+          <button className="ghost-button cancel-btn" disabled={busy} onClick={onCancel} type="button">
             Cancel
           </button>
           <button
-            className={dialog.variant === 'primary' ? 'primary-button' : 'danger-button'}
+            className={destructive ? 'danger-button' : 'success-button'}
             disabled={busy}
             onClick={onConfirm}
             type="button"

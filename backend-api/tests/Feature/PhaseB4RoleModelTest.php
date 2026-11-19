@@ -340,7 +340,7 @@ class PhaseB4RoleModelTest extends TestCase
     }
 
     #[Test]
-    public function admin_can_still_create_a_standalone_maintenance_record(): void
+    public function admin_can_no_longer_create_a_standalone_maintenance_record(): void
     {
         $vehicle = $this->vehicle();
 
@@ -350,7 +350,7 @@ class PhaseB4RoleModelTest extends TestCase
             'maintenance_type' => 'Oil Change',
             'problem_reason' => 'Routine oil change',
             'maintenance_personnel_id' => $this->mechanic->id,
-        ])->assertCreated();
+        ])->assertForbidden();
     }
 
     #[Test]

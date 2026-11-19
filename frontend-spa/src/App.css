@@ -11886,19 +11886,24 @@ html[data-theme="light"] .table-shell button.cell-link:hover {
   text-decoration: underline;
 }
 
-/* Confirmation popup: Cancel reads as a solid green "safe" action, and the
-   confirm/destructive action is a solid red — not the pale, washed-out tint
-   that .danger-button inherits from an unscoped dark-theme rule elsewhere. */
+/* Confirmation popup: Cancel is a solid red button and the confirming action (Approve, Restore...) a solid green one. A
+   destructive confirmation (Delete, Decline...) is red itself, so its Cancel turns neutral to stay distinguishable. */
 html[data-theme="light"] .confirm-dialog-actions .ghost-button {
-  background: #16a34a !important;
-  border: 1px solid #16a34a !important;
+  background: #dc2626 !important;
+  border: 1px solid #dc2626 !important;
   border-radius: 9px !important;
   color: #ffffff !important;
 }
 html[data-theme="light"] .confirm-dialog-actions .ghost-button:hover:not(:disabled) {
-  background: #15803d !important;
-  border-color: #15803d !important;
+  background: #b91c1c !important;
+  border-color: #b91c1c !important;
 }
+html[data-theme="light"] .confirm-dialog-actions.is-danger .ghost-button {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+html[data-theme="light"] .confirm-dialog-actions.is-danger .ghost-button:hover:not(:disabled) { background: #cbd5e1 !important; }
 html[data-theme="light"] .danger-button {
   background: linear-gradient(90deg, #dc2626, #ef4444) !important;
   border: none !important;
@@ -17172,3 +17177,65 @@ html[data-theme="dark"] .page-chart-panel { border-color: #1f2937; border-top-co
 html[data-theme="dark"] .page-chart-head { border-bottom-color: #1f2937; }
 html[data-theme="dark"] .page-chart-head h3 { color: #f1f5f9; }
 html[data-theme="dark"] .page-chart-head span { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
+
+/* Schedules filter bar: the "Show cancelled schedules" checkbox sits beside the Status dropdown. */
+.schedule-cancelled-toggle { display: inline-flex; align-items: center; gap: 8px; align-self: flex-end; margin: 0 0 6px 14px; font-size: 0.86rem; font-weight: 700; color: #334155; cursor: pointer; white-space: nowrap; }
+.schedule-cancelled-toggle input { width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer; }
+html[data-theme="dark"] .schedule-cancelled-toggle { color: #cbd5e1; }
+html .schedule-cancelled-toggle { color: #334155 !important; }
+html[data-theme="dark"] .schedule-cancelled-toggle { color: #cbd5e1 !important; }
+
+/* ---- Approve is green, Cancel is red, everywhere -------------------------------------------------------------------- */
+html .success-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; padding: 0 18px;
+  border: 1px solid #15803d; border-radius: 10px; background: #16a34a; color: #fff; font-weight: 700; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.25); transition: background 0.15s ease, transform 0.12s ease;
+}
+html .success-button:hover:not(:disabled) { background: #15803d; transform: translateY(-1px); }
+html .success-button:disabled { opacity: 0.55; cursor: not-allowed; }
+html .ghost-button.cancel-btn { color: #b91c1c; border-color: #fca5a5; background: #fff1f2; }
+html .ghost-button.cancel-btn:hover:not(:disabled) { background: #fee2e2; border-color: #f87171; color: #991b1b; }
+html[data-theme="dark"] .ghost-button.cancel-btn { color: #fca5a5; border-color: rgba(248, 113, 113, 0.45); background: rgba(239, 68, 68, 0.12); }
+html[data-theme="dark"] .ghost-button.cancel-btn:hover:not(:disabled) { background: rgba(239, 68, 68, 0.22); }
+.confirm-dialog-actions .success-button { height: 40px; }
+
+/* ---- One button shape everywhere ----------------------------------------------------------------------------------
+   Every button, icon button, tab and filter control uses the same 10px corner, so no page mixes square and rounded ones. */
+html :is(
+  .primary-button, .ghost-button, .danger-button, .success-button, .secondary-button, .link-button.is-solid,
+  .export-btn, .icon-add-btn, .filter-apply-btn, .filter-clear-btn, .filter-clear-all-btn, .btn-sm, .archive-btn,
+  .readiness-text-btn, .entry-mode-btn, .icon-btn, .row-actions button, .locations-tab-button, .view-tabs button,
+  .filter-select, .multi-select-trigger, .proposal-decision-btn, .lr-method-choice, .wizard-step-pill
+) { border-radius: 10px !important; }
+html :is(.pagination-page, .pagination-arrow, .pagination-size button) { border-radius: 8px !important; }
+
+/* Repair log: "No repair needed" is teal (nothing wrong), "Return to Admin" is amber (needs someone else). */
+html .lr-btn-norepair { background: #0d9488 !important; border: 1px solid #0d9488 !important; color: #fff !important; font-weight: 700; }
+html .lr-btn-norepair:hover:not(:disabled) { background: #0f766e !important; border-color: #0f766e !important; }
+html .lr-btn-return { background: #f59e0b !important; border: 1px solid #d97706 !important; color: #1f1300 !important; font-weight: 700; }
+html .lr-btn-return:hover:not(:disabled) { background: #d97706 !important; border-color: #b45309 !important; color: #fff !important; }
+html .lr-btn-norepair:disabled, html .lr-btn-return:disabled { opacity: 0.55; }
+
+/* A page's graph and its filters sit side by side: graph left, filters right. They stack on narrow screens. */
+.chart-filter-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: stretch; margin-bottom: 16px; }
+.chart-filter-row.is-chart-only { grid-template-columns: minmax(0, 1fr); }
+.chart-filter-row > .page-chart-panel { margin-bottom: 0; }
+.chart-filter-row > .chart-filter-aside { margin: 0; display: flex; align-items: center; }
+.chart-filter-aside > * { width: 100%; }
+.chart-filter-aside .filter-bar-container { flex-wrap: wrap; row-gap: 14px; }
+@media (max-width: 1000px) { .chart-filter-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* Status chips in one tidy row (My Tasks and Work Orders), the same look as the Admin's Repair Tickets filter. */
+.status-chip-filter .ticket-filter-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.status-chip-filter .issue-filter-status-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.status-chip-filter .issue-filter-status-chip { display: inline-flex; align-items: center; justify-content: flex-start; gap: 8px; width: auto; padding: 6px 14px; border-radius: 8px; font-size: 0.86rem; font-weight: 700; cursor: pointer; }
+.status-chip-filter .issue-filter-status-chip span { text-align: left; }
+
+/* A vehicle's history on its own profile. */
+.vehicle-history-card .veh-card-head .count-badge { margin-left: 8px; }
+.vehicle-history-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 0; }
+.vehicle-history-list li { display: grid; grid-template-columns: 96px minmax(120px, 190px) 1fr auto; gap: 10px; align-items: baseline; padding: 9px 2px; border-bottom: 1px solid var(--border-subtle, #e5edf8); font-size: 0.86rem; }
+.vehicle-history-list li:last-child { border-bottom: 0; }
+.vehicle-history-when { color: var(--text-muted, #64748b); font-weight: 600; }
+.vehicle-history-who { color: var(--text-muted, #64748b); font-size: 0.8rem; }
+@media (max-width: 720px) { .vehicle-history-list li { grid-template-columns: 1fr; gap: 2px; } }

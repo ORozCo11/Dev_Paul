@@ -141,55 +141,92 @@ class ConvertDueSchedulesToTickets extends Command
         }
 
         DB::transaction(function () use ($schedule, $vehicle, $custodian, $ticketTitle, $issueSummary) {
+            // The mechanic the Admin approved on the schedule. When there is one (and an Admin to be named as the
+            // approver) the schedule's approval IS the job's approval, so the job starts Active, already assigned: no
+            // second approval. A schedule with no assigned mechanic still becomes a proposal so the Admin can assign one.
+            $mechanic = $schedule->assigned_to
+                ? User::where('barangay_id', $vehicle->barangay_id)->where('is_active', true)->havingRole('Maintenance Personnel')->find($schedule->assigned_to)
+                : null;
+            $admin = $mechanic
+                ? User::where('barangay_id', $vehicle->barangay_id)->havingRole('Admin')->where('is_active', true)->orderBy('id')->first()
+                : null;
+            $direct = $mechanic !== null && $admin !== null;
+
             $ticket = MaintenanceTicket::create([
                 'vehicle_id' => $vehicle->vehicle_id,
                 'created_by' => $custodian->id,
                 'ticket_title' => $ticketTitle,
-                'ticket_description' => "Auto-proposed from Maintenance Schedule #{$schedule->schedule_id}, due {$schedule->scheduled_date}."
+                'ticket_description' => ($direct ? "Created from the approved Scheduled Service #{$schedule->schedule_id}, due {$schedule->scheduled_date}." : "Auto-proposed from Maintenance Schedule #{$schedule->schedule_id}, due {$schedule->scheduled_date}.")
                     . ($schedule->notes ? " Notes: {$schedule->notes}" : ''),
                 'priority' => 'Medium',
-                'status' => 'Pending Approval',
+                'status' => $direct ? 'Active' : 'Pending Approval',
                 'assigned_custodian_id' => $custodian->id,
+                'assigned_mechanic_id' => $direct ? $mechanic->id : null,
                 'assigned_at' => now(),
+                'down_since' => $direct ? now() : null,
             ]);
             $ticket->update(['ticket_title' => MaintenanceTicket::composeTitle($ticket->barangay_number ?? $ticket->ticket_id, $vehicle->vehicle_name, $issueSummary)]);
+            if ($direct) {
+                $ticket->forceFill(['decision_revision' => 1, 'decision_history' => [[
+                    'at' => now()->toIso8601String(), 'name' => $admin->name, 'user_id' => $admin->id, 'event' => 'Approved',
+                    'details' => ['via' => "Approved Scheduled Service #{$schedule->schedule_id}", 'assigned_mechanics' => [$mechanic->id]],
+                ]]])->save();
+            }
 
-            // A rider for Admin to review, same as a human proposal's
-            // suggested_mechanic_id — not a real dispatch. approveTicket()
-            // is what actually assigns them, exactly like any other proposal.
-            $suggestedMechanic = $schedule->assigned_to
-                ? User::where('barangay_id', $vehicle->barangay_id)->where('is_active', true)->havingRole('Maintenance Personnel')->find($schedule->assigned_to)
-                : null;
-
-            // Final senior system review (2026-10-05, §3) — a preventive
-            // schedule isn't a diagnosed defect, so its sub-issue shouldn't
-            // be titled as though it is. "Scheduled Maintenance" names what
-            // kind of work this is; maintenance_type still carries the real
-            // type for every downstream list/filter/report that reads it.
+            // A preventive schedule isn't a diagnosed defect, so its work item isn't titled as though it were.
+            // "Scheduled Maintenance" names the kind of work; maintenance_type carries the real type for every list.
             TicketSubIssue::create([
                 'ticket_id' => $ticket->ticket_id,
                 'created_by' => $custodian->id,
                 'title' => 'Scheduled Maintenance',
                 'maintenance_type' => $schedule->maintenance_type,
-                'suggested_mechanic_id' => $suggestedMechanic?->id,
-                'status' => 'Open',
+                'suggested_mechanic_id' => $mechanic?->id,
+                'assigned_mechanic_id' => $direct ? $mechanic->id : null,
+                'mechanic_assigned_by' => $direct ? $admin->id : null,
+                'mechanic_assigned_at' => $direct ? now() : null,
+                'status' => $direct ? 'Under Repair' : 'Open',
             ]);
 
             $schedule->update(['resulting_ticket_id' => $ticket->ticket_id]);
 
-            // No authenticated request in a console command, so
-            // BelongsToBarangay's auto-stamp (which reads Auth::user())
-            // never fires here — barangay_id (and role, for consistency
-            // with every HTTP-triggered log entry) must be set explicitly.
+            // A routine service does not change the vehicle's condition: it is held for the work (Under Maintenance) and
+            // returns to Available when the job is verified and closed. It never reads as Needs Repair.
+            if ($direct && !in_array($vehicle->status, ['Inactive', 'Decommissioned'], true)) {
+                $vehicle->update(['status' => 'Under Maintenance']);
+            }
+
+            // No authenticated request in a console command, so BelongsToBarangay's auto-stamp never fires here:
+            // barangay_id (and role, for consistency with every HTTP-triggered log entry) is set explicitly.
             ActivityLog::create([
                 'user_id' => $custodian->id,
                 'role' => $custodian->role,
-                'action' => 'Auto-Propose Ticket',
+                'action' => $direct ? 'Auto-Create Job' : 'Auto-Propose Ticket',
                 'module' => 'Maintenance Tickets',
                 'affected_record_id' => (string) $ticket->ticket_id,
-                'details' => "Ticket #{$ticket->display_number} auto-proposed (Pending Approval) from due Maintenance Schedule #{$schedule->schedule_id} ({$vehicle->vehicle_name}) — awaiting Admin review.",
+                'details' => $direct
+                    ? "Ticket #{$ticket->display_number} created Active from the approved Scheduled Service #{$schedule->schedule_id} ({$vehicle->vehicle_name}) and assigned to {$mechanic->name}."
+                    : "Ticket #{$ticket->display_number} auto-proposed (Pending Approval) from due Maintenance Schedule #{$schedule->schedule_id} ({$vehicle->vehicle_name}) — awaiting Admin review.",
                 'barangay_id' => $vehicle->barangay_id,
             ]);
+
+            if ($direct) {
+                Notification::create([
+                    'user_id' => $mechanic->id,
+                    'title' => 'Maintenance Assigned to You',
+                    'message' => "Your scheduled {$schedule->maintenance_type} for {$vehicle->vehicle_name} is due today (Ticket #{$ticket->display_number}). Do the work, test it, and submit it.",
+                    'type' => 'mechanic_assigned',
+                    'ticket_id' => $ticket->ticket_id,
+                ]);
+                Notification::create([
+                    'user_id' => $custodian->id,
+                    'title' => 'Scheduled Service Started',
+                    'message' => "Your scheduled {$schedule->maintenance_type} for {$vehicle->vehicle_name} is due, so Ticket #{$ticket->display_number} was started and assigned to {$mechanic->name}. You will verify it when it is done.",
+                    'type' => 'schedule_due_ticket_created',
+                    'ticket_id' => $ticket->ticket_id,
+                ]);
+
+                return;
+            }
 
             Notification::create([
                 'user_id' => $custodian->id,
@@ -203,7 +240,7 @@ class ConvertDueSchedulesToTickets extends Command
                 Notification::create([
                     'user_id' => $admin->id,
                     'title' => 'New Ticket Proposal Awaiting Review',
-                    'message' => "A due Maintenance Schedule auto-proposed Ticket #{$ticket->display_number} — \"{$schedule->maintenance_type}\" for {$vehicle->vehicle_name}. Review, edit if needed, then approve or decline.",
+                    'message' => "A due Maintenance Schedule auto-proposed Ticket #{$ticket->display_number} — \"{$schedule->maintenance_type}\" for {$vehicle->vehicle_name}. Assign a mechanic, then approve or decline.",
                     'type' => 'ticket_proposed',
                     'ticket_id' => $ticket->ticket_id,
                 ]);

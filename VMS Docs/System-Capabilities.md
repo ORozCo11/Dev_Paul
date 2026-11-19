@@ -98,7 +98,7 @@ A Custodian signs off that the vehicle is ready to respond. The Maintenance Pers
 
 The dialog loads server eligibility. Confirmation stays disabled if eligibility cannot be retrieved. The save endpoint checks eligibility again under a vehicle lock: Under Maintenance, an Active/For Verification ticket, or retirement blocks confirmation. Rejected requests create no check. Repair closure invalidates earlier readiness evidence; independent repair verification must be followed by a fresh operation check.
 
-A passing attestation remains fresh for **24 hours**. Availability, physical condition and readiness are separate indicators. States include ready, stale, not_ready, unchecked, in_maintenance and retired. The historical Mark Available endpoint retains open-ticket and retirement guards; it does not bypass active repairs.
+A passing attestation stays valid until something changes (a repair or condition change invalidates it) or it is **7 days** old (`READINESS_MAX_DAYS`, default 7); it no longer lapses after 24 hours. Availability, physical condition and readiness are separate indicators. States include ready, stale, not_ready, unchecked, in_maintenance and retired. The historical Mark Available endpoint retains open-ticket and retirement guards; it does not bypass active repairs.
 
 ---
 
@@ -505,7 +505,7 @@ Follow-up changes to menus, pages and flows. The sidebar contents per role are l
 - Admin approval of cannibalized repairs and the Issue Report on the donor were removed; one rule set applies to every logged part.
 - Retired (decommissioned) vehicles can be donors; their parts are logged as used.
 - **Ready to Respond** shows **Last Maintained** (the last time maintenance work was finished) instead of Last Readiness Check.
-- **Custodian menu:** the separate Maintenance Schedule item is removed. Condition Monitoring now has a **Next Maintenance** column (the soonest open schedule for each vehicle, which opens the schedule's page to view, edit or cancel it); planned maintenance is still added from the Condition Check form.
+- **Custodian menu:** the separate Maintenance Schedule item is removed. Condition Monitoring now has a **Next Scheduled Service** column (and a Maintenance Schedules tab with the full list) (the soonest open schedule for each vehicle, which opens the schedule's page to view, edit or cancel it); planned maintenance is still added from the Condition Check form.
 
 ## Revision - 12 November 2026
 
@@ -515,3 +515,17 @@ Follow-up changes to menus, pages and flows. The sidebar contents per role are l
 - **Dead code removed.** Direct ticket creation, the inspection step and "Open" status, per-item assign, reassign, verify, confirm and defer, the Admin "Close" button and "Unconfirm" were unreachable and are removed. Closing is only by the Custodian's verification. See Ticket-Dataflow-2026-11-12.md.
 - **Screens.** Repair Tickets cards order is Total, Proposals, Active, Closed, Declined, Cancelled, with a compact status filter. The dashboard attention list groups items by kind with one colour per kind and a "High priority" tag. "My Active Work Orders" opens the list already filtered to Active. The Condition Check and Record Repair Work pages were resized.
 - **Sidebar groups.** Clicking an item such as View Vehicles or Maintenance never folds its group any more; only the small arrow does. Groups are open on every fresh load and reopen when you move to another page.
+
+- **Maintenance Personnel menu (18 November 2026).** The mechanic's menu is Dashboard and **My Tasks**. My Tasks has two tabs: **Work Orders** (repairs, with Record Repair Work) and **Maintenance Schedule** (routine jobs assigned to them, such as oil changes, with the Complete action). The separate Maintenance Schedule item and Vehicles Needing Work are gone.
+
+## Simplification, 20 November 2026
+
+Decided after the system analysis (System-Analysis-2026-11-20.md) and now in the product:
+
+- **Scheduled services are plans, not a second process.** The Custodian plans a service (the calendar button on Condition Monitoring or Schedule a service), the Admin approves it and its mechanic, and on the due date the system creates an **Active job already assigned to that mechanic**. There is no second approval. The mechanic does and tests it, the Custodian verifies, the job closes, the record is written, the schedule is Completed and, if it repeats, the next one is planned. A schedule with no assigned mechanic still becomes a proposal so the Admin can assign one.
+- **No direct "complete" on a schedule.** The route and the Mark as Done button are gone; the work is done on the job.
+- **A routine service never makes a vehicle Needs Repair.** The vehicle is held (Under Maintenance) while the job is active and its condition is untouched.
+- **One verification.** The Custodian's verification closes every job. The Admin no longer confirms records, and records cannot be added or edited by hand (`record.create` and `record.edit` have no role), so the old Add Maintenance form is removed. History is read-only.
+- **Navigation.** One Vehicles page (tabs), one Work page for the Admin (Requests & Jobs, Scheduled services, History), one Vehicles page for the Custodian (adds Readiness check and Locations), vehicle history on the vehicle profile, and My Tasks for the mechanic.
+- **Condition Check form** now offers only Good and Needs Repair; planning a service is its own form.
+- **Wording.** The external-shop assignee is shown as "Assigned Maintenance Personnel" (the Admin chooses at approval); schedules read "Scheduled services".

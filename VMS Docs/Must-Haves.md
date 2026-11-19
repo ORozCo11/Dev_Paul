@@ -182,3 +182,11 @@ Second Super Admin recheck, 21 October 2026: **111 API/browser scenarios, 433 ba
 | AUD-24-08 | Low - documentation aligned | Current ticket cards show completion counts and stages; the ticket list also includes a progress bar and percentage. The old card progress ring is removed. Recording current behavior does not approve a new baseline requirement. |
 
 The requirements PDF is an earlier export of this Markdown reference and was not regenerated in this update. The original supplied baseline and earlier generated DOCX remain historical artifacts; neither is evidence that the new audit findings are resolved.
+
+## Updated 20 November 2026 (simplification)
+
+- [x] Scheduled service: Custodian plans, Admin approves once, the due date creates an Active job for the approved mechanic (no second approval), the Custodian verifies, the record writes itself, the next recurrence is planned.
+- [x] A routine service does not change the vehicle's condition.
+- [x] One verification (Custodian) for every job; no Admin record confirmation; no manual record entry.
+- [x] Readiness stays valid until something changes or 7 days (configurable).
+- [x] One Vehicles page, one Work page (Admin), vehicle history on the vehicle profile.

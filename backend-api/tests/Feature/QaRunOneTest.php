@@ -33,15 +33,6 @@ class QaRunOneTest extends TestCase
         $id = $this->postJson('/api/tickets/propose', ['vehicle_id' => $this->vehicle->vehicle_id, 'ticket_description' => 'Brake noise observed', 'priority' => 'High', 'sub_issues' => [['title' => 'Brakes squeal', 'maintenance_type' => 'Other']]])->assertCreated()->json('ticket_id');
         return MaintenanceTicket::with('subIssues')->findOrFail($id);
     }
-    public function test_future_completion_is_rejected_without_creating_a_record_or_recurrence(): void
-    {
-        $schedule = $this->schedule();
-        Sanctum::actingAs($this->mechanic);
-        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete", ['date_completed' => now('Asia/Manila')->addYear()->toDateString()])->assertUnprocessable()->assertJsonValidationErrors('date_completed');
-        $this->assertSame('Scheduled', $schedule->fresh()->status);
-        $this->assertDatabaseCount('vehicle_maintenance_records', 0);
-        $this->assertDatabaseCount('vehicle_maintenance_schedules', 1);
-    }
     public function test_only_schedule_creator_can_edit_and_owner_change_returns_for_review(): void
     {
         $schedule = $this->schedule('Pending Approval');
@@ -156,14 +147,6 @@ class QaRunOneTest extends TestCase
         $this->assertStringContainsString('Impersonated', $log->details);
         $this->assertSame('Investigate QA finding', $log->impersonation_reason);
     }
-    public function test_schedule_receipt_waits_for_inspection_without_diagnosing_a_new_repair(): void
-    {
-        $schedule = $this->schedule();
-        Sanctum::actingAs($this->mechanic);
-        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete", [])->assertOk();
-        $this->assertSame('Needs Repair', $this->vehicle->fresh()->condition);
-        $this->assertSame('Under Maintenance', $this->vehicle->fresh()->status);
-    }
     public function test_pending_proposal_does_not_claim_that_repairs_have_started(): void
     {
         $ticket = $this->proposal();
@@ -181,17 +164,6 @@ class QaRunOneTest extends TestCase
         $migration->up();
         $this->assertDatabaseHas('vehicles', ['vehicle_id' => $id, 'plate_number' => 'QA-1025']);
         $this->assertNotNull($this->vehicle->fresh()->readiness_invalidated_at);
-    }
-
-    public function test_pending_work_does_not_erase_a_newer_good_physical_observation(): void
-    {
-        $schedule = $this->schedule();
-        Sanctum::actingAs($this->mechanic);
-        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete", [])->assertOk();
-        $this->vehicle->refresh()->update(['condition' => 'Good']);
-        \App\Services\VehicleOperationalState::refresh($this->vehicle);
-        $this->assertSame('Good', $this->vehicle->fresh()->condition);
-        $this->assertSame('Under Maintenance', $this->vehicle->fresh()->status);
     }
 
     public function test_reports_flag_legacy_invalid_data_without_guessing_or_rewriting_it(): void

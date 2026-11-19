@@ -122,13 +122,6 @@ class SampleFleetSeederTest extends TestCase
             'functional_test' => [['item' => 'Warning lights tested and operating', 'passed' => true]],
         ])->assertOk();
         $this->assertSame('Closed', $ready->fresh()->status);
-
-        $today = VehicleMaintenanceSchedule::where('status', 'Scheduled')->whereNull('resulting_ticket_id')->where('recurrence_months', 1)->firstOrFail();
-        Sanctum::actingAs(User::findOrFail($today->assigned_to), ['*']);
-        $this->putJson("/api/maintenance-schedules/{$today->schedule_id}/complete", ['date_completed' => now()->toDateString(), 'notes' => 'Sample service completed.'])->assertOk();
-        $this->assertSame('Completed', $today->fresh()->status);
-        $this->assertNotNull($today->fresh()->resulting_maintenance_id);
-        $this->assertDatabaseHas('vehicle_maintenance_schedules', ['vehicle_id' => $today->vehicle_id, 'scheduled_date' => now()->addMonthNoOverflow()->toDateString(), 'status' => 'Scheduled']);
     }
 
     public function test_production_does_not_reset_data_or_create_demo_accounts(): void

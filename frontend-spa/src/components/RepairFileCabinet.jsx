@@ -84,7 +84,7 @@ export default function RepairFileCabinet({ files, savedFiles = [], onChange, on
               </div>
             </label>
             <div className="confirm-dialog-actions">
-              <button className="ghost-button" type="button" onClick={() => setRenaming(null)}>Cancel</button>
+              <button className="ghost-button cancel-btn" type="button" onClick={() => setRenaming(null)}>Cancel</button>
               <button className="primary-button" type="button" disabled={!renaming.name.trim()} onClick={confirmRename}>Save name</button>
             </div>
           </div>

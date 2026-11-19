@@ -235,7 +235,7 @@ function AddBarangayForm({ existingBarangayIds, onAdded, onCancel }) {
           <option value="">{barangayLookup.loading ? 'Loading barangays…' : 'Barangay (PSGC)'}</option>
           {barangays.map((barangay) => <option key={barangay.id} value={barangay.id}>{barangay.name} · {barangay.psgc_code}</option>)}
         </SearchableSelect>
-        <button type="button" className="ghost-button" onClick={onCancel}>Cancel</button>
+        <button type="button" className="ghost-button cancel-btn" onClick={onCancel}>Cancel</button>
         <button type="submit" className="primary-button" disabled={saving || !cityId || !barangayId || isDuplicate}>
           {saving ? 'Adding…' : 'Add'}
         </button>

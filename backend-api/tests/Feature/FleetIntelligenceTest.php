@@ -304,6 +304,8 @@ class FleetIntelligenceTest extends TestCase
             'condition_result' => 'Needs Repair',
             'checked_by' => $this->custodian->id,
         ]);
+        // The badge counts vehicles that are Needs Repair now, which is what recording the check does to the vehicle.
+        $vehicle->update(['condition' => 'Needs Repair']);
 
         Sanctum::actingAs($this->admin, ['*']);
         $before = $this->getJson('/api/dashboard')->assertOk()->json('badge_counts.conditions');
@@ -317,6 +319,21 @@ class FleetIntelligenceTest extends TestCase
 
         $after = $this->getJson('/api/dashboard')->assertOk()->json('badge_counts.conditions');
         $this->assertSame($before - 1, $after);
+    }
+
+    #[Test]
+    public function the_conditions_badge_drops_once_the_vehicle_is_good_again(): void
+    {
+        $vehicle = $this->vehicle();
+        Sanctum::actingAs($this->custodian, ['*']);
+        $before = $this->getJson('/api/dashboard')->assertOk()->json('badge_counts.conditions');
+
+        // An old Needs Repair check stays in the history; only the vehicle's current condition counts.
+        $this->postJson('/api/conditions', ['vehicle_id' => $vehicle->vehicle_id, 'condition_result' => 'Needs Repair'])->assertCreated();
+        $this->assertSame($before + 1, $this->getJson('/api/dashboard')->json('badge_counts.conditions'));
+
+        $vehicle->forceFill(['condition' => 'Good', 'status' => 'Available'])->save();
+        $this->assertSame($before, $this->getJson('/api/dashboard')->json('badge_counts.conditions'));
     }
 
     #[Test]

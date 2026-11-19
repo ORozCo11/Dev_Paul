@@ -47,14 +47,14 @@ function ResizeMapOnContainerResize() {
   return null;
 }
 
-function BoundaryViewport({ polygons, lat, lng }) {
+// The map opens close in on the vehicle's location (street level), with the barangay outline still drawn around it. It no
+// longer zooms out to fit the whole boundary, which left the pin small in a wide view.
+const LOCATION_ZOOM = 17;
+function CenterOnLocation({ lat, lng }) {
   const map = useMap();
   useEffect(() => {
-    if (!polygons.length) return;
-    const bounds = L.latLngBounds(polygons.flat(2));
-    bounds.extend([Number(lat), Number(lng)]);
-    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 16 });
-  }, [map, polygons, lat, lng]);
+    map.setView([Number(lat), Number(lng)], LOCATION_ZOOM);
+  }, [map, lat, lng]);
   return null;
 }
 
@@ -73,7 +73,7 @@ export default function VehicleLocationMap({ lat, lng, label, scrollWheelZoom = 
     <MapContainer
       key={`${lat},${lng}`}
       center={center}
-      zoom={16}
+      zoom={LOCATION_ZOOM}
       scrollWheelZoom={scrollWheelZoom}
       className="veh-map-canvas"
       attributionControl
@@ -84,7 +84,7 @@ export default function VehicleLocationMap({ lat, lng, label, scrollWheelZoom = 
     >
       <ZoomControl position="bottomright" />
       <ResizeMapOnContainerResize />
-      <BoundaryViewport polygons={polygons} lat={lat} lng={lng} />
+      <CenterOnLocation lat={lat} lng={lng} />
       <TileLayer url={CARTO_TILE_URL} attribution={`${CARTO_ATTRIBUTION}${polygons.length ? ` | ${BOUNDARY_REFERENCE_ATTRIBUTION}` : ''}`} />
       {polygons.map((positions, index) => (
         <Polygon key={`halo-${index}`} positions={positions} pathOptions={{ color: '#1e293b', weight: 6, opacity: 0.45, fill: false }} />

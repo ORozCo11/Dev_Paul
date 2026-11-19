@@ -109,3 +109,16 @@ Custodian inspects, proposes an external-shop repair (shop, reason, scope, estim
 Rework: the Custodian sends it out again; the same tester receives and tests it.
 ```
 The Custodian can no longer record the return (`external.receive` is Maintenance Personnel only, and only the named tester). The tester sees the work in My Work Orders as soon as it is sent.
+
+## 9. Scheduled service (20 November 2026)
+
+```
+Custodian plans a service (vehicle, type, date, optional mechanic; may repeat)        PLAN, waiting for the Admin
+Admin approves it and confirms the mechanic                                            APPROVED PLAN
+On the due date the system creates the job ALREADY APPROVED                            ACTIVE, assigned to that mechanic
+   (no mechanic on the plan: it becomes a proposal and the Admin assigns one)
+Mechanic does it, tests it, submits the repair log                                     FOR VERIFICATION
+Custodian verifies (no driving)                                                        CLOSED
+   -> the record is written, the plan shows Completed, the next recurrence is planned
+Vehicle: held as Under Maintenance while the job is active; condition untouched; released at close.
+```

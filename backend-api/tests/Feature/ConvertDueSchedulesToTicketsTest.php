@@ -227,15 +227,10 @@ class ConvertDueSchedulesToTicketsTest extends TestCase
         ]);
         $this->artisan('schedules:convert-due-to-tickets')->assertExitCode(0);
 
-        // Final senior system review (2026-10-05, §2) — only the assigned
-        // Maintenance Personnel can even reach completeSchedule() now, so
-        // this specifically tests THAT guard (resulting_ticket_id), not the
-        // role check a non-mechanic would trip first.
+        // A schedule has no direct "complete" any more: the work is done on the job it became.
         Sanctum::actingAs($this->mechanic, ['*']);
-        $response = $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete", [])
-            ->assertStatus(422);
-
-        $this->assertStringContainsString((string) $schedule->fresh()->resulting_ticket_id, $response->json('message'));
+        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete", [])->assertNotFound();
+        $this->assertNotNull($schedule->fresh()->resulting_ticket_id);
     }
 
     // ---- Ticket end finishes the schedule it came from ----------------------

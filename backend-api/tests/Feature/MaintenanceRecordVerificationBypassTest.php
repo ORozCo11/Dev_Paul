@@ -52,31 +52,26 @@ class MaintenanceRecordVerificationBypassTest extends TestCase
     }
 
     #[Test]
-    public function creating_a_record_with_a_receipt_cannot_skip_straight_to_completed(): void
+    public function the_admin_cannot_add_a_record_by_hand_so_a_receipt_cannot_skip_verification(): void
     {
         Storage::fake('supabase');
         $vehicle = $this->vehicle();
 
+        // Maintenance records are written automatically when a job is verified and closed; nobody adds them by hand.
         Sanctum::actingAs($this->admin, ['*']);
-        $response = $this->post('/api/maintenance-records', [
+        $this->post('/api/maintenance-records', [
             'vehicle_id' => $vehicle->vehicle_id,
             'maintenance_type' => 'Oil Change',
             'problem_reason' => 'Scheduled service.',
             'maintenance_personnel_id' => $this->mechanic->id,
             'progress_status' => 'Completed',
             'receipt' => UploadedFile::fake()->create('receipt.pdf', 50, 'application/pdf'),
-        ])->assertCreated();
-
-        $record = VehicleMaintenanceRecord::findOrFail($response->json('maintenance_id'));
-        $this->assertSame('For Verification', $record->progress_status);
-        $this->assertNotNull($record->receipt_url, 'The receipt should still be attached as evidence.');
-        $this->assertNull($record->verification_result);
-        $this->assertNull($record->confirmed_by);
-        $this->assertSame('Under Maintenance', $vehicle->fresh()->status);
+        ])->assertForbidden();
+        $this->assertSame(0, VehicleMaintenanceRecord::count());
     }
 
     #[Test]
-    public function editing_a_record_to_completed_with_a_receipt_is_rejected_without_verification(): void
+    public function editing_a_record_to_completed_with_a_receipt_is_refused_for_everyone(): void
     {
         Storage::fake('supabase');
         $vehicle = $this->vehicle();
@@ -92,7 +87,7 @@ class MaintenanceRecordVerificationBypassTest extends TestCase
         $this->put("/api/maintenance-records/{$record->maintenance_id}", [
             'progress_status' => 'Completed',
             'receipt' => UploadedFile::fake()->create('receipt.pdf', 50, 'application/pdf'),
-        ])->assertStatus(422);
+        ])->assertForbidden();
 
         $this->assertSame('Under Repair', $record->fresh()->progress_status);
     }

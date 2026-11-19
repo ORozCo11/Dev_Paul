@@ -102,8 +102,9 @@ return [
     // manual/historical entries now; Custodian is read-only and Maintenance
     // Personnel has no involvement at all outside the auto-generated ledger
     // line a confirmed ticket sub-issue creates.
-    'record.create' => ['Admin'],
-    'record.edit' => ['Admin'],
+    // Maintenance records are written automatically when a job is verified and closed; nobody adds or edits them by hand.
+    'record.create' => [],
+    'record.edit' => [],
     'record.verify' => ['Custodian'],
     'record.confirm' => ['Admin'],
     'record.decision_close' => ['Admin'],
@@ -133,7 +134,6 @@ return [
     // hand off a stuck/unassigned schedule now reassigns it
     // (schedule.reassign) to the Maintenance Personnel who'll actually do
     // the work, exactly like reassigning a ticket's mechanic.
-    'schedule.complete' => ['Maintenance Personnel'],
     'schedule.delete' => ['Custodian'],
     'schedule.restore' => ['Custodian'],
 

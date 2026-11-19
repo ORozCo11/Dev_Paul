@@ -264,32 +264,6 @@ class SystemWorkflowAuditTest extends TestCase
         $this->assertSame('Decommissioned', $this->vehicle->fresh()->status);
     }
 
-    public function test_stale_schedule_completion_cannot_race_a_new_ticket_proposal(): void
-    {
-        $schedule = $this->schedule(['status' => 'Scheduled', 'assigned_to' => $this->mechanic->id]);
-        $ticket = $this->ticket(['status' => 'Pending Approval']);
-        $schedule->newQuery()->whereKey($schedule->schedule_id)->update(['resulting_ticket_id' => $ticket->ticket_id]);
-        Sanctum::actingAs($this->mechanic, ['*']);
-        $request = Request::create('/api/maintenance-schedules/'.$schedule->schedule_id.'/complete', 'PUT');
-        $request->setUserResolver(fn () => $this->mechanic);
-        try {
-            app(FleetController::class)->completeSchedule($request, $schedule);
-            $this->fail('Ticket-linked work must not also be completed from a stale schedule.');
-        } catch (HttpException $e) {
-            $this->assertSame(422, $e->getStatusCode());
-        }
-        $this->assertDatabaseCount('vehicle_maintenance_records', 0);
-    }
-
-    public function test_retired_vehicles_cannot_be_unretired_by_an_old_scheduled_job(): void
-    {
-        $schedule = $this->schedule(['status' => 'Scheduled', 'assigned_to' => $this->mechanic->id]);
-        $this->vehicle->update(['status' => 'Decommissioned']);
-        Sanctum::actingAs($this->mechanic, ['*']);
-        $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}/complete")->assertUnprocessable();
-        $this->assertSame('Decommissioned', $this->vehicle->fresh()->status);
-    }
-
     public function test_stale_verification_cannot_use_the_previous_custodians_assignment(): void
     {
         $ticket = $this->ticket(['status' => 'For Verification']);
@@ -326,13 +300,12 @@ class SystemWorkflowAuditTest extends TestCase
         $this->assertNull($line->fresh()->repair_logs);
     }
 
-    public function test_record_repair_edits_invalidate_a_passed_verification(): void
+    public function test_records_cannot_be_edited_by_hand_so_a_passed_verification_cannot_be_altered(): void
     {
         $record = $this->record(['verification_result' => 'Passed', 'verified_by' => $this->custodian->id]);
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/maintenance-records/{$record->maintenance_id}", ['action_taken' => 'Changed repair', 'maintenance_personnel_id' => $this->custodian->id])->assertOk();
-        $this->assertNull($record->fresh()->verification_result);
-        $this->putJson("/api/maintenance-records/{$record->maintenance_id}/confirm", ['confirmed' => true])->assertUnprocessable();
+        $this->putJson("/api/maintenance-records/{$record->maintenance_id}", ['action_taken' => 'Changed repair', 'maintenance_personnel_id' => $this->custodian->id])->assertForbidden();
+        $this->assertSame('Passed', $record->fresh()->verification_result);
     }
 
     public function test_record_confirmation_rejects_legacy_self_verification(): void
@@ -342,17 +315,11 @@ class SystemWorkflowAuditTest extends TestCase
         $this->putJson("/api/maintenance-records/{$record->maintenance_id}/confirm", ['confirmed' => true])->assertUnprocessable();
     }
 
-    public function test_record_edit_rejects_self_donor_and_another_vehicles_issue(): void
+    public function test_record_edit_is_refused_even_with_a_bad_donor_or_issue(): void
     {
         $record = $this->record();
-        $other = $this->vehicle->replicate();
-        $other->plate_number = 'AUD-002';
-        $other->save();
-        $issue = VehicleIssueReport::create(['vehicle_id' => $other->vehicle_id, 'issue_type' => 'Other issue', 'issue_description' => 'Other vehicle', 'severity_level' => 'Low', 'reported_by' => $this->custodian->id, 'status' => 'Pending']);
         Sanctum::actingAs($this->admin, ['*']);
-        $this->putJson("/api/maintenance-records/{$record->maintenance_id}", ['source_vehicle_id' => $this->vehicle->vehicle_id])->assertUnprocessable();
-        $this->putJson("/api/maintenance-records/{$record->maintenance_id}", ['issue_report_id' => $issue->issue_report_id])->assertUnprocessable();
-        $this->assertSame('Pending', $issue->fresh()->status);
+        $this->putJson("/api/maintenance-records/{$record->maintenance_id}", ['source_vehicle_id' => $this->vehicle->vehicle_id])->assertForbidden();
     }
 
     public function test_inactive_custodian_cannot_receive_ticket_assignment(): void
