@@ -526,6 +526,6 @@ Decided after the system analysis (System-Analysis-2026-11-20.md) and now in the
 - **No direct "complete" on a schedule.** The route and the Mark as Done button are gone; the work is done on the job.
 - **A routine service never makes a vehicle Needs Repair.** The vehicle is held (Under Maintenance) while the job is active and its condition is untouched.
 - **One verification.** The Custodian's verification closes every job. The Admin no longer confirms records, and records cannot be added or edited by hand (`record.create` and `record.edit` have no role), so the old Add Maintenance form is removed. History is read-only.
-- **Navigation.** One Vehicles page (tabs), one Work page for the Admin (Requests & Jobs, Scheduled services, History), one Vehicles page for the Custodian (adds Readiness check and Locations), vehicle history on the vehicle profile, and My Tasks for the mechanic.
+- **Navigation.** Every page is its own sidebar item; there are no tabs (a short-lived tabbed layout was reverted the same day on request). A vehicle's profile also shows its history.
 - **Condition Check form** now offers only Good and Needs Repair; planning a service is its own form.
 - **Wording.** The external-shop assignee is shown as "Assigned Maintenance Personnel" (the Admin chooses at approval); schedules read "Scheduled services".

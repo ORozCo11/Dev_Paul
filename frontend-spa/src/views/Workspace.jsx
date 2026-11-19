@@ -56,14 +56,17 @@ const modulesByRole = {
   // 'vehiclesReady' / 'vehiclesNotReady' are sub-pages of View Vehicles.
   Admin: [
     { section: null, items: [['dashboard', 'Dashboard']] },
-    // One Vehicles page; All / Ready / Not ready are tabs on it.
+    // Every page is its own sidebar item (no tabs): the vehicle lists, then the work.
     { section: 'Fleet', icon: 'vehicle', items: [
-      ['vehicles', 'Vehicles'],
+      ['vehicles', 'View Vehicles'],
+      ['vehiclesReady', 'Ready to Respond'],
+      ['vehiclesNotReady', 'Not Ready to Respond'],
     ] },
-    // One Work page with three tabs: Requests & Jobs (tickets), Scheduled services (schedules) and History (records).
     // The Admin does not record condition checks (the Custodian does), so there is no Condition Monitoring here.
     { section: 'Operations', icon: 'clipboard', items: [
-      ['tickets', 'Work'],
+      ['tickets', 'Repair Tickets'],
+      ['schedules', 'Scheduled Services'],
+      ['maintenance', 'Records'],
     ] },
     { section: 'Administration', icon: 'key', items: [
       ['users', 'Users'],
@@ -79,22 +82,28 @@ const modulesByRole = {
     // (the vehicle list with View / Maintenance Schedule / Condition Check actions).
     // Planned maintenance is added from Condition Monitoring, which also shows each vehicle's next schedule.
     { section: null, items: [['dashboard', 'Dashboard'], ['conditions', 'Condition Monitoring']] },
-    // One Vehicles page; All / Readiness check / Ready / Not ready / Locations are tabs on it, and a vehicle's history
-    // is on that vehicle's own profile.
     { section: 'Fleet', icon: 'vehicle', items: [
-      ['vehicles', 'Vehicles'],
+      ['vehicles', 'View Vehicles'],
+      ['vehiclesReadiness', 'Readiness Check'],
+      ['vehiclesReady', 'Ready to Respond'],
+      ['vehiclesNotReady', 'Not Ready to Respond'],
+      ['locations', 'Vehicle Location'],
     ] },
-    // 'myTasks' is a tabbed container (Repair Verification / Work Tracker) around shared ticket data.
     { section: 'Work', icon: 'wrench', items: [
       ['myTasks', 'My Tasks'],
+      ['schedules', 'Scheduled Services'],
+    ] },
+    { section: 'Reference', icon: 'list', items: [
+      ['histories', 'Vehicle History'],
     ] },
   ],
   'Maintenance Personnel': [
     { section: null, items: [['dashboard', 'Dashboard']] },
     // The mechanic works from their own tickets; a barangay-wide list of unready vehicles only repeated them.
     { section: 'Work', icon: 'wrench', items: [
-      // One entry with two tabs: Work Orders (repairs) and Maintenance Schedule (routine jobs such as oil changes).
       ['ticketWorkOrders', 'My Tasks'],
+      // The mechanic's routine services (oil changes and the like), as a page of their own.
+      ['schedules', 'Scheduled Services'],
     ] },
   ],
 };
@@ -398,8 +407,10 @@ const moduleIcons = {
 
 // Sidebar and page-heading icons share the Solar Linear catalogue used by the
 // rest of the application, keeping this navigation flat and outline-only.
-// The three tabs of the Admin's Work page.
-const ADMIN_WORK_TABS = ['tickets', 'schedules', 'maintenance'];
+// Sidebar pages that are views of the vehicle list -> the ?view= value each one opens.
+const VEHICLE_SUBPAGE_VIEWS = { vehiclesReady: 'ready', vehiclesNotReady: 'notready', vehiclesReadiness: 'readiness' };
+// The Admin's Work tabs are no longer used; kept as an empty list so the old tab code stays inert.
+const ADMIN_WORK_TABS = [];
 // The sidebar shows the short names under the Maintenance folder; the page itself keeps the full name.
 const moduleIconNames = {
   maintenanceGroup: 'wrench',
@@ -2557,9 +2568,11 @@ function Workspace() {
     // 'myTasks' / 'maintenanceLedger' are thin tabbed wrappers — they reopen
     // whichever tab was last open.
     if (key === 'vehicles') {
-      // The Vehicles item always opens the full list; the other views are tabs on that page.
       setActiveModuleState('vehicles');
       navigate(`${roleRoutes[user.role]}?module=vehicles`);
+    } else if (VEHICLE_SUBPAGE_VIEWS[key]) {
+      setActiveModuleState('vehicles');
+      navigate(`${roleRoutes[user.role]}?module=vehicles&view=${VEHICLE_SUBPAGE_VIEWS[key]}`);
     } else if (key === 'myTasks') {
       setMyTasksTab(myTasksLastTab);
     } else if (key === 'maintenanceLedger') {
@@ -2625,7 +2638,9 @@ function Workspace() {
             {moduleGroups.map(({ section, items }) => {
               const renderItem = ([key, label]) => {
                 const badgeCount = badgeCountFor(key);
-                const isActive = key === navModule;
+                const isActive = key === 'vehicles' ? (breadcrumbModule === 'vehicles' && vehicleView === 'all')
+                  : VEHICLE_SUBPAGE_VIEWS[key] ? (breadcrumbModule === 'vehicles' && vehicleView === VEHICLE_SUBPAGE_VIEWS[key])
+                  : key === navModule;
                 return (
                   <button
                     className={isActive ? 'active' : ''}
@@ -2702,7 +2717,7 @@ function Workspace() {
                     isn't a literal sidebar item any more so moduleLabel
                     couldn't resolve it; breadcrumbModule already maps those
                     to the merged entry's own key/label for exactly this. */}
-                <h2>{subPageTitle ?? moduleLabel(modules, navModule)}</h2>
+                <h2>{subPageTitle ?? (breadcrumbModule === 'vehicles' && vehicleView !== 'all' ? (vehicleView === 'ready' ? 'Ready to Respond Vehicles' : vehicleView === 'readiness' ? 'Readiness Check' : 'Not Ready to Respond Vehicles') : moduleLabel(modules, navModule))}</h2>
               </div>
             </div>
           )}
@@ -3142,39 +3157,7 @@ function Workspace() {
         ))}
       </div>
     );
-    // The Vehicles page: every view of the fleet list is a tab. The Custodian also has Readiness check and Locations.
-    const isCustodianVehicles = canDo(user, 'vehicle.readiness_check');
-    const vehicleTabs = [
-      ['all', 'All vehicles'],
-      ...(isCustodianVehicles ? [['readiness', 'Readiness check']] : []),
-      ['ready', 'Ready to respond'],
-      ['notready', 'Not ready'],
-      ...(hasVehicleTabsNav && isCustodianVehicles ? [['locations', 'Locations']] : []),
-    ];
-    const vehicleTabBar = (activeModule === 'vehicles' || (hasVehicleTabsNav && activeModule === 'locations')) && (
-      <div className="locations-tab-bar" role="tablist" aria-label="Vehicles">
-        {vehicleTabs.map(([key, label]) => {
-          const selected = key === 'locations' ? activeModule === 'locations' : activeModule === 'vehicles' && vehicleView === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              className={`locations-tab-button ${selected ? 'active' : ''}`}
-              onClick={() => {
-                if (selected) return;
-                if (key === 'locations') { returnToModule('locations'); return; }
-                setActiveModuleState('vehicles');
-                navigate(`${roleRoutes[user.role]}?module=vehicles${key === 'all' ? '' : `&view=${key}`}`);
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-    );
+    const vehicleTabBar = false; // vehicle views are separate sidebar pages, not tabs
     const showMaintenanceLedgerContainer = hasMaintenanceLedgerNav && (
       activeModule === 'maintenanceStatus' || activeModule === 'maintenance'
     );
