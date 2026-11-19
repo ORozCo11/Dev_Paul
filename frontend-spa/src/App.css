@@ -17172,3 +17172,19 @@ html[data-theme="dark"] .page-chart-panel { border-color: #1f2937; border-top-co
 html[data-theme="dark"] .page-chart-head { border-bottom-color: #1f2937; }
 html[data-theme="dark"] .page-chart-head h3 { color: #f1f5f9; }
 html[data-theme="dark"] .page-chart-head span { background: rgba(59, 130, 246, 0.18); color: #93c5fd; }
+
+
+/* Slim workspace footer: one line (brand left, copyright and links right) instead of a tall banner */
+.workspace-footer { align-items: center; gap: 8px 24px; padding: 14px 32px; }
+.workspace-footer .workspace-footer-tagline { display: none; }
+.workspace-footer .workspace-footer-actions { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px 20px; }
+.workspace-footer .workspace-footer-copyright { white-space: normal; }
+@media (max-width: 900px) {
+  .workspace-footer { padding: 12px 20px; }
+}
+
+/* Vehicle headline status */
+.status-badge.headline-ready { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.status-badge.headline-repair { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.status-badge.headline-unchecked { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+.status-badge.headline-out { background: #e2e8f0; color: #334155; border-color: #cbd5e1; }

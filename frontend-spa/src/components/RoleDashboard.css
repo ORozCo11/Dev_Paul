@@ -86,3 +86,25 @@ html .role-dashboard .focus-branded-heading select { background: #fff; border-co
   .focus-tasks li > div { flex-basis: calc(100% - 48px); }
   .focus-tasks li > button { margin-left: 48px; min-height: 44px; }
 }
+
+/* Fleet at a glance (Admin) */
+.focus-fleetbar-track { display: flex; gap: 3px; height: 14px; border-radius: 7px; overflow: hidden; background: var(--border, #e2e8f0); }
+.focus-fleetbar-track button { flex-basis: 0; min-width: 8px; padding: 0; border: 0; cursor: pointer; }
+.focus-fleetbar-track .is-available, .focus-fleetbar-legend .is-available { background: #16a34a; }
+.focus-fleetbar-track .is-repair, .focus-fleetbar-legend .is-repair { background: #d97706; }
+.focus-fleetbar-track .is-other, .focus-fleetbar-legend .is-other { background: #94a3b8; }
+.focus-fleetbar-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 14px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--text-muted, #64748b); }
+.focus-fleetbar-legend li { display: flex; align-items: center; gap: 8px; }
+.focus-fleetbar-legend i { width: 10px; height: 10px; border-radius: 50%; }
+.focus-fleetbar-legend strong { color: var(--text-strong, #0f172a); }
+/* Report an issue shortcut (Custodian) */
+html .role-dashboard .focus-heading .focus-cta { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 16px; border: 0; border-radius: 8px; background: #fff; color: #173b7a; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+html .role-dashboard .focus-heading .focus-cta:hover { background: #dbeafe; }
+/* Phones: stat cards two across so the task list is reachable without scrolling past four tall cards */
+@media (max-width: 600px) {
+  .focus-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .focus-kpis > button { flex-direction: column; gap: 8px; padding: 14px; }
+  .focus-kpis > button > svg { display: none; }
+  .focus-kpis strong { margin-top: 4px; font-size: 26px; }
+  .focus-kpi-icon { flex-basis: 32px; width: 32px; height: 32px; }
+}

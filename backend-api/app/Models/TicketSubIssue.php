@@ -24,6 +24,9 @@ class TicketSubIssue extends Model
     }
 
     protected $fillable = [
+        'on_hold_reason',
+        'on_hold_since',
+        'on_hold_until',
         'mechanic_tested_at',
         'mechanic_tested_by',
         'mechanic_test_notes',
@@ -117,6 +120,23 @@ class TicketSubIssue extends Model
         // The Maintenance Personnel who tests an external-shop job when it returns.
         'external_tester_id',
     ];
+
+    /**
+     * A hold only makes sense while the item is Under Repair with someone on
+     * it. Moving on (inspection, done, returned, reassigned) clears it.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $item) {
+            if ($item->on_hold_since && ($item->status !== 'Under Repair'
+                || $item->isDirty('assigned_mechanic_id')
+                || $item->isDirty('external_tester_id'))) {
+                $item->on_hold_reason = null;
+                $item->on_hold_since = null;
+                $item->on_hold_until = null;
+            }
+        });
+    }
 
     protected $casts = [
         'external_cycles' => 'array',

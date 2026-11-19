@@ -67,14 +67,15 @@ const modulesByRole = {
       ['maintenanceGroup', 'Maintenance'],
       ['tickets', 'Repair Tickets'],
       ['schedules', 'Schedule'],
-      ['maintenance', 'Records'],
+      ['maintenance', 'Maintenance History'],
+      ['issues', 'Issue Reports'],
     ] },
     { section: 'Administration', icon: 'key', items: [
       ['users', 'Users'],
       ['reports', 'Reports'],
     ] },
     { section: 'Reference', icon: 'list', items: [
-      ['categories', 'Vehicle Categories'],
+      ['categories', 'Vehicle Types'],
       ['logs', 'Activity Log'],
     ] },
   ],
@@ -414,7 +415,7 @@ const MAINTENANCE_SUBPAGES = ['tickets', 'schedules', 'maintenance'];
 // Sidebar sub-pages of View Vehicles -> the ?view= value each one opens.
 const VEHICLE_SUBPAGE_VIEWS = { vehiclesReady: 'ready', vehiclesNotReady: 'notready', vehiclesReadiness: 'readiness' };
 // The sidebar shows the short names under the Maintenance folder; the page itself keeps the full name.
-const MAINTENANCE_PAGE_TITLES = { tickets: 'Repair Tickets', schedules: 'Maintenance Schedule', maintenance: 'Maintenance Records' };
+const MAINTENANCE_PAGE_TITLES = { tickets: 'Repair Tickets', schedules: 'Maintenance Schedule', maintenance: 'Maintenance History' };
 const moduleIconNames = {
   maintenanceGroup: 'wrench',
   dashboard: 'grid', vehicles: 'vehicle', vehiclesReady: 'checkCircle', vehiclesNotReady: 'alert', vehiclesReadiness: 'checkCircle', categories: 'list', locations: 'pin',
@@ -488,8 +489,8 @@ function Workspace() {
     || (vehicleProfileId && 'Vehicle Profile')
     || (isNewTicketPage && 'Create New Ticket')
     || (ticketProfileId && 'Ticket Details')
-    || (isNewCategoryPage && 'Add Vehicle Category')
-    || (editCategoryId && 'Edit Vehicle Category')
+    || (isNewCategoryPage && 'Add Vehicle Type')
+    || (editCategoryId && 'Edit Vehicle Type')
     || (isNewSchedulePage && 'Add Maintenance Schedule')
     || (editScheduleId && 'Update Schedule')
     || (scheduleProfileId && 'Maintenance Schedule Details')
@@ -1552,7 +1553,7 @@ function Workspace() {
     }
   };
 
-  // Shared submit handler for the simple single-form pages (Vehicle Categories,
+  // Shared submit handler for the simple single-form pages (Vehicle Types,
   // Maintenance Schedules, Condition Checks, Issue Reports) — moduleKey picks
   // the endpoint/method, existing (or null) picks create vs update.
   // Gap 2 — close the loop on a scheduled PM: one call marks it done, logs the
@@ -1790,7 +1791,7 @@ function Workspace() {
 
     // Location/Domain filters — shared by Vehicle Management and any module
     // whose rows carry the same fields (Vehicle Location's own current
-    // location; Vehicle Categories' own domain).
+    // location; Vehicle Types' own domain).
     if ((activeModule === 'vehicles' || activeModule === 'locations') && filterLocation.length) {
       result = result.filter((row) => filterLocation.includes(row.current_location));
     }
@@ -2900,6 +2901,11 @@ function Workspace() {
             />
           ) : ticketProfileId ? (
             <TicketProfilePage key={ticketProfileId}
+              onRecordConditionCheck={canDo(user, 'condition.create') ? (vehicleId) => {
+                clearDraftState(`draft:form:${roleRoutes[user.role]}/conditions/new`);
+                setPrefilledConditionVehicleId(vehicleId);
+                navigate(`${roleRoutes[user.role]}/conditions/new`);
+              } : undefined}
               ticketId={ticketProfileId}
               user={user}
               userId={user.id}
@@ -2927,7 +2933,7 @@ function Workspace() {
               onBack={() => returnToModule('categories')}
               initialValues={editCategoryId ? (records.categories ?? []).find((c) => String(c.category_id) === String(editCategoryId)) : EMPTY_OBJ}
               onSubmit={(payload) => submitFormPage('categories', editCategoryId ? { category_id: editCategoryId } : null, payload)}
-              submitLabel={editCategoryId ? 'Update Vehicle Category' : 'Add Vehicle Category'}
+              submitLabel={editCategoryId ? 'Update Vehicle Type' : 'Add Vehicle Type'}
               categoryVehicleCount={editCategoryId ? (records.categories ?? []).find((c) => String(c.category_id) === String(editCategoryId))?.vehicles_count : null}
               categories={records.categories ?? []}
               onDirty={() => setHasUnsavedChanges(true)}
@@ -3064,6 +3070,8 @@ function Workspace() {
               onExternalSend={(row, payload) => ticketAction(`/tickets/${row.ticket_id}/sub-issues/${row.sub_issue_id}/external-sent`, payload, 'Marked as sent to the shop.')}
               onExternalReturn={(row, payload) => ticketAction(`/tickets/${row.ticket_id}/sub-issues/${row.sub_issue_id}/external-returned`, payload, 'Marked as returned from the shop.')}
               onReturnToAdmin={(row, payload) => ticketAction(`/tickets/${row.ticket_id}/sub-issues/${row.sub_issue_id}/return-to-admin`, payload, 'Returned to the Admin. The Custodian has been told.').then((ok) => { if (ok) returnToModule('ticketWorkOrders'); return ok; })}
+              onHold={(row, payload) => ticketAction(`/tickets/${row.ticket_id}/sub-issues/${row.sub_issue_id}/hold`, payload, 'Put on hold. The Custodian and Admin have been told.').then((ok) => { if (ok) returnToModule('ticketWorkOrders'); return ok; })}
+              onResume={(row) => ticketAction(`/tickets/${row.ticket_id}/sub-issues/${row.sub_issue_id}/resume`, {}, 'Work resumed.').then((ok) => { if (ok) returnToModule('ticketWorkOrders'); return ok; })}
               onNoRepair={(row, payload) => ticketAction(`/tickets/${row.ticket_id}/sub-issues/${row.sub_issue_id}/no-repair-needed`, payload, 'Marked as no repair needed. It goes to the Custodian to verify and close.').then((ok) => { if (ok) returnToModule('ticketWorkOrders'); return ok; })}
               isMechanic={hasRole(user, 'Maintenance Personnel')}
               onDirty={() => setHasUnsavedChanges(true)}
@@ -3322,7 +3330,7 @@ function Workspace() {
           }
         >
           <div className="panel-header-bar">
-            <h3>Vehicle Categories <span className="count-badge">{visibleRows.length}</span></h3>
+            <h3>Vehicle Types <span className="count-badge">{visibleRows.length}</span></h3>
             <LocalSearchInput
               value={searchQuery}
               onChange={setSearchQuery}
@@ -3656,7 +3664,7 @@ function Workspace() {
           description="Finished repairs and maintenance for each vehicle. Open a record to see what was done."
           statCards={
             <ModuleStatCards
-              totalLabel="Total Maintenance Records"
+              totalLabel="Total Maintenance History"
               total={maintenanceRecordStats.total}
               cards={MAINTENANCE_RECORD_STAT_CARDS}
               counts={maintenanceRecordStats}
@@ -3705,7 +3713,7 @@ function Workspace() {
           }
         >
           <div className="panel-header-bar">
-            <h3>Maintenance Records <span className="count-badge">{visibleRows.length}</span></h3>
+            <h3>Maintenance History <span className="count-badge">{visibleRows.length}</span></h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {/* No general "+ Add" entry point here anymore — repair data
                   is now entered through Tickets; Maintenance Schedule
@@ -6266,7 +6274,7 @@ function defaultCriticalityFor(vehicle, lookups) {
 }
 
 function vehicleCriticality(vehicle, lookups) {
-  return vehicle.criticality ? `${vehicle.criticality} (set for this vehicle)` : `${defaultCriticalityFor(vehicle, lookups)} (from vehicle category)`;
+  return vehicle.criticality ? `${vehicle.criticality} (set for this vehicle)` : `${defaultCriticalityFor(vehicle, lookups)} (from vehicle type)`;
 }
 
 
@@ -6396,13 +6404,13 @@ function NewVehiclePage({ onBack, lookups, allHubs, onSubmit, onDirty }) {
             title: 'Use letters and digits with optional spaces or dashes, e.g. INEM-112, FDR-303 or AMB-1101', uppercase: true, maxLength: 10,
           },
       {
-        label: 'Vehicle Category',
+        label: 'Vehicle Type',
         name: 'category_id',
         options: lookups.categories.filter((c) => c.domain === domainFilter),
         optionDomain: domainFilter,
         required: true,
         type: 'creatable-select',
-        newItemLabel: 'vehicle category',
+        newItemLabel: 'vehicle type',
         catalogEndpoint: '/categories',
         idField: 'category_id',
         nameField: 'category_name',
@@ -6693,7 +6701,7 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
     e.preventDefault();
     if (submitting) return;
     const next = {};
-    if (!values.category_name.trim()) next.category_name = 'Vehicle Category Name is required.';
+    if (!values.category_name.trim()) next.category_name = 'Vehicle Type Name is required.';
     if (!values.domain) next.domain = 'Domain is required.';
     setErrors(next);
     if (Object.keys(next).length) return;
@@ -6708,18 +6716,18 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
   return (
     <FxPage
       icon="vehicle"
-      crumbs={['Vehicle Categories', isEditing ? 'Edit Vehicle Category' : 'Add Vehicle Category']}
-      title={isEditing ? 'Edit Vehicle Category' : 'Add Vehicle Category'}
-      description={isEditing ? 'Update this vehicle category and the default information it uses.' : 'Create a new vehicle category and define the default information it will use.'}
+      crumbs={['Vehicle Types', isEditing ? 'Edit Vehicle Type' : 'Add Vehicle Type']}
+      title={isEditing ? 'Edit Vehicle Type' : 'Add Vehicle Type'}
+      description={isEditing ? 'Update this vehicle type and the default information it uses.' : 'Create a new vehicle type and define the default information it will use.'}
     >
       <form className="fx-form fx-cols fx-cols--preview" onSubmit={handleSubmit} noValidate autoComplete="off">
-        <aside className="fx-aside" aria-label="Vehicle category preview">
-          <h3 className="fx-section-title">Vehicle Category Preview</h3>
+        <aside className="fx-aside" aria-label="Vehicle type preview">
+          <h3 className="fx-section-title">Vehicle Type Preview</h3>
           <p className="fx-hint">How this type's domain-specific information will be presented when a vehicle is assigned to it.</p>
           <div className="fx-preview">
             <span className="fx-preview-icon"><Icon name={vehicleIconName(previewDomain)} size={40} /></span>
             <strong className={`fx-preview-name${values.category_name.trim() ? '' : ' is-placeholder'}`}>
-              {values.category_name.trim() || 'Vehicle category name'}
+              {values.category_name.trim() || 'Vehicle type name'}
             </strong>
             <div className="fx-chips">
               <span className="fx-chip">{values.domain || 'Domain not set'}</span>
@@ -6740,9 +6748,9 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
         </aside>
 
         <div className="fx-main">
-          <h3 className="fx-section-title">Vehicle Category Details</h3>
+          <h3 className="fx-section-title">Vehicle Type Details</h3>
           <div className="fx-grid">
-            <FxField id="vt-name" label="Vehicle Category Name" required error={errors.category_name} className="fx-span-2">
+            <FxField id="vt-name" label="Vehicle Type Name" required error={errors.category_name} className="fx-span-2">
               <input id="vt-name" type="text" maxLength={255} value={values.category_name} onChange={(e) => set('category_name', e.target.value)} placeholder="Ambulance, Fire Truck, Rescue Boat" />
             </FxField>
             <FxField id="vt-domain" label="Domain" required error={errors.domain} className="fx-span-2" hint="Land or Water — decides which vehicle-specific fields a vehicle of this type asks for.">
@@ -7163,11 +7171,11 @@ function vehicleFields(lookups, allHubs = [], domain = 'Land', existingPhotoUrl 
   const fields = [
     { label: 'Vehicle Name', name: 'vehicle_name', required: true, type: 'text', group: 'Vehicle identity' },
     { label: plateFieldLabel(domain), name: 'plate_number', required: true, type: 'text', maxLength: 10, group: 'Vehicle identity' },
-    { label: 'Vehicle Category', name: 'category_id', options: lookups.categories ?? [], required: true, type: 'creatable-select', group: 'Vehicle identity',
-      newItemLabel: 'vehicle category', catalogEndpoint: '/categories', idField: 'category_id', nameField: 'category_name', valueIsId: true,
+    { label: 'Vehicle Type', name: 'category_id', options: lookups.categories ?? [], required: true, type: 'creatable-select', group: 'Vehicle identity',
+      newItemLabel: 'vehicle type', catalogEndpoint: '/categories', idField: 'category_id', nameField: 'category_name', valueIsId: true,
       extraFields: [{ name: 'domain', label: 'Domain', options: ['Land', 'Water'], required: true, default: domain }],
     },
-    { label: 'Operational Criticality (override)', name: 'criticality', options: [...CRITICALITY_LEVELS, 'Inherit'], type: 'select', group: 'Vehicle identity', hint: 'Choose Inherit to use the Vehicle Category default.' },
+    { label: 'Operational Criticality (override)', name: 'criticality', options: [...CRITICALITY_LEVELS, 'Inherit'], type: 'select', group: 'Vehicle identity', hint: 'Choose Inherit to use the Vehicle Type default.' },
     { label: 'Vehicle Photo', name: 'photo', accept: 'image/*', type: 'file', existingUrl: existingPhotoUrl, group: 'Vehicle photo' },
     { label: 'Brand', name: 'brand', required: true, type: 'text', group: 'Technical details' },
     { label: 'Model', name: 'model', required: true, type: 'text', group: 'Technical details' },
@@ -7543,7 +7551,7 @@ function reportFieldDefs(lookups, reportDef) {
     defs.push({ label: 'Date To', name: 'to', type: 'date' });
   }
   if (reportDef.fields.includes('category_id')) {
-    defs.push({ label: 'Vehicle Category', name: 'category_id', options: options(lookups.categories, 'category_id', 'category_name'), type: 'select' });
+    defs.push({ label: 'Vehicle Type', name: 'category_id', options: options(lookups.categories, 'category_id', 'category_name'), type: 'select' });
   }
   if (reportDef.fields.includes('location')) {
     // The report matches current_location exactly, so offer only the
@@ -7833,7 +7841,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
         className: 'cell-center',
         render: (row) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-            <StatusBadge value={row.status} />
+            <VehicleHeadlineBadge row={row} />
             {/* Every sub-issue is resolved, only Close Ticket is left. */}
             {row.awaiting_closure && (
               <span
@@ -7944,7 +7952,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
 function categoryColumns(onEdit, deleteRecord, canManage = true) {
   const columns = [
     { key: 'id', label: 'ID', width: '6%', locked: true, className: 'cell-center', render: (row) => row.category_id },
-    { key: 'category', label: 'Vehicle Category', width: '18%', render: (row) => row.category_name },
+    { key: 'category', label: 'Vehicle Type', width: '18%', render: (row) => row.category_name },
     { key: 'domain', label: 'Domain', width: '10%', className: 'cell-center', render: (row) => <StatusBadge value={row.domain ?? 'Land'} /> },
     { key: 'vehicles', label: 'Vehicles', width: '9%', className: 'cell-center', render: (row) => row.vehicles_count ?? 0 },
     { key: 'description', label: 'Description', width: '49%', render: (row) => row.description ?? '-' },
@@ -7957,7 +7965,7 @@ function categoryColumns(onEdit, deleteRecord, canManage = true) {
       render: (row) => (
         <div className="row-actions">
           <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
-          <button className="btn-delete-action icon-btn" onClick={() => deleteRecord(`/categories/${row.category_id}`, 'Category deleted.', `Delete the "${row.category_name}" vehicle category? This cannot be undone.`)} type="button" title="Delete" aria-label="Delete"><Icon name="trash" size={14} /></button>
+          <button className="btn-delete-action icon-btn" onClick={() => deleteRecord(`/categories/${row.category_id}`, 'Category deleted.', `Delete the "${row.category_name}" vehicle type? This cannot be undone.`)} type="button" title="Delete" aria-label="Delete"><Icon name="trash" size={14} /></button>
         </div>
       ),
     },
@@ -8829,6 +8837,14 @@ function scheduleColumns(onEdit, deleteRecord, onComplete, currentUser, onViewRe
               </span>
             )
           )}
+          {row.status === 'Scheduled' && row.hold_reason && (
+            <span
+              style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', cursor: 'help' }}
+              title={`On hold: ${row.hold_reason}`}
+            >
+              On hold <Icon name="info" size={11} />
+            </span>
+          )}
           {row.status === 'Declined' && row.decline_reason && (
             <span
               style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', cursor: 'help' }}
@@ -9239,6 +9255,23 @@ function reportExportColumns(rows) {
   return reportColumns(rows).map((col) => ({ label: col.label, value: (row) => col.render(row) }));
 }
 
+// One plain headline for a vehicle instead of three separate fields (availability, condition, readiness).
+// The detail fields stay available in the tooltip and on the vehicle profile.
+function vehicleHeadline(row) {
+  switch (row?.readiness_state) {
+    case 'ready': return { label: 'Ready', tone: 'ready' };
+    case 'in_maintenance': return { label: 'Under repair', tone: 'repair' };
+    case 'retired': return { label: 'Out of service', tone: 'out' };
+    default: return { label: 'Not checked', tone: 'unchecked' };
+  }
+}
+
+function VehicleHeadlineBadge({ row }) {
+  const { label, tone } = vehicleHeadline(row);
+  const detail = [row?.status && `Availability: ${row.status}`, row?.condition && `Condition: ${row.condition}`, row?.not_ready_reason].filter(Boolean).join(' · ');
+  return <span className={`status-badge headline-${tone}`} title={detail || label}>{label}</span>;
+}
+
 function StatusBadge({ value }) {
   return <span className={`status-badge ${String(value).toLowerCase().replaceAll(' ', '-')}`}>{value ?? '-'}</span>;
 }
@@ -9375,8 +9408,8 @@ function moduleRequest(moduleKey, editTarget, payload) {
 
   if (moduleKey === 'categories') {
     return (editTarget && editTarget.category_id)
-      ? { method: 'put', path: `/categories/${editTarget.category_id}`, success: 'Vehicle category updated.' }
-      : { method: 'post', path: '/categories', success: 'Vehicle category added.' };
+      ? { method: 'put', path: `/categories/${editTarget.category_id}`, success: 'Vehicle type updated.' }
+      : { method: 'post', path: '/categories', success: 'Vehicle type added.' };
   }
 
   if (moduleKey === 'users') {
@@ -10680,7 +10713,7 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
 // TICKET DETAIL PANEL — shown when admin clicks a ticket row
 // =========================================================================
 
-function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechanic, onReassignCustodian, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSetShopTester, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false }) {
+function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, lookups, onAssignTicketMechanic, onReassignCustodian, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSetShopTester, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false }) {
   const [cancelling, setCancelling] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [reassigningCustodian, setReassigningCustodian] = useState(false);
@@ -10802,6 +10835,12 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
         ) : ticket.status === 'Declined' ? (
           <p className="notice danger ticket-process-cancelled">
             <Icon name="alert" size={15} /> This proposal was declined.{ticket.decline_reason ? ` Reason: ${ticket.decline_reason}` : ''}
+            {onRecordConditionCheck && ticket.vehicle_id && (
+              <>
+                {' '}The vehicle stays marked Needs Repair until a new Condition Check.{' '}
+                <button type="button" className="primary-button" onClick={() => onRecordConditionCheck(ticket.vehicle_id)}>Record condition check</button>
+              </>
+            )}
           </p>
         ) : (
           <div className="ticket-process-flow" role="list" aria-label="Ticket progress">
@@ -11061,6 +11100,12 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                       )}
                     </div>
                   )}
+                  {si.on_hold_since && si.status === 'Under Repair' && (
+                    <div className="lr-alert lr-alert-warning" role="status">
+                      <strong>On hold · {formatDate(si.on_hold_since)}{si.on_hold_until ? ` · expected ${formatDate(si.on_hold_until)}` : ''}</strong>
+                      <p>{si.on_hold_reason}</p>
+                    </div>
+                  )}
                   {si.returned_to_admin_at && si.status === 'Under Repair' && (
                     <div className="lr-alert lr-alert-warning" role="status">
                       <strong>Returned to Admin{si.returned_to_admin_by?.name ? ` by ${si.returned_to_admin_by.name}` : ''} · {formatDate(si.returned_to_admin_at)}</strong>
@@ -11275,7 +11320,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
   );
 }
 
-function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDeleteTicket, onRequestConfirmation, ticketAction: sendTicketAction }) {
+function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDeleteTicket, onRequestConfirmation, onRecordConditionCheck, ticketAction: sendTicketAction }) {
   const navigate = useNavigate();
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -11330,6 +11375,7 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
   return (
     <TicketDetailPanel
       asPage
+      onRecordConditionCheck={onRecordConditionCheck}
       user={user}
       userId={userId}
       ticket={ticket}
@@ -12655,7 +12701,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
           <h2>{vehicle.vehicle_name}</h2>
           <div className="vehicle-profile-subtitle">
             <span className="vehicle-profile-plate">{vehicle.category?.domain ?? 'Land'}.{vehicle.plate_number}</span>
-            <span>{vehicle.category?.category_name ?? 'Unassigned vehicle category'}</span>
+            <span>{vehicle.category?.category_name ?? 'Unassigned vehicle type'}</span>
           </div>
         </div>
         <div className="vehicle-profile-actions">
@@ -12871,7 +12917,7 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
               <dl className="veh-report-grid">
                 <div><dt>{plateFieldLabel(vehicle.category?.domain)}</dt><dd>{vehicle.plate_number}</dd></div>
                 <div><dt>Vehicle Name</dt><dd>{vehicle.vehicle_name}</dd></div>
-                <div><dt>Vehicle Category</dt><dd>{vehicle.category?.category_name ?? 'Unassigned'}</dd></div>
+                <div><dt>Vehicle Type</dt><dd>{vehicle.category?.category_name ?? 'Unassigned'}</dd></div>
                 <div><dt>Brand / Model</dt><dd>{`${vehicle.brand ?? '-'} ${vehicle.model ?? ''}`.trim() || '-'}</dd></div>
                 <div><dt>Year Model</dt><dd>{vehicle.year_model ?? '-'}</dd></div>
                 <div><dt>Capacity</dt><dd>{vehicle.capacity ?? '-'}</dd></div>
@@ -13617,7 +13663,7 @@ function CannibalizationManagement({ ticket, vehicleOptions, onChanged, notify }
   );
 }
 
-function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty, onExternalSend, onExternalReturn, onNoRepair, onReturnToAdmin, isMechanic = false, onDonorChanged, notify }) {
+function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty, onExternalSend, onExternalReturn, onNoRepair, onReturnToAdmin, onHold, onResume, isMechanic = false, onDonorChanged, notify }) {
   // A repair can be a standard repair, use parts from another vehicle, or both. "Both" is recorded as a
   // cannibalized repair that also carries the mechanic's own work and purchased parts.
   const [doesStandard, setDoesStandard] = useState(false);
@@ -13625,6 +13671,10 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   const chosenRepairType = usesDonorParts ? 'cannibalized' : (doesStandard ? 'in_house' : '');
   const [noRepairOpen, setNoRepairOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
+  const [holdOpen, setHoldOpen] = useState(false);
+  const [holdReason, setHoldReason] = useState('Waiting for parts');
+  const [holdNote, setHoldNote] = useState('');
+  const [holdDate, setHoldDate] = useState('');
   const [returnReason, setReturnReason] = useState('');
   const [noRepairNotes, setNoRepairNotes] = useState('');
   const [methodBusy, setMethodBusy] = useState(false);
@@ -13926,6 +13976,41 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                       <button type="button" className="primary-button" disabled={noRepairNotes.trim().length < 5 || submittingRepair}
                         onClick={async () => { setSubmittingRepair(true); try { await onNoRepair(ticket, { notes: noRepairNotes.trim() }); } finally { setSubmittingRepair(false); } }}>
                         Send to Custodian: no repair needed
+                      </button>
+                    </>
+                  )}
+              </div>
+            )}
+            {isMechanic && onHold && ticket?.on_hold_since && (
+              <div className="lr-alert lr-alert-warning" role="status">
+                <strong>On hold since {formatDate(ticket.on_hold_since)}{ticket.on_hold_until ? ` · expected ${formatDate(ticket.on_hold_until)}` : ''}</strong>
+                <p>{ticket.on_hold_reason}</p>
+                <button type="button" className="primary-button" disabled={submittingRepair}
+                  onClick={async () => { setSubmittingRepair(true); try { await onResume(ticket); } finally { setSubmittingRepair(false); } }}>
+                  Resume work
+                </button>
+              </div>
+            )}
+            {isMechanic && onHold && !ticket?.on_hold_since && ticket?.repair_type !== 'external' && (
+              <div className={`lr-field lr-no-repair${holdOpen ? ' is-open' : ''}`}>
+                {!holdOpen
+                  ? <button type="button" className="ghost-button" onClick={() => setHoldOpen(true)}>Put on hold</button>
+                  : (
+                    <>
+                      <label className="lr-label" htmlFor={`${idBase}-hold`}>Why is the work on hold? <abbr className="required-asterisk" title="required">*</abbr></label>
+                      <select id={`${idBase}-hold`} className="lr-textarea" style={{ minHeight: 0, height: 42, maxWidth: 320 }} value={holdReason} onChange={(e) => setHoldReason(e.target.value)}>
+                        <option>Waiting for parts</option>
+                        <option>Waiting for outside shop</option>
+                        <option>Waiting for vehicle access</option>
+                        <option>Other</option>
+                      </select>
+                      <textarea className="lr-textarea" rows={2} aria-label="Note (required for Other)" placeholder={holdReason === 'Other' ? 'Explain the hold (required)' : 'Optional note'} value={holdNote} onChange={(e) => setHoldNote(e.target.value)} />
+                      <label className="lr-label" htmlFor={`${idBase}-hold-date`}>Expected back to work (optional)</label>
+                      <input id={`${idBase}-hold-date`} type="date" className="lr-textarea" style={{ minHeight: 0, height: 42, maxWidth: 220 }} min={new Date().toISOString().slice(0, 10)} value={holdDate} onChange={(e) => setHoldDate(e.target.value)} />
+                      <small className="lr-hint">You stay assigned. The Custodian and Admin are told, and no reminders are sent while it is on hold.</small>
+                      <button type="button" className="primary-button" disabled={(holdReason === 'Other' && holdNote.trim().length < 3) || submittingRepair}
+                        onClick={async () => { setSubmittingRepair(true); try { await onHold(ticket, { reason: holdReason, note: holdNote.trim() || undefined, expected_date: holdDate || undefined }); } finally { setSubmittingRepair(false); } }}>
+                        Put on hold
                       </button>
                     </>
                   )}

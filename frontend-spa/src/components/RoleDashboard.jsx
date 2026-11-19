@@ -86,21 +86,39 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   tasks.sort((a, b) => groupOrder.indexOf(groupOf(a)) - groupOrder.indexOf(groupOf(b)) || String(a.date ?? '').localeCompare(String(b.date ?? '')));
   const kpis = admin ? [
     { label: 'Pending Approvals', value: pending ? '—' : pendingTickets.length + pendingSchedules.length, detail: 'Ticket proposals and schedule bookings', icon: 'clipboard', open: () => go('tickets', ['Pending Approval']) },
-    { label: 'Active Maintenance', value: metric('Vehicles Under Maintenance'), detail: 'Vehicles under maintenance', icon: 'wrench', open: () => go('vehicles', ['Under Maintenance']) },
+    { label: 'Active Maintenance', value: metric('Vehicles Under Maintenance'), detail: `of ${metric('Total Vehicles')} vehicles under maintenance`, icon: 'wrench', open: () => go('vehicles', ['Under Maintenance']) },
     { label: 'Overdue Maintenance', value: metric('Overdue Maintenance'), detail: 'Scheduled maintenance past due', icon: 'calendar', open: () => go('schedules', ['Overdue']) },
-    { label: 'Available Vehicles', value: metric('Available Vehicles'), detail: 'Availability, separate from readiness', icon: 'vehicle', open: () => go('vehicles', ['Available']) },
+    { label: 'Available Vehicles', value: metric('Available Vehicles'), detail: `of ${metric('Total Vehicles')} vehicles`, icon: 'vehicle', open: () => go('vehicles', ['Available']) },
   ] : custodian ? [
     { label: 'Pending Verification', value: pending ? '—' : verifications.length, icon: 'checkCircle', open: () => go('ticketVerifications', ['Pending']) },
     { label: 'Readiness Checks Needed', value: watch.length, icon: 'vehicle', open: () => go('vehicles') },
+    { label: 'Vehicles Needing Repair', value: data.badge_counts?.conditions ?? 0, detail: 'Flagged by a condition check', icon: 'alert', open: () => go('conditions') },
+    { label: 'My Open Reports', value: data.badge_counts?.issues ?? 0, detail: 'Issue reports not yet resolved', icon: 'clipboard', open: () => go('issues') },
   ] : [
     { label: 'My Active Work Orders', value: pending ? '—' : activeMine.length, icon: 'wrench', open: () => go('ticketWorkOrders', ['Pending']) },
     { label: 'My Upcoming Maintenance', value: pending ? '—' : mySchedules.length - myOverdue.length, icon: 'calendar', open: () => go('schedules', ['MyAssigned']) },
     { label: 'My Overdue Assignments', value: pending ? '—' : myOverdue.length, detail: 'Assigned schedules past due', icon: 'alert', open: () => go('schedules', ['MyAssigned']) },
   ];
+  const fleetTotal = Number(metric('Total Vehicles')) || 0;
+  const fleetAvailable = Number(metric('Available Vehicles')) || 0;
+  const fleetRepair = Number(metric('Vehicles Under Maintenance')) || 0;
+  const fleetOther = Math.max(0, fleetTotal - fleetAvailable - fleetRepair);
+  const fleetSegments = [
+    { key: 'available', label: 'Available', value: fleetAvailable, open: () => go('vehicles', ['Available']) },
+    { key: 'repair', label: 'Under maintenance', value: fleetRepair, open: () => go('vehicles', ['Under Maintenance']) },
+    { key: 'other', label: 'Inactive / retired', value: fleetOther, open: () => go('vehicles', ['Inactive']) },
+  ];
   return <div className="focus-dashboard role-dashboard">
-    <header className="focus-heading focus-branded-heading"><div><h2>{roleCopy[role][0]}</h2><p>{roleCopy[role][1]}</p></div>{roles.length > 1 && <label>Responsibility<SearchableSelect aria-label="Dashboard responsibility" value={role} onChange={(e) => setSelectedRole(e.target.value)}>{roles.map((r) => <option key={r}>{r}</option>)}</SearchableSelect></label>}</header>
+    <header className="focus-heading focus-branded-heading"><div><h2>{roleCopy[role][0]}</h2><p>{roleCopy[role][1]}</p></div>{custodian && <button type="button" className="focus-cta" onClick={() => onNavigate(`${basePath}/issues/new`)}><Icon name="plus" size={15} /> Report an issue</button>}{roles.length > 1 && <label>Responsibility<SearchableSelect aria-label="Dashboard responsibility" value={role} onChange={(e) => setSelectedRole(e.target.value)}>{roles.map((r) => <option key={r}>{r}</option>)}</SearchableSelect></label>}</header>
     {error && <div role="alert" className="focus-error">{error}<button type="button" onClick={() => setRetry((n) => n + 1)}>Retry</button></div>}
     <div className="focus-kpis" style={{ '--kpi-count': kpis.length }}>{kpis.map((k) => <button type="button" key={k.label} onClick={k.open}><span className="focus-kpi-icon"><Icon name={k.icon} size={19} /></span><span>{k.label}<strong>{k.value}</strong>{k.detail && <small>{k.detail}</small>}</span><Icon name="chevronRight" size={14} /></button>)}</div>
+    {admin && fleetTotal > 0 && <section className="focus-card focus-fleetbar" aria-label="Fleet at a glance">
+      <header><h3>Fleet at a glance</h3><span>{fleetTotal} vehicle{fleetTotal === 1 ? '' : 's'}</span></header>
+      <div className="focus-fleetbar-track" role="img" aria-label={fleetSegments.map((x) => `${x.value} ${x.label}`).join(', ')}>
+        {fleetSegments.filter((x) => x.value > 0).map((x) => <button type="button" key={x.key} className={`is-${x.key}`} style={{ flexGrow: x.value }} onClick={x.open} title={`${x.value} ${x.label}`} />)}
+      </div>
+      <ul className="focus-fleetbar-legend">{fleetSegments.map((x) => <li key={x.key}><i className={`is-${x.key}`} />{x.label}<strong>{x.value}</strong></li>)}</ul>
+    </section>}
     <div className="focus-panel-stack">
       <TaskList key={role} title="What needs your attention" items={tasks} loading={loading} error={error} onViewAll={() => go(admin ? 'tickets' : custodian ? 'ticketVerifications' : 'ticketWorkOrders')} />
       {admin && data.sole_active_admin && <section className="focus-card">

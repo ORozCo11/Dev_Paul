@@ -1,6 +1,7 @@
 # VMS Backend Watchdog - keeps Laravel PHP server alive on port 8001
 $projectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$phpExe    = "C:\webdev\PHP\php.exe"
+$phpExe    = "C:\Web\php\php.exe"
+if (-not (Test-Path $phpExe)) { $cmd = Get-Command php -ErrorAction SilentlyContinue; if ($cmd) { $phpExe = $cmd.Source } }
 $backendDir = Join-Path $projectRoot "backend-api"
 $artisan   = Join-Path $backendDir "artisan"
 $logDir    = Join-Path $projectRoot "logs"
@@ -34,5 +35,17 @@ while ($true) {
             -WindowStyle Hidden
         Log "Laravel server process launched."
     }
+    # The scheduler converts due maintenance schedules into ticket proposals and
+    # prunes old notifications. Without it those jobs never run.
+    $scheduler = Get-CimInstance Win32_Process -Filter "Name='php.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -match 'schedule:work' }
+    if (-not $scheduler) {
+        Log "Scheduler not running - starting schedule:work..."
+        Start-Process -FilePath $phpExe `
+            -ArgumentList "`"$artisan`" schedule:work" `
+            -WorkingDirectory $backendDir `
+            -WindowStyle Hidden
+    }
+
     Start-Sleep -Seconds 15
 }

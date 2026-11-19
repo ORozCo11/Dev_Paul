@@ -13,7 +13,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Runs daily (see routes/console.php). A Scheduled maintenance entry whose
+ * Runs every minute (see routes/console.php). A Scheduled maintenance entry whose
  * date has arrived becomes a ticket PROPOSAL automatically, instead of
  * relying on someone noticing and converting it by hand.
  *
@@ -96,6 +96,7 @@ class ConvertDueSchedulesToTickets extends Command
 
         if (!$vehicle || in_array($vehicle->status, ['Inactive', 'Decommissioned'], true)) {
             $this->warn("Schedule #{$schedule->schedule_id}: vehicle missing or retired, skipped.");
+            $this->hold($schedule, 'The vehicle is inactive or decommissioned.');
             return false;
         }
 
@@ -113,6 +114,7 @@ class ConvertDueSchedulesToTickets extends Command
 
         if (!$custodian) {
             $this->warn("Schedule #{$schedule->schedule_id}: no active Custodian available in this barangay, skipped.");
+            $this->hold($schedule, 'No active Custodian is available in this barangay.');
             return false;
         }
 
@@ -137,6 +139,7 @@ class ConvertDueSchedulesToTickets extends Command
 
         if ($duplicate) {
             $this->warn("Schedule #{$schedule->schedule_id}: vehicle already has an open ticket (#{$duplicate->ticket_id}) for \"{$schedule->maintenance_type}\", skipped.");
+            $this->hold($schedule, "The vehicle already has an open ticket (#{$duplicate->ticket_id}) for this maintenance type.");
             return false;
         }
 
@@ -147,7 +150,7 @@ class ConvertDueSchedulesToTickets extends Command
                 'ticket_title' => $ticketTitle,
                 'ticket_description' => "Auto-proposed from Maintenance Schedule #{$schedule->schedule_id}, due {$schedule->scheduled_date}."
                     . ($schedule->notes ? " Notes: {$schedule->notes}" : ''),
-                'priority' => 'Medium',
+                'priority' => $this->priorityFor($schedule->maintenance_type),
                 'status' => 'Pending Approval',
                 'assigned_custodian_id' => $custodian->id,
                 'assigned_at' => now(),
@@ -175,7 +178,7 @@ class ConvertDueSchedulesToTickets extends Command
                 'status' => 'Open',
             ]);
 
-            $schedule->update(['resulting_ticket_id' => $ticket->ticket_id]);
+            $schedule->update(['resulting_ticket_id' => $ticket->ticket_id, 'hold_reason' => null]);
 
             // No authenticated request in a console command, so
             // BelongsToBarangay's auto-stamp (which reads Auth::user())
@@ -211,5 +214,33 @@ class ConvertDueSchedulesToTickets extends Command
         });
 
         return true;
+    }
+
+    /**
+     * Record why a due schedule was not converted, so the user sees it on the
+     * schedule row instead of it silently retrying every minute. The
+     * Custodian is notified once, when the reason first appears or changes.
+     */
+    private function hold(VehicleMaintenanceSchedule $schedule, string $reason): void
+    {
+        if ($schedule->hold_reason === $reason) {
+            return;
+        }
+        $schedule->update(['hold_reason' => $reason]);
+
+        if ($schedule->created_by) {
+            Notification::create([
+                'user_id' => $schedule->created_by,
+                'title' => 'Due Maintenance Schedule On Hold',
+                'message' => "Schedule #{$schedule->schedule_id} ({$schedule->maintenance_type}) is due but was not turned into a ticket: {$reason}",
+                'type' => 'schedule_on_hold',
+            ]);
+        }
+    }
+
+    /** Safety-critical work gets High priority; everything else stays Medium. */
+    private function priorityFor(?string $maintenanceType): string
+    {
+        return preg_match('/brake|steering|tire|tyre|fire|pump|engine|electrical/i', (string) $maintenanceType) ? 'High' : 'Medium';
     }
 }
