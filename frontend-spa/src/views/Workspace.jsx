@@ -56,7 +56,8 @@ const modulesByRole = {
   // 'vehiclesReady' / 'vehiclesNotReady' are sub-pages of View Vehicles.
   Admin: [
     { section: null, items: [['dashboard', 'Dashboard']] },
-    // Every page is its own sidebar item (no tabs): the vehicle lists, then the work.
+    // A page with its sub-pages: View Vehicles has Ready / Not Ready under it, Maintenance has its three pages under it.
+    // No tabs: every sub-page is a page of its own.
     { section: 'Fleet', icon: 'vehicle', items: [
       ['vehicles', 'View Vehicles'],
       ['vehiclesReady', 'Ready to Respond'],
@@ -64,6 +65,8 @@ const modulesByRole = {
     ] },
     // The Admin does not record condition checks (the Custodian does), so there is no Condition Monitoring here.
     { section: 'Operations', icon: 'clipboard', items: [
+      // 'maintenanceGroup' is only a folder: its three sub-pages drop down under it.
+      ['maintenanceGroup', 'Maintenance'],
       ['tickets', 'Repair Tickets'],
       ['schedules', 'Scheduled Services'],
       ['maintenance', 'Records'],
@@ -81,7 +84,8 @@ const modulesByRole = {
     // Condition Monitoring sits right under the Dashboard: it is the Custodian's main job
     // (the vehicle list with View / Maintenance Schedule / Condition Check actions).
     // Planned maintenance is added from Condition Monitoring, which also shows each vehicle's next schedule.
-    { section: null, items: [['dashboard', 'Dashboard'], ['conditions', 'Condition Monitoring']] },
+    // Scheduled Services is the sub-page of Condition Monitoring (the Custodian plans services from there).
+    { section: null, items: [['dashboard', 'Dashboard'], ['conditions', 'Condition Monitoring'], ['schedules', 'Scheduled Services']] },
     { section: 'Fleet', icon: 'vehicle', items: [
       ['vehicles', 'View Vehicles'],
       ['vehiclesReadiness', 'Readiness Check'],
@@ -91,7 +95,6 @@ const modulesByRole = {
     ] },
     { section: 'Work', icon: 'wrench', items: [
       ['myTasks', 'My Tasks'],
-      ['schedules', 'Scheduled Services'],
     ] },
     { section: 'Reference', icon: 'list', items: [
       ['histories', 'Vehicle History'],
@@ -102,7 +105,7 @@ const modulesByRole = {
     // The mechanic works from their own tickets; a barangay-wide list of unready vehicles only repeated them.
     { section: 'Work', icon: 'wrench', items: [
       ['ticketWorkOrders', 'My Tasks'],
-      // The mechanic's routine services (oil changes and the like), as a page of their own.
+      // The sub-page of My Tasks: the mechanic's routine services (oil changes and the like).
       ['schedules', 'Scheduled Services'],
     ] },
   ],
@@ -2549,11 +2552,28 @@ function Workspace() {
   useEffect(() => {
     try { localStorage.setItem(seenStorageKey, JSON.stringify(seenBadges)); } catch { /* storage unavailable */ }
   }, [seenStorageKey, seenBadges]);
+  // Which sidebar page is a sub-page of which: the vehicle views under View Vehicles, the Admin's three work pages under
+  // Maintenance, and Scheduled Services under Condition Monitoring (Custodian) or My Tasks (mechanic).
+  const schedulesParent = modules.some(([k]) => k === 'maintenanceGroup') ? 'maintenanceGroup'
+    : modules.some(([k]) => k === 'conditions') ? 'conditions'
+      : modules.some(([k]) => k === 'ticketWorkOrders') ? 'ticketWorkOrders' : null;
+  const parentOf = (key) => (VEHICLE_SUBPAGE_VIEWS[key] ? 'vehicles'
+    : (['tickets', 'maintenance'].includes(key) && modules.some(([k]) => k === 'maintenanceGroup')) ? 'maintenanceGroup'
+      : key === 'schedules' ? schedulesParent : null);
+  const childrenOf = (parent) => modules.map(([k]) => k).filter((k) => parentOf(k) === parent);
+  const groupHasPage = (parent) => (parent !== 'maintenanceGroup' && breadcrumbModule === parent) || childrenOf(parent).some((k) => (VEHICLE_SUBPAGE_VIEWS[k] ? breadcrumbModule === 'vehicles' : breadcrumbModule === k));
+  // Groups start folded and open by themselves while you are on one of their pages; the row or the arrow opens or folds one.
+  const [groupOverride, setGroupOverride] = useState({});
+  const groupPageKey = `${breadcrumbModule}|${vehicleView}`;
+  const [previousGroupPageKey, setPreviousGroupPageKey] = useState(groupPageKey);
+  if (previousGroupPageKey !== groupPageKey) {
+    setPreviousGroupPageKey(groupPageKey);
+    setGroupOverride({});
+  }
+  const isGroupOpen = (parent) => groupOverride[parent] ?? groupHasPage(parent);
   const unseenBadgeFor = (key) => Math.max(0, rawBadgeCountFor(key) - (seenBadges[key] ?? 0));
   // The Admin's Work item carries what is waiting across its three tabs.
-  const badgeCountFor = (key) => (key === 'tickets' && hasAdminWorkNav
-    ? ADMIN_WORK_TABS.reduce((sum, tab) => sum + unseenBadgeFor(tab), 0)
-    : unseenBadgeFor(key));
+  const badgeCountFor = (key) => unseenBadgeFor(key);
 
   // Open a sidebar module — shared by the sidebar, the phone drawer and the
   // phone bottom bar. Closes the drawer once navigation actually happens.
@@ -2567,7 +2587,9 @@ function Workspace() {
     }
     // 'myTasks' / 'maintenanceLedger' are thin tabbed wrappers — they reopen
     // whichever tab was last open.
-    if (key === 'vehicles') {
+    if (key === 'maintenanceGroup') {
+      setActiveModule('tickets');
+    } else if (key === 'vehicles') {
       setActiveModuleState('vehicles');
       navigate(`${roleRoutes[user.role]}?module=vehicles`);
     } else if (VEHICLE_SUBPAGE_VIEWS[key]) {
@@ -2637,15 +2659,29 @@ function Workspace() {
           <nav className="module-nav" aria-label="Workspace modules">
             {moduleGroups.map(({ section, items }) => {
               const renderItem = ([key, label]) => {
-                const badgeCount = badgeCountFor(key);
-                const isActive = key === 'vehicles' ? (breadcrumbModule === 'vehicles' && vehicleView === 'all')
-                  : VEHICLE_SUBPAGE_VIEWS[key] ? (breadcrumbModule === 'vehicles' && vehicleView === VEHICLE_SUBPAGE_VIEWS[key])
-                  : key === navModule;
+                const parent = parentOf(key);
+                // A sub-page is only listed while its page is open.
+                if (parent && !isGroupOpen(parent)) return null;
+                const kids = childrenOf(key);
+                const isParent = kids.length > 0;
+                const open = isParent && isGroupOpen(key);
+                const toggleParent = () => setGroupOverride((current) => ({ ...current, [key]: !isGroupOpen(key) }));
+                const isActive = key === 'maintenanceGroup' ? false
+                  : key === 'vehicles' ? (breadcrumbModule === 'vehicles' && vehicleView === 'all')
+                    : VEHICLE_SUBPAGE_VIEWS[key] ? (breadcrumbModule === 'vehicles' && vehicleView === VEHICLE_SUBPAGE_VIEWS[key])
+                      : key === navModule;
+                // A folded page carries the total of its sub-pages; once open, each shows its own.
+                const badgeCount = badgeCountFor(key) + (isParent && !open ? kids.reduce((sum, child) => sum + badgeCountFor(child), 0) : 0);
                 return (
                   <button
-                    className={isActive ? 'active' : ''}
+                    className={`${isActive ? 'active' : ''}${parent ? ' module-nav-sub' : ''}`}
                     key={key}
-                    onClick={() => goToModule(key)}
+                    onClick={() => {
+                      // Clicking an open page's own row folds it, like the arrow; otherwise it opens the group and goes there.
+                      if (isParent && open && isActive) { toggleParent(); return; }
+                      if (isParent) setGroupOverride((current) => ({ ...current, [key]: true }));
+                      goToModule(key);
+                    }}
                     aria-label={badgeCount > 0 ? `${label} (${badgeCount})` : label}
                     title={isSidebarCollapsed ? label : undefined}
                     type="button"
@@ -2653,11 +2689,24 @@ function Workspace() {
                     {renderModuleIcon(key)}
                     <span>{label}</span>
                     {badgeCount > 0 && <span className="module-nav-badge">{badgeCount}</span>}
+                    {isParent && (
+                      <span
+                        className="module-nav-chevron"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={open ? `Collapse ${label} pages` : `Expand ${label} pages`}
+                        aria-expanded={open}
+                        onClick={(e) => { e.stopPropagation(); toggleParent(); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); toggleParent(); } }}
+                      >
+                        <Icon name={open ? 'chevronDown' : 'chevronRight'} size={14} />
+                      </span>
+                    )}
                   </button>
                 );
               };
 
-              // Groups are separated by spacing only.
+              // Groups are separated by spacing only; a page with sub-pages carries a chevron.
               return (
                 <div key={section ?? '__top'} className="module-nav-group">
                   {items.map(renderItem)}

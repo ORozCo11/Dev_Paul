@@ -189,4 +189,4 @@ The requirements PDF is an earlier export of this Markdown reference and was not
 - [x] A routine service does not change the vehicle's condition.
 - [x] One verification (Custodian) for every job; no Admin record confirmation; no manual record entry.
 - [x] Readiness stays valid until something changes or 7 days (configurable).
-- [x] Every page is a separate sidebar page (no tabs); a vehicle's profile also shows its history.
+- [x] Navigation is a page with its sub-pages (no tabs); a vehicle's profile also shows its history.
