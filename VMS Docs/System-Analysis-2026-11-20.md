@@ -259,7 +259,7 @@ Each phase ships with tests and a browser pass as each role, as was done for the
 | R4/R5 One verification, record written at close; no Admin confirm, no manual records | Yes (`record.create` and `record.edit` have no role; the Add Maintenance form is gone) |
 | R6 Readiness event-driven, 7-day limit | Yes (`READINESS_MAX_DAYS`) |
 | R8 Admin assigns (per item still possible) | Unchanged by decision |
-| Navigation: tabs were built, then **replaced on request** by a page with its sub-pages (View Vehicles, Maintenance, Condition Monitoring, My Tasks); a vehicle's profile also shows its history | Done (no tabs) |
+| Navigation: tabs were built, then **replaced on request** by pages with sub-pages for the Admin (View Vehicles, Maintenance) and flat menus for the Custodian and mechanic; a vehicle's profile also shows its history | Done (no tabs) |
 | Condition form: Good / Needs Repair only; Schedule a service is its own form | Yes |
 | Wording: Scheduled services, Assigned Maintenance Personnel | Yes |
 

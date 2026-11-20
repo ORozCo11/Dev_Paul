@@ -84,11 +84,11 @@ The one-line version of each role, for quick reference:
 - **Admin**: Manage → Review → Assign → Monitor.
 - **Maintenance Personnel**: Repair → Test → Submit (or No repair needed); completes scheduled work (no condition checks).
 
-The sidebar is a page with its sub-pages, with no tabs: a page that has sub-pages carries a small arrow, starts folded, and opens while you are on one of its pages. Every sub-page is a page of its own. As of 21 November 2026:
+The sidebar has no tabs. The Admin's menu uses pages with sub-pages (a small arrow; folded until you are on one of its pages); the Custodian's and the mechanic's menus are short flat lists. As of 21 November 2026:
 
 - **Admin**: Dashboard · View Vehicles (Ready to Respond, Not Ready to Respond) · Maintenance (Repair Tickets, Scheduled Services, Records) · Users · Reports · Vehicle Categories · Activity Log.
-- **Custodian**: Dashboard · Condition Monitoring (Scheduled Services) · View Vehicles (Readiness Check, Ready to Respond, Not Ready to Respond) · Vehicle Location · My Tasks · Vehicle History. A vehicle's profile also shows that vehicle's history.
-- **Maintenance Personnel**: Dashboard · My Tasks (Scheduled Services).
+- **Custodian**: Dashboard · Condition Monitoring · Scheduled Services · View Vehicles · Readiness Check · Ready to Respond · Not Ready to Respond · Vehicle Location · My Tasks · Vehicle History. A vehicle's profile also shows that vehicle's history.
+- **Maintenance Personnel**: Dashboard · My Tasks · Scheduled Services.
 
 Four navigation decisions are deliberate and final — not oversights to "fix" in a future pass:
 

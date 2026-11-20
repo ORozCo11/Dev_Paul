@@ -2557,7 +2557,9 @@ function Workspace() {
   const schedulesParent = modules.some(([k]) => k === 'maintenanceGroup') ? 'maintenanceGroup'
     : modules.some(([k]) => k === 'conditions') ? 'conditions'
       : modules.some(([k]) => k === 'ticketWorkOrders') ? 'ticketWorkOrders' : null;
-  const parentOf = (key) => (VEHICLE_SUBPAGE_VIEWS[key] ? 'vehicles'
+  // Only the Admin's menu is long enough to need pages with sub-pages; the Custodian's and the mechanic's stay flat lists.
+  const useFolders = modules.some(([k]) => k === 'maintenanceGroup');
+  const parentOf = (key) => (!useFolders ? null : VEHICLE_SUBPAGE_VIEWS[key] ? 'vehicles'
     : (['tickets', 'maintenance'].includes(key) && modules.some(([k]) => k === 'maintenanceGroup')) ? 'maintenanceGroup'
       : key === 'schedules' ? schedulesParent : null);
   const childrenOf = (parent) => modules.map(([k]) => k).filter((k) => parentOf(k) === parent);
