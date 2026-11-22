@@ -21,8 +21,8 @@ class ProvinceController extends Controller
      */
     public function withBarangays()
     {
-        return Province::whereHas('cities', fn ($query) => $query->whereHas('barangays', fn ($barangays) => $barangays->whereHas('users')->orWhere('name', 'Paknaan')))
-            ->with(['cities' => fn ($query) => $query->whereHas('barangays', fn ($barangays) => $barangays->whereHas('users')->orWhere('name', 'Paknaan'))->orderBy('name')])
+        return Province::whereHas('cities', fn ($query) => $query->whereHas('barangays', fn ($barangays) => $barangays->whereHas('users')))
+            ->with(['cities' => fn ($query) => $query->whereHas('barangays', fn ($barangays) => $barangays->whereHas('users'))->orderBy('name')])
             ->orderBy('name')
             ->get(['id', 'name'])
             ->map(function (Province $province) {

@@ -16,12 +16,12 @@ export function PlatformOverview({ barangays, onNavigate }) {
   const boundaries = barangays.filter((b) => b.boundary_status === 'needs_review');
   const active = barangays.filter((b) => b.has_active_admin).length;
   const metrics = [
-    { label: 'Registered Barangays', value: barangays.length, icon: 'pin', tab: 'barangays', detail: `${active} with an active Administrator` },
+    { label: 'Barangays with an Administrator', value: `${active} of ${barangays.length}`, icon: 'pin', tab: 'barangays', filter: 'orphaned', detail: barangays.length - active > 0 ? `${barangays.length - active} still need an Administrator` : 'Every barangay has an Administrator' },
     { label: 'Boundaries Needing Review', value: boundaries.length, icon: 'pin', tab: 'barangays', filter: 'boundary_review', detail: 'Candidate boundaries to verify' },
   ];
   const items = [
-    ...boundaries.map((b) => ({ key: `boundary-${b.id}`, title: 'Review candidate boundary', detail: `${b.name}, ${b.city_name ?? ''}`, status: 'Needs Review', date: b.updated_at, tab: 'barangays', filter: 'boundary_review' })),
-    ...barangays.filter((b) => !b.has_active_admin).map((b) => ({ key: `recovery-${b.id}`, title: 'Create or recover Administrator', detail: `${b.name}, ${b.city_name ?? ''}`, status: 'No Active Admin', tab: 'barangays', filter: 'orphaned' })),
+    ...boundaries.map((b) => ({ key: `boundary-${b.id}`, title: 'Review candidate boundary', detail: b.name, status: 'Needs Review', date: b.updated_at, tab: 'barangays', filter: 'boundary_review' })),
+    ...barangays.filter((b) => !b.has_active_admin).map((b) => ({ key: `recovery-${b.id}`, title: 'Create the Administrator', detail: b.name, status: 'No Active Admin', tab: 'barangays', filter: 'orphaned' })),
   ];
   const segments = [{ label: 'Active Administrator', value: active, color: '#16a34a' }, { label: 'Without active Administrator', value: barangays.length - active, color: '#d97706' }];
   return <div className="focus-dashboard sa-overview">
@@ -31,7 +31,7 @@ export function PlatformOverview({ barangays, onNavigate }) {
         {!items.length ? <AdminEmptyState icon="checkCircle" title="You're up to date" description="No administrative actions are waiting for review." /> : <ul className="focus-tasks">{(expanded ? items : items.slice(0, 5)).map((item) => <li key={item.key}><div><strong>{item.title}</strong><span>{item.detail}</span><div className="sa-queue-meta"><StatusBadge value={item.status} /><time>{item.date ? formatDate(item.date) : 'Date not recorded'}</time></div></div><button type="button" onClick={() => onNavigate(item.tab, item.filter)}>Review <Icon name="chevronRight" size={14} /></button></li>)}</ul>}
         {items.length > 5 && <button type="button" className="focus-more" onClick={() => setExpanded(!expanded)}>{expanded ? 'Show fewer actions' : `View all ${items.length} actions`}</button>}
       </section>
-      <section className="focus-card sa-platform-status"><header><div><h3>Platform Status</h3><p>Administrator coverage across registered barangays.</p></div></header>{barangays.length ? <div className="focus-donut"><DonutChart segments={segments} centerLabel={barangays.length} centerSubLabel="barangays" /><ul>{segments.map((segment) => <li key={segment.label}><i style={{ background: segment.color }} />{segment.label}<strong>{segment.value}</strong></li>)}</ul></div> : <AdminEmptyState icon="pin" title="No barangays registered" description="Add a barangay to begin platform onboarding." />}<button type="button" className="focus-more" onClick={() => onNavigate('barangays')}>Manage barangays <Icon name="chevronRight" size={14} /></button></section>
+      <section className="focus-card sa-platform-status"><header><div><h3>Administrator Coverage</h3><p>How many of the municipality's barangays have an Administrator.</p></div></header>{barangays.length ? <div className="focus-donut"><DonutChart segments={segments} centerLabel={barangays.length} centerSubLabel="barangays" /><ul>{segments.map((segment) => <li key={segment.label}><i style={{ background: segment.color }} />{segment.label}<strong>{segment.value}</strong></li>)}</ul></div> : <AdminEmptyState icon="pin" title="No barangays registered" description="Add a barangay to begin platform onboarding." />}<button type="button" className="focus-more" onClick={() => onNavigate('barangays')}>Manage barangays <Icon name="chevronRight" size={14} /></button></section>
     </div>
   </div>;
 }
@@ -60,17 +60,13 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onResend, onSend
   // Barangay Management links here with ?user=<id> to land on one account.
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => users.find((account) => String(account.id) === searchParams.get('user'))?.email ?? '');
-  const [province, setProvince] = useState('');
-  const [city, setCity] = useState('');
   const [barangay, setBarangay] = useState('');
   const [role, setRole] = useState('');
   const [status, setStatus] = useState('');
   const [editing, setEditing] = useState(null);
-  // Only locations that actually have users are offered, narrowed province → city → barangay.
+  // Only barangays that actually have users are offered.
   const located = users.filter((account) => account.barangay_id);
-  const provinceOptions = [...new Set(located.map((account) => account.province_name).filter(Boolean))].sort();
-  const cityOptions = [...new Set(located.filter((account) => !province || account.province_name === province).map((account) => account.city_name).filter(Boolean))].sort();
-  const barangayOptions = [...new Map(located.filter((account) => (!province || account.province_name === province) && (!city || account.city_name === city)).map((account) => [String(account.barangay_id), account.barangay_name])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+  const barangayOptions = [...new Map(located.map((account) => [String(account.barangay_id), account.barangay_name])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
   const [nextRole, setNextRole] = useState('');
   const [emailing, setEmailing] = useState(null);
   const accountStatus = (account) => account.is_active ? 'Active' : 'Deactivated';
@@ -80,11 +76,11 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onResend, onSend
     event.preventDefault();
     onRequestConfirmation({ title: 'Change Account Role', message: `Change ${editing.name}'s role from ${effectiveRoles(editing).join(', ')} to ${nextRole}? This replaces their current roles and changes account permissions.`, confirmLabel: 'Confirm Role Change', variant: 'primary', onConfirm: async () => { const success = await onChangeRole(editing, nextRole); if (success) setEditing(null); } });
   };
-  const visible = users.filter((account) => (!province || account.province_name === province) && (!city || account.city_name === city) && (!barangay || String(account.barangay_id) === barangay) && (!role || effectiveRoles(account).includes(role)) && (!status || accountStatus(account) === status) && [account.name, account.email, location(account)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const visible = users.filter((account) => (!barangay || String(account.barangay_id) === barangay) && (!role || effectiveRoles(account).includes(role)) && (!status || accountStatus(account) === status) && [account.name, account.email, location(account)].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const columns = [
     { label: 'ID', key: 'id', className: 'cell-center' },
     { label: 'User', render: (account) => <AdminIdentity name={account.name} email={account.email} /> },
-    { label: 'Barangay', render: (account) => <div className="sa-stacked"><strong>{account.barangay_name || 'Unassigned'}</strong><span>{[account.city_name, account.province_name].filter(Boolean).join(', ')}</span></div> },
+    { label: 'Barangay', render: (account) => <div className="sa-stacked"><strong>{account.barangay_name || 'Unassigned'}</strong></div> },
     { label: 'Role', render: (account) => effectiveRoles(account).join(', ') },
     { label: 'Account Status', render: (account) => <StatusBadge value={accountStatus(account)} /> },
     { label: 'Actions', render: (account) => <div className="sa-row-actions">
@@ -94,7 +90,7 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onResend, onSend
       <button className="ghost-button sa-icon-button sa-icon-mail" type="button" aria-label={`Email ${account.name}`} title="Send email" onClick={() => setEmailing(account)}><Icon name="mail" size={17} /></button>
     </div> },
   ];
-  return <div className="superadmin-tab"><AdminManagementCard toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search user or email..." /><AdminFilterField label="Province"><SearchableSelect value={province} onChange={(event) => { setProvince(event.target.value); setCity(''); setBarangay(''); }}><option value="">All Provinces</option>{provinceOptions.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="City / Municipality"><SearchableSelect value={city} onChange={(event) => { setCity(event.target.value); setBarangay(''); }}><option value="">All Cities</option>{cityOptions.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Barangay"><SearchableSelect value={barangay} onChange={(event) => setBarangay(event.target.value)}><option value="">All Barangays</option>{barangayOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Role"><SearchableSelect value={role} onChange={(event) => setRole(event.target.value)}><option value="">All Roles</option>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Account status"><SearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option>{['Active', 'Deactivated'].map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField></>}>
+  return <div className="superadmin-tab"><AdminManagementCard toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search user or email..." /><AdminFilterField label="Barangay"><SearchableSelect value={barangay} onChange={(event) => setBarangay(event.target.value)}><option value="">All Barangays</option>{barangayOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Role"><SearchableSelect value={role} onChange={(event) => setRole(event.target.value)}><option value="">All Roles</option>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Account status"><SearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option>{['Active', 'Deactivated'].map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField></>}>
     <PaginatedTable rows={visible} columns={columns} emptyMessage="No matching users" emptyDescription="Try another user name or adjust the account filters." />
   </AdminManagementCard>{emailing && <MessageEmail account={emailing} onSend={onSendEmail} onClose={() => setEmailing(null)} />}{editing && <AdminActionDrawer title="Edit account role" description="Review this account's access before saving." onClose={() => setEditing(null)}><AdminIdentity name={editing.name} email={editing.email} /><form className="sa-role-form" onSubmit={requestRoleChange}><p>Current roles: <strong>{effectiveRoles(editing).join(', ')}</strong></p><AdminFilterField label="New role"><SearchableSelect value={nextRole} onChange={(event) => setNextRole(event.target.value)}>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><p className="muted">Saving replaces the account's current roles. Last-Administrator and account restrictions still apply.</p><div className="sa-row-actions"><button type="button" className="ghost-button cancel-btn" onClick={() => setEditing(null)}>Cancel</button><button type="submit" className="primary-button" disabled={nextRole === editing.role && effectiveRoles(editing).length === 1}>Save Role</button></div></form></AdminActionDrawer>}</div>;
 }

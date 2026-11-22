@@ -97,9 +97,10 @@ class TicketController extends Controller
                     $scoped->orWhere('assigned_mechanic_id', $user->id)
                         ->orWhereHas('subIssues', fn ($q) => $q->where('assigned_mechanic_id', $user->id))
                         // Shop work that has been handed to the shop: the named shop tester receives it back and tests it.
-                        ->orWhereHas('subIssues', fn ($q) => $q->where('repair_type', 'external')->whereNull('assigned_mechanic_id')
-                            ->whereNotNull('external_sent_at')->where('status', 'Under Repair')
-                            ->where(fn ($who) => $who->where('external_tester_id', $user->id)->orWhereNull('external_tester_id')));
+                        // A tester the Admin has named sees the ticket right away (even before the vehicle is sent out); with no tester named, it appears once sent.
+                        ->orWhereHas('subIssues', fn ($q) => $q->where('external_tester_id', $user->id))
+                        ->orWhereHas('subIssues', fn ($q) => $q->where('repair_type', 'external')->whereNull('assigned_mechanic_id')->whereNull('external_tester_id')
+                            ->where('status', 'Under Repair')->whereNotNull('external_sent_at'));
                 }
             });
         }
@@ -132,17 +133,7 @@ class TicketController extends Controller
         // by someone it wasn't already visible to in the list (VMS-IMPROVEMENT-PLAN.md
         // Phase B3). A dual-hat account (e.g. Custodian + Maintenance Personnel)
         // passes if EITHER hat gives them a reason to be here.
-        if (!$user->hasRole('Admin')) {
-            $isAssignedCustodian = $user->hasRole('Custodian') && $ticket->assigned_custodian_id === $user->id;
-            $isAssignedMechanic = $user->hasRole('Maintenance Personnel')
-                && ((int) $ticket->assigned_mechanic_id === (int) $user->id
-                    || $ticket->subIssues()->where('assigned_mechanic_id', $user->id)->exists()
-                    || $ticket->subIssues()->where('repair_type', 'external')->whereNull('assigned_mechanic_id')
-                        ->whereNotNull('external_sent_at')->where('status', 'Under Repair')
-                        ->where(fn ($who) => $who->where('external_tester_id', $user->id)->orWhereNull('external_tester_id'))->exists());
-
-            abort_unless($isAssignedCustodian || $isAssignedMechanic, 403, 'You are not assigned to this ticket.');
-        }
+        abort_unless($this->canViewTicket($user, $ticket), 403, 'You are not assigned to this ticket.');
 
         $ticket->load($this->eagerLoads());
 
@@ -328,7 +319,7 @@ class TicketController extends Controller
             'condition_check_id'  => ['nullable', 'exists:vehicle_condition_checks,condition_check_id'],
             // Ignored if sent — the server composes the "MT-0010 — Vehicle — Issue" title.
             'ticket_title'        => ['nullable', 'string', 'max:255'],
-            'ticket_description'  => ['required', 'string'],
+            'ticket_description'  => ['required', 'string', 'max:2000'],
             'priority'            => ['required', Rule::in($this->priorities)],
             // How the repair will be done. A proposal always states what is
             // wrong and how it will be fixed (the Custodian has already seen
@@ -597,7 +588,7 @@ class TicketController extends Controller
         );
 
         $data = $request->validate([
-            'ticket_description'    => ['sometimes', 'string'],
+            'ticket_description'    => ['sometimes', 'string', 'max:2000'],
             'priority'              => ['sometimes', Rule::in($this->priorities)],
             'assigned_custodian_id' => ['sometimes', 'exists:users,id'],
             // Required for an in-house ticket. An EXTERNAL-shop ticket has no
@@ -776,6 +767,7 @@ class TicketController extends Controller
                 : $items->filter(fn ($item) => $item->status === 'Under Repair' && $item->repair_type !== 'external');
             abort_if(isset($data['sub_issue_ids']) && $selected->count() !== count($data['sub_issue_ids']), 422, 'A selected work item does not belong to this ticket.');
             abort_if($selected->isEmpty(), 422, 'There is no unfinished in-house work to reassign.');
+            $handedOver = [];
             foreach ($selected as $item) {
                 abort_unless($item->status === 'Under Repair' && $item->repair_type !== 'external', 422, 'Submitted, verified and external work cannot be reassigned.');
                 abort_if((int) $item->assigned_mechanic_id === (int) $mechanic->id, 422, 'That mechanic already owns a selected work item.');
@@ -791,11 +783,16 @@ class TicketController extends Controller
                     'returned_to_admin_at' => null, 'returned_to_admin_by' => null, 'returned_to_admin_reason' => null,
                 ]);
                 $this->notifyUser($mechanic->id, 'Work Order Reassigned to You', "Ticket #{$ticket->display_number}: {$item->title}. Reason: {$data['reassign_reason']}", 'work_order_assigned', $ticket->ticket_id);
-                if ($previous) $this->notifyUser($previous, 'Work Order Reassigned', "Ticket #{$ticket->display_number}: {$item->title} was reassigned to {$mechanic->name}.", 'work_order_reassigned', $ticket->ticket_id);
+                if ($previous) $handedOver[] = [$previous, $item->title];
                 $this->log($request, 'Ticket Mechanic Reassigned', "Ticket #{$ticket->display_number}: {$item->title} reassigned from {$previousName} to {$mechanic->name}. Reason: {$data['reassign_reason']}", $ticket->ticket_id);
             }
             $ids = $ticket->subIssues()->pluck('assigned_mechanic_id')->filter()->unique();
             $ticket->update(['assigned_mechanic_id' => $ids->count() === 1 ? $ids->first() : null]);
+            // Told only now that the ticket's own mechanic is settled, so a person who lost access gets a notice without a dead link.
+            foreach ($handedOver as [$formerId, $title]) {
+                $this->unlinkLostAccess($formerId, $ticket);
+                $this->notifyUser($formerId, 'Work Order Reassigned', "Ticket #{$ticket->display_number}: {$title} was reassigned to {$mechanic->name}.", 'work_order_reassigned', $ticket->ticket_id);
+            }
             return response()->json($ticket->fresh($this->eagerLoads()));
         });
     }
@@ -845,6 +842,7 @@ class TicketController extends Controller
 
             $ids = $ticket->subIssues()->pluck('assigned_mechanic_id')->filter()->unique();
             $ticket->update(['assigned_mechanic_id' => $ids->count() === 1 ? $ids->first() : null]);
+            $this->unlinkLostAccess($request->user()->id, $ticket);
 
             $vehicleName = $ticket->vehicle->vehicle_name;
             $message = "{$request->user()->name} returned \"{$subIssue->title}\" on Ticket #{$ticket->display_number} ({$vehicleName}) to the Admin. Reason: {$data['reason']}";
@@ -875,6 +873,7 @@ class TicketController extends Controller
             $subIssue->update(['external_tester_id' => $tester->id, 'returned_to_admin_at' => null, 'returned_to_admin_by' => null, 'returned_to_admin_reason' => null]);
             $this->notifyUser($tester->id, 'Shop Test Assigned to You', "Ticket #{$ticket->display_number}: you will test \"{$subIssue->title}\" when it returns from the shop.", 'work_order_assigned', $ticket->ticket_id);
             if ($previous && (int) $previous !== (int) $tester->id) {
+                $this->unlinkLostAccess($previous, $ticket);
                 $this->notifyUser($previous, 'Shop Test Reassigned', "Ticket #{$ticket->display_number}: the shop test for \"{$subIssue->title}\" was given to {$tester->name}.", 'work_order_reassigned', $ticket->ticket_id);
             }
             $this->log($request, 'Shop Tester Assigned', "Ticket #{$ticket->display_number}: {$tester->name} will test \"{$subIssue->title}\" after the shop.", $ticket->ticket_id);
@@ -1275,7 +1274,7 @@ class TicketController extends Controller
     {
         $this->requireAbility($request, 'ticket.resubmit');
         $data = $request->validate([
-            'ticket_description' => ['required', 'string'],
+            'ticket_description' => ['required', 'string', 'max:2000'],
             'priority' => ['required', Rule::in($this->priorities)],
             'sub_issues' => ['required', 'array', 'min:1'],
             'sub_issues.*.sub_issue_id' => ['required', 'integer', 'distinct'],
@@ -1359,7 +1358,7 @@ class TicketController extends Controller
 
         $data = $request->validate([
             'assigned_custodian_id' => ['required', 'exists:users,id'],
-            'reassign_reason'       => ['required', 'string'],
+            'reassign_reason'       => ['required', 'string', 'max:5000'],
         ], [
             'reassign_reason.required' => 'A reason is required so the audit trail shows why responsibility moved.',
         ]);
@@ -1423,6 +1422,7 @@ class TicketController extends Controller
             );
 
             if ($previousCustodianId) {
+                $this->unlinkLostAccess($previousCustodianId, $ticket);
                 $this->notifyUser(
                     $previousCustodianId,
                     'Ticket Reassigned',
@@ -1723,7 +1723,7 @@ class TicketController extends Controller
         $data = $request->validate([
             'external_vendor' => ['required', 'string', 'max:255'],
             'external_reason' => ['required', 'string', 'max:255'],
-            'external_work_scope' => ['required', 'string'],
+            'external_work_scope' => ['required', 'string', 'max:5000'],
             'external_shop_contact' => ['nullable', 'regex:/^09[0-9]{9}$/'],
             'external_shop_address' => ['nullable', 'string', 'max:255'],
             'external_contact_person' => ['nullable', 'string', 'max:255'],
@@ -1780,7 +1780,7 @@ class TicketController extends Controller
         abort_if($subIssue->external_returned_at, 422, 'This repair has already been marked returned.');
 
         $data = $request->validate([
-            'external_return_notes' => ['required', 'string'],
+            'external_return_notes' => ['required', 'string', 'max:5000'],
             'external_actual_cost' => ['nullable', 'numeric', 'min:0'],
             'warranty_until' => ['nullable', 'date'],
         ]);
@@ -1859,8 +1859,8 @@ class TicketController extends Controller
         $data = $request->validate([
             // A donor-part-only job (just swapping a part in) needs no repair
             // narrative; a repair, or a repair + donor part, still does.
-            'repair_logs'           => ['required_unless:repair_type,cannibalized', 'nullable', 'string'],
-            'parts_used'            => ['nullable', 'string'],
+            'repair_logs'           => ['required_unless:repair_type,cannibalized', 'nullable', 'string', 'max:5000'],
+            'parts_used'            => ['nullable', 'string', 'max:5000'],
             'photo'                 => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:8192'],
             'photos'                => ['nullable', 'array', 'max:10'],
             'photos.*'              => ['file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:8192'],
@@ -1879,7 +1879,7 @@ class TicketController extends Controller
             'part_needed'           => ['nullable', 'string', 'max:255'],
             'part_quantity'         => ['nullable', 'integer', 'min:1'],
             'part_condition'        => ['nullable', 'string', 'max:255'],
-            'cannibal_reason'       => ['nullable', 'string'],
+            'cannibal_reason'       => ['nullable', 'string', 'max:5000'],
             'part_installed_at'     => ['nullable', 'date'],
             // The Maintenance Personnel tests the vehicle after the work; the Custodian only verifies.
             'tested_ok'             => ['required', 'accepted'],
@@ -2494,9 +2494,46 @@ class TicketController extends Controller
         ]);
     }
 
+    /**
+     * The one rule for who may open a ticket (mirrors index()'s scoping). A person holding BOTH Custodian and
+     * Maintenance hats passes if EITHER gives them a reason to be here. A shop tester the Admin has named can open
+     * the ticket right away; with no tester named, Maintenance Personnel see it once it is sent out.
+     */
+    private function canViewTicket(User $user, MaintenanceTicket $ticket): bool
+    {
+        if ($user->hasRole('Admin')) {
+            return true;
+        }
+        if ($user->hasRole('Custodian') && (int) $ticket->assigned_custodian_id === (int) $user->id) {
+            return true;
+        }
+
+        return $user->hasRole('Maintenance Personnel')
+            && ((int) $ticket->assigned_mechanic_id === (int) $user->id
+                || $ticket->subIssues()->where('assigned_mechanic_id', $user->id)->exists()
+                // The named shop tester keeps the ticket for good (like an assigned mechanic does), including after testing it.
+                || $ticket->subIssues()->where('external_tester_id', $user->id)->exists()
+                // No tester named yet: any Maintenance Personnel sees unfinished shop work once it has been sent out.
+                || $ticket->subIssues()->where('repair_type', 'external')->whereNull('assigned_mechanic_id')->whereNull('external_tester_id')
+                    ->where('status', 'Under Repair')->whereNotNull('external_sent_at')->exists());
+    }
+
+    /** After a reassignment: whoever lost access keeps their notices, but they no longer link to a ticket they cannot open. */
+    private function unlinkLostAccess($userId, MaintenanceTicket $ticket): void
+    {
+        $user = $userId ? User::find($userId) : null;
+        if ($user && ! $this->canViewTicket($user, $ticket->fresh())) {
+            \App\Models\Notification::where('user_id', $userId)->where('ticket_id', $ticket->ticket_id)->update(['ticket_id' => null]);
+        }
+    }
+
     private function notifyUser($userId, $title, $message, $type, $ticketId)
     {
         if (!$userId) return;
+        // A notice never links to a ticket its recipient cannot open ("Ticket unavailable" after a click is a dead end).
+        if ($ticketId && ($recipient = User::find($userId)) && ($linked = MaintenanceTicket::find($ticketId)) && ! $this->canViewTicket($recipient, $linked)) {
+            $ticketId = null;
+        }
         \App\Models\Notification::create([
             'user_id'   => $userId,
             'title'     => $title,

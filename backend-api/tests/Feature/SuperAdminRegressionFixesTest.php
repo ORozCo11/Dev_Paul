@@ -37,26 +37,18 @@ class SuperAdminRegressionFixesTest extends TestCase
             'current_location' => 'QA Depot', 'barangay_id' => $this->barangay->id]);
     }
 
-    public function test_provisioned_reference_is_visible_after_reload_even_without_boundary_code_or_users(): void
+    public function test_every_barangay_of_the_municipality_is_listed_without_being_added_first(): void
     {
-        $this->getJson('/api/superadmin/barangays')->assertOk()->assertJsonCount(0);
-        $payload = ['city_id' => $this->barangay->city_id, 'barangay_id' => $this->barangay->id];
-        $this->postJson('/api/superadmin/barangays', $payload)->assertCreated();
-        $stamp = $this->barangay->fresh()->provisioned_at;
-        $this->assertNotNull($stamp);
-        $this->getJson('/api/superadmin/barangays')->assertOk()->assertJsonPath('0.id', $this->barangay->id);
-        $this->travel(1)->days();
-        $this->postJson('/api/superadmin/barangays', $payload)->assertCreated();
-        $this->assertTrue($stamp->equalTo($this->barangay->fresh()->provisioned_at));
+        $this->getJson('/api/superadmin/barangays')->assertOk()->assertJsonCount(1)->assertJsonPath('0.id', $this->barangay->id);
     }
 
-    public function test_provision_and_refresh_preserve_reviewed_status_and_real_staff_counts(): void
+    public function test_listing_and_refresh_preserve_reviewed_status_and_real_staff_counts(): void
     {
         $this->user(['Admin']);
         $geometry = ['type' => 'Polygon', 'coordinates' => [[[123, 10], [124, 10], [124, 11], [123, 10]]]];
         $this->barangay->update(['boundary' => $geometry, 'boundary_status' => 'verified', 'boundary_source' => 'uploaded_reference: QA survey', 'boundary_verified_by' => $this->superAdmin->id]);
-        $this->postJson('/api/superadmin/barangays', ['city_id' => $this->barangay->city_id, 'barangay_id' => $this->barangay->id])
-            ->assertCreated()->assertJsonPath('staff_count', 1)->assertJsonPath('has_active_admin', true)->assertJsonPath('boundary_status', 'verified');
+        $this->getJson('/api/superadmin/barangays')
+            ->assertOk()->assertJsonPath('0.staff_count', 1)->assertJsonPath('0.has_active_admin', true)->assertJsonPath('0.boundary_status', 'verified');
         $this->postJson("/api/superadmin/barangays/{$this->barangay->id}/boundary/refresh")->assertOk()->assertJsonPath('boundary_status', 'verified');
     }
 

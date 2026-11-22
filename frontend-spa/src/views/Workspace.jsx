@@ -1,6 +1,7 @@
 import PaginationControls from '../components/PaginationControls';
 import { parseTimestamp, scheduleStage, scheduleIsOverdue, relatedRecordLabel } from '../utils/qaWorkflow';
 import ThemeToggle from '../components/ThemeToggle';
+import NotificationBell from '../components/NotificationBell';
 import SearchableSelect from '../components/SearchableSelect';
 import ImpersonationPicker from '../components/ImpersonationPicker';
 import { recordNumber, ticketNumber, ticketTitle } from '../utils/recordNumber';
@@ -777,6 +778,8 @@ function Workspace() {
   // Admin-only) — hands a still-open schedule to a different Maintenance
   // Personnel without cancelling and re-booking it.
   const [reassignScheduleTarget, setReassignScheduleTarget] = useState(null);
+  // A proposed schedule that arrived with no mechanic: the Admin picks one as part of approving it.
+  const [approveScheduleTarget, setApproveScheduleTarget] = useState(null);
   // Admin's "Decline" action on a Pending Approval row (schedule.decline
   // ability, Admin-only) — collects a reason, same modal pattern as Reassign.
   const [declineScheduleTarget, setDeclineScheduleTarget] = useState(null);
@@ -784,6 +787,9 @@ function Workspace() {
   // vehicle — offer the Readiness Check right then instead of making them
   // come back for a second visit. Holds the vehicle to check, or null.
   const [readinessPromptTarget, setReadinessPromptTarget] = useState(null);
+  // Readiness Check page: "show all vehicles" toggle and the vehicles ticked for a one-go confirmation.
+  const [showAllReadiness, setShowAllReadiness] = useState(false);
+  const [selectedReadiness, setSelectedReadiness] = useState([]);
   const [decommissionTarget, setDecommissionTarget] = useState(null);
   // Admin's Maintenance Schedule defaults to the card ("ticket") view rather
   // than the plain table — a schedule reads more like a ticket now that its
@@ -801,7 +807,7 @@ function Workspace() {
     const timer = setTimeout(() => setNotice(null), notice.undo ? 10000 : notice.lines ? 8000 : 5000);
     return () => clearTimeout(timer);
   }, [notice]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [userInfoTarget, setUserInfoTarget] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -916,6 +922,21 @@ function Workspace() {
       console.error('Failed to load notifications:', error);
     }
   }, []);
+
+  // Opens whatever a notice is about (ticket, schedule, vehicle or reported issue) and marks it read.
+  const openNotification = async (notice) => {
+    const base = roleRoutes[user.role];
+    try { if (!notice.read_at) await api.put(`/notifications/${notice.notification_id}/read`); } catch { /* the page still opens */ }
+    loadNotifications();
+    if (notice.ticket_id) navigate(`${base}/tickets/${notice.ticket_id}`);
+    else if (notice.schedule_id) navigate(`${base}/schedules/${notice.schedule_id}`);
+    else if (notice.issue_report_id) navigate(`${base}/issues/${notice.issue_report_id}`);
+    else if (notice.vehicle_id) navigate(`${base}/vehicles/${notice.vehicle_id}`);
+  };
+  const markAllNotificationsRead = async () => {
+    try { await api.put('/notifications/read-all'); } catch { /* shown again on the next load */ }
+    loadNotifications();
+  };
 
   const loadLookups = useCallback(async () => {
     const response = await api.get('/lookups');
@@ -1381,6 +1402,30 @@ function Workspace() {
     }
   };
 
+  // Confirms every ticked vehicle on the Readiness Check page in one go; one that cannot be confirmed is skipped with its reason.
+  const confirmBulkReadiness = (ids) => {
+    if (!ids.length) return;
+    setConfirmDialog({
+      title: 'Confirm readiness',
+      message: `Confirm ${ids.length} vehicle${ids.length === 1 ? '' : 's'} as ready to respond? Each one is checked on its own; one that is blocked by a repair or a missing part is skipped.`,
+      confirmLabel: `Confirm ${ids.length} ready`,
+      onConfirm: async () => {
+        try {
+          const { data } = await api.post('/vehicles/readiness-check-bulk', { vehicle_ids: ids, confirmed: true });
+          const skipped = data.skipped ?? [];
+          setSelectedReadiness([]);
+          setNotice({
+            type: skipped.length ? 'warning' : 'success',
+            text: `${data.confirmed.length} vehicle${data.confirmed.length === 1 ? '' : 's'} confirmed ready.${skipped.length ? ` ${skipped.length} skipped: ${skipped.map((x) => `${x.vehicle_name ?? `#${x.vehicle_id}`} (${x.reason})`).join('; ')}` : ''}`,
+          });
+          await refreshCurrent();
+        } catch (error) {
+          showError(error, setNotice);
+        }
+      },
+    });
+  };
+
   // Retiring a vehicle from the list: same action (and required reason) as the
   // Decommission button on the vehicle profile. Recommission undoes it.
   const submitDecommission = async (vehicleId, reason) => {
@@ -1600,23 +1645,24 @@ function Workspace() {
   // live (Scheduled); decline collects a reason, same propose/approve/decline
   // shape as a ticket proposal. Both work from Declined too (approve direct,
   // or decline again is a no-op since it's already there).
-  const approveScheduleNow = async (target) => {
+  const approveScheduleNow = async (target, assignedTo = null) => {
     setNotice(null);
     try {
-      await api.put(`/maintenance-schedules/${target.schedule_id}/approve`);
+      await api.put(`/maintenance-schedules/${target.schedule_id}/approve`, assignedTo ? { assigned_to: assignedTo } : {});
+      setApproveScheduleTarget(null);
       await refreshCurrent();
       setNotice({ type: 'success', text: 'Schedule approved.' });
     } catch (error) {
       showError(error, setNotice);
     }
   };
-  const approveSchedule = (target) => setConfirmDialog({
+  const approveSchedule = (target) => (!target.assigned_to ? setApproveScheduleTarget(target) : setConfirmDialog({
     title: 'Approve Maintenance Schedule',
     message: `Approve ${target.maintenance_type} for ${target.vehicle?.vehicle_name ?? 'this vehicle'} on ${formatDate(target.scheduled_date)}?`,
     confirmLabel: 'Approve Schedule',
     variant: 'primary',
     onConfirm: () => approveScheduleNow(target),
-  });
+  }));
   const declineSchedule = async (target, payload) => {
     setNotice(null);
     try {
@@ -1828,10 +1874,14 @@ function Workspace() {
     }
 
     if (activeModule === 'vehicles' && vehicleView === 'readiness') {
-      // Every vehicle still in the fleet can be checked, ready or not (a ready one is simply re-confirmed).
-      result = result.filter((row) => row.readiness_state !== 'retired');
+      // The Custodian's to-do list: only vehicles that need a check and can be checked now, the longest-waiting first.
+      // "Show all vehicles" brings back the rest (already checked, or blocked by a repair).
+      result = result.filter((row) => row.readiness_state !== 'retired' && (showAllReadiness || (row.readiness_state !== 'ready' && row.can_confirm_readiness !== false)));
+      result = [...result].sort((a, b) => (a.readiness_last_checked ? new Date(a.readiness_last_checked).getTime() : 0) - (b.readiness_last_checked ? new Date(b.readiness_last_checked).getTime() : 0));
     } else if (activeModule === 'vehicles' && vehicleView !== 'all') {
       result = result.filter((row) => row.readiness_state !== 'retired' && ((row.readiness_state === 'ready') === (vehicleView === 'ready')));
+      // Ready: the check that lapses soonest comes first.
+      if (vehicleView === 'ready') result = [...result].sort((a, b) => (a.readiness_days_left ?? 99) - (b.readiness_days_left ?? 99));
     }
 
     if (activeModule === 'vehicles' && !filterStatus.length) {
@@ -2101,7 +2151,7 @@ function Workspace() {
     }
 
     return result;
-  }, [rawRows, searchQuery, filterCategory, filterCapacity, filterLocation, filterDomain, filterStatus, filterPriority, filterReadiness, vehicleView, filterIssueType, filterMaintType, filterSource, filterActive, filterAssignedTo, filterVerdict, filterCheckedBy, filterActivityType, filterVehicle, filterMechanic, filterCustodian, filterDateStart, filterDateEnd, activeModule, condFilterStartDate, condFilterEndDate, archiveStart, archiveEnd, archiveStatusFilter, showDeletedArchives, user.id, hasPersonalMaintenanceRecords]);
+  }, [rawRows, searchQuery, filterCategory, filterCapacity, filterLocation, filterDomain, filterStatus, filterPriority, filterReadiness, vehicleView, showAllReadiness, filterIssueType, filterMaintType, filterSource, filterActive, filterAssignedTo, filterVerdict, filterCheckedBy, filterActivityType, filterVehicle, filterMechanic, filterCustodian, filterDateStart, filterDateEnd, activeModule, condFilterStartDate, condFilterEndDate, archiveStart, archiveEnd, archiveStatusFilter, showDeletedArchives, user.id, hasPersonalMaintenanceRecords]);
 
   // Status breakdown for the Vehicle Management stat cards — counted from the
   // full unfiltered fetch so the cards stay accurate regardless of the active
@@ -2302,8 +2352,12 @@ function Workspace() {
   // "All Vehicles" is the pilot table for the Choose Columns toolbar button
   // (show/hide + drag to reorder, persisted per browser) — see
   // ColumnChooserButton/useColumnChooser below.
-  const vehicleColumnDefs = (() => vehicleColumns(user, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile, (row) => setReadinessPromptTarget(row), vehicleView, setDecommissionTarget))();
-  const vehicleColumnChooser = useColumnChooser(`vms_vehicle_columns_v3_${vehicleView}`, vehicleColumnDefs);
+  const vehicleColumnDefs = (() => vehicleColumns(user, (row) => openVehicleProfile(row, 'edit'), deleteRecord, restoreRecord, filterStatus, openTicketProfile, (row) => setReadinessPromptTarget(row), vehicleView, setDecommissionTarget, {
+    selected: selectedReadiness,
+    toggle: (id) => setSelectedReadiness((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id])),
+    onProposeRepair: (row) => { setPrefilledTicketData({ vehicle_id: row.vehicle_id, entry_mode: 'in_house' }); navigate(`${roleRoutes[user.role]}/tickets/new`); },
+  }))();
+  const vehicleColumnChooser = useColumnChooser(`vms_vehicle_columns_v4_${vehicleView}`, vehicleColumnDefs);
 
   // Every other module's table gets the same Choose Columns / drag-to-reorder
   // treatment as Vehicle Management above — one useColumnChooser call per
@@ -2557,8 +2611,8 @@ function Workspace() {
   const schedulesParent = modules.some(([k]) => k === 'maintenanceGroup') ? 'maintenanceGroup'
     : modules.some(([k]) => k === 'conditions') ? 'conditions'
       : modules.some(([k]) => k === 'ticketWorkOrders') ? 'ticketWorkOrders' : null;
-  // Only the Admin's menu is long enough to need pages with sub-pages; the Custodian's and the mechanic's stay flat lists.
-  const useFolders = modules.some(([k]) => k === 'maintenanceGroup');
+  // The Admin's and the Custodian's menus use pages with sub-pages; the mechanic's short menu stays a flat list.
+  const useFolders = modules.some(([k]) => k === 'maintenanceGroup' || k === 'conditions');
   const parentOf = (key) => (!useFolders ? null : VEHICLE_SUBPAGE_VIEWS[key] ? 'vehicles'
     : (['tickets', 'maintenance'].includes(key) && modules.some(([k]) => k === 'maintenanceGroup')) ? 'maintenanceGroup'
       : key === 'schedules' ? schedulesParent : null);
@@ -2638,6 +2692,7 @@ function Workspace() {
         </div>
 
         <div className="topbar-right">
+          <NotificationBell notifications={notifications} onOpen={openNotification} onMarkAllRead={markAllNotificationsRead} />
           <ThemeToggle /><EndImpersonationAction compact />
           {/* The Return control now lives in the persistent banner below the
               topbar (Phase A5) — a single, more visible home for it instead
@@ -2960,6 +3015,7 @@ function Workspace() {
               onDeleteTicket={deleteTicket}
               onRequestConfirmation={setConfirmDialog}
               ticketAction={ticketAction}
+              onRecordGoodCheck={canDo(user, 'condition.create') ? (vehicleId) => { setPrefilledConditionVehicleId(vehicleId, 'Good'); navigate(`${roleRoutes[user.role]}/conditions/new`); } : undefined}
             />
           ) : maintenanceProfileId ? (
             <MaintenanceRecordProfilePage key={maintenanceProfileId}
@@ -3124,6 +3180,20 @@ function Workspace() {
   // Assigned To.
   function renderReassignScheduleModal() {
     return (
+      <>
+      <FormModal open={!!approveScheduleTarget} title={`Approve — ${approveScheduleTarget?.maintenance_type ?? ''}`} onClose={() => setApproveScheduleTarget(null)}>
+        {approveScheduleTarget && (
+          <SmartForm
+            fields={[{ label: 'Maintenance personnel for this service', name: 'assigned_to', options: options(lookups.maintenance_personnel ?? [], 'id', 'name'), required: true, type: 'select' }]}
+            key={`approve-${approveScheduleTarget.schedule_id}`}
+            initialValues={{ assigned_to: '' }}
+            onCancel={() => setApproveScheduleTarget(null)}
+            onSubmit={(payload) => approveScheduleNow(approveScheduleTarget, payload.assigned_to)}
+            submitLabel="Approve Schedule"
+            title=""
+          />
+        )}
+      </FormModal>
       <FormModal open={!!reassignScheduleTarget} title={`Reassign — ${reassignScheduleTarget?.maintenance_type ?? ''}`} onClose={() => setReassignScheduleTarget(null)}>
         {reassignScheduleTarget && (
           <SmartForm
@@ -3148,6 +3218,7 @@ function Workspace() {
           />
         )}
       </FormModal>
+      </>
     );
   }
 
@@ -3252,9 +3323,9 @@ function Workspace() {
     if (activeModule === 'vehicles') {
       const vehicleViewCopy = {
         all: 'Every vehicle in the barangay. Open a vehicle to see its full information.',
-        ready: 'Vehicles that are ready to respond right now.',
-        notready: 'Vehicles that are not ready to respond, why, and when they were last maintained.',
-        readiness: 'Every vehicle in the fleet. Record a Readiness Check once a vehicle has been looked at and is ready to respond; the button is greyed out, with the reason, while it cannot be confirmed.',
+        ready: 'Vehicles that are ready to respond, with who checked them and how many days the check stays valid. The ones that lapse soonest come first.',
+        notready: 'Vehicles that are not ready to respond, why, and what will make each one ready again.',
+        readiness: 'Your to-do list: vehicles that have never been checked or whose check has expired, the longest-waiting first. Tick several and confirm them in one go, or use Check on a single row.',
       };
       return (
         <ModulePanel
@@ -3299,7 +3370,19 @@ function Workspace() {
               addLabel="Add Vehicle"
             />
           </div>
-          <PaginatedTable columns={vehicleColumnChooser.visibleColumns} rows={visibleRows} onRowClick={openVehicleProfile} onReorderColumn={vehicleColumnChooser.reorderColumn} emptyMessage="No vehicles here yet — click the + button to register one." />
+          {vehicleView === 'readiness' && canDo(user, 'vehicle.readiness_check') && (() => {
+            const selectableIds = visibleRows.filter((row) => row.can_confirm_readiness !== false).map((row) => row.vehicle_id);
+            const picked = selectedReadiness.filter((id) => selectableIds.includes(id));
+            const allPicked = selectableIds.length > 0 && picked.length === selectableIds.length;
+            return (
+              <div className="readiness-bulkbar">
+                <label><input type="checkbox" checked={allPicked} disabled={!selectableIds.length} onChange={() => setSelectedReadiness(allPicked ? [] : selectableIds)} /> Select all ({selectableIds.length})</label>
+                <label><input type="checkbox" checked={showAllReadiness} onChange={(e) => { setShowAllReadiness(e.target.checked); setSelectedReadiness([]); }} /> Show all vehicles</label>
+                <button className="success-button" type="button" disabled={!picked.length} onClick={() => confirmBulkReadiness(picked)}>Confirm ready ({picked.length})</button>
+              </div>
+            );
+          })()}
+          <PaginatedTable columns={vehicleColumnChooser.visibleColumns} rows={visibleRows} onRowClick={openVehicleProfile} onReorderColumn={vehicleColumnChooser.reorderColumn} emptyMessage={vehicleView === 'readiness' ? 'Nothing needs a readiness check right now. Tick "Show all vehicles" to see every vehicle.' : 'No vehicles here yet — click the + button to register one.'} />
           <FormModal
             open={!!readinessPromptTarget}
             title={`Readiness Check — ${readinessPromptTarget?.vehicle_name ?? ''}`}
@@ -3790,7 +3873,7 @@ function Workspace() {
             <DataTable
               columns={maintenanceStatusColumnChooser.visibleColumns}
               onReorderColumn={maintenanceStatusColumnChooser.reorderColumn}
-              emptyMessage="Nothing awaiting your verification right now."
+              emptyMessage="Nothing to verify right now. A repair appears here once the mechanic submits it."
               rows={visibleRows}
               onRowClick={(row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.maintenance_id}`)}
             />
@@ -3950,7 +4033,7 @@ function Workspace() {
           <PaginatedTable
             columns={scheduleColumnChooser.visibleColumns}
             onReorderColumn={scheduleColumnChooser.reorderColumn}
-            emptyMessage="No schedules match the selected filters. Clear the Status filter to include history."
+            emptyMessage="No schedules match the selected filters. Clear the Status filter to include history, or add a service with the + button."
             rows={scheduleRows}
           />
 
@@ -7401,10 +7484,9 @@ const MAINTENANCE_RECORD_STAT_CARDS = [
 // before the one-mechanic-per-ticket redesign.
 const TICKET_STAT_CARDS = [
   { key: 'Pending Approval', label: 'Proposals', icon: 'clipboard', bg: '#fef3c7', color: '#92400e' },
-  // "For Verification" was here, but that's a Custodian action, not
-  // something Admin does anything with — Declined is the one Admin needs a
-  // quick count of, since those proposals are waiting on a reconsider.
   { key: 'Active', label: 'Active', icon: 'wrench', bg: '#dbeafe', color: '#1e40af' },
+  // Work waiting at the Custodian: the Admin watches this count so stuck verifications get chased.
+  { key: 'For Verification', label: 'To Verify', icon: 'checkCircle', bg: '#fef3c7', color: '#d97706' },
   { key: 'Closed', label: 'Closed', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
   { key: 'Declined', label: 'Declined', icon: 'close', bg: '#fee2e2', color: '#dc2626' },
   { key: 'Cancelled', label: 'Cancelled', icon: 'close', bg: '#f1f5f9', color: '#64748b' },
@@ -7477,7 +7559,7 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards: allCards, counts,
   // At most four cards in a row (the total plus three): the rest stay available in the page's Status filter.
   const cards = allCards.slice(0, 3);
   if (readOnly) return (
-    <section className={`metric-grid stat-one-line ${gridClassName}`} aria-label="Status summary" style={{ marginBottom: 16, '--stat-cols': cards.length + 1 }}>
+    <section className={`metric-grid stat-one-line ${gridClassName}`} aria-label="Status summary" style={{ '--stat-cols': cards.length + 1 }}>
       {[{ key: 'total', label: totalLabel, icon: 'grid', bg: '#dbeafe', color: '#1d4ed8' }, ...cards].map(({ key, label, icon, bg, color }) => (
         <div key={key} className="metric-card metric-card-iconic ticket-summary-metric" style={{ '--accent': color }}>
           <span className="metric-card-icon" style={{ background: bg, color }}><Icon name={icon} size={18} /></span>
@@ -7489,7 +7571,7 @@ function ModuleStatCards({ totalLabel = 'Total', total, cards: allCards, counts,
   const isFilterMulti = Array.isArray(activeFilter);
   const isTotalActive = isFilterMulti ? activeFilter.length === 0 : !activeFilter;
   return (
-    <section className={`metric-grid stat-one-line${gridClassName ? ` ${gridClassName}` : ''}`} aria-label="Status summary" style={{ marginBottom: '16px', '--stat-cols': cards.length + 1 }}>
+    <section className={`metric-grid stat-one-line${gridClassName ? ` ${gridClassName}` : ''}`} aria-label="Status summary" style={{ '--stat-cols': cards.length + 1 }}>
       <button
         type="button"
         className={`metric-card metric-card-iconic stat-filter-card${isTotalActive ? ' is-active' : ''}`}
@@ -7548,7 +7630,24 @@ function vehicleConditionLabel(row) {
   return ['Inactive', 'Decommissioned'].includes(row.status) ? row.status : (row.condition ?? 'Good');
 }
 
-function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus, onViewTicket, onReadinessCheck, view = 'all', onDecommission = null) {
+// Why a vehicle needs a readiness check (or how long its check still holds), in plain words.
+function readinessWhy(row) {
+  if (row.readiness_state === 'ready') return row.readiness_days_left > 0 ? `Valid for ${row.readiness_days_left} more day${row.readiness_days_left === 1 ? '' : 's'}` : 'Valid until the end of today';
+  if (row.can_confirm_readiness === false) return row.not_ready_reason ?? 'Cannot be checked yet';
+  if (!row.readiness_last_checked) return 'Never checked';
+  const lapsed = Math.floor((Date.now() - new Date(row.readiness_last_checked).getTime()) / 86400000) - 7;
+  return lapsed > 0 ? `Check expired ${lapsed} day${lapsed === 1 ? '' : 's'} ago` : 'Check no longer valid (something changed)';
+}
+
+// What would make a not-ready vehicle ready again.
+function readinessUnblocks(row) {
+  if (row.missing_parts?.length) return 'Put the part back and mark it restored.';
+  if (row.open_ticket_id) return `Finish Ticket #${row.open_ticket_number ?? row.open_ticket_id}; the Custodian verifies it.`;
+  if (row.condition === 'Needs Repair') return 'Propose a repair ticket for the problem.';
+  return 'Confirm it on the Readiness Check page.';
+}
+
+function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus, onViewTicket, onReadinessCheck, view = 'all', onDecommission = null, extra = {}) {
   // Only the columns a reader needs. No photo here — it shows on the vehicle's own profile.
   const columns = [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'vehicle_id') },
@@ -7556,19 +7655,35 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
     { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.plate_number },
     { key: 'category', label: 'Category', render: (row) => row.category?.category_name ?? 'Unassigned' },
   ];
-  if (view === 'notready' || view === 'readiness') {
+  if (view === 'readiness') {
+    // A tick box to pick the vehicle for a one-go confirmation (only vehicles that can be confirmed now).
+    if (extra.toggle && canDo(user, 'vehicle.readiness_check')) {
+      columns.splice(0, 0, {
+        key: 'select', label: '', locked: true, className: 'cell-center',
+        render: (row) => (row.can_confirm_readiness === false ? null : (
+          <input type="checkbox" aria-label={`Select ${row.vehicle_name}`} checked={(extra.selected ?? []).includes(row.vehicle_id)} onClick={(e) => e.stopPropagation()} onChange={() => extra.toggle(row.vehicle_id)} />
+        )),
+      });
+    }
     columns.push(
-      { key: 'reason', label: view === 'readiness' ? 'Readiness Status' : 'Reason Not Ready', render: (row) => (view === 'readiness' && row.readiness_state === 'ready' ? 'Ready to respond' : (row.not_ready_reason ?? '-')) },
-      // The last time maintenance work was finished, not the last readiness check.
-      { key: 'last_maintained', label: 'Last Maintained', className: 'cell-center', render: (row) => (row.last_maintained_at ? <DateBadge value={row.last_maintained_at} /> : 'Never') },
+      { key: 'reason', label: 'Why it needs a check', render: (row) => readinessWhy(row) },
+      { key: 'last_checked', label: 'Last checked', render: (row) => (row.readiness_last_checked ? <span><DateBadge value={row.readiness_last_checked} />{row.readiness_checked_by ? <span className="muted"> by {row.readiness_checked_by}</span> : null}</span> : 'Never') },
     );
-    // A missing part is already named in "Reason Not Ready"; the button to mark it restored is in the Action column.
+  } else if (view === 'notready') {
+    columns.push(
+      { key: 'reason', label: 'Reason not ready', render: (row) => (row.not_ready_reason ?? '-') },
+      { key: 'unblocks', label: 'What makes it ready', render: (row) => readinessUnblocks(row) },
+      { key: 'ticket', label: 'Ticket', className: 'cell-center', render: (row) => (row.open_ticket_id && onViewTicket
+        ? <button className="readiness-text-btn is-blocked is-ticket" type="button" onClick={(e) => { e.stopPropagation(); onViewTicket({ ticket_id: row.open_ticket_id }); }}>Ticket #{row.open_ticket_number ?? row.open_ticket_id}</button>
+        : '-') },
+    );
   } else if (view === 'ready') {
-    // Every row here is ready, so availability would only repeat the page. The date is the last time
-    // maintenance work was finished on the vehicle, not the last readiness check.
+    // Every row here is ready, so availability would only repeat the page: show who confirmed it and how long it holds.
     columns.push(
       { key: 'location', label: 'Location', render: (row) => row.current_location },
-      { key: 'last_maintained', label: 'Last Maintained', className: 'cell-center', render: (row) => (row.last_maintained_at ? <DateBadge value={row.last_maintained_at} /> : 'Never') },
+      { key: 'checked_by', label: 'Checked by', render: (row) => row.readiness_checked_by ?? '-' },
+      { key: 'checked_on', label: 'Checked on', className: 'cell-center', render: (row) => (row.readiness_last_checked ? <DateBadge value={row.readiness_last_checked} /> : '-') },
+      { key: 'valid_for', label: 'Valid for', className: 'cell-center', render: (row) => <span className={`readiness-valid${row.readiness_days_left <= 2 ? ' is-soon' : ''}`}>{readinessWhy(row)}</span> },
     );
   } else {
     columns.push(
@@ -7608,7 +7723,25 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
   // column even though they can't edit/restore/archive vehicles.
   const canCheckReadiness = canDo(user, 'vehicle.readiness_check') && !!onReadinessCheck;
   if (view === 'notready') {
-    // Not Ready is a look-up with no Action column: the reason column already names the ticket.
+    // A vehicle that needs repair but has no ticket yet gets a button that opens the repair proposal for it.
+    if (canDo(user, 'ticket.propose') && extra.onProposeRepair) {
+      columns.push({
+        key: 'action', label: 'Action', locked: true, className: 'cell-center',
+        render: (row) => (row.condition === 'Needs Repair' && !row.open_ticket_id && !row.missing_parts?.length
+          ? <button className="readiness-text-btn is-blocked is-repair" type="button" onClick={(e) => { e.stopPropagation(); extra.onProposeRepair(row); }}>Propose repair</button>
+          : null),
+      });
+    }
+  } else if (view === 'ready') {
+    // Re-check shows up once the check has two days or less left.
+    if (canCheckReadiness) {
+      columns.push({
+        key: 'action', label: 'Action', locked: true, className: 'cell-center',
+        render: (row) => (row.readiness_days_left <= 2 && row.can_confirm_readiness !== false
+          ? <button className="readiness-text-btn is-ready" type="button" onClick={(e) => { e.stopPropagation(); onReadinessCheck(row); }}>Re-check</button>
+          : null),
+      });
+    }
   } else if (view === 'readiness') {
     // The Custodian's queue. The check button is greyed out, with the reason, while the vehicle cannot be
     // confirmed yet (for example an open ticket).
@@ -7636,8 +7769,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
         },
       });
     }
-  } else if (view !== 'ready' && (canEditVehicle || canRestoreVehicle || canArchiveVehicle || !!onViewTicket)) {
-    // (Ready to Respond has no Action column: it is only a look-up, like Not Ready.)
+  } else if (canEditVehicle || canRestoreVehicle || canArchiveVehicle || !!onViewTicket) {
     columns.push({
       key: 'action',
       label: 'Action',
@@ -8524,6 +8656,20 @@ function maintenanceStatusColumns(setEditTarget, currentUserId) {
   ];
 }
 
+// One line under a schedule's status that says what happens to it next, so the Custodian is not left guessing.
+function scheduleNextLine(row) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  if (row.status === 'Pending Approval') return { text: 'Waiting for the Admin to approve' };
+  if (row.status === 'Declined') return { text: row.decline_reason ? `Declined: ${row.decline_reason}` : 'Declined' };
+  if (row.status !== 'Scheduled') return null;
+  if (row.resulting_ticket_id) return { text: 'Job created: repair in progress' };
+  if (!row.assigned_to) return { text: 'No mechanic assigned yet', warn: true };
+  const day = String(row.scheduled_date).slice(0, 10);
+  if (day < today) return { text: 'Due, but no job has started yet. Tell the Admin if this stays.', warn: true };
+  if (day === today) return { text: 'Due today: the job starts automatically' };
+  return { text: `Approved: the job starts on ${formatDate(row.scheduled_date)}` };
+}
+
 function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restoreRecord, onReassign, onViewTicket, onApprove, onDecline) {
   return [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'schedule_id') },
@@ -8561,6 +8707,7 @@ function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restor
               Scheduled/Completed/Cancelled fall back to the same plain
               style StatusBadge gave them, so this is a strict addition. */}
           <TicketStatusBadge value={row.status} />
+          {(() => { const next = scheduleNextLine(row); return next ? <small className={`schedule-next-line${next.warn ? ' is-warn' : ''}`}>{next.text}</small> : null; })()}
           {/* #11 — a scheduled PM whose date has passed is overdue: flag it
               loudly instead of leaving it to sit silently on the calendar. */}
           {isScheduleOverdue(row) && (
@@ -9486,8 +9633,9 @@ function flattenSubIssueRows(tickets, mechanicId = null, includeShopTests = fals
     (ticket.sub_issues ?? []).forEach((subIssue) => {
       // Work handed to an outside shop is received back and tested by the named Maintenance Personnel.
       const awaitingShopTest = includeShopTests && subIssue.repair_type === 'external' && !subIssue.assigned_mechanic_id
-        && !!subIssue.external_sent_at && subIssue.status === 'Under Repair'
-        && (!subIssue.external_tester_id || !mechanicId || String(subIssue.external_tester_id) === String(mechanicId));
+        && subIssue.status === 'Under Repair'
+        // A named tester sees the shop test from the moment they are named; unnamed shop work shows once it is sent out.
+        && (subIssue.external_tester_id ? (!mechanicId || String(subIssue.external_tester_id) === String(mechanicId)) : !!subIssue.external_sent_at);
       if (mechanicId && subIssue.assigned_mechanic_id !== mechanicId && !awaitingShopTest) return;
       rows.push({
         ...subIssue,
@@ -10437,7 +10585,7 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
 // TICKET DETAIL PANEL — shown when admin clicks a ticket row
 // =========================================================================
 
-function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechanic, onReassignCustodian, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSetShopTester, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false }) {
+function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechanic, onReassignCustodian, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSetShopTester, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false, onRecordGoodCheck }) {
   const [cancelling, setCancelling] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [reassigningCustodian, setReassigningCustodian] = useState(false);
@@ -10526,6 +10674,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
               )}
             </div>
             <h3 className="ticket-detail-title">{ticketTitle(ticket)}</h3>
+            <TicketTurnBanner ticket={ticket} onRecordGoodCheck={onRecordGoodCheck} />
             <div className="ticket-detail-meta">
               <div className="ticket-hero-badges">
                 <TicketStatusBadge value={ticket.priority} />
@@ -10777,7 +10926,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                       mechanic, wrench icon = category, ₱ = cost, colored
                       badge = verdict), which cuts the block's height by more
                       than half without losing any information. */}
-                  {(attachmentCount > 0 || si.assigned_mechanic || si.maintenance_type || si.verification_verdict || si.source_vehicle || si.external_vendor || (si.maintenance_cost !== null && si.maintenance_cost !== undefined)) && (
+                  {(attachmentCount > 0 || si.assigned_mechanic || si.maintenance_type || si.verification_verdict || si.source_vehicle || (si.external_vendor && si.warranty_until) || (si.repair_type !== 'external' && si.maintenance_cost !== null && si.maintenance_cost !== undefined)) && (
                     <div className="subissue-meta-strip">
                       {si.assigned_mechanic && <UserAvatarName user={si.assigned_mechanic} />}
                       {attachmentCount > 0 && (
@@ -10826,7 +10975,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
                     </div>
                   )}
                   {si.repair_type === 'external' && si.status === 'Under Repair' && ticket.status === 'Active' && (
-                    <div className="lr-note" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <div className="lr-note shop-tester-row">
                       <span>Assigned to: <strong>{si.external_tester?.name ?? 'not assigned'}</strong></span>
                       {canDo(user, 'ticket.assign_mechanic') && onSetShopTester && (
                         <>
@@ -11032,7 +11181,7 @@ function TicketDetailPanel({ user, userId, ticket, lookups, onAssignTicketMechan
   );
 }
 
-function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDeleteTicket, onRequestConfirmation, ticketAction: sendTicketAction }) {
+function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDeleteTicket, onRequestConfirmation, ticketAction: sendTicketAction, onRecordGoodCheck }) {
   const navigate = useNavigate();
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -11087,6 +11236,7 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
   return (
     <TicketDetailPanel
       asPage
+      onRecordGoodCheck={onRecordGoodCheck}
       user={user}
       userId={userId}
       ticket={ticket}
@@ -12758,6 +12908,58 @@ const TICKET_STAGE_STYLE = {
   info:    { bg: 'linear-gradient(90deg,#f8fafc,#f1f5f9)', color: '#475569', icon: 'wrench' },
 };
 
+// One plain sentence that says whose turn it is on a ticket, so nobody has to work it out from the status.
+function ticketTurn(ticket) {
+  const custodian = ticket.assigned_custodian?.name ?? 'the assigned Custodian';
+  const mechanics = ticketPersonnel(ticket).filter((p) => p.role !== 'Custodian').map((p) => p.name);
+  const mechanic = mechanics.length ? mechanics.join(', ') : 'the assigned mechanic';
+  switch (ticket.status) {
+    case 'Pending Approval':
+      return ticket.correction_requested_at
+        ? { text: `Waiting for ${custodian} to revise the proposal the Admin sent back.`, tone: 'waiting' }
+        : { text: 'Waiting for the Admin to approve or decline this proposal.', tone: 'action' };
+    case 'Declined':
+      return { text: 'Declined. The vehicle stays marked Needs Repair until the Custodian records a new condition check with the result Good, or proposes the repair again.', tone: 'info' };
+    case 'Cancelled':
+      return { text: 'Cancelled. If the problem is gone, the Custodian records a condition check with the result Good to clear the Needs Repair mark.', tone: 'info' };
+    case 'For Verification':
+      return { text: `Waiting for ${custodian} to verify the repair.`, tone: 'waiting' };
+    case 'Closed':
+      return { text: 'Done. The repair was verified and the ticket is closed.', tone: 'info' };
+    case 'Active': {
+      const subs = ticket.sub_issues ?? [];
+      if (subs.some((x) => x.returned_to_admin_at && x.status === 'Under Repair' && !x.assigned_mechanic_id)) return { text: 'Waiting for the Admin to reassign the work a mechanic sent back.', tone: 'action' };
+      if (subs.length > 0 && subs.every((x) => x.status === 'For Inspection')) return { text: `Waiting for ${mechanic} to submit the repair for verification.`, tone: 'action' };
+      // Outside-shop work: say where the vehicle is, not "waiting for the mechanic".
+      const shop = subs.find((x) => x.repair_type === 'external' && x.status === 'Under Repair' && !x.assigned_mechanic_id);
+      if (shop) {
+        const tester = shop.external_tester?.name ?? 'the Maintenance Personnel';
+        if (!shop.external_sent_at) return { text: `Waiting for ${custodian} to send the vehicle to the shop. ${tester} will test it when it comes back.`, tone: 'waiting' };
+        if (!shop.external_returned_at) return { text: `At the shop. When it comes back, ${tester} receives it and tests it.`, tone: 'waiting' };
+        return { text: `Back from the shop. Waiting for ${tester} to test it and write the repair up.`, tone: 'action' };
+      }
+      return { text: `Waiting for ${mechanic} to finish the repair and test the vehicle.`, tone: 'info' };
+    }
+    default:
+      return null;
+  }
+}
+
+function TicketTurnBanner({ ticket, onRecordGoodCheck }) {
+  const [now] = useState(() => Date.now());
+  const turn = ticketTurn(ticket);
+  if (!turn) return null;
+  const waited = ticket.updated_at ? Math.floor((now - new Date(ticket.updated_at).getTime()) / 86400000) : 0;
+  return (
+    <p className={`ticket-turn-banner is-${turn.tone}`} role="status">
+      <strong>Next:</strong> {turn.text}{waited >= 1 && ['Pending Approval', 'For Verification', 'Active'].includes(ticket.status) ? ` Waiting ${waited} day${waited === 1 ? '' : 's'} since the last update.` : ''}
+      {onRecordGoodCheck && ['Declined', 'Cancelled'].includes(ticket.status) && ticket.vehicle?.condition === 'Needs Repair' && (
+        <button className="success-button ticket-turn-action" type="button" onClick={() => onRecordGoodCheck(ticket.vehicle_id)}>Record a Good condition check</button>
+      )}
+    </p>
+  );
+}
+
 function TicketStageBadge({ ticket, variant = 'flag' }) {
   const stage = ticketWorkflowStage(ticket);
   if (!stage) return null;
@@ -13835,7 +14037,7 @@ function TicketsReadyToClosePanel({ tickets, onViewTicket, onCloseTicket }) {
 
 function ticketTableColumns(onViewTicket, onChangeVisibility, { repairAction = false } = {}) {
   const columns = [
-    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => <div className={`ticket-list-identity ${ticketStatusClass(r.status)}`}><strong>{ticketNumber(r)}</strong><small className="muted">{(r.updated_at ?? r.created_at) ? new Date(r.updated_at ?? r.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) : '-'}</small></div> },
+    { key: 'ticket_id', label: 'Ticket ID', locked: true, className: 'cell-center', render: (r) => <div className={`ticket-list-identity ${ticketStatusClass(r.status)}`}><strong>{ticketNumber(r)}</strong><small className="muted"><DateBadge value={r.updated_at ?? r.created_at} /></small></div> },
     { key: 'created', label: 'Date Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     {
@@ -13851,7 +14053,20 @@ function ticketTableColumns(onViewTicket, onChangeVisibility, { repairAction = f
     },
     { key: 'repair_source', label: 'Repair Type', className: 'cell-center', render: (r) => <RepairSourceBadge ticket={r} /> },
     { key: 'vehicle_image', label: 'Vehicle Image', className: 'cell-center', render: (r) => <PhotoCell alt={r.vehicle?.vehicle_name ?? 'Vehicle'} url={r.vehicle?.photo_url} /> },
-    { key: 'status', label: 'Status', className: 'cell-center', render: (r) => <span><TicketStatusPill status={r.status} />{r.correction_requested_at && <small className="muted"> Corrections requested</small>}</span> },
+    { key: 'status', label: 'Status', className: 'cell-center', render: (r) => {
+      // Say it in the list, not only inside the ticket: rework the mechanic must redo, and work sent back to the Admin.
+      const subs = r.sub_issues ?? [];
+      const rejected = r.status === 'Active' && subs.some((si) => si.status === 'Under Repair' && si.verification_verdict === 'Rejected');
+      const sentBack = r.status === 'Active' && subs.some((si) => si.status === 'Under Repair' && si.returned_to_admin_at && !si.assigned_mechanic_id);
+      return (
+        <span>
+          <TicketStatusPill status={r.status} />
+          {r.correction_requested_at && <small className="muted"> Corrections requested</small>}
+          {rejected && <small className="ticket-rework-flag"> Rejected: redo the repair</small>}
+          {sentBack && <small className="ticket-rework-flag"> Sent back: needs a mechanic</small>}
+        </span>
+      );
+    } },
     { key: 'personnel', label: 'Assigned To', render: (r) => <AssignedPersonnelNames ticket={r} /> },
     { key: 'actions', label: 'Actions', className: 'cell-center', render: (r) => <span className="ticket-list-actions"><button type="button" className="icon-btn btn-view-action" title={repairAction ? 'Open work order' : 'View ticket'} aria-label={`${repairAction ? 'Open work order for ticket' : 'View ticket'} ${ticketNumber(r)}`} onClick={(e) => { e.stopPropagation(); onViewTicket(r); }}><Icon name={repairAction ? 'wrench' : 'eye'} size={16} /></button>{onChangeVisibility && <button type="button" className={`icon-btn ${r.hidden_from_list ? 'btn-reopen-action' : 'btn-archive-action'}`} title={r.hidden_from_list ? 'Restore to my list' : 'Hide from my list; repair tracking continues'} aria-label={`${r.hidden_from_list ? 'Restore' : 'Hide'} ticket ${ticketNumber(r)} ${r.hidden_from_list ? 'to' : 'from'} my list`} onClick={(e) => { e.stopPropagation(); onChangeVisibility(r, !r.hidden_from_list); }}><Icon name={r.hidden_from_list ? 'undo' : 'archive'} size={16} /></button>}</span> },
   ];

@@ -17239,3 +17239,87 @@ html .lr-btn-norepair:disabled, html .lr-btn-return:disabled { opacity: 0.55; }
 .vehicle-history-when { color: var(--text-muted, #64748b); font-weight: 600; }
 .vehicle-history-who { color: var(--text-muted, #64748b); font-size: 0.8rem; }
 @media (max-width: 720px) { .vehicle-history-list li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* Readiness pages: the Custodian's to-do bar, the "valid for" text, and a filter card that fits its content. */
+.readiness-bulkbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--border-color, #e2e8f0); font-size: 0.85rem; }
+.readiness-bulkbar label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.readiness-bulkbar .success-button { margin-left: auto; }
+.readiness-bulkbar .success-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.readiness-valid { color: #166534; font-weight: 600; }
+.readiness-valid.is-soon { color: #b45309; }
+.chart-filter-row > .chart-filter-aside { align-self: start; }
+
+/* Ticket detail: the one-sentence "whose turn is it" line. */
+.ticket-turn-banner { margin: 8px 0 4px; padding: 9px 12px; border-left: 4px solid #64748b; border-radius: 6px; background: #f1f5f9; color: #334155; font-size: 0.88rem; line-height: 1.4; }
+.ticket-turn-banner.is-action { border-left-color: #7c3aed; background: #f5f3ff; color: #4c1d95; }
+.ticket-turn-banner.is-waiting { border-left-color: #2563eb; background: #eff6ff; color: #1e3a8a; }
+:root[data-theme="dark"] .ticket-turn-banner { background: #1e293b; color: #e2e8f0; }
+:root[data-theme="dark"] .ticket-turn-banner.is-action { background: #2e1065; color: #ede9fe; }
+:root[data-theme="dark"] .ticket-turn-banner.is-waiting { background: #172554; color: #dbeafe; }
+.ticket-turn-action { margin-left: 12px; padding: 4px 12px; font-size: 0.8rem; }
+.ticket-rework-flag { display: block; margin-top: 2px; color: #b45309; font-weight: 700; }
+:root[data-theme="dark"] .ticket-rework-flag { color: #fbbf24; }
+.schedule-next-line { display: block; margin-top: 3px; font-size: 0.72rem; color: #64748b; font-weight: 500; line-height: 1.3; }
+.schedule-next-line.is-warn { color: #b45309; font-weight: 700; }
+:root[data-theme="dark"] .schedule-next-line { color: #94a3b8; }
+:root[data-theme="dark"] .schedule-next-line.is-warn { color: #fbbf24; }
+
+/* Notice bell and list in the top bar. */
+.notice-bell { position: relative; display: inline-flex; }
+.notice-bell-btn { position: relative; }
+.notice-bell-count { position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: #dc2626; color: #fff; font-size: 0.68rem; font-weight: 700; line-height: 17px; text-align: center; }
+.notice-panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: min(380px, 92vw); max-height: 70vh; overflow-y: auto; background: #fff; color: #0f172a; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); }
+.notice-panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; position: sticky; top: 0; background: inherit; }
+.notice-markall { background: none; border: none; color: #2563eb; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.notice-markall:disabled { color: #94a3b8; cursor: default; }
+.notice-empty { padding: 18px 14px; margin: 0; font-size: 0.85rem; color: #64748b; }
+.notice-list { list-style: none; margin: 0; padding: 0; }
+.notice-item { display: block; width: 100%; text-align: left; padding: 10px 14px; background: none; border: none; border-bottom: 1px solid #f1f5f9; cursor: pointer; color: inherit; }
+.notice-item:hover { background: #f8fafc; }
+.notice-item.is-unread { background: #eff6ff; }
+.notice-item-title { display: block; font-weight: 700; font-size: 0.85rem; }
+.notice-item-text { display: block; margin-top: 2px; font-size: 0.8rem; color: #475569; line-height: 1.35; }
+.notice-item-time { display: block; margin-top: 3px; font-size: 0.7rem; color: #94a3b8; }
+:root[data-theme="dark"] .notice-panel { background: #1e293b; color: #e2e8f0; border-color: #334155; }
+:root[data-theme="dark"] .notice-panel-head, :root[data-theme="dark"] .notice-item { border-color: #334155; }
+:root[data-theme="dark"] .notice-item:hover { background: #273449; }
+:root[data-theme="dark"] .notice-item.is-unread { background: #172554; }
+:root[data-theme="dark"] .notice-item-text { color: #cbd5e1; }
+@media (max-width: 600px) {
+  /* On a phone the notice list spans the screen instead of hanging off the bell's left edge. */
+  .notice-bell { position: static; }
+  .notice-panel { position: fixed; top: 58px; left: 8px; right: 8px; width: auto; max-height: 75vh; }
+}
+
+/* A long unbroken vehicle name wraps instead of pushing the profile page wider than the screen. */
+.vehicle-profile-header, .vehicle-profile-heading, .vehicle-profile-dashboard { min-width: 0; max-width: 100%; }
+.vehicle-profile-heading h2, .vehicle-profile-subtitle, .ticket-detail-title, .row-title-text { overflow-wrap: anywhere; }
+
+/* Status chips wrap inside their card on tablet widths instead of pushing the page sideways. */
+.status-chip-filter, .status-chip-filter .ticket-filter-controls { min-width: 0; max-width: 100%; }
+.status-chip-filter .ticket-filter-controls { flex-wrap: wrap; }
+.status-chip-filter .issue-filter-status-grid { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+
+/* Page spacing: one even gap between the blocks of a page (cards, chart, filters, table). Blocks used to add their own
+   16px bottom margin on top of the 20px grid gap, which made some gaps 36px. */
+.module-grid { gap: 16px; }
+.module-grid > .metric-grid,
+.module-grid > .chart-filter-row,
+.module-grid > .location-map-summary,
+.module-grid > .page-chart-panel { margin-bottom: 0; }
+/* Table header bars share one height (the Users bar was 80px, the others 71px). */
+.panel-header-bar { padding-top: 16px; padding-bottom: 16px; }
+/* Vehicle Location summary cards match the 86px stat cards used on other pages. */
+.location-map-summary > div { padding: 12px 16px; }
+.location-map-summary dd { margin: 2px 0; font-size: 1.5rem; }
+/* Filter card beside a chart sits in the middle instead of the top, leaving no blank block under it. */
+.chart-filter-row > .chart-filter-aside { align-self: center; }
+/* Map tabs: tighter space between the tab bar and the map. */
+.locations-tab-bar { margin-bottom: 12px; }
+
+/* Ticket page, outside-shop item: "Assigned to: Name  [Change assignee]  [Save]" stays on one tidy row; the picker was
+   stretching across the whole card and looked like a bare box. */
+.shop-tester-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 8px 0; }
+.shop-tester-row .searchable-select { flex: 0 1 260px; width: 260px; max-width: 100%; }
+.shop-tester-row .searchable-select input { width: 100%; height: 34px; padding: 0 30px 0 12px; border: 1px solid var(--border, #cbd5e1); border-radius: 8px; background: var(--surface, #fff); font-size: .82rem; }
+.shop-tester-row .btn-sm { height: 34px; padding: 0 16px; }

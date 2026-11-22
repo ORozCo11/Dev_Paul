@@ -20,8 +20,9 @@ return [
     // in, not just whoever manages the type itself.
     'vehicle_type.view' => ['Admin', 'Custodian', 'Maintenance Personnel'],
     'vehicle_type.create' => ['Admin', 'Custodian'],
-    'vehicle_type.edit' => ['Admin'],
-    'vehicle_type.delete' => ['Admin'],
+    'vehicle_type.edit' => ['Admin', 'Custodian'],
+    'vehicle_type.delete' => ['Admin', 'Custodian'],
+    'vehicle_type.fields' => ['Admin'],
 
     // Vehicles
     // Registering vehicles is the Custodian's duty only; the Admin edits and archives records.

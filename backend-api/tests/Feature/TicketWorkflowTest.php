@@ -884,13 +884,13 @@ class TicketWorkflowTest extends TestCase
         $this->postJson('/api/maintenance-schedules', [
             'vehicle_id' => $vehicle->vehicle_id,
             'maintenance_type' => 'Oil Change',
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
         ])->assertCreated();
 
         $unconfirmed = $this->postJson('/api/maintenance-schedules', [
             'vehicle_id' => $vehicle->vehicle_id,
             'maintenance_type' => 'Tire Rotation',
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
         ])->assertStatus(409);
         $this->assertTrue($unconfirmed->json('same_vehicle_conflict'));
         $this->assertDatabaseCount('vehicle_maintenance_schedules', 1);
@@ -898,7 +898,7 @@ class TicketWorkflowTest extends TestCase
         $this->postJson('/api/maintenance-schedules', [
             'vehicle_id' => $vehicle->vehicle_id,
             'maintenance_type' => 'Tire Rotation',
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
             'confirm_conflicts' => true,
         ])->assertCreated();
         $this->assertDatabaseCount('vehicle_maintenance_schedules', 2);

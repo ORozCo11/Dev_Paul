@@ -35,17 +35,17 @@ class FleetReferenceSeeder extends Seeder
     }
 
     /**
-     * Seed the fixed Paknaan vehicle hubs the fleet map/location dropdowns rely on.
+     * Seed the fixed Pahina Central vehicle hubs the fleet map/location dropdowns rely on.
      * These used to live only in frontend localStorage — moved server-side so every
      * user shares the same hub list.
      *
-     * These three are real Paknaan locations (Twinbee Hub, the Paknaan
-     * Barangay Hall, the Paknaan Gymnasium) — not generic examples every
-     * barangay could plausibly reuse — so they're stamped with Paknaan's own
+     * These three are real Pahina Central locations (Twinbee Hub, the Pahina
+     * Brgy Hall, the Pahina Gymnasium) — not generic examples every
+     * barangay could plausibly reuse — so they're stamped with Pahina Central's own
      * barangay_id rather than left null. A hub row with a null barangay_id
      * is invisible to every tenant (BelongsToBarangay's global scope filters
      * on `WHERE barangay_id = <user's>`, which never matches NULL), which
-     * would otherwise leave every barangay — Paknaan included — with zero
+     * would otherwise leave every barangay — Pahina Central included — with zero
      * hubs to pick from and unable to add any vehicle at all (validateVehicle()
      * requires current_location to be one of VehicleHub::pluck('name')). Any
      * other barangay still starts with no hubs of its own; its Admin adds
@@ -54,7 +54,7 @@ class FleetReferenceSeeder extends Seeder
      */
     private function seedDefaultHubs(): void
     {
-        $paknaanId = Barangay::where('name', 'Paknaan')->value('id');
+        $homeBarangayId = Barangay::where('name', 'Pahina Central (Pob.)')->whereHas('city', fn ($q) => $q->where('name', 'Cebu City'))->value('id');
 
         $hubs = [
             [
@@ -67,7 +67,7 @@ class FleetReferenceSeeder extends Seeder
             ],
             [
                 'hub_key' => 'paknaan-brgy-hall',
-                'name' => 'Paknaan Brgy Hall',
+                'name' => 'Pahina Brgy Hall',
                 'label' => 'BH',
                 'lat' => 10.34631777531932,
                 'lng' => 123.96022810316107,
@@ -75,7 +75,7 @@ class FleetReferenceSeeder extends Seeder
             ],
             [
                 'hub_key' => 'paknaan-gymnasium',
-                'name' => 'Paknaan Gymnasium',
+                'name' => 'Pahina Gymnasium',
                 'label' => 'GY',
                 'lat' => 10.346474742138703,
                 'lng' => 123.95854066966143,
@@ -86,7 +86,7 @@ class FleetReferenceSeeder extends Seeder
         foreach ($hubs as $hub) {
             VehicleHub::firstOrCreate(
                 ['hub_key' => $hub['hub_key']],
-                $hub + ['is_default' => true, 'barangay_id' => $paknaanId],
+                $hub + ['is_default' => true, 'barangay_id' => $homeBarangayId],
             );
         }
     }

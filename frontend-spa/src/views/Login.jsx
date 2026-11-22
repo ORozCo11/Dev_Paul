@@ -21,11 +21,16 @@ function Login() {
   const location = useLocation();
   const { login, token, user } = useContext(AuthContext);
   const [credentials, setCredentials] = useState({
-    email: '',
+    email: 'superadmin@demotest.com',
     password: '',
   });
   const [rememberMe, setRememberMe] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(() => {
+    try {
+      if (sessionStorage.getItem('vms_session_ended')) { sessionStorage.removeItem('vms_session_ended'); return 'Your session has ended. Please sign in again.'; }
+    } catch { /* storage unavailable */ }
+    return '';
+  });
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 

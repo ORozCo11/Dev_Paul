@@ -30,13 +30,13 @@ class UserSeeder extends Seeder
         }
 
         // Same convention as FleetReferenceSeeder::seedDefaultHubs() — these
-        // demo accounts represent real Paknaan staff, so they're stamped with
-        // Paknaan's own barangay_id. Without it, BelongsToBarangay's global
+        // demo accounts represent real Pahina Central staff, so they're stamped with
+        // Pahina Central's own barangay_id. Without it, BelongsToBarangay's global
         // scope (`Auth::check() && Auth::user()->barangay_id`) never applies
         // for them, so they'd see/act across every barangay's data — and
         // Vehicle's creating-time auto-stamp never fires here anyway since
         // there's no authenticated user while seeding.
-        $paknaanId = Barangay::where('name', 'Paknaan')->value('id');
+        $paknaanId = Barangay::where('name', 'Pahina Central (Pob.)')->whereHas('city', fn ($q) => $q->where('name', 'Cebu City'))->value('id');
 
         $users = [
             [
@@ -114,7 +114,7 @@ class UserSeeder extends Seeder
                     'roles' => [$user['role']],
                     'barangay_id' => $user['barangay_id'],
                     'city_id' => $user['barangay_id'] ? $barangay?->city_id : null,
-                    'address' => $user['barangay_id'] ? 'Paknaan, Mandaue City, Cebu' : null,
+                    'address' => $user['barangay_id'] ? 'Pahina Central, Cebu City, Cebu' : null,
                     'photo_url' => isset($profilePhotos[$user['email']])
                         ? rtrim(config('app.url'), '/').'/mockups/profiles/'.$profilePhotos[$user['email']]
                         : null,

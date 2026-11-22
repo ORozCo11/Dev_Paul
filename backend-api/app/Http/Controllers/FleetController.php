@@ -475,7 +475,7 @@ class FleetController extends Controller
     /** Latest readiness check per vehicle, keyed by vehicle_id. */
     private function latestReadinessChecks()
     {
-        return VehicleReadinessCheck::orderByDesc('checked_at')
+        return VehicleReadinessCheck::with('checkedBy:id,name')->orderByDesc('checked_at')
             ->get()
             ->unique('vehicle_id')
             ->keyBy('vehicle_id');
@@ -911,7 +911,7 @@ class FleetController extends Controller
             'category_name' => ['required', 'string', 'max:255', 'unique:vehicle_categories,category_name'],
             'domain' => ['required', 'in:Land,Water'],
             'default_criticality' => ['sometimes', Rule::in(self::CRITICALITY_LEVELS)],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:5000'],
         ]);
 
         $category = VehicleCategory::create($data);
@@ -933,7 +933,7 @@ class FleetController extends Controller
             ],
             'domain' => ['required', 'in:Land,Water'],
             'default_criticality' => ['sometimes', Rule::in(self::CRITICALITY_LEVELS)],
-            'description' => ['nullable', 'string'],
+            'description' => ['nullable', 'string', 'max:5000'],
         ]);
 
         $category->update($data);
@@ -1033,6 +1033,12 @@ class FleetController extends Controller
                 $vehicle->readiness_state = 'not_ready';
             }
             $vehicle->readiness_last_checked = $latest?->checked_at;
+            $vehicle->readiness_checked_by = $latest?->checkedBy?->name;
+            // A confirmed check stays good for a set number of days: show when it lapses and how long is left.
+            $validUntil = ($latest && $vehicle->readiness_state === 'ready')
+                ? $latest->checked_at->copy()->addDays((int) config('vms.readiness_max_days', 7)) : null;
+            $vehicle->readiness_valid_until = $validUntil;
+            $vehicle->readiness_days_left = $validUntil ? max(0, (int) ceil(now()->floatDiffInDays($validUntil, false))) : null;
             $vehicle->last_maintained_at = $lastMaintained->get($vehicle->vehicle_id);
             $vehicle->not_ready_reason = $vehicle->missing_parts->isNotEmpty()
                 ? 'Missing part: '.$vehicle->missing_parts->implode(', ')
@@ -1222,7 +1228,7 @@ class FleetController extends Controller
         }
 
         $data = $request->validate([
-            'decommission_reason' => ['required', 'string'],
+            'decommission_reason' => ['required', 'string', 'max:5000'],
         ]);
 
         $vehicle->update([
@@ -1252,6 +1258,40 @@ class FleetController extends Controller
             $vehicle = Vehicle::whereKey($vehicle->vehicle_id)->lockForUpdate()->firstOrFail();
             return $this->storeReadinessCheckLocked($request, $vehicle);
         });
+    }
+
+    /**
+     * Confirm several vehicles ready in one go. Each vehicle is checked on its own, exactly like the single check:
+     * one that cannot be confirmed (open repair, missing part, Needs Repair) is skipped with its reason, and the
+     * others still go through.
+     */
+    public function bulkReadinessCheck(Request $request)
+    {
+        $this->requireAbility($request, 'vehicle.readiness_check');
+        $data = $request->validate([
+            'vehicle_ids'   => ['required', 'array', 'min:1', 'max:50'],
+            'vehicle_ids.*' => ['integer', 'distinct'],
+            'confirmed'     => ['required', 'accepted'],
+            'notes'         => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $confirmed = [];
+        $skipped = [];
+        foreach ($data['vehicle_ids'] as $id) {
+            $vehicle = Vehicle::find($id);
+            if (!$vehicle) {
+                $skipped[] = ['vehicle_id' => (int) $id, 'vehicle_name' => null, 'reason' => 'Vehicle not found.'];
+                continue;
+            }
+            try {
+                $this->storeReadinessCheck($request, $vehicle);
+                $confirmed[] = ['vehicle_id' => $vehicle->vehicle_id, 'vehicle_name' => $vehicle->vehicle_name];
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+                $skipped[] = ['vehicle_id' => $vehicle->vehicle_id, 'vehicle_name' => $vehicle->vehicle_name, 'reason' => $e->getMessage()];
+            }
+        }
+
+        return response()->json(['confirmed' => $confirmed, 'skipped' => $skipped]);
     }
 
     /**
@@ -1355,7 +1395,7 @@ class FleetController extends Controller
         // always writes one synthetic, passed item.
         $data = $request->validate([
             'confirmed' => ['required', 'accepted'],
-            'notes'     => ['nullable', 'string'],
+            'notes'     => ['nullable', 'string', 'max:5000'],
         ]);
 
         $vehicle->update(['readiness_invalidated_at' => null]);
@@ -1500,7 +1540,7 @@ class FleetController extends Controller
             'vehicle_id' => ['required', 'exists:vehicles,vehicle_id'],
             'current_location' => ['required', 'string', 'max:255', Rule::in(VehicleHub::pluck('name'))],
             'address_area' => ['nullable', 'string', 'max:255'],
-            'remarks' => ['nullable', 'string'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
         ]);
 
         $location = DB::transaction(function () use ($data, $request) {
@@ -1541,7 +1581,7 @@ class FleetController extends Controller
         $data = $request->validate([
             'vehicle_id' => ['required', 'exists:vehicles,vehicle_id'],
             'condition_result' => ['required', Rule::in(['Good', 'Needs Repair'])],
-            'observations' => ['nullable', 'string'],
+            'observations' => ['nullable', 'string', 'max:5000'],
             // Sent after the Custodian agrees to close reports left over from a withdrawn repair (see below).
             'confirm_clear_reports' => ['sometimes', 'boolean'],
         ]);
@@ -1621,7 +1661,7 @@ class FleetController extends Controller
         $data = $request->validate([
             'vehicle_id' => ['sometimes', 'exists:vehicles,vehicle_id'],
             'condition_result' => ['sometimes', Rule::in(['Good', 'Needs Repair'])],
-            'observations' => ['nullable', 'string'],
+            'observations' => ['nullable', 'string', 'max:5000'],
         ]);
 
         DB::transaction(function () use ($condition, $data, $request) {
@@ -1724,9 +1764,9 @@ class FleetController extends Controller
 
         $data = $request->validate([
             'maintenance_types'   => ['nullable', 'array'],
-            'maintenance_types.*' => ['string'],
-            'issue_type'          => ['nullable', 'string'],
-            'title'               => ['required', 'string'],
+            'maintenance_types.*' => ['string', 'max:255'],
+            'issue_type'          => ['nullable', 'string', 'max:255'],
+            'title'               => ['required', 'string', 'max:255'],
         ]);
 
         return response()->json(
@@ -1856,13 +1896,13 @@ class FleetController extends Controller
         $data = $request->validate([
             'vehicle_id' => ['required', 'exists:vehicles,vehicle_id'],
             'issue_type' => ['required', 'string', 'max:150'],
-            'issue_description' => ['required', 'string'],
+            'issue_description' => ['required', 'string', 'max:5000'],
             'severity_level' => ['required', Rule::in(['Low', 'Medium', 'High'])],
             // Was a single 'photo' (image only) — now any number of files of
             // any common type, matching VehicleDocument's "file cabinet".
             'attachments' => ['nullable', 'array'],
             'attachments.*' => ['file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:10240'],
-            'remarks' => ['nullable', 'string'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
         ]);
 
         $data['issue_type'] = FaultCategory::resolve($data['issue_type']);
@@ -1938,11 +1978,11 @@ class FleetController extends Controller
 
             $data = $request->validate([
                 'issue_type' => ['sometimes', 'string', 'max:150'],
-                'issue_description' => ['sometimes', 'string'],
+                'issue_description' => ['sometimes', 'string', 'max:5000'],
                 'severity_level' => ['sometimes', Rule::in(['Low', 'Medium', 'High'])],
                 'attachments' => ['nullable', 'array'],
                 'attachments.*' => ['file', 'mimes:jpg,jpeg,png,pdf,doc,docx', 'max:10240'],
-                'remarks' => ['nullable', 'string'],
+                'remarks' => ['nullable', 'string', 'max:5000'],
             ]);
 
             if (isset($data['issue_type'])) {
@@ -1968,9 +2008,9 @@ class FleetController extends Controller
 
         $data = $request->validate([
             'status' => ['sometimes', Rule::in(['Pending', 'Under Review', 'In Maintenance', 'Resolved'])],
-            'remarks' => ['nullable', 'string'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
             'issue_type' => ['sometimes', 'string', 'max:150'],
-            'issue_description' => ['sometimes', 'string'],
+            'issue_description' => ['sometimes', 'string', 'max:5000'],
             'severity_level' => ['sometimes', Rule::in(['Low', 'Medium', 'High'])],
         ]);
 
@@ -2273,7 +2313,7 @@ class FleetController extends Controller
             'part_name' => ['nullable', 'string', 'max:255'],
             'issue_report_id' => ['nullable', 'exists:vehicle_issue_reports,issue_report_id'],
             'maintenance_type' => ['required', 'string', 'max:150'],
-            'problem_reason' => ['required', 'string'],
+            'problem_reason' => ['required', 'string', 'max:5000'],
             'date_started' => ['nullable', 'date'],
             'date_completed' => ['nullable', 'date', 'before_or_equal:' . now('Asia/Manila')->toDateString()],
             'maintenance_personnel_id' => ['nullable', 'exists:users,id'],
@@ -2285,11 +2325,11 @@ class FleetController extends Controller
             'external_vendor' => ['nullable', 'string', 'max:255'],
             'warranty_until' => ['nullable', 'date'],
             'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:8192'],
-            'action_taken' => ['nullable', 'string'],
-            'parts_used' => ['nullable', 'string'],
+            'action_taken' => ['nullable', 'string', 'max:5000'],
+            'parts_used' => ['nullable', 'string', 'max:5000'],
             'maintenance_cost' => ['nullable', 'numeric', 'min:0'],
             'progress_status' => ['nullable', Rule::in(['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification', 'Completed'])],
-            'remarks' => ['nullable', 'string'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
         ], [
             'source_vehicle_id.different' => 'A vehicle cannot be the source of its own part.',
         ]);
@@ -2405,7 +2445,7 @@ class FleetController extends Controller
             'part_name' => ['nullable', 'string', 'max:255'],
             'issue_report_id' => ['nullable', 'exists:vehicle_issue_reports,issue_report_id'],
             'maintenance_type' => ['sometimes', 'string', 'max:150'],
-            'problem_reason' => ['sometimes', 'string'],
+            'problem_reason' => ['sometimes', 'string', 'max:5000'],
             'date_started' => ['nullable', 'date'],
             'date_completed' => ['nullable', 'date', 'before_or_equal:' . now('Asia/Manila')->toDateString()],
             'maintenance_personnel_id' => ['nullable', 'exists:users,id'],
@@ -2414,11 +2454,11 @@ class FleetController extends Controller
             'external_vendor' => ['nullable', 'string', 'max:255'],
             'warranty_until' => ['nullable', 'date'],
             'receipt' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:8192'],
-            'action_taken' => ['nullable', 'string'],
-            'parts_used' => ['nullable', 'string'],
+            'action_taken' => ['nullable', 'string', 'max:5000'],
+            'parts_used' => ['nullable', 'string', 'max:5000'],
             'maintenance_cost' => ['nullable', 'numeric', 'min:0'],
             'progress_status' => ['nullable', Rule::in(['Assigned', 'Under Repair', 'On Hold - Awaiting Parts', 'For Verification', 'Completed'])],
-            'remarks' => ['nullable', 'string'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
         ], [
             'source_vehicle_id.different' => 'A vehicle cannot be the source of its own part.',
         ]);
@@ -2572,7 +2612,7 @@ class FleetController extends Controller
 
         $data = $request->validate([
             'verification_result' => ['required', Rule::in(['Passed', 'Failed'])],
-            'verification_notes' => ['required_if:verification_result,Failed', 'nullable', 'string'],
+            'verification_notes' => ['required_if:verification_result,Failed', 'nullable', 'string', 'max:5000'],
             'test_attested' => ['required_if:verification_result,Passed', 'accepted_if:verification_result,Passed'],
         ]);
 
@@ -2625,7 +2665,7 @@ class FleetController extends Controller
 
         $data = $request->validate([
             'confirmed' => ['required', 'boolean'],
-            'remarks' => ['nullable', 'string'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
         ]);
 
         DB::transaction(function () use ($record, $data, $request) {
@@ -2718,7 +2758,7 @@ class FleetController extends Controller
         );
 
         $data = $request->validate([
-            'closure_reason'      => ['required', 'string'],
+            'closure_reason'      => ['required', 'string', 'max:5000'],
             'returned_to_service' => ['required', 'boolean'],
         ], [
             'closure_reason.required' => 'A reason is required to close this without Custodian verification.',
@@ -2910,10 +2950,11 @@ class FleetController extends Controller
         $data = $request->validate([
             'vehicle_id' => ['required', 'exists:vehicles,vehicle_id'],
             'maintenance_type' => ['required', 'string', 'max:150'],
-            'scheduled_date' => ['required', 'date'],
+            // A new service cannot be planned for a day that has already passed.
+            'scheduled_date' => ['required', 'date', 'after_or_equal:' . now('Asia/Manila')->toDateString()],
             'scheduled_time' => ['nullable', 'date_format:H:i'],
             'service_location' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string', 'max:2000'],
             'assigned_to' => ['nullable', 'exists:users,id'],
             // null/absent = one-time; otherwise the interval (months) to auto-
             // schedule the next service when this one is completed.
@@ -3046,6 +3087,14 @@ class FleetController extends Controller
             "Only a Pending Approval or Declined schedule can be approved. Current: {$schedule->status}."
         );
 
+        // The Admin can pick the mechanic right at approval when the proposal came in without one.
+        if (!$schedule->assigned_to && $request->filled('assigned_to')) {
+            $request->validate(['assigned_to' => ['exists:users,id']]);
+            $this->validateScheduleAssignee((int) $request->input('assigned_to'), $schedule->vehicle);
+            $schedule->update(['assigned_to' => (int) $request->input('assigned_to')]);
+        }
+        // The due-date job needs a mechanic to hand the work to, so a schedule cannot be approved without one.
+        abort_unless($schedule->assigned_to, 422, 'Choose the Maintenance Personnel for this schedule before approving it.');
         $this->validateScheduleAssignee($schedule->assigned_to, $schedule->vehicle);
         abort_if(in_array($schedule->vehicle->status, ['Inactive', 'Decommissioned'], true), 422, 'Cannot approve maintenance for a retired vehicle.');
         $schedule = DB::transaction(function () use ($schedule, $request) {
@@ -3102,7 +3151,7 @@ class FleetController extends Controller
         abort_unless($schedule->status === 'Pending Approval', 422, "Only a Pending Approval schedule can be declined. Current: {$schedule->status}.");
 
         $data = $request->validate([
-            'decline_reason' => ['required', 'string'],
+            'decline_reason' => ['required', 'string', 'max:5000'],
         ]);
 
         $schedule->update([
@@ -3179,7 +3228,7 @@ class FleetController extends Controller
             'scheduled_date' => ['sometimes', 'date'],
             'scheduled_time' => ['nullable', 'date_format:H:i'],
             'service_location' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string', 'max:5000'],
             'assigned_to' => ['nullable', 'exists:users,id'],
             // Completed is deliberately NOT a valid value here — marking a
             // schedule done must go through completeSchedule(), which also
@@ -3192,6 +3241,13 @@ class FleetController extends Controller
         ]);
 
         if (isset($data['status'])) return $this->deleteSchedule($request, $schedule);
+
+        // A date can only be moved to today or later; a schedule that is already overdue may still be edited
+        // (notes, mechanic) as long as its date is left alone.
+        if (isset($data['scheduled_date'])
+            && \Illuminate\Support\Carbon::parse($data['scheduled_date'])->toDateString() !== \Illuminate\Support\Carbon::parse($schedule->scheduled_date)->toDateString()) {
+            abort_if(\Illuminate\Support\Carbon::parse($data['scheduled_date'])->toDateString() < now('Asia/Manila')->toDateString(), 422, 'A schedule cannot be moved to a date that has already passed.');
+        }
 
         $targetVehicle = isset($data['vehicle_id']) ? Vehicle::findOrFail($data['vehicle_id']) : $schedule->vehicle;
         abort_if(in_array($targetVehicle->status, ['Inactive', 'Decommissioned'], true), 422, 'Cannot schedule a retired vehicle.');
@@ -3450,14 +3506,15 @@ class FleetController extends Controller
         $this->requireAbility($request, 'report.generate');
 
         $data = $request->validate([
-            'report_type' => ['required', 'string'],
+            // Only the seven reports the Reports page offers; anything else used to fall through to the inventory report.
+            'report_type' => ['required', 'string', Rule::in(['Vehicle Inventory Report', 'Vehicle Category Report', 'Vehicle Location Report', 'Vehicle Issue Report', 'Vehicle Maintenance Report', 'Vehicle Maintenance Schedule Report', 'Vehicle History Report'])],
             'from' => ['nullable', 'date'],
-            'to' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
             'category_id' => ['nullable', 'exists:vehicle_categories,category_id'],
-            'location' => ['nullable', 'string'],
-            'maintenance_type' => ['nullable', 'string'],
-            'issue_type' => ['nullable', 'string'],
-            'severity_level' => ['nullable', 'string'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'maintenance_type' => ['nullable', 'string', 'max:255'],
+            'issue_type' => ['nullable', 'string', 'max:255'],
+            'severity_level' => ['nullable', 'string', 'max:255'],
         ]);
 
         $rows = match ($data['report_type']) {
@@ -3562,7 +3619,7 @@ class FleetController extends Controller
             'current_location' => ['required', 'string', 'max:255', Rule::in(VehicleHub::pluck('name'))],
             'estimated_return_date' => ['nullable', 'date'],
             'photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-            'remarks' => ['nullable', 'string'],
+            'remarks' => ['nullable', 'string', 'max:5000'],
             // Admin-only override of the Vehicle Category's default (stripped for anyone else).
             'criticality' => ['nullable', Rule::in([...self::CRITICALITY_LEVELS, 'Inherit'])],
         ];

@@ -30,11 +30,11 @@ Route::get('/files/{file}', [\App\Http\Controllers\ManagedFileController::class,
 |--------------------------------------------------------------------------
 */
 // Rate-limited to blunt credential brute-forcing: 10 attempts/min per IP.
-Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 // Accounts are created by a Super Admin (for barangay Admins) or a barangay Admin
 // (for staff); there is no public sign-up.
-Route::get('/address-suggestions', [\App\Http\Controllers\AddressSuggestionController::class, 'index'])->middleware('throttle:20,1');
+Route::get('/address-suggestions', [\App\Http\Controllers\AddressSuggestionController::class, 'index'])->middleware('throttle:address-suggestions');
 
 // Cascading Province -> City/Municipality -> Barangay lists for the
 // registration form's address fields.
@@ -52,7 +52,7 @@ Route::get('/barangays/{barangay}', [BarangayController::class, 'show']);
 
 // Support Center's "Report a Concern" form — no account required. Rate-limited
 // like /register to blunt scripted spam.
-Route::post('/concern-reports', [ConcernReportController::class, 'store'])->middleware('throttle:5,1');
+Route::post('/concern-reports', [ConcernReportController::class, 'store'])->middleware('throttle:concern-reports');
 
 /*
 |--------------------------------------------------------------------------
@@ -82,10 +82,10 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
 
     Route::get('/greeting', [AuthController::class, 'greeting']);
     Route::get('/impersonate/candidates', [AuthController::class, 'impersonationCandidates']);
-    Route::post('/impersonate/default', [AuthController::class, 'impersonateDefault'])->middleware('throttle:10,1');
-    Route::post('/impersonate/{user}', [AuthController::class, 'impersonate'])->middleware('throttle:10,1');
+    Route::post('/impersonate/default', [AuthController::class, 'impersonateDefault'])->middleware('throttle:impersonate');
+    Route::post('/impersonate/{user}', [AuthController::class, 'impersonate'])->middleware('throttle:impersonate');
     // Verifies the current password, so rate-limit it against guessing too.
-    Route::put('/profile/password', [AuthController::class, 'updatePassword'])->middleware('throttle:10,1');
+    Route::put('/profile/password', [AuthController::class, 'updatePassword'])->middleware('throttle:change-password');
     Route::put('/profile', [AuthController::class, 'updateProfile']);
 
     Route::get('/lookups', [FleetController::class, 'lookups']);
@@ -140,6 +140,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::get('/vehicles/{vehicle}/reliability', [FleetController::class, 'vehicleReliability']);
     Route::get('/vehicles/{vehicle}/readiness', [FleetController::class, 'vehicleReadiness']);
     Route::post('/vehicles/{vehicle}/request-inspection', [FleetController::class, 'requestInspection']);
+    Route::post('/vehicles/readiness-check-bulk', [FleetController::class, 'bulkReadinessCheck']);
     Route::post('/vehicles/{vehicle}/readiness-check', [FleetController::class, 'storeReadinessCheck']);
     Route::put('/vehicles/{vehicle}/mark-available', [FleetController::class, 'markVehicleAvailable']);
     Route::get('/vehicles/{vehicle}/open-tickets', [TicketController::class, 'openTicketsForVehicle']);
@@ -155,7 +156,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::get('/users', [UserController::class, 'index']);
     Route::post('/users', [UserController::class, 'store']);
     Route::put('/users/{user}', [UserController::class, 'update']);
-    Route::post('/users/{user}/resend-credentials', [UserController::class, 'resendCredentials'])->middleware('throttle:10,1');
+    Route::post('/users/{user}/resend-credentials', [UserController::class, 'resendCredentials'])->middleware('throttle:resend-credentials');
     Route::put('/users/{user}/deactivate', [UserController::class, 'deactivate']);
     Route::put('/users/{user}/activate', [UserController::class, 'activate']);
 
@@ -168,15 +169,12 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     |--------------------------------------------------------------------------
     */
     Route::get('/superadmin/barangays', [SuperAdminController::class, 'barangays']);
-    Route::get('/superadmin/barangays/search', [SuperAdminController::class, 'searchBarangays']);
-    Route::get('/superadmin/barangays/locations', [SuperAdminController::class, 'barangayLocations']);
-    Route::post('/superadmin/barangays', [SuperAdminController::class, 'storeBarangay']);
-    Route::post('/superadmin/barangays/{barangay}/admin', [SuperAdminController::class, 'storeAdmin'])->middleware('throttle:20,1');
-    Route::post('/superadmin/users/{user}/resend-credentials', [SuperAdminController::class, 'resendCredentials'])->middleware('throttle:10,1');
+    Route::post('/superadmin/barangays/{barangay}/admin', [SuperAdminController::class, 'storeAdmin'])->middleware('throttle:create-admin');
+    Route::post('/superadmin/users/{user}/resend-credentials', [SuperAdminController::class, 'resendCredentials'])->middleware('throttle:resend-credentials');
     Route::get('/superadmin/users', [SuperAdminController::class, 'users']);
     Route::put('/superadmin/users/{user}/deactivate', [SuperAdminController::class, 'deactivateUser']);
     Route::put('/superadmin/users/{user}/role', [SuperAdminController::class, 'updateUserRole']);
-    Route::post('/superadmin/users/{user}/email', [SuperAdminController::class, 'emailUser'])->middleware('throttle:10,1');
+    Route::post('/superadmin/users/{user}/email', [SuperAdminController::class, 'emailUser'])->middleware('throttle:send-email');
     Route::post('/superadmin/barangays/{barangay}/boundary/refresh', [SuperAdminController::class, 'refreshBarangayBoundary']);
     Route::post('/superadmin/barangays/{barangay}/boundary/confirm', [SuperAdminController::class, 'confirmBarangayBoundary']);
     Route::post('/superadmin/barangays/{barangay}/boundary/candidate', [SuperAdminController::class, 'uploadBoundaryCandidate']);
@@ -187,7 +185,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::put('/superadmin/concern-reports/{concernReport}/reopen', [SuperAdminController::class, 'reopenConcernReport']);
     Route::delete('/superadmin/concern-reports/{concernReport}', [SuperAdminController::class, 'destroyConcernReport']);
     Route::put('/superadmin/concern-reports/{concernReport}/restore', [SuperAdminController::class, 'restoreConcernReport']);
-    Route::post('/superadmin/concern-reports/{concernReport}/email', [SuperAdminController::class, 'emailConcernReporter'])->middleware('throttle:10,1');
+    Route::post('/superadmin/concern-reports/{concernReport}/email', [SuperAdminController::class, 'emailConcernReporter'])->middleware('throttle:send-email');
 
     Route::get('/hubs', [HubController::class, 'index']);
     Route::post('/hubs', [HubController::class, 'store']);

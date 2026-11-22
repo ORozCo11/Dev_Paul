@@ -64,20 +64,20 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const pendingSchedules = schedules.filter((s) => s.status === 'Pending Approval');
   const metric = (label) => data.metrics?.find((m) => m.label === label)?.value ?? 0;
   const go = (module, filters = []) => onGoToModule(module, filters);
-  const ticketTask = (t, title = t.ticket_title) => ({ key: `ticket-${t.ticket_id}`, title, reference: `${t.vehicle?.vehicle_name ?? 'Vehicle'} · Ticket #${t.ticket_id}`, status: t.status, date: t.created_at, highPriority: t.priority === 'High', open: () => onNavigate(`${basePath}/tickets/${t.ticket_id}`), action: 'View ticket' });
-  const scheduleTask = (s) => ({ key: `schedule-${s.schedule_id}`, title: s.maintenance_type, reference: `${s.vehicle?.vehicle_name ?? 'Vehicle'} · Schedule #${s.schedule_id}`, status: isScheduleOverdue(s) ? 'Overdue' : s.status, date: s.scheduled_date, urgent: isScheduleOverdue(s), icon: 'calendar', open: () => onNavigate(`${basePath}/schedules/${s.schedule_id}`), action: 'View schedule' });
+  const ticketTask = (t, title = t.ticket_title, action = 'Open ticket') => ({ key: `ticket-${t.ticket_id}`, title, reference: `${t.vehicle?.vehicle_name ?? 'Vehicle'} · Ticket #${t.ticket_id}`, status: t.status, date: t.created_at, highPriority: t.priority === 'High', open: () => onNavigate(`${basePath}/tickets/${t.ticket_id}`), action });
+  const scheduleTask = (s, action = 'Open schedule') => ({ key: `schedule-${s.schedule_id}`, title: s.maintenance_type, reference: `${s.vehicle?.vehicle_name ?? 'Vehicle'} · Schedule #${s.schedule_id}`, status: isScheduleOverdue(s) ? 'Overdue' : s.status, date: s.scheduled_date, urgent: isScheduleOverdue(s), icon: 'calendar', open: () => onNavigate(`${basePath}/schedules/${s.schedule_id}`), action });
   const activeMine = mine.filter((t) => t.status === 'Active');
   const tasks = admin ? [
-    ...pendingTickets.map((t) => ticketTask(t, 'Review ticket proposal')),
-    ...pendingSchedules.map((s) => ({ ...scheduleTask(s), title: 'Review schedule booking' })),
+    ...pendingTickets.map((t) => ticketTask(t, 'Review ticket proposal', 'Review proposal')),
+    ...pendingSchedules.map((s) => ({ ...scheduleTask(s, 'Review booking'), title: 'Review schedule booking' })),
     ...tickets.filter((t) => t.status === 'Active' && (t.sub_issues ?? []).some((s) => s.status === 'Under Repair' && (s.repair_type === 'external' ? !s.external_tester_id : !s.assigned_mechanic_id)))
-      .map((t) => ticketTask(t, (t.sub_issues ?? []).some((s) => s.returned_to_admin_at && s.status === 'Under Repair') ? 'Reassign returned work' : 'Assign maintenance personnel')),
-    ...overdueSchedules.filter((s) => !s.resulting_ticket_id).map(scheduleTask),
+      .map((t) => ticketTask(t, (t.sub_issues ?? []).some((s) => s.returned_to_admin_at && s.status === 'Under Repair') ? 'Reassign returned work' : 'Assign maintenance personnel', 'Assign mechanic')),
+    ...overdueSchedules.filter((s) => !s.resulting_ticket_id).map((s) => scheduleTask(s, 'Check schedule')),
   ] : custodian ? [
-    ...verifications.map((t) => ticketTask(t, 'Verify completed repair')),
-    ...tickets.filter((t) => t.status === 'Open' && sameId(t.assigned_custodian_id, user.id)).map((t) => ticketTask(t, 'Inspect reported issue')),
-    ...watch.map((v) => ({ key: `readiness-${v.vehicle_id}`, title: 'Check vehicle readiness', reference: v.vehicle_name, status: ({ not_ready: 'Failed last check', stale: 'Check expired', unchecked: 'Not checked' })[v.state] ?? v.state, urgent: v.state === 'not_ready', icon: 'vehicle', open: () => onNavigate(`${basePath}/vehicles/${v.vehicle_id}`), action: 'View vehicle' })),
-  ] : [...activeMine.map((t) => ticketTask(t)), ...mySchedules.map(scheduleTask)];
+    ...verifications.map((t) => ticketTask(t, 'Verify completed repair', 'Verify repair')),
+    ...tickets.filter((t) => t.status === 'Open' && sameId(t.assigned_custodian_id, user.id)).map((t) => ticketTask(t, 'Inspect reported issue', 'Inspect issue')),
+    ...watch.map((v) => ({ key: `readiness-${v.vehicle_id}`, title: 'Check vehicle readiness', reference: v.vehicle_name, status: ({ not_ready: 'Failed last check', stale: 'Check expired', unchecked: 'Not checked' })[v.state] ?? v.state, urgent: v.state === 'not_ready', icon: 'vehicle', open: () => onNavigate(`${basePath}/vehicles/${v.vehicle_id}`), action: 'Check vehicle' })),
+  ] : [...activeMine.map((t) => ticketTask(t, undefined, 'Open job')), ...mySchedules.map((s) => scheduleTask(s, 'Open service'))];
   // Keep the same kind of item together (all proposals, then all bookings, then all overdue ...), oldest first
   // inside each group, instead of mixing kinds by urgency.
   const groupOf = (task) => `${String(task.key).split('-')[0]}|${task.status}`;

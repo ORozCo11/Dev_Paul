@@ -14,6 +14,12 @@ class Vehicle extends Model
 
     protected $primaryKey = 'vehicle_id';
 
+    /** Plates are kept in one shape (trimmed, single spaces, capitals) so "qa 1121-x" and "QA 1121-X" are the same plate. */
+    public function setPlateNumberAttribute($value): void
+    {
+        $this->attributes['plate_number'] = $value === null ? null : mb_strtoupper(preg_replace('/\s+/', ' ', trim((string) $value)));
+    }
+
     protected $fillable = [
         'readiness_invalidated_at',
         'custom_values',

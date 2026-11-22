@@ -162,7 +162,7 @@ class SuperAdminControllerTest extends TestCase
     #[Test]
     public function public_concern_submissions_are_rate_limited(): void
     {
-        for ($attempt = 0; $attempt < 5; $attempt++) {
+        for ($attempt = 0; $attempt < 10; $attempt++) {
             $this->postJson('/api/concern-reports', ['concern_type' => 'Other', 'description' => 'A concern'])->assertCreated();
         }
         $this->postJson('/api/concern-reports', ['concern_type' => 'Other', 'description' => 'Another concern'])->assertStatus(429);

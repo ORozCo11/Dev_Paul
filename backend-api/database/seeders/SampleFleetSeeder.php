@@ -18,7 +18,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
-/** Reset only the named Paknaan demo fleet, never a tenant's entire fleet. */
+/** Reset only the named Pahina Central demo fleet, never a tenant's entire fleet. */
 class SampleFleetSeeder extends Seeder
 {
     private const LEGACY_FLEET = [
@@ -46,10 +46,10 @@ class SampleFleetSeeder extends Seeder
             return;
         }
 
-        $barangay = Barangay::where('name', 'Paknaan')
-            ->whereHas('city', fn ($q) => $q->where('name', 'Mandaue City'))->first();
+        $barangay = Barangay::where('name', 'Pahina Central (Pob.)')
+            ->whereHas('city', fn ($q) => $q->where('name', 'Cebu City'))->first();
         if (!$barangay) {
-            throw new RuntimeException('Seed the Cebu / Mandaue City / Paknaan references first.');
+            throw new RuntimeException('Seed the Cebu / Cebu City / Pahina Central (Pob.) references first.');
         }
 
         DB::transaction(function () use ($barangay) {
@@ -75,11 +75,11 @@ class SampleFleetSeeder extends Seeder
 
             $vehicles = [];
             $specs = [
-                ['BFP-5501', 'Fire Truck', 'Pierce', 'Enforcer Pumper', 2018, '2000 L', 'Red', 'Paknaan Brgy Hall', 'firetruck-01-pierce-pumper.jpg'],
-                ['FDT-2801', 'Fire Truck', 'Pierce', 'Aerial Ladder Truck', 2020, '1135 L', 'Red / White', 'Paknaan Gymnasium', 'firetruck-03-ladder-28.jpg'],
+                ['BFP-5501', 'Fire Truck', 'Pierce', 'Enforcer Pumper', 2018, '2000 L', 'Red', 'Pahina Brgy Hall', 'firetruck-01-pierce-pumper.jpg'],
+                ['FDT-2801', 'Fire Truck', 'Pierce', 'Aerial Ladder Truck', 2020, '1135 L', 'Red / White', 'Pahina Gymnasium', 'firetruck-03-ladder-28.jpg'],
                 ['AMB-1101', 'Ambulance', 'Toyota', 'HiAce Carryboy EMS', 2023, '8 pax', 'White / Red', 'Twinbee Hub', 'ambulance-01-hiace-carryboy.jpg'],
-                ['INEM-112', 'Ambulance', 'Mercedes-Benz', 'Sprinter 316 CDI', 2021, '8 pax', 'White / Red', 'Paknaan Brgy Hall', 'ambulance-02-sprinter.jpg'],
-                ['FDR-303', 'Ambulance', 'Ford', 'E-450 Rescue Ambulance', 2020, '8 pax', 'White / Red', 'Paknaan Gymnasium', 'ambulance-03-ford-eseries.jpg'],
+                ['INEM-112', 'Ambulance', 'Mercedes-Benz', 'Sprinter 316 CDI', 2021, '8 pax', 'White / Red', 'Pahina Brgy Hall', 'ambulance-02-sprinter.jpg'],
+                ['FDR-303', 'Ambulance', 'Ford', 'E-450 Rescue Ambulance', 2020, '8 pax', 'White / Red', 'Pahina Gymnasium', 'ambulance-03-ford-eseries.jpg'],
             ];
             foreach ($specs as [$plate, $type, $brand, $model, $year, $capacity, $color, $hub, $photo]) {
                 $vehicle = Vehicle::withoutGlobalScopes()->updateOrCreate(['plate_number' => $plate], [

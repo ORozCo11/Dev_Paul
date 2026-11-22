@@ -34,7 +34,7 @@ class VehicleTypeFieldController extends Controller
 
     public function store(Request $request, VehicleCategory $category)
     {
-        $this->requireAbility($request, 'vehicle_type.edit');
+        $this->requireAbility($request, 'vehicle_type.fields');
         $data = $this->validated($request, null);
 
         $base = Str::slug($data['label'], '_') ?: 'field';
@@ -54,7 +54,7 @@ class VehicleTypeFieldController extends Controller
 
     public function update(Request $request, VehicleTypeField $field)
     {
-        $this->requireAbility($request, 'vehicle_type.edit');
+        $this->requireAbility($request, 'vehicle_type.fields');
         $data = $this->validated($request, $field);
         // The type is fixed once created — changing it would orphan stored values.
         unset($data['field_type']);

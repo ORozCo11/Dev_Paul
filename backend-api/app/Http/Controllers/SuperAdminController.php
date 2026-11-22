@@ -74,10 +74,9 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'barangay.view_all', 'Only a Super Admin can perform this action.');
 
+        // The system serves one municipality and all of its barangays are already loaded, so every barangay is listed
+        // (each one needs its Administrator created by the Super Admin).
         return Barangay::with(['city.province'])
-            // A registration code on its own doesn't count: BarangaySeeder pre-issues
-            // codes for all of Mandaue City, and those barangays were never onboarded.
-            ->registered()
             ->select(['id', 'name', 'psgc_code', 'city_id', 'boundary_status', 'boundary_source', 'boundary_verified_by', 'pending_boundary', 'pending_boundary_source', 'updated_at'])
             ->selectRaw('CASE WHEN boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
             ->withCount([
@@ -131,146 +130,6 @@ class SuperAdminController extends Controller
     }
 
     /**
-     * Server-side, paginated search over registered barangays nationwide,
-     * for screens that must not pull every barangay into the browser.
-     * Location filters use stable ids (and the PSGC region prefix), never
-     * names, so same-named barangays in different cities stay distinct.
-     */
-    public function searchBarangays(Request $request)
-    {
-        $this->requireAbility($request, 'barangay.view_all', 'Only a Super Admin can perform this action.');
-        $data = $request->validate($this->locationFilterRules() + [
-            'q' => ['nullable', 'string', 'max:100'],
-            'barangay_id' => ['nullable', 'integer'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'per_page' => ['nullable', 'integer', Rule::in([10, 25, 50])],
-        ]);
-
-        $query = $this->registeredLocations($data)
-            ->select(['barangays.id', 'barangays.name', 'barangays.psgc_code', 'barangays.city_id', 'cities.name as located_city', 'cities.code as located_city_code', 'cities.province_id as located_province_id', 'provinces.name as located_province'])
-            ->selectRaw('CASE WHEN barangays.boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
-            ->selectRaw('CASE WHEN barangays.pending_boundary IS NULL THEN 0 ELSE 1 END AS pending_present');
-        if (!empty($data['barangay_id'])) $query->where('barangays.id', $data['barangay_id']);
-        if (($search = trim($data['q'] ?? '')) !== '') {
-            $pattern = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_strtolower($search)).'%';
-            $query->where(function ($query) use ($pattern) {
-                foreach (['barangays.name', 'cities.name', 'provinces.name', 'barangays.psgc_code'] as $column) {
-                    $query->orWhereRaw("LOWER({$column}) LIKE ? ESCAPE '!'", [$pattern]);
-                }
-            });
-        }
-
-        return $query->orderBy('barangays.name')->orderBy('cities.name')->orderBy('barangays.id')
-            ->paginate($data['per_page'] ?? 25)->withQueryString()
-            ->through(function ($b) {
-                $region = PsgcRegions::codeForCity($b->located_city_code);
-
-                return [
-                    'id' => $b->id,
-                    'name' => $b->name,
-                    'psgc_code' => $b->psgc_code,
-                    'city_id' => $b->city_id,
-                    'city_name' => $b->located_city,
-                    'province_id' => $b->located_province_id,
-                    'province_name' => $b->located_province,
-                    'region_code' => $region,
-                    'region_name' => PsgcRegions::name($region),
-                    'has_boundary' => (bool) $b->boundary_present,
-                    'has_pending_boundary' => (bool) $b->pending_present,
-                ];
-            });
-    }
-
-    /**
-     * Dependent Region > Province > City > Barangay choices, limited to
-     * places that actually contain a registered barangay so no filter ever
-     * leads to an empty list. Barangays are listed only within one city.
-     */
-    public function barangayLocations(Request $request)
-    {
-        $this->requireAbility($request, 'barangay.view_all', 'Only a Super Admin can perform this action.');
-        $data = $request->validate($this->locationFilterRules());
-
-        $rows = $this->registeredLocations([])
-            ->get(['barangays.id', 'barangays.name', 'cities.id as located_city_id', 'cities.name as located_city', 'cities.code as located_city_code', 'provinces.id as located_province_id', 'provinces.name as located_province']);
-        $regionOf = fn ($row) => PsgcRegions::codeForCity($row->located_city_code);
-        $inRegion = fn ($row) => empty($data['region']) || $regionOf($row) === $data['region'];
-        $inProvince = fn ($row) => $inRegion($row) && (empty($data['province_id']) || $row->located_province_id === (int) $data['province_id']);
-
-        return response()->json([
-            'regions' => $rows->map($regionOf)->filter()->unique()->sort()->values()
-                ->map(fn ($code) => PsgcRegions::all()[$code] ?? ['code' => $code, 'name' => "Region {$code}", 'long_name' => "Region {$code}"])->values(),
-            'provinces' => $rows->filter($inRegion)->unique('located_province_id')->sortBy('located_province')->values()
-                ->map(fn ($row) => ['id' => $row->located_province_id, 'name' => $row->located_province, 'region_code' => $regionOf($row)]),
-            'cities' => $rows->filter($inProvince)->unique('located_city_id')->sortBy('located_city')->values()
-                ->map(fn ($row) => ['id' => $row->located_city_id, 'name' => $row->located_city, 'province_id' => $row->located_province_id]),
-            'barangays' => empty($data['city_id']) ? [] : $rows->where('located_city_id', (int) $data['city_id'])->sortBy('name')->values()
-                ->map(fn ($row) => ['id' => $row->id, 'name' => $row->name]),
-        ]);
-    }
-
-    private function locationFilterRules(): array
-    {
-        return [
-            'region' => ['nullable', 'regex:/^\d{2}$/'],
-            'province_id' => ['nullable', 'integer'],
-            'city_id' => ['nullable', 'integer'],
-        ];
-    }
-
-    private function registeredLocations(array $filters)
-    {
-        $query = Barangay::registered()
-            ->join('cities', 'cities.id', '=', 'barangays.city_id')
-            ->leftJoin('provinces', 'provinces.id', '=', 'cities.province_id');
-        if (!empty($filters['region'])) $query->where('cities.code', 'like', $filters['region'].'%');
-        if (!empty($filters['province_id'])) $query->where('cities.province_id', $filters['province_id']);
-        if (!empty($filters['city_id'])) $query->where('barangays.city_id', $filters['city_id']);
-
-        return $query;
-    }
-
-    /**
-     * Provisions an existing PSA PSGC reference barangay.  This intentionally
-     * accepts no free-text name and never calls a geocoder: a boundary is
-     * selected solely by its official PSGC identity, or remains unavailable.
-     */
-    public function storeBarangay(Request $request)
-    {
-        $this->requireAbility($request, 'barangay.create', 'Only a Super Admin can perform this action.');
-
-        $data = $request->validate([
-            'city_id' => ['required', 'exists:cities,id'],
-            'barangay_id' => ['required', 'integer', 'exists:barangays,id'],
-        ]);
-        $barangay = Barangay::with('city.province')->findOrFail($data['barangay_id']);
-        abort_unless($barangay->city_id === (int) $data['city_id'] && $barangay->psgc_code,
-            422, 'Select an official PSGC barangay belonging to the selected city or municipality.');
-        $barangay->load('city.province');
-        app(BarangayGeography::class)->attachBoundary($barangay);
-        $barangay->update(['provisioned_at' => $barangay->provisioned_at ?? now()]);
-        $barangay->refresh();
-        $barangay->loadCount(['users', 'users as active_admin_count' => fn ($query) => $query->havingRole('Admin')->where('is_active', true)]);
-
-        $this->log($request, 'Add', "Added barangay {$barangay->name} ({$barangay->city?->name}).");
-
-        return response()->json([
-            'id' => $barangay->id,
-            'name' => $barangay->name,
-            'city_name' => $barangay->city?->name,
-            'province_name' => $barangay->city?->province?->name,
-            'staff_count' => $barangay->users_count,
-            'has_active_admin' => $barangay->active_admin_count > 0,
-            'sole_active_admin' => $barangay->active_admin_count === 1,
-            'psgc_code' => $barangay->psgc_code,
-            'has_boundary' => $barangay->boundary !== null,
-            'boundary_status' => $this->boundaryStatus($barangay),
-            'pending_boundary' => $barangay->pending_boundary,
-            'pending_boundary_source' => $barangay->pending_boundary_source,
-        ], 201);
-    }
-
-    /**
      * Re-checks the code-matched PSA/NAMRIA reference bundle. No geocoder,
      * name matching, generated geometry, or fallback barangay is permitted.
      */
@@ -305,7 +164,7 @@ class SuperAdminController extends Controller
         $data = $request->validate([
             'geojson' => ['required', 'array'],
             'source' => ['required', 'string', 'max:200'],
-            'psgc_code' => ['nullable', 'string'],
+            'psgc_code' => ['nullable', 'string', 'max:255'],
         ]);
         abort_unless(($data['psgc_code'] ?? null) === $barangay->psgc_code, 422, 'The selected barangay code does not match.');
         $feature = $data['geojson'];
@@ -641,7 +500,10 @@ class SuperAdminController extends Controller
     {
         $this->requireAbility($request, 'user.view_all_platform', 'Only a Super Admin can perform this action.');
 
+        // The dedicated account-switcher account is infrastructure, not staff: it is not listed here, so it cannot be
+        // deactivated or re-roled by mistake.
         $query = User::with(['barangay.city.province', 'roleRows']);
+        $query->whereNot(fn ($q) => $q->havingRole('Impersonator'));
 
         if ($request->filled('q')) {
             // Escape LIKE wildcards so "%" and "_" match literally, same as activityLog().

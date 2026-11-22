@@ -8,13 +8,11 @@ import '../components/RoleDashboard.css';
 import './SuperAdminWorkspace.css';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, Polygon, TileLayer } from 'react-leaflet';
 import BoundaryReviewModal from '../components/BoundaryReviewModal';
 import api from '../api/axios';
 import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import { AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge, SuccessCelebration } from '../components/SuperAdminUI';
-import { geoJsonToPolygons } from '../utils/boundary';
 import { ActivityLogTab, CreateAdminDrawer, CredentialsDialog, PlatformOverview, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
 import SupportCenterTab from './SupportCenterTab';
@@ -33,9 +31,9 @@ const TABS = [
 ];
 
 const TAB_DESCRIPTIONS = {
-  dashboard: 'Manage barangays, user accounts, and platform administration.',
-  barangays: 'Manage registered barangays, create their Administrators, and review boundaries.',
-  users: 'Manage platform users, roles, and account availability by location.',
+  dashboard: 'Create the Administrator for each barangay and keep the accounts in order.',
+  barangays: 'Every barangay of the municipality. Create its Administrator, or review its boundary.',
+  users: 'Manage user accounts, roles, and who can log in.',
   activity: 'A chronological record of platform and Super Admin activity.',
   settings: 'Manage your Super Admin account settings and security.',
   support: 'Review and manage concerns submitted through the public Support Center.',
@@ -98,11 +96,9 @@ function ProfileMenu({ user, open, setOpen, onOpenSettings, onLogout }) {
 
 const apiError = (error, fallback) => { const data = error.response?.data; return (data?.errors && Object.values(data.errors)[0]?.[0]) || data?.message || fallback; };
 
-function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, showAddForm, onCloseAdd, onCreateAdmin, onRequestConfirmation }) {
+function BarangayManagementTab({ barangays, users, onPromote, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, onCreateAdmin, onRequestConfirmation }) {
   const [activeFilter, setActiveFilter] = useState(initialFilter || 'all');
   const [search, setSearch] = useState('');
-  const [provinceFilter, setProvinceFilter] = useState('');
-  const [cityFilter, setCityFilter] = useState('');
   const [boundaryFilter] = useState('');
   const navigate = useNavigate();
   const detailRoute = useMatch('/superadmin/barangays/:barangayId');
@@ -112,10 +108,8 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const [reviewingBoundary, setReviewingBoundary] = useState(null);
   const [creatingFor, setCreatingFor] = useState(null);
   const orphaned = barangays.filter((b) => !b.has_active_admin);
-  const provinceOptions = [...new Set(barangays.map((b) => b.province_name).filter(Boolean))].sort();
-  const cities = [...new Set(barangays.filter((b) => !provinceFilter || b.province_name === provinceFilter).map((b) => b.city_name).filter(Boolean))].sort();
   const boundaryStatus = (b) => b.boundary_status === 'verified' ? 'Reviewed' : b.boundary_status === 'needs_review' ? 'Needs Review' : 'Not Found';
-  const filtered = barangays.filter((b) => (activeFilter === 'all' || activeFilter === 'active' && b.has_active_admin || activeFilter === 'orphaned' && !b.has_active_admin || activeFilter === 'boundary_review' && b.boundary_status === 'needs_review') && (!provinceFilter || b.province_name === provinceFilter) && (!cityFilter || b.city_name === cityFilter) && (!boundaryFilter || boundaryStatus(b) === boundaryFilter) && [b.name, b.city_name, b.province_name].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const filtered = barangays.filter((b) => (activeFilter === 'all' || activeFilter === 'active' && b.has_active_admin || activeFilter === 'orphaned' && !b.has_active_admin || activeFilter === 'boundary_review' && b.boundary_status === 'needs_review') && (!boundaryFilter || boundaryStatus(b) === boundaryFilter) && [b.name].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const managing = barangays.find((b) => String(b.id) === managingId);
   const candidates = managing ? users.filter((account) => account.barangay_id === managing.id) : [];
   const adminBarangayIds = new Set(users.filter((account) => account.role === 'Admin').map((account) => account.barangay_id));
@@ -124,17 +118,13 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
   const columns = [
     { label: 'ID', key: 'id', className: 'cell-center' },
     { label: 'Barangay', render: (b) => <strong>{b.name}</strong> },
-    { label: 'City / Province', render: (b) => <div className="sa-stacked"><strong>{b.city_name || 'Not specified'}</strong><span>{b.province_name || 'Not specified'}</span></div> },
     { label: 'Staff Count', key: 'staff_count' },
     { label: 'Administrator Status', render: (b) => <div className="sa-stacked"><StatusBadge value={b.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></div> },
     { label: 'Actions', render: (b) => <div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => { setManagingId(b.id); setPickedUserId(''); }}>View / Manage</button>{needsAdmin(b) && <button type="button" className="ghost-button sa-icon-button sa-icon-confirm" aria-label={`Create Admin for ${b.name}`} title="Create Admin" onClick={() => setCreatingFor(b)}><Icon name="plus" size={17} /></button>}</div> },
   ];
   return <div className="superadmin-tab">
-    {showAddForm && <AddBarangayForm existingBarangayIds={barangays.map((b) => String(b.id))} onAdded={(created) => { onAddedBarangay(created); onCloseAdd(); }} onCancel={onCloseAdd} />}
     {!managingId && <AdminManagementCard summary={<div className="sa-segments">{[['all', 'All Barangays', barangays.length], ['active', 'Active Admin', barangays.length - orphaned.length], ['orphaned', 'Orphaned', orphaned.length]].map(([key, label, count]) => <button key={key} type="button" aria-pressed={activeFilter === key} onClick={() => setActiveFilter(key)}>{label}<span>{count}</span></button>)}</div>} toolbar={<>
-      <LocalSearchInput value={search} onChange={setSearch} placeholder="Search barangay, city, or province..." />
-      <AdminFilterField label="Province"><SearchableSelect aria-label="Filter by province" value={provinceFilter} onChange={(event) => { setProvinceFilter(event.target.value); setCityFilter(''); }}><option value="">All Provinces</option>{provinceOptions.map((province) => <option key={province}>{province}</option>)}</SearchableSelect></AdminFilterField>
-      <AdminFilterField label="City"><SearchableSelect aria-label="Filter by city" value={cityFilter} onChange={(event) => setCityFilter(event.target.value)}><option value="">All Cities</option>{cities.map((city) => <option key={city}>{city}</option>)}</SearchableSelect></AdminFilterField>
+      <LocalSearchInput value={search} onChange={setSearch} placeholder="Search barangay..." />
     </>}><PaginatedTable rows={filtered} columns={columns} emptyIcon="pin" emptyMessage="No barangays found" emptyDescription="Try another search or adjust the location and status filters." /></AdminManagementCard>}
     {managingId && !managing && <p role="alert">Barangay not found. <button type="button" className="ghost-button" onClick={() => setManagingId(null)}>Back to Barangays</button></p>}
     {managing && <section className="sa-management-card sa-barangay-page">
@@ -149,108 +139,6 @@ function BarangayManagementTab({ barangays, users, onPromote, onAddedBarangay, o
     {creatingFor && <CreateAdminDrawer barangay={creatingFor} onClose={() => setCreatingFor(null)} onSubmit={async (b, form) => { const failure = await onCreateAdmin(b, form); if (!failure) setCreatingFor(null); return failure; }} />}
     {reviewingBoundary && <BoundaryReviewModal onSaved={onBoundarySaved} barangay={reviewingBoundary} onClose={() => setReviewingBoundary(null)} onConfirm={async () => { if (await onConfirmBoundary(reviewingBoundary)) setReviewingBoundary(null); }} onDiscard={async () => { if (await onDiscardBoundary(reviewingBoundary)) setReviewingBoundary(null); }} />}
   </div>;
-}
-
-function useAdminLookup(url, enabled, label) {
-  const [attempt, setAttempt] = useState(0);
-  const [result, setResult] = useState({ key: '', rows: [], error: null });
-  const key = `${url}:${attempt}`;
-  useEffect(() => {
-    if (!enabled) return;
-    let current = true;
-    api.get(url).then(({ data }) => {
-      if (current) setResult({ key, rows: data, error: null });
-    }).catch(() => {
-      if (current) setResult({ key, rows: [], error: `Could not load ${label}. Please retry.` });
-    });
-    return () => { current = false; };
-  }, [url, enabled, label, key]);
-  return { rows: enabled && result.key === key ? result.rows : [], loading: enabled && result.key !== key, error: enabled && result.key === key ? result.error : null, retry: () => setAttempt((value) => value + 1) };
-}
-
-// Nationwide location cascade for adding a registered barangay.
-function AddBarangayForm({ existingBarangayIds, onAdded, onCancel }) {
-  const [provinceId, setProvinceId] = useState('');
-  const [cityId, setCityId] = useState('');
-  const [barangayId, setBarangayId] = useState('');
-  const [boundaryPreview, setBoundaryPreview] = useState(null);
-  const [previewStatus, setPreviewStatus] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-
-  const provinceLookup = useAdminLookup('/provinces', true, 'provinces');
-  const cityLookup = useAdminLookup(`/cities?province_id=${provinceId}`, Boolean(provinceId), 'cities');
-  const barangayLookup = useAdminLookup(`/barangays?city_id=${cityId}`, Boolean(cityId), 'barangays');
-  const provinces = provinceLookup.rows;
-  const cities = cityLookup.rows;
-  const barangays = barangayLookup.rows;
-  const isDuplicate = barangayId && existingBarangayIds.includes(String(barangayId));
-
-  useEffect(() => {
-    if (!barangayId) return;
-    let current = true;
-    api.get(`/barangays/${barangayId}`).then(({ data }) => {
-      if (!current) return;
-      setBoundaryPreview(data);
-      setPreviewStatus(data.boundary ? '' : 'Unavailable: this PSGC record has no approved reference geometry. No boundary will be generated.');
-    }).catch(() => { if (current) setPreviewStatus('The reference boundary could not be loaded.'); });
-    return () => { current = false; };
-  }, [barangayId]);
-
-  const previewPolygons = useMemo(() => geoJsonToPolygons(boundaryPreview?.boundary), [boundaryPreview]);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!cityId || !barangayId || isDuplicate) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await api.post('/superadmin/barangays', { city_id: cityId, barangay_id: barangayId });
-      onAdded(res.data);
-    } catch (err) {
-      setError(apiError(err, 'Could not add this barangay. Check the selection and try again.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <form className="location-form-panel superadmin-panel-spaced" onSubmit={submit}>
-      <h3>Add Barangay</h3>
-      <p className="muted superadmin-muted-block">
-        Adds the barangay to platform management. After adding it, create its Administrator from the barangay's row or detail page.
-      </p>
-      {error && <p className="muted" style={{ color: '#dc2626' }}>{error}</p>}
-      {[provinceLookup, cityLookup, barangayLookup].filter((lookup) => lookup.error).map((lookup) => <p key={lookup.error} className="notice error" role="alert">{lookup.error} <button type="button" className="ghost-button" onClick={lookup.retry}>Retry lookup</button></p>)}
-      <div className="superadmin-inline-row">
-        <SearchableSelect aria-label="New barangay province" value={provinceId} disabled={provinceLookup.loading || Boolean(provinceLookup.error)} onChange={(e) => { setProvinceId(e.target.value); setCityId(''); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} required>
-          <option value="">{provinceLookup.loading ? 'Loading provinces…' : 'Province'}</option>
-          {provinces.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </SearchableSelect>
-        <SearchableSelect aria-label="New barangay city" value={cityId} onChange={(e) => { setCityId(e.target.value); setBarangayId(''); setBoundaryPreview(null); setPreviewStatus(''); }} disabled={!provinceId || cityLookup.loading || Boolean(cityLookup.error)} required>
-          <option value="">{cityLookup.loading ? 'Loading cities…' : 'City / Municipality'}</option>
-          {cities.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </SearchableSelect>
-        <SearchableSelect aria-label="Official PSGC barangay" value={barangayId} onChange={(e) => { setBarangayId(e.target.value); setBoundaryPreview(null); setPreviewStatus('Loading the PSGC-matched boundary…'); }} disabled={!cityId || barangayLookup.loading || Boolean(barangayLookup.error)} required>
-          <option value="">{barangayLookup.loading ? 'Loading barangays…' : 'Barangay (PSGC)'}</option>
-          {barangays.map((barangay) => <option key={barangay.id} value={barangay.id}>{barangay.name} · {barangay.psgc_code}</option>)}
-        </SearchableSelect>
-        <button type="button" className="ghost-button cancel-btn" onClick={onCancel}>Cancel</button>
-        <button type="submit" className="primary-button" disabled={saving || !cityId || !barangayId || isDuplicate}>
-          {saving ? 'Adding…' : 'Add'}
-        </button>
-      </div>
-      {isDuplicate && <p className="notice error" role="alert">This barangay is already managed by the platform. Open it from the barangay list instead.</p>}
-      {barangayId && <section className="boundary-registration-preview" aria-live="polite">
-        <div className="boundary-registration-preview-head"><div><strong>Step 2 — Boundary Preview</strong><span>{boundaryPreview?.name ?? 'Selected barangay'} · PSGC {boundaryPreview?.psgc_code ?? 'Loading…'}</span></div><small>{boundaryPreview?.boundary_source ?? 'Authoritative reference lookup'}</small></div>
-        {previewPolygons.length ? <div className="boundary-registration-map"><MapContainer key={JSON.stringify(boundaryPreview?.boundary)} bounds={previewPolygons.flat(2)} style={{ height: '100%', width: '100%' }} scrollWheelZoom>
-          <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-          {previewPolygons.map((polygon, index) => <Polygon key={index} positions={polygon} pathOptions={{ color: '#fca5a5', weight: 2, fillColor: '#ef4444', fillOpacity: .12 }} />)}
-        </MapContainer></div> : <p className="muted boundary-registration-empty">{previewStatus || 'Choose an official PSGC barangay to retrieve its boundary.'}</p>}
-        {previewPolygons.length > 0 && <p className="muted boundary-registration-note">Reference preview only. A live imported outline can support registration without being marked reviewed. Confirming an uploaded source marks a boundary reviewed; this is not a legal or cadastral certification.</p>}
-      </section>}
-    </form>
-  );
 }
 
 function SettingsTab({ setNotice }) {
@@ -324,8 +212,7 @@ export default function SuperAdminWorkspace() {
     && !location.pathname.split('/').slice(4).some(Boolean);
   const [barangayFilter, setBarangayFilter] = useState('all');
   const [credentials, setCredentials] = useState(null);
-  const [showAddBarangay, setShowAddBarangay] = useState(false);
-  const navigateTab = (tab, filter) => { navigate(`/superadmin/${tab}`); setMobileNavOpen(false); setBarangayFilter(filter || 'all'); setShowAddBarangay(false); window.scrollTo({ top: 0, behavior: 'instant' }); };
+  const navigateTab = (tab, filter) => { navigate(`/superadmin/${tab}`); setMobileNavOpen(false); setBarangayFilter(filter || 'all'); window.scrollTo({ top: 0, behavior: 'instant' }); };
   // Always starts expanded — a collapsed sidebar should only ever be a
   // deliberate, in-session choice (the toggle button), never the default a
   // returning user lands on.
@@ -448,15 +335,6 @@ export default function SuperAdminWorkspace() {
       return false;
     }
   };
-
-  // AddBarangayForm already POSTs and hands back the created row itself —
-  // this just refreshes the shared datasets (same loadAll() convention
-  // every other mutation here uses) and surfaces the success notice.
-  const addBarangay = async (created) => {
-    setNotice({ type: 'success', text: `${created.name} (${created.city_name}) added.` });
-    await loadAll();
-  };
-
 
   const confirmBoundary = async (barangay) => {
     try {
@@ -606,7 +484,6 @@ export default function SuperAdminWorkspace() {
               <h1>{!validRoute ? 'Page not found' : TABS.find(([k]) => k === activeTab)?.[1] ?? 'My Settings'}</h1>
               <p>{!validRoute ? 'This Super Admin page does not exist.' : TAB_DESCRIPTIONS[activeTab] ?? TAB_DESCRIPTIONS.settings}</p>
             </div>
-            {activeTab === 'barangays' && !location.pathname.split('/')[3] && <button type="button" className="primary-button" onClick={() => setShowAddBarangay(!showAddBarangay)}><Icon name={showAddBarangay ? 'close' : 'plus'} size={16} />{showAddBarangay ? 'Cancel' : 'Add Barangay'}</button>}
           </div>
 
           {notice && (
@@ -635,14 +512,11 @@ export default function SuperAdminWorkspace() {
                 onBoundarySaved={() => loadAll()}
                 key={barangayFilter}
                 initialFilter={barangayFilter}
-                showAddForm={showAddBarangay}
-                onCloseAdd={() => setShowAddBarangay(false)}
                 onCreateAdmin={createAdmin}
                 onRequestConfirmation={setConfirmDialog}
                 barangays={barangays}
                 users={visibleUsers}
                 onPromote={promoteToAdmin}
-                onAddedBarangay={addBarangay}
                 onConfirmBoundary={confirmBoundary}
                 onDiscardBoundary={discardBoundary}
               />

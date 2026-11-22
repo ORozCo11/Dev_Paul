@@ -70,7 +70,7 @@ class ScheduleConflictWarningTest extends TestCase
         $this->postJson('/api/maintenance-schedules', [
             'vehicle_id' => $this->vehicle()->vehicle_id,
             'maintenance_type' => 'Oil Change',
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
         ])->assertCreated();
     }
 
@@ -86,7 +86,7 @@ class ScheduleConflictWarningTest extends TestCase
             VehicleMaintenanceSchedule::create([
                 'vehicle_id' => $this->vehicle()->vehicle_id,
                 'maintenance_type' => 'Oil Change',
-                'scheduled_date' => '2026-08-01',
+                'scheduled_date' => '2030-08-01',
                 'created_by' => $this->admin->id,
                 'status' => 'Scheduled',
             ]);
@@ -98,7 +98,7 @@ class ScheduleConflictWarningTest extends TestCase
         $warned = $this->postJson('/api/maintenance-schedules', [
             'vehicle_id' => $newVehicle->vehicle_id,
             'maintenance_type' => 'Tire Rotation',
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
         ])->assertStatus(409);
 
         $this->assertFalse($warned->json('same_vehicle_conflict'));
@@ -108,7 +108,7 @@ class ScheduleConflictWarningTest extends TestCase
         $this->postJson('/api/maintenance-schedules', [
             'vehicle_id' => $newVehicle->vehicle_id,
             'maintenance_type' => 'Tire Rotation',
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
             'confirm_conflicts' => true,
         ])->assertCreated();
         $this->assertDatabaseCount('vehicle_maintenance_schedules', $threshold + 1);
@@ -134,7 +134,7 @@ class ScheduleConflictWarningTest extends TestCase
                     'barangay_id' => $otherBarangayId,
                 ])->vehicle_id,
                 'maintenance_type' => 'Oil Change',
-                'scheduled_date' => '2026-08-01',
+                'scheduled_date' => '2030-08-01',
                 'created_by' => $this->admin->id,
                 'status' => 'Scheduled',
             ]);
@@ -144,7 +144,7 @@ class ScheduleConflictWarningTest extends TestCase
         $this->postJson('/api/maintenance-schedules', [
             'vehicle_id' => $this->vehicle()->vehicle_id,
             'maintenance_type' => 'Tire Rotation',
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
         ])->assertCreated();
     }
 
@@ -157,7 +157,7 @@ class ScheduleConflictWarningTest extends TestCase
             VehicleMaintenanceSchedule::create([
                 'vehicle_id' => $this->vehicle()->vehicle_id,
                 'maintenance_type' => 'Oil Change',
-                'scheduled_date' => '2026-08-01',
+                'scheduled_date' => '2030-08-01',
                 'created_by' => $this->admin->id,
                 'status' => 'Scheduled',
             ]);
@@ -168,20 +168,20 @@ class ScheduleConflictWarningTest extends TestCase
         $schedule = VehicleMaintenanceSchedule::create([
             'vehicle_id' => $this->vehicle()->vehicle_id,
             'maintenance_type' => 'Brake Check',
-            'scheduled_date' => '2026-09-01',
+            'scheduled_date' => '2030-09-01',
             'created_by' => $this->custodian->id,
             'status' => 'Scheduled',
         ]);
 
         Sanctum::actingAs($this->custodian, ['*']);
         $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}", [
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
         ])->assertStatus(409);
 
         $this->putJson("/api/maintenance-schedules/{$schedule->schedule_id}", [
-            'scheduled_date' => '2026-08-01',
+            'scheduled_date' => '2030-08-01',
             'confirm_conflicts' => true,
         ])->assertOk();
-        $this->assertStringStartsWith('2026-08-01', (string) $schedule->fresh()->scheduled_date);
+        $this->assertStringStartsWith('2030-08-01', (string) $schedule->fresh()->scheduled_date);
     }
 }

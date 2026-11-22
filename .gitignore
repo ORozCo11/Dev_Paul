@@ -7,3 +7,6 @@
 
 # Local setup verification and scratch artifacts
 /tmp/
+
+# Moved-aside old documents (local only)
+/_archive/

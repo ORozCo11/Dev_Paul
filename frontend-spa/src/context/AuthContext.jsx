@@ -25,6 +25,22 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // A session can end while the page is open (it expires, or someone signs the account out). Without this the page
+  // just kept failing quietly; now any "not signed in" answer sends the person back to the login page with a reason.
+  useEffect(() => {
+    const id = api.interceptors.response.use((response) => response, (error) => {
+      const current = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const sent = error.config?.headers?.Authorization;
+      const url = error.config?.url ?? '';
+      if (error.response?.status === 401 && current && !/\/(login|logout)$/.test(url) && (!sent || sent === `Bearer ${current}`)) {
+        try { sessionStorage.setItem('vms_session_ended', '1'); } catch { /* the redirect still happens */ }
+        logout();
+      }
+      return Promise.reject(error);
+    });
+    return () => api.interceptors.response.eject(id);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     const currentToken = () => localStorage.getItem('token') || sessionStorage.getItem('token');

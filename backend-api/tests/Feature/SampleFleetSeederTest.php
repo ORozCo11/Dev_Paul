@@ -26,8 +26,8 @@ class SampleFleetSeederTest extends TestCase
     {
         parent::setUp();
         $province = Province::create(['name' => 'Cebu', 'code' => '070220000']);
-        $city = City::create(['name' => 'Mandaue City', 'province_id' => $province->id]);
-        $this->barangay = Barangay::create(['name' => 'Paknaan', 'city_id' => $city->id]);
+        $city = City::create(['name' => 'Cebu City', 'province_id' => $province->id]);
+        $this->barangay = Barangay::create(['name' => 'Pahina Central (Pob.)', 'city_id' => $city->id]);
     }
 
     private function staff(string $email): User

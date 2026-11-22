@@ -12,6 +12,9 @@ Artisan::command('inspire', function () {
 // App\Console\Commands\PruneOldNotifications for the retention rule.
 Schedule::command('notifications:prune')->daily();
 
+// Tells each Custodian, once a day, which readiness checks lapse within a day — see App\Console\Commands\WarnExpiringReadiness.
+Schedule::command('readiness:warn-expiring')->dailyAt('07:00')->timezone('Asia/Manila');
+
 // Turns a due Maintenance Schedule entry into a real ticket automatically —
 // see App\Console\Commands\ConvertDueSchedulesToTickets.
 Schedule::command('schedules:convert-due-to-tickets')->everyMinute()->timezone('Asia/Manila')->withoutOverlapping();

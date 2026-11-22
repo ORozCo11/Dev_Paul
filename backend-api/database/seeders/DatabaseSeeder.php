@@ -16,9 +16,10 @@ class DatabaseSeeder extends Seeder
             ProvinceSeeder::class,
             CitySeeder::class,
             CityBoundarySeeder::class,
-            BarangaySeeder::class,
             PhilippineBarangaySeeder::class,
             BarangayBoundarySeeder::class,
+            // One municipality only (Cebu City): drops every other province, city and barangay.
+            MunicipalityScopeSeeder::class,
             FleetReferenceSeeder::class,
             SampleFleetSeeder::class,
         ]);

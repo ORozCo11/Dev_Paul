@@ -69,6 +69,23 @@ class ExternalShopTicketTest extends TestCase
     }
 
     #[Test]
+    public function a_named_shop_tester_sees_the_ticket_before_it_is_sent_out_and_another_mechanic_does_not(): void
+    {
+        $other = User::factory()->create(['role' => 'Maintenance Personnel']);
+        $id = $this->propose('external');
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/tickets/{$id}/approve", ['assigned_mechanic_id' => $this->mechanic->id])->assertOk();
+
+        // Not sent out yet: the named tester can open it, an unrelated mechanic cannot.
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->getJson("/api/tickets/{$id}")->assertOk();
+        $this->assertContains($id, collect($this->getJson('/api/tickets')->json())->pluck('ticket_id')->all());
+        Sanctum::actingAs($other, ['*']);
+        $this->getJson("/api/tickets/{$id}")->assertForbidden();
+        $this->assertNotContains($id, collect($this->getJson('/api/tickets')->json())->pluck('ticket_id')->all());
+    }
+
+    #[Test]
     public function an_internal_ticket_still_requires_a_mechanic(): void
     {
         $id = $this->propose('in_house');

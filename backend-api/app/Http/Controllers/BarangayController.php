@@ -24,28 +24,25 @@ class BarangayController extends Controller
     }
 
     /**
-     * Barangays with at least one real registered user, scoped to a city —
-     * used by the admin Vehicle Location map's boundary selector, which
-     * should only offer barangays actual residents have signed up under,
-     * not the full seeded address list. Paknaan is always included: it's
-     * the system's built-in home barangay (hubs, vehicles, the original
-     * map), not something a resident registered into.
+     * Every barangay of the municipality this system serves, for the public Support form's barangay picker.
+     * A city id may narrow it, but with a single municipality it is normally left out.
      */
     public function registered(Request $request)
     {
         $request->validate([
-            'city_id' => ['required', 'exists:cities,id'],
+            'city_id' => ['nullable', 'exists:cities,id'],
         ]);
 
-        return Barangay::where('city_id', $request->city_id)
-            ->where(fn ($query) => $query->where('name', 'Paknaan')->orWhereHas('users'))
-            ->with('city:id,name')
+        // With a city: that city's registered barangays; without one: every registered barangay.
+        return Barangay::when($request->filled('city_id'), fn ($query) => $query->where('city_id', $request->city_id))
+            ->with('city.province')
             ->orderBy('name')
             ->get(['id', 'name', 'city_id'])
             ->map(fn ($barangay) => [
                 'id' => $barangay->id,
                 'name' => $barangay->name,
                 'city_name' => $barangay->city?->name,
+                'province_name' => $barangay->city?->province?->name,
             ]);
     }
 
