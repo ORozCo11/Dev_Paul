@@ -373,7 +373,9 @@ VITE_API_BASE_URL=http://127.0.0.1:8001/api
 ```bash
 cd backend-api
 php artisan serve --port=8001
+php artisan schedule:work   # second terminal: converts due maintenance schedules into ticket proposals
 ```
+`watchdog-backend.ps1` starts both the API and the scheduler and restarts them if they stop.
 
 **Frontend:**
 ```bash

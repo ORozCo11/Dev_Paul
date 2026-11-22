@@ -65,6 +65,8 @@ class MaintenanceTicket extends Model
         'down_since'          => 'datetime',
         'inspected_at'        => 'datetime',
         'closed_at'           => 'datetime',
+        'stall_reminded_at'   => 'datetime',
+        'stall_escalated_at'  => 'datetime',
         'archived_at'         => 'datetime',
         'returned_to_service' => 'boolean',
     ];

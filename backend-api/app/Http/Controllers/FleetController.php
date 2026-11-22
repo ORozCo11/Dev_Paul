@@ -185,7 +185,16 @@ class FleetController extends Controller
                         ->whereNot('status', 'Resolved')
                         ->whereHas('vehicle', fn ($q) => $q->whereNotIn('status', ['Inactive', 'Decommissioned']))
                         ->count()
-                    : $activeIssues,
+                    : ($user->hasRole('Admin')
+                        // The Admin's Issue Reports page only lists reports with no approved ticket
+                        // (no ticket yet, or a proposal still pending or declined). Count those, so the
+                        // badge matches what the page shows.
+                        ? VehicleIssueReport::whereNot('status', 'Resolved')
+                            ->whereHas('vehicle', fn ($q) => $q->whereNotIn('status', ['Inactive', 'Decommissioned']))
+                            ->where(fn ($q) => $q->whereDoesntHave('maintenanceTicket')
+                                ->orWhereHas('maintenanceTicket', fn ($t) => $t->whereIn('status', ['Pending Approval', 'Declined'])))
+                            ->count()
+                        : $activeIssues),
                 // Admin: what needs a look — proposals awaiting a decision plus
                 // tickets a Custodian closed in the last 14 days (so a closure
                 // shows up here without anyone telling them). Everyone else
@@ -2965,6 +2974,14 @@ class FleetController extends Controller
             'confirm_conflicts' => ['nullable', 'boolean'],
         ]);
 
+        // A booking dated in the past would be born overdue and be turned into
+        // a ticket proposal immediately. Past dates are refused.
+        abort_if(
+            \Illuminate\Support\Carbon::parse($data['scheduled_date'], 'Asia/Manila')->toDateString() < now('Asia/Manila')->toDateString(),
+            422,
+            'The scheduled date cannot be in the past. Choose today or a later date.'
+        );
+
         $data['maintenance_type'] = MaintenanceType::resolve($data['maintenance_type']);
 
         $vehicle = Vehicle::findOrFail($data['vehicle_id']);
@@ -3498,7 +3515,11 @@ class FleetController extends Controller
             });
         }
 
-        return $query->latest('log_id')->get();
+        // Newest first, capped so the log cannot grow into a huge response over the years.
+        // The page shows the latest 1000 entries by default; ?limit= (max 5000) asks for more.
+        $limit = min(max((int) $request->input('limit', 1000), 1), 5000);
+
+        return $query->latest('log_id')->limit($limit)->get();
     }
 
     public function reports(Request $request)

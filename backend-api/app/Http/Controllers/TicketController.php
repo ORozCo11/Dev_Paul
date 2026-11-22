@@ -798,6 +798,68 @@ class TicketController extends Controller
     }
 
     /**
+     * PUT .../hold — the mechanic (or shop tester) pauses a work item with a
+     * reason (waiting for parts, waiting for the shop...). The item stays
+     * Under Repair and stays assigned; "on hold" is only a flag, so every
+     * existing Under Repair rule keeps working and the item is left out of
+     * the stalled-ticket reminders.
+     */
+    public function holdWorkItem(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->requireAbility($request, 'subissue.log_repair');
+        $this->assertBelongsToTicket($ticket, $subIssue);
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'in:Waiting for parts,Waiting for outside shop,Waiting for vehicle access,Other'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'expected_date' => ['nullable', 'date', 'after_or_equal:today'],
+        ]);
+
+        return DB::transaction(function () use ($request, $ticket, $subIssue, $data) {
+            $ticket = $this->lockTicket($ticket, $request);
+            $subIssue = TicketSubIssue::whereKey($subIssue->sub_issue_id)->lockForUpdate()->firstOrFail();
+            $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
+            abort_unless($ticket->status === 'Active', 422, "Work can only be put on hold while the ticket is Active. Current status: {$ticket->status}.");
+            abort_unless($subIssue->status === 'Under Repair', 422, "Only an Under Repair item can be put on hold. Current: {$subIssue->status}.");
+            abort_if($data['reason'] === 'Other' && blank($data['note'] ?? null), 422, 'Add a short note explaining the hold.');
+
+            $label = $data['reason'] . (filled($data['note'] ?? null) ? ': ' . $data['note'] : '');
+            $subIssue->update([
+                'on_hold_reason' => $label,
+                'on_hold_since' => now(),
+                'on_hold_until' => $data['expected_date'] ?? null,
+            ]);
+            $this->workEvent($subIssue, $request, 'Put on hold', ['reason' => $label]);
+
+            $message = "{$request->user()->name} put \"{$subIssue->title}\" on Ticket #{$ticket->display_number} ({$ticket->vehicle->vehicle_name}) on hold. {$label}";
+            $this->notifyUser($ticket->assigned_custodian_id, 'Repair On Hold', $message, 'work_order_on_hold', $ticket->ticket_id);
+            $this->notifyAdmins('Repair On Hold', $message, 'work_order_on_hold', $ticket->ticket_id, $ticket->vehicle->barangay_id);
+            $this->log($request, 'Work On Hold', "Ticket #{$ticket->display_number}: {$subIssue->title} on hold. {$label}", $ticket->ticket_id);
+
+            return response()->json($ticket->fresh($this->eagerLoads()));
+        });
+    }
+
+    /** PUT .../resume — clears the hold; the work item carries on as before. */
+    public function resumeWorkItem(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $this->requireAbility($request, 'subissue.log_repair');
+        $this->assertBelongsToTicket($ticket, $subIssue);
+
+        return DB::transaction(function () use ($request, $ticket, $subIssue) {
+            $ticket = $this->lockTicket($ticket, $request);
+            $subIssue = TicketSubIssue::whereKey($subIssue->sub_issue_id)->lockForUpdate()->firstOrFail();
+            $this->authorizeWorkOrderActor($request, $ticket, $subIssue);
+            abort_unless($subIssue->on_hold_since, 422, 'This item is not on hold.');
+
+            $subIssue->update(['on_hold_reason' => null, 'on_hold_since' => null, 'on_hold_until' => null]);
+            $this->workEvent($subIssue, $request, 'Resumed', []);
+            $this->log($request, 'Work Resumed', "Ticket #{$ticket->display_number}: {$subIssue->title} resumed.", $ticket->ticket_id);
+
+            return response()->json($ticket->fresh($this->eagerLoads()));
+        });
+    }
+
+    /**
      * The assigned mechanic (or the named shop tester) hands a work item back to the Admin, with a reason: it
      * should not be theirs, for example it needs different work. The item stays Under Repair but has nobody
      * assigned; the Admin reassigns it (or cancels the ticket). The Custodian is told too, and the return shows
@@ -2104,6 +2166,8 @@ class TicketController extends Controller
             $this->resetLinkedIssueReports($ticket, 'Pending');
             $vehicleId = $ticket->vehicle_id;
             $this->log($request, 'Delete Ticket', "Untouched Ticket #{$ticket->display_number} deleted by Admin.", $ticket->ticket_id);
+            // Notices about a deleted ticket would otherwise stay with a dead link.
+            \App\Models\Notification::where('ticket_id', $ticket->ticket_id)->delete();
             $ticket->delete();
             $this->recomputeVehicleStatus($vehicleId, $request);
             return response()->json(['message' => 'Untouched ticket deleted.']);

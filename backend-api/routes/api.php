@@ -278,6 +278,8 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/external-returned', [TicketController::class, 'markExternalReturned']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/no-repair-needed', [TicketController::class, 'noRepairNeeded']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/return-to-admin', [TicketController::class, 'returnToAdmin']);
+    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/hold', [TicketController::class, 'holdWorkItem']);
+    Route::put('/tickets/{ticket}/sub-issues/{subIssue}/resume', [TicketController::class, 'resumeWorkItem']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}/external-tester', [TicketController::class, 'setExternalTester']);
     Route::post('/tickets/{ticket}/sub-issues', [TicketController::class, 'addSubIssue']);
     Route::put('/tickets/{ticket}/sub-issues/{subIssue}', [TicketController::class, 'updateSubIssue']);
