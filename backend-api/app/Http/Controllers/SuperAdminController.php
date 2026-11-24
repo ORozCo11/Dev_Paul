@@ -16,6 +16,7 @@ use App\Services\BarangayGeography;
 use App\Services\PsgcRegions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -52,7 +53,7 @@ class SuperAdminController extends Controller
      * surface here. Using an allowlist (rather than excluding fleet modules
      * by name) means a newly added fleet module is excluded by default.
      */
-    private const ACCOUNT_MODULES = ['Super Admin', 'Dev Tools', 'Profile', 'Impersonation'];
+    private const ACCOUNT_MODULES = ['Super Admin', 'Users', 'Dev Tools', 'Profile', 'Impersonation'];
 
     private function log(Request $request, string $action, string $details): void
     {
@@ -76,6 +77,8 @@ class SuperAdminController extends Controller
 
         // The system serves one municipality and all of its barangays are already loaded, so every barangay is listed
         // (each one needs its Administrator created by the Super Admin).
+        $admins = User::havingRole('Admin')->where('is_active', true)->get(['id', 'name', 'email', 'barangay_id', 'must_change_password', 'temp_password_expires_at', 'last_login_at'])->groupBy('barangay_id');
+
         return Barangay::with(['city.province'])
             ->select(['id', 'name', 'psgc_code', 'city_id', 'boundary_status', 'boundary_source', 'boundary_verified_by', 'pending_boundary', 'pending_boundary_source', 'updated_at'])
             ->selectRaw('CASE WHEN boundary IS NULL THEN 0 ELSE 1 END AS boundary_present')
@@ -85,7 +88,10 @@ class SuperAdminController extends Controller
             ])
             ->orderBy('name')
             ->get()
-            ->map(function ($b) {
+            ->map(function ($b) use ($admins) {
+                $adminRows = $admins->get($b->id, collect());
+                $adminStates = $adminRows->map(fn ($a) => $this->invitationState($a));
+                $adminStatus = $adminRows->isEmpty() ? 'none' : ($adminStates->contains('active') ? 'active' : ($adminStates->contains('invited') ? 'invited' : 'expired'));
                 // One query, two derived facts — has_active_admin was
                 // previously its own separate ->exists() query; counting
                 // instead also gives Phase A4's "only one Admin left" signal
@@ -99,6 +105,9 @@ class SuperAdminController extends Controller
                     'city_name' => $b->city?->name,
                     'province_name' => $b->city?->province?->name,
                     'staff_count' => $b->users_count,
+                    'admin_status' => $adminStatus,
+                    'admin_name' => $adminRows->first()?->name,
+                    'admin_email' => $adminRows->first()?->email,
                     'has_active_admin' => $activeAdminCount > 0,
                     // VMS-IMPROVEMENT-PLAN.md Phase A4 — one departure away
                     // from becoming a `has_active_admin: false` orphaned
@@ -523,7 +532,20 @@ class SuperAdminController extends Controller
             'barangay_name' => $u->barangay?->name,
             'city_name' => $u->barangay?->city?->name,
             'province_name' => $u->barangay?->city?->province?->name,
+            'invitation' => $this->invitationState($u),
+            'invitation_expires_at' => $u->must_change_password ? $u->temp_password_expires_at : null,
+            'last_login_at' => $u->last_login_at,
         ]);
+    }
+
+    /** active = has chosen their own password; invited = temporary password still valid; expired = it ran out. */
+    private function invitationState(User $user): string
+    {
+        if (! $user->must_change_password) {
+            return 'active';
+        }
+
+        return $user->temp_password_expires_at && $user->temp_password_expires_at->isPast() ? 'expired' : 'invited';
     }
 
     /** A plain message from the Super Admin to any account. */
@@ -548,17 +570,54 @@ class SuperAdminController extends Controller
     public function storeAdmin(Request $request, Barangay $barangay)
     {
         $this->requireAbility($request, 'user.create_admin_platform', 'Only a Super Admin can perform this action.');
-        $data = $request->validate([
+        $data = $this->adminData($request);
+        abort_if(
+            User::where('barangay_id', $barangay->id)->havingRole('Admin')->exists(),
+            422,
+            "Barangay {$barangay->name} already has an Admin. A barangay can only have one Admin. Use Replace Admin to hand it to someone else."
+        );
+
+        return response()->json($this->provisionAdmin($request, $barangay, $data), 201);
+    }
+
+    /**
+     * Hands a barangay to a new Admin in one step (wrong email, someone leaving): the new Admin is created and emailed,
+     * and the current Admin is deactivated. The barangay is never left without an Admin, and a departing Admin who still
+     * has open work must hand it over first.
+     */
+    public function replaceAdmin(Request $request, Barangay $barangay)
+    {
+        $this->requireAbility($request, 'user.create_admin_platform', 'Only a Super Admin can perform this action.');
+        $data = $this->adminData($request);
+        $current = User::where('barangay_id', $barangay->id)->havingRole('Admin')->where('is_active', true)->get();
+        abort_if($current->isEmpty(), 422, "Barangay {$barangay->name} has no Admin to replace. Create the Admin instead.");
+        foreach ($current as $old) {
+            $this->abortIfHasOpenWork($old, 'replacing them');
+        }
+
+        return DB::transaction(function () use ($request, $barangay, $data, $current) {
+            $result = $this->provisionAdmin($request, $barangay, $data);
+            foreach ($current as $old) {
+                $old->update(['is_active' => false]);
+                $old->tokens()->delete();
+                $this->log($request, 'Deactivate', "Replaced {$old->name} ({$old->email}) as Admin of {$barangay->name}; their account was deactivated.");
+            }
+
+            return response()->json($result + ['replaced' => $current->pluck('name')->all()], 201);
+        });
+    }
+
+    private function adminData(Request $request): array
+    {
+        return $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'regex:/^09[0-9]{9}$/'],
         ], ['phone.regex' => 'Phone number must be 11 digits starting with 09 (e.g. 09171234567).']);
-        abort_if(
-            User::where('barangay_id', $barangay->id)->havingRole('Admin')->exists(),
-            422,
-            "Barangay {$barangay->name} already has an Admin. A barangay can only have one Admin."
-        );
+    }
 
+    private function provisionAdmin(Request $request, Barangay $barangay, array $data): array
+    {
         $admin = User::create($data + [
             'password' => Hash::make(Str::random(40)),
             'role' => 'Admin',
@@ -574,7 +633,39 @@ class SuperAdminController extends Controller
         $this->markProvisioned($barangay);
         $this->log($request, 'Add', "Created the Admin {$admin->name} ({$admin->email}) for barangay {$barangay->name}.");
 
-        return response()->json(['id' => $admin->id, 'name' => $admin->name, 'email' => $admin->email, 'temporary_password' => $plain, 'email_sent' => $emailed], 201);
+        return ['id' => $admin->id, 'name' => $admin->name, 'email' => $admin->email, 'temporary_password' => $plain, 'email_sent' => $emailed];
+    }
+
+    /**
+     * Fixes a mistyped email on an invitation nobody has accepted yet. The new address gets a fresh temporary password;
+     * the old one stops working. An account that has already signed in keeps its email (it is how they sign in).
+     */
+    public function changeEmail(Request $request, User $user)
+    {
+        $this->requireAbility($request, 'user.create_admin_platform', 'Only a Super Admin can perform this action.');
+        abort_if($user->id === $request->user()->id, 422, 'Use Change Password for your own account.');
+        abort_if($user->hasRole('Super Admin') || $user->hasRole('Impersonator'), 422, 'This account\'s email cannot be changed here.');
+        abort_unless($user->must_change_password, 422, 'This person has already signed in, so their email cannot be changed here.');
+        $data = $request->validate(['email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)]]);
+
+        $old = $user->email;
+        $user->update(['email' => $data['email']]);
+        $plain = $this->issueTemporaryPassword($user);
+        $emailed = $this->emailCredentials($user, $plain, $request->user()->name);
+        $this->log($request, 'Edit', "Changed the email of {$user->name} from {$old} to {$user->email} and sent new temporary credentials.");
+
+        return response()->json(['temporary_password' => $plain, 'email_sent' => $emailed, 'email' => $user->email]);
+    }
+
+    /** "Is email working?" - sends a short message to the Super Admin's own address so a broken mail setup shows before accounts are created. */
+    public function sendTestEmail(Request $request)
+    {
+        $this->requireAbility($request, 'user.email_platform', 'Only a Super Admin can perform this action.');
+        $me = $request->user();
+        $this->sendMail($me, new AccountMail($me, 'VMS email check', 'message', ['body' => 'This is a test from VMS. If you can read it, emails to your barangays\' staff will arrive too.']));
+        $this->log($request, 'Edit', "Sent a test email to {$me->email}.");
+
+        return response()->json(['message' => "A test email was sent to {$me->email}. Check your inbox (and Spam)."]);
     }
 
     /** New emailed temporary password for any account (lost or expired credentials). */
@@ -636,6 +727,11 @@ class SuperAdminController extends Controller
 
         if ($data['role'] !== 'Admin') {
             $this->abortIfLastActiveAdmin($user, 'changing their role');
+        } elseif (! $user->hasRole('Admin') && $user->barangay_id) {
+            // One active Admin per barangay. Promotion is only for a barangay that has none (recovering one whose Admin left);
+            // handing it to someone else while the Admin is active goes through Replace Admin.
+            $current = User::where('barangay_id', $user->barangay_id)->where('is_active', true)->havingRole('Admin')->where('id', '!=', $user->id)->first();
+            abort_if($current, 422, "{$user->barangay?->name} already has an active Admin ({$current?->name}). A barangay has one Admin. Use Replace Admin to hand it to someone else.");
         }
 
         $this->abortIfHasOpenWork($user, 'changing their roles', $roles);

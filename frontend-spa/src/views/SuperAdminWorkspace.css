@@ -136,7 +136,7 @@ html:root[data-theme] .superadmin-shell .status-badge:is(.deactivated,.deleted,.
 .superadmin-shell .sa-empty strong { font-size:16px; font-weight:600; }
 .superadmin-shell .sa-empty p { max-width:440px; margin:0; color:var(--sa-muted); font-size:13px; line-height:1.6; }
 .superadmin-shell .sa-overview .focus-columns { grid-template-columns:minmax(0,1.85fr) minmax(0,1fr); align-items:start; }
-.superadmin-shell .focus-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.superadmin-shell .focus-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .superadmin-shell .focus-card, .superadmin-shell .focus-kpis > button { border-color:var(--sa-border); background:var(--sa-surface); box-shadow:none; }
 .superadmin-shell .sa-overview .focus-card > header p { color:var(--sa-muted); font-size:13px; line-height:1.5; margin:5px 0 0; }
 .superadmin-shell .sa-overview .focus-tasks li { padding:16px 0; }

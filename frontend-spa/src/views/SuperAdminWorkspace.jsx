@@ -13,7 +13,7 @@ import api from '../api/axios';
 import Icon from '../components/Icon';
 import WorkspaceFooter from '../components/WorkspaceFooter';
 import { AdminConfirmDialog, AdminFilterField, AdminManagementCard, LocalSearchInput, PaginatedTable, StatusBadge, SuccessCelebration } from '../components/SuperAdminUI';
-import { ActivityLogTab, CreateAdminDrawer, CredentialsDialog, PlatformOverview, UsersTab } from './SuperAdminPanels';
+import { ActivityLogTab, ChangeEmailDrawer, CreateAdminDrawer, CredentialsDialog, PlatformOverview, ReplaceAdminDrawer, UsersTab } from './SuperAdminPanels';
 import { AuthContext } from '../context/AuthContextObject';
 import SupportCenterTab from './SupportCenterTab';
 
@@ -31,8 +31,8 @@ const TABS = [
 ];
 
 const TAB_DESCRIPTIONS = {
-  dashboard: 'Create the Administrator for each barangay and keep the accounts in order.',
-  barangays: 'Every barangay of the municipality. Create its Administrator, or review its boundary.',
+  dashboard: 'See which barangays are live, which invitations are waiting, and what needs your attention.',
+  barangays: 'Every barangay of the municipality. Invite its Administrator, replace one, or review a boundary.',
   users: 'Manage user accounts, roles, and who can log in.',
   activity: 'A chronological record of platform and Super Admin activity.',
   settings: 'Manage your Super Admin account settings and security.',
@@ -96,7 +96,7 @@ function ProfileMenu({ user, open, setOpen, onOpenSettings, onLogout }) {
 
 const apiError = (error, fallback) => { const data = error.response?.data; return (data?.errors && Object.values(data.errors)[0]?.[0]) || data?.message || fallback; };
 
-function BarangayManagementTab({ barangays, users, onPromote, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, onCreateAdmin, onRequestConfirmation }) {
+function BarangayManagementTab({ barangays, users, onPromote, onConfirmBoundary, onDiscardBoundary, onBoundarySaved, initialFilter, onCreateAdmin, onReplaceAdmin, onChangeEmail, onRequestConfirmation }) {
   const [activeFilter, setActiveFilter] = useState(initialFilter || 'all');
   const [search, setSearch] = useState('');
   const [boundaryFilter] = useState('');
@@ -107,9 +107,16 @@ function BarangayManagementTab({ barangays, users, onPromote, onConfirmBoundary,
   const [pickedUserId, setPickedUserId] = useState('');
   const [reviewingBoundary, setReviewingBoundary] = useState(null);
   const [creatingFor, setCreatingFor] = useState(null);
+  const [replacing, setReplacing] = useState(null);
+  const [fixingEmail, setFixingEmail] = useState(null);
   const orphaned = barangays.filter((b) => !b.has_active_admin);
+  const waiting = barangays.filter((b) => ['invited', 'expired'].includes(b.admin_status));
+  const adminLabel = (b) => ({ active: 'Signed in', invited: 'Invited', expired: 'Invitation expired', none: 'No Administrator' }[b.admin_status] ?? 'No Administrator');
+  // Barangays that already have an Administrator come first so the ones in use are not buried on page 3 of 4.
+  const order = { expired: 0, invited: 1, active: 2, none: 3 };
+  const sorted = [...barangays].sort((a, b) => (order[a.admin_status] ?? 3) - (order[b.admin_status] ?? 3) || String(a.name).localeCompare(String(b.name)));
   const boundaryStatus = (b) => b.boundary_status === 'verified' ? 'Reviewed' : b.boundary_status === 'needs_review' ? 'Needs Review' : 'Not Found';
-  const filtered = barangays.filter((b) => (activeFilter === 'all' || activeFilter === 'active' && b.has_active_admin || activeFilter === 'orphaned' && !b.has_active_admin || activeFilter === 'boundary_review' && b.boundary_status === 'needs_review') && (!boundaryFilter || boundaryStatus(b) === boundaryFilter) && [b.name].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
+  const filtered = sorted.filter((b) => (activeFilter === 'all' || activeFilter === 'active' && b.admin_status === 'active' || activeFilter === 'waiting' && ['invited', 'expired'].includes(b.admin_status) || activeFilter === 'orphaned' && !b.has_active_admin || activeFilter === 'boundary_review' && b.boundary_status === 'needs_review') && (!boundaryFilter || boundaryStatus(b) === boundaryFilter) && [b.name].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
   const managing = barangays.find((b) => String(b.id) === managingId);
   const candidates = managing ? users.filter((account) => account.barangay_id === managing.id) : [];
   const adminBarangayIds = new Set(users.filter((account) => account.role === 'Admin').map((account) => account.barangay_id));
@@ -119,33 +126,37 @@ function BarangayManagementTab({ barangays, users, onPromote, onConfirmBoundary,
     { label: 'ID', key: 'id', className: 'cell-center' },
     { label: 'Barangay', render: (b) => <strong>{b.name}</strong> },
     { label: 'Staff Count', key: 'staff_count' },
-    { label: 'Administrator Status', render: (b) => <div className="sa-stacked"><StatusBadge value={b.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></div> },
+    { label: 'Administrator', render: (b) => <div className="sa-stacked"><StatusBadge value={adminLabel(b)} />{b.admin_name && <small className="muted">{b.admin_name}</small>}</div> },
     { label: 'Actions', render: (b) => <div className="sa-row-actions"><button type="button" className="ghost-button" onClick={() => { setManagingId(b.id); setPickedUserId(''); }}>View / Manage</button>{needsAdmin(b) && <button type="button" className="ghost-button sa-icon-button sa-icon-confirm" aria-label={`Create Admin for ${b.name}`} title="Create Admin" onClick={() => setCreatingFor(b)}><Icon name="plus" size={17} /></button>}</div> },
   ];
   return <div className="superadmin-tab">
-    {!managingId && <AdminManagementCard summary={<div className="sa-segments">{[['all', 'All Barangays', barangays.length], ['active', 'Active Admin', barangays.length - orphaned.length], ['orphaned', 'Orphaned', orphaned.length]].map(([key, label, count]) => <button key={key} type="button" aria-pressed={activeFilter === key} onClick={() => setActiveFilter(key)}>{label}<span>{count}</span></button>)}</div>} toolbar={<>
+    {!managingId && <AdminManagementCard summary={<div className="sa-segments">{[['all', 'All Barangays', barangays.length], ['active', 'Signed in', barangays.filter((b) => b.admin_status === 'active').length], ['waiting', 'Invited', waiting.length], ['orphaned', 'No Administrator', orphaned.length]].map(([key, label, count]) => <button key={key} type="button" aria-pressed={activeFilter === key} onClick={() => setActiveFilter(key)}>{label}<span>{count}</span></button>)}</div>} toolbar={<>
       <LocalSearchInput value={search} onChange={setSearch} placeholder="Search barangay..." />
     </>}><PaginatedTable rows={filtered} columns={columns} emptyIcon="pin" emptyMessage="No barangays found" emptyDescription="Try another search or adjust the location and status filters." /></AdminManagementCard>}
     {managingId && !managing && <p role="alert">Barangay not found. <button type="button" className="ghost-button" onClick={() => setManagingId(null)}>Back to Barangays</button></p>}
     {managing && <section className="sa-management-card sa-barangay-page">
       <header className="sa-barangay-page-header"><button type="button" className="ghost-button" onClick={() => setManagingId(null)}><Icon name="arrowLeft" size={15} />Back to Barangays</button><h2>{managing.name}</h2><p>{[managing.city_name, managing.province_name].filter(Boolean).join(', ')}</p></header>
       <div className="sa-barangay-page-grid">
-      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator status</dt><dd><StatusBadge value={managing.has_active_admin ? 'Active Admin' : 'No Active Admin'} /></dd></dl>
+      <dl className="sa-detail-list"><dt>Registered staff</dt><dd>{managing.staff_count}</dd><dt>Administrator</dt><dd>{managing.admin_name ? `${managing.admin_name} (${managing.admin_email})` : 'None yet'}</dd><dt>Status</dt><dd><StatusBadge value={adminLabel(managing)} /></dd></dl>
       {needsAdmin(managing) && <section className="sa-detail-section"><h3>Create Admin</h3><p>This barangay has no Administrator yet. Create the one Admin who will manage its Custodian and Maintenance accounts. A temporary password is emailed to them.</p><button type="button" className="primary-button" onClick={() => setCreatingFor(managing)}><Icon name="plus" size={15} />Create Admin</button></section>}
+      {managing.has_active_admin && <section className="sa-detail-section"><h3>Administrator</h3><p>{['invited', 'expired'].includes(managing.admin_status) ? `${managing.admin_name} has not signed in yet. If the email is wrong, change it; the new address gets a fresh temporary password.` : 'Hand this barangay to someone else. The new Admin is invited by email and the current Admin is deactivated.'}</p><div className="sa-row-actions">{['invited', 'expired'].includes(managing.admin_status) && <button type="button" className="ghost-button" onClick={() => setFixingEmail(candidates.find((account) => account.role === 'Admin' && account.is_active))}>Change email</button>}<button type="button" className="ghost-button" onClick={() => setReplacing(managing)}>Replace Admin</button></div></section>}
       <section className="sa-detail-section sa-barangay-users"><h3>Users in this barangay</h3>{!candidates.length ? <p>No users yet.</p> : <ul className="sa-barangay-user-list">{candidates.map((account) => <li key={account.id}><div><strong>{account.name}</strong><span>{account.role}</span></div><StatusBadge value={account.is_active ? 'Active' : 'Inactive'} /></li>)}</ul>}</section>
-      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!activeCandidates.length ? <p>No active staff are available to promote.</p> : <><p>Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{activeCandidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = activeCandidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
+      {!managing.has_active_admin && <section className="sa-detail-section"><h3>Recover Administrator</h3>{!activeCandidates.length ? <p>No active staff are available to promote.</p> : <><p>The barangay has no active Admin. Promote an existing staff member to Admin while keeping their current roles and assigned responsibilities, or invite a new Admin above.</p><AdminFilterField label="Staff member"><SearchableSelect value={pickedUserId} onChange={(event) => setPickedUserId(event.target.value)}><option value="">Select a staff member</option>{activeCandidates.map((account) => <option key={account.id} value={account.id}>{account.name} · {account.role}</option>)}</SearchableSelect></AdminFilterField><button type="button" className="primary-button" disabled={!pickedUserId} onClick={() => { const target = activeCandidates.find((account) => String(account.id) === pickedUserId); onRequestConfirmation({ title: 'Recover Administrator', message: `Promote ${target.name} to Admin for ${managing.name}?`, confirmLabel: 'Promote to Admin', variant: 'primary', onConfirm: async () => { const success = await onPromote(target); if (success) setManagingId(null); } }); }}>Promote to Admin</button></>}</section>}
       </div>
     </section>}
+    {replacing && <ReplaceAdminDrawer barangay={replacing} current={candidates.find((account) => account.role === 'Admin' && account.is_active)} onClose={() => setReplacing(null)} onSubmit={async (b, form) => { const failure = await onReplaceAdmin(b, form); if (!failure) setReplacing(null); return failure; }} />}
+    {fixingEmail && <ChangeEmailDrawer account={fixingEmail} onSubmit={onChangeEmail} onClose={() => setFixingEmail(null)} />}
     {creatingFor && <CreateAdminDrawer barangay={creatingFor} onClose={() => setCreatingFor(null)} onSubmit={async (b, form) => { const failure = await onCreateAdmin(b, form); if (!failure) setCreatingFor(null); return failure; }} />}
     {reviewingBoundary && <BoundaryReviewModal onSaved={onBoundarySaved} barangay={reviewingBoundary} onClose={() => setReviewingBoundary(null)} onConfirm={async () => { if (await onConfirmBoundary(reviewingBoundary)) setReviewingBoundary(null); }} onDiscard={async () => { if (await onDiscardBoundary(reviewingBoundary)) setReviewingBoundary(null); }} />}
   </div>;
 }
 
-function SettingsTab({ setNotice }) {
+function SettingsTab({ user, setNotice }) {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [testing, setTesting] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -165,28 +176,49 @@ function SettingsTab({ setNotice }) {
     }
   };
 
+  const sendTest = async () => {
+    setTesting(true);
+    try {
+      const { data } = await api.post('/superadmin/test-email');
+      setNotice({ type: 'success', text: data.message });
+    } catch (error) {
+      setNotice({ type: 'error', text: apiError(error, 'The test email could not be sent. Check the mail settings on the server.') });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <div className="superadmin-tab superadmin-settings-tab">
-      <div className="panel-header-bar">
+      <section className="sa-management-card sa-settings-card">
+        <h3>Your account</h3>
+        <dl className="sa-detail-list"><dt>Name</dt><dd>{user.name}</dd><dt>Email</dt><dd>{user.email}</dd><dt>Role</dt><dd>{user.role}</dd></dl>
+      </section>
+      <section className="sa-management-card sa-settings-card">
+        <h3>Check that emails work</h3>
+        <p>Accounts are given to each barangay by email. Send a test message to {user.email} before inviting anyone. If it does not arrive, the mail settings on the server need attention.</p>
+        <button type="button" className="primary-button" onClick={sendTest} disabled={testing}><Icon name="mail" size={16} />{testing ? 'Sending…' : 'Send me a test email'}</button>
+      </section>
+      <section className="sa-management-card sa-settings-card">
         <h3>Change password</h3>
-      </div>
-      <form className="smart-form" onSubmit={submit} style={{ maxWidth: 420 }}>
-        <label>
-          <span>Current Password</span>
-          <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} required autoComplete="off" />
-        </label>
-        <label>
-          <span>New Password</span>
-          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
-        </label>
-        <label>
-          <span>Confirm New Password</span>
-          <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
-        </label>
-        <div className="form-actions">
-          <button className="primary-button" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Update Password'}</button>
-        </div>
-      </form>
+        <form className="smart-form" onSubmit={submit} style={{ maxWidth: 420 }}>
+          <label>
+            <span>Current Password</span>
+            <input type="password" value={oldPassword} onChange={(e) => setOldPassword(e.target.value)} required autoComplete="off" />
+          </label>
+          <label>
+            <span>New Password</span>
+            <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+          </label>
+          <label>
+            <span>Confirm New Password</span>
+            <input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} autoComplete="new-password" />
+          </label>
+          <div className="form-actions">
+            <button className="primary-button" type="submit" disabled={submitting}>{submitting ? 'Saving…' : 'Update Password'}</button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
@@ -400,6 +432,27 @@ export default function SuperAdminWorkspace() {
     }
   };
 
+  const replaceAdmin = async (barangay, form) => {
+    try {
+      const { data } = await api.post(`/superadmin/barangays/${barangay.id}/replace-admin`, form);
+      showCredentials({ ...data, email: data.email ?? form.email }, 'Admin replaced', `${(data.replaced ?? []).join(', ') || 'The previous Admin'} was deactivated. The new Admin is invited.`);
+      await loadAll();
+    } catch (error) {
+      return apiError(error, 'Could not replace the Admin. Check the email address and try again.');
+    }
+  };
+
+  // Resolves to an error string (shown in the form) or undefined on success.
+  const changeEmail = async (target, email) => {
+    try {
+      const { data } = await api.put(`/superadmin/users/${target.id}/change-email`, { email });
+      showCredentials({ ...data, email: data.email ?? email }, 'Email changed', 'Email changed. New temporary password issued.');
+      await loadAll();
+    } catch (error) {
+      return apiError(error, 'Could not change that email. Try again.');
+    }
+  };
+
   const resendCredentials = async (target) => {
     try {
       const { data } = await api.post(`/superadmin/users/${target.id}/resend-credentials`);
@@ -506,13 +559,15 @@ export default function SuperAdminWorkspace() {
             ) : loadError ? (
               <div className="sa-management-card"><p className="sa-load-error" role="alert">Data for this page could not be loaded. <button type="button" className="ghost-button" onClick={() => loadAll()}>Retry</button></p></div>
             ) : activeTab === 'dashboard' ? (
-              <PlatformOverview barangays={barangays} onNavigate={navigateTab} />
+              <PlatformOverview barangays={barangays} openConcerns={openConcerns} onNavigate={navigateTab} />
             ) : activeTab === 'barangays' ? (
               <BarangayManagementTab
                 onBoundarySaved={() => loadAll()}
                 key={barangayFilter}
                 initialFilter={barangayFilter}
                 onCreateAdmin={createAdmin}
+                onReplaceAdmin={replaceAdmin}
+                onChangeEmail={changeEmail}
                 onRequestConfirmation={setConfirmDialog}
                 barangays={barangays}
                 users={visibleUsers}
@@ -521,13 +576,13 @@ export default function SuperAdminWorkspace() {
                 onDiscardBoundary={discardBoundary}
               />
             ) : activeTab === 'users' ? (
-              <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onResend={resendCredentials} onSendEmail={sendEmail} onRequestConfirmation={setConfirmDialog} />
+              <UsersTab users={visibleUsers} onChangeRole={changeRole} onToggleActive={toggleActive} onResend={resendCredentials} onSendEmail={sendEmail} onChangeEmail={changeEmail} onRequestConfirmation={setConfirmDialog} />
             ) : activeTab === 'activity' ? (
               <ActivityLogTab />
             ) : activeTab === 'support' ? (
               <SupportCenterTab onRequestConfirmation={setConfirmDialog} onSuccess={setCelebration} onOpenCountChange={setOpenConcerns} />
             ) : (
-              <SettingsTab setNotice={setNotice} />
+              <SettingsTab user={user} setNotice={setNotice} />
             )}
           </div>
         </section>

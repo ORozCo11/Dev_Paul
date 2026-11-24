@@ -129,7 +129,7 @@ export default function SupportCenterTab({ onRequestConfirmation, onSuccess, onO
         columns={[
           { label: 'ID', key: 'id', className: 'cell-center' },
           { label: 'Concern', render: (report) => <><strong>#{report.id} · {typeOf(report)}</strong><div>{location(report) || 'Location not provided'}</div></> },
-          { label: 'Reporter', render: (report) => report.reporter_name || 'Anonymous' },
+          { label: 'Reporter', render: (report) => <div className="sa-stacked"><strong>{report.reporter_name || 'Anonymous'}</strong>{report.reporter_contact && <small className="muted">{report.reporter_contact}{replyEmail(report) ? '' : ' (no email: call or text)'}</small>}</div> },
           { label: 'Submitted', render: (report) => formatDate(report.created_at) },
           ...(view === 'history' ? [{ label: 'Closed', render: (report) => formatDate(report.deleted_at ?? report.resolved_at) }] : []),
           { label: 'Status', render: (report) => <StatusBadge value={stateOf(report)} /> },

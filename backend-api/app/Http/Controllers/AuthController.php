@@ -58,6 +58,7 @@ class AuthController extends Controller
         // 4. Issue a secure, unique Sanctum token, tagged with every role
         //    (hat) the account may wear so token abilities match its access.
         $token = $user->createToken('auth_token', $user->allRoles())->plainTextToken;
+        $user->forceFill(['last_login_at' => now()])->saveQuietly();
 
         // 5. Send data bundle back to the React client application
         return response()->json([

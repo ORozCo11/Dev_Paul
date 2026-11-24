@@ -55,6 +55,7 @@ class User extends Authenticatable
         'is_active' => 'boolean',
         'must_change_password' => 'boolean',
         'temp_password_expires_at' => 'datetime',
+        'last_login_at' => 'datetime',
         'approved_at' => 'datetime',
         'can_register_vehicles' => 'boolean',
     ];

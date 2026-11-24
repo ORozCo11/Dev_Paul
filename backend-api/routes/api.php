@@ -171,6 +171,9 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::get('/superadmin/barangays', [SuperAdminController::class, 'barangays']);
     Route::post('/superadmin/barangays/{barangay}/admin', [SuperAdminController::class, 'storeAdmin'])->middleware('throttle:create-admin');
     Route::post('/superadmin/users/{user}/resend-credentials', [SuperAdminController::class, 'resendCredentials'])->middleware('throttle:resend-credentials');
+    Route::put('/superadmin/users/{user}/change-email', [SuperAdminController::class, 'changeEmail'])->middleware('throttle:resend-credentials');
+    Route::post('/superadmin/barangays/{barangay}/replace-admin', [SuperAdminController::class, 'replaceAdmin'])->middleware('throttle:create-admin');
+    Route::post('/superadmin/test-email', [SuperAdminController::class, 'sendTestEmail'])->middleware('throttle:send-email');
     Route::get('/superadmin/users', [SuperAdminController::class, 'users']);
     Route::put('/superadmin/users/{user}/deactivate', [SuperAdminController::class, 'deactivateUser']);
     Route::put('/superadmin/users/{user}/role', [SuperAdminController::class, 'updateUserRole']);

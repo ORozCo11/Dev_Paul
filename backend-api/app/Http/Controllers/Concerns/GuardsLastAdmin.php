@@ -44,7 +44,7 @@ trait GuardsLastAdmin
         abort_if(
             $this->isLastActiveAdminForBarangay($user),
             422,
-            "{$user->name} is the only active Admin for their barangay — {$action} would leave it with no one who can manage users, vehicles, or approvals. Promote another user to Admin first."
+            "{$user->name} is the only active Admin for their barangay — {$action} would leave it with no one who can manage users, vehicles, or approvals. Use Replace Admin to hand the barangay to a new Admin first."
         );
     }
 }
