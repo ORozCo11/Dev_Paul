@@ -71,6 +71,43 @@ function MessageEmail({ account, onSend, onClose }) {
   </AdminActionDrawer>;
 }
 
+function BarangayGroups({ accounts, columns, filtering, sig, toggled, setToggled }) {
+  if (!accounts.length) return <AdminEmptyState title="No matching users" description="Try another user name or adjust the account filters." />;
+  const groups = [...accounts.reduce((map, account) => {
+    const key = String(account.barangay_id ?? 'none');
+    if (!map.has(key)) map.set(key, { key, name: account.barangay_name || 'Unassigned', accounts: [] });
+    map.get(key).accounts.push(account);
+    return map;
+  }, new Map()).values()].sort((a, b) => a.name.localeCompare(b.name));
+  // Collapsed by default so a long list stays readable; searching or filtering opens everything that matched.
+  // A click only counts for the filter it was made under; changing the search or a filter starts fresh.
+  const map = toggled.sig === sig ? toggled.map : {};
+  const update = (change) => setToggled((previous) => ({ sig, map: change(previous.sig === sig ? previous.map : {}) }));
+  const isOpen = (group) => (group.key in map ? map[group.key] : filtering || groups.length === 1);
+  const setAll = (open) => update(() => Object.fromEntries(groups.map((group) => [group.key, open])));
+  return <div className="sa-user-groups">
+    <div className="sa-user-groups-bar"><span>{groups.length} barangay{groups.length === 1 ? '' : 's'}, {accounts.length} account{accounts.length === 1 ? '' : 's'}</span>
+      <span><button type="button" className="sa-text-button" onClick={() => setAll(true)}>Expand all</button><button type="button" className="sa-text-button" onClick={() => setAll(false)}>Collapse all</button></span></div>
+    {groups.map((group) => {
+      const open = isOpen(group);
+      const admin = group.accounts.find((account) => account.role === 'Admin' && account.is_active);
+      const waiting = group.accounts.filter((account) => account.is_active && ['invited', 'expired'].includes(account.invitation)).length;
+      const bodyId = `sa-group-${group.key}`;
+      return <section key={group.key} className={`sa-user-group${open ? ' is-open' : ''}`}>
+        <button type="button" className="sa-user-group-head" aria-expanded={open} aria-controls={bodyId} onClick={() => update((current) => ({ ...current, [group.key]: !open }))}>
+          <Icon name={open ? 'chevronDown' : 'chevronRight'} size={16} />
+          <strong>{group.name}</strong>
+          <span className="sa-user-group-meta">{group.accounts.length} account{group.accounts.length === 1 ? '' : 's'}</span>
+          {admin ? <span className="sa-user-group-meta">Admin: {admin.name}</span> : <StatusBadge value="No Administrator" />}
+          {waiting > 0 && <StatusBadge value={`${waiting} not signed in`} />}
+        </button>
+        {open && <div id={bodyId} className="table-shell sa-table"><table><thead><tr>{columns.map((column) => <th scope="col" className={column.className} key={column.label}>{column.label}</th>)}</tr></thead>
+          <tbody>{group.accounts.map((account) => <tr key={account.id}>{columns.map((column) => <td className={column.className} data-label={column.label} key={column.label}>{column.render ? column.render(account) : (account[column.key] ?? '\u2014')}</td>)}</tr>)}</tbody></table></div>}
+      </section>;
+    })}
+  </div>;
+}
+
 export function UsersTab({ users, onChangeRole, onToggleActive, onResend, onSendEmail, onChangeEmail, onRequestConfirmation }) {
   // Barangay Management links here with ?user=<id> to land on one account.
   const [searchParams] = useSearchParams();
@@ -80,6 +117,7 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onResend, onSend
   const [status, setStatus] = useState(() => (searchParams.get('invitation') === 'pending' ? 'Not signed in yet' : ''));
   const [editing, setEditing] = useState(null);
   const [fixingEmail, setFixingEmail] = useState(null);
+  const [toggled, setToggled] = useState({ sig: '', map: {} });
   // Only barangays that actually have users are offered.
   const located = users.filter((account) => account.barangay_id);
   const barangayOptions = [...new Map(located.map((account) => [String(account.barangay_id), account.barangay_name])).entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
@@ -99,7 +137,7 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onResend, onSend
     { label: 'User', render: (account) => <AdminIdentity name={account.name} email={account.email} /> },
     { label: 'Barangay', render: (account) => <div className="sa-stacked"><strong>{account.barangay_name || 'Unassigned'}</strong></div> },
     { label: 'Role', render: (account) => effectiveRoles(account).join(', ') },
-    { label: 'Account Status', render: (account) => <div className="sa-stacked"><StatusBadge value={accountStatus(account)} />{account.invitation === 'invited' && account.invitation_expires_at && <small className="muted">Valid until {formatDate(account.invitation_expires_at)}</small>}{account.invitation === 'expired' && <small className="muted">Resend credentials to give them a new one</small>}{account.invitation === 'active' && account.is_active && <small className="muted">{account.last_login_at ? `Last sign-in ${formatDate(account.last_login_at)}` : 'Has not signed in'}</small>}{notSignedIn(account) && onChangeEmail && <button type="button" className="sa-text-button" onClick={() => setFixingEmail(account)}>Wrong email? Change it</button>}</div> },
+    { label: 'Account Status', render: (account) => <div className="sa-stacked"><StatusBadge value={accountStatus(account)} />{account.invitation === 'invited' && account.invitation_expires_at && <small className="muted">Valid until {formatDate(account.invitation_expires_at)}</small>}{account.invitation === 'expired' && <small className="muted">Resend credentials to give them a new one</small>}{account.invitation === 'active' && account.is_active && <small className="muted">{account.last_login_at ? `Last sign-in ${formatDate(account.last_login_at)}` : 'Last sign-in not recorded yet'}</small>}{notSignedIn(account) && onChangeEmail && <button type="button" className="sa-text-button" onClick={() => setFixingEmail(account)}>Wrong email? Change it</button>}</div> },
     { label: 'Actions', render: (account) => <div className="sa-row-actions">
       <button className="ghost-button sa-icon-button sa-icon-edit" type="button" aria-label={`Edit role for ${account.name}`} title="Edit role" onClick={() => { setEditing(account); setNextRole(account.role); }}><Icon name="edit" size={17} /></button>
       {account.is_active && <button type="button" className="ghost-button sa-icon-button sa-icon-confirm" aria-label={`Resend credentials to ${account.name}`} title="Resend credentials" onClick={() => requestResend(account)}><Icon name="key" size={17} /></button>}
@@ -108,7 +146,7 @@ export function UsersTab({ users, onChangeRole, onToggleActive, onResend, onSend
     </div> },
   ];
   return <div className="superadmin-tab"><AdminManagementCard toolbar={<><LocalSearchInput value={search} onChange={setSearch} placeholder="Search user or email..." /><AdminFilterField label="Barangay"><SearchableSelect value={barangay} onChange={(event) => setBarangay(event.target.value)}><option value="">All Barangays</option>{barangayOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Role"><SearchableSelect value={role} onChange={(event) => setRole(event.target.value)}><option value="">All Roles</option>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><AdminFilterField label="Account status"><SearchableSelect value={status} onChange={(event) => setStatus(event.target.value)}><option value="">All Statuses</option>{['Active', 'Not signed in yet', 'Invited', 'Invitation expired', 'Deactivated'].map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField></>}>
-    <PaginatedTable rows={visible} columns={columns} emptyMessage="No matching users" emptyDescription="Try another user name or adjust the account filters." />
+    <BarangayGroups accounts={visible} columns={columns.filter((column) => column.label !== 'Barangay')} filtering={Boolean(search.trim() || barangay || role || status)} sig={[search, barangay, role, status].join('|')} toggled={toggled} setToggled={setToggled} />
   </AdminManagementCard>{emailing && <MessageEmail account={emailing} onSend={onSendEmail} onClose={() => setEmailing(null)} />}{fixingEmail && <ChangeEmailDrawer account={fixingEmail} onSubmit={onChangeEmail} onClose={() => setFixingEmail(null)} />}{editing && <AdminActionDrawer title="Edit account role" description="Review this account's access before saving." onClose={() => setEditing(null)}><AdminIdentity name={editing.name} email={editing.email} /><form className="sa-role-form" onSubmit={requestRoleChange}><p>Current roles: <strong>{effectiveRoles(editing).join(', ')}</strong></p><AdminFilterField label="New role"><SearchableSelect value={nextRole} onChange={(event) => setNextRole(event.target.value)}>{ROLES.map((name) => <option key={name}>{name}</option>)}</SearchableSelect></AdminFilterField><p className="muted">Saving replaces the account's current roles. Last-Administrator and account restrictions still apply.</p><div className="sa-row-actions"><button type="button" className="ghost-button cancel-btn" onClick={() => setEditing(null)}>Cancel</button><button type="submit" className="primary-button" disabled={nextRole === editing.role && effectiveRoles(editing).length === 1}>Save Role</button></div></form></AdminActionDrawer>}</div>;
 }
 

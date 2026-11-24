@@ -17357,3 +17357,15 @@ html[data-theme="dark"] .status-badge.no-administrator { background: rgba(217, 1
 @media (max-width: 1100px) { .sa-overview .focus-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .sa-overview .focus-kpis { grid-template-columns: minmax(0, 1fr); } }
 .sa-stacked { align-items: flex-start; text-align: left; }
+
+/* Users grouped by barangay: one collapsible section per barangay. */
+.sa-user-groups { display: grid; gap: 10px; padding: 4px 16px 16px; }
+.sa-user-groups-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 6px 4px; font-size: 0.84rem; color: var(--text-muted, #64748b); }
+.sa-user-groups-bar .sa-text-button { margin-left: 14px; }
+.sa-user-group { border: 1px solid var(--border, #dbe5f3); border-radius: 12px; background: var(--surface, #fff); overflow: hidden; }
+.sa-user-group-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; width: 100%; padding: 14px 16px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.sa-user-group-head:hover { background: var(--hover-bg, rgba(37, 99, 235, 0.05)); }
+.sa-user-group-head strong { font-size: 1rem; }
+.sa-user-group-meta { font-size: 0.82rem; color: var(--text-muted, #64748b); }
+.sa-user-group.is-open .sa-user-group-head { border-bottom: 1px solid var(--border, #dbe5f3); }
+.sa-user-group .table-shell { margin: 0; border: 0; border-radius: 0; }
