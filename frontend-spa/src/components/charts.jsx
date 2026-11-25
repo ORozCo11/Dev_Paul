@@ -218,9 +218,24 @@ export function StackedBarChart({ title, segments, showPercentages = false }) {
               <Bar key={s.label} dataKey={s.label} stackId="a" fill={s.color} isAnimationActive={false}>
                 <LabelList
                   dataKey={s.label}
-                  position="center"
-                  formatter={(v) => (v > 0 ? (showPercentages ? percentage(v) : v) : '')}
-                  style={{ fill: '#ffffff', fontWeight: 700, fontSize: 13 }}
+                  content={({ x, y, width, height, value }) => {
+                    const label = showPercentages ? percentage(value) : String(value ?? '');
+                    const labelWidth = label.length * 8 + 12;
+                    if (!value || !Number.isFinite(width) || width < labelWidth) return null;
+                    return (
+                      <text
+                        x={x + width / 2}
+                        y={y + height / 2}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="#ffffff"
+                        fontWeight={700}
+                        fontSize={13}
+                      >
+                        {label}
+                      </text>
+                    );
+                  }}
                 />
               </Bar>
             ))}
@@ -231,7 +246,7 @@ export function StackedBarChart({ title, segments, showPercentages = false }) {
         {segments.map((s) => (
           <span key={s.label} className="stacked-bar-legend-item">
             <span style={{ background: s.color }} />
-            {s.label}{showPercentages ? ` ${percentage(s.value)} (${s.value})` : ''}
+            {s.label}{showPercentages ? ` ${percentage(s.value)}` : ''}<strong>{s.value}</strong>
           </span>
         ))}
       </div>
