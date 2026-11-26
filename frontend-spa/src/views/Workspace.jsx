@@ -1663,6 +1663,24 @@ function Workspace() {
     variant: 'primary',
     onConfirm: () => approveScheduleNow(target),
   }));
+  // The assigned mechanic opens the job now (even before the due date), then logs the repair from My Tasks.
+  const recordScheduleWork = (target) => setConfirmDialog({
+    title: 'Record Repair Work',
+    message: target.resulting_ticket_id
+      ? `Open ${target.vehicle?.vehicle_name ?? 'this vehicle'}'s job in My Tasks to record the work?`
+      : `Start ${target.maintenance_type} on ${target.vehicle?.vehicle_name ?? 'this vehicle'} now${String(target.scheduled_date).slice(0, 10) > new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) ? ` (scheduled for ${formatDate(target.scheduled_date)})` : ''}? You can then record the repair from My Tasks.`,
+    confirmLabel: target.resulting_ticket_id ? 'Open My Tasks' : 'Start Job',
+    variant: 'primary',
+    onConfirm: async () => {
+      setNotice(null);
+      try {
+        if (!target.resulting_ticket_id) await api.post(`/maintenance-schedules/${target.schedule_id}/start`);
+        navigate(`${roleRoutes[user.role]}/tickets`);
+      } catch (error) {
+        showError(error, setNotice);
+      }
+    },
+  });
   const declineSchedule = async (target, payload) => {
     setNotice(null);
     try {
@@ -2488,7 +2506,7 @@ function Workspace() {
   );
   const maintenanceStatusColumnChooser = useColumnChooser('vms_maintenance_status_columns_s2', maintenanceStatusColumnDefsWithNote, ['id', 'plate']);
 
-  const scheduleColumnDefs = (() => scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord, setReassignScheduleTarget, openTicketProfile, approveSchedule, setDeclineScheduleTarget))();
+  const scheduleColumnDefs = (() => scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord, setReassignScheduleTarget, openTicketProfile, approveSchedule, setDeclineScheduleTarget, recordScheduleWork))();
   const scheduleColumnChooser = useColumnChooser('vms_schedule_columns_s2', scheduleColumnDefs, ['id', 'plate', 'time', 'repeat', 'location']);
 
   const historyColumnsWithNote = useMemo(() => withNoteColumn(historyColumns, (r) => r.description, { label: 'Description', width: '24%' }), []);
@@ -2627,9 +2645,9 @@ function Workspace() {
     setGroupOverride({});
   }
   const isGroupOpen = (parent) => groupOverride[parent] ?? groupHasPage(parent);
-  const unseenBadgeFor = (key) => Math.max(0, rawBadgeCountFor(key) - (seenBadges[key] ?? 0));
-  // The Admin's Work item carries what is waiting across its three tabs.
-  const badgeCountFor = (key) => unseenBadgeFor(key);
+  // Sidebar badges always show the live count of open items for that page, on every page
+  // (including the one you are on). Visiting a page no longer clears its badge.
+  const badgeCountFor = (key) => Math.max(0, rawBadgeCountFor(key));
 
   // Open a sidebar module — shared by the sidebar, the phone drawer and the
   // phone bottom bar. Closes the drawer once navigation actually happens.
@@ -6785,9 +6803,6 @@ function VehicleTypeFormPage({ initialValues, isEditing, onBack, onSubmit, submi
                 <option value="Water">Water</option>
               </SearchableSelect>
             </FxField>
-            <FxField id="vt-desc" label="Description" className="fx-span-2" hint="Optional — when to use this type.">
-              <textarea id="vt-desc" rows={4} value={values.description} onChange={(e) => set('description', e.target.value)} placeholder="Notes about which vehicles belong under this type" />
-            </FxField>
           </div>
 
           <div className="fx-info" role="note">
@@ -8666,18 +8681,18 @@ function maintenanceStatusColumns(setEditTarget, currentUserId) {
 // One line under a schedule's status that says what happens to it next, so the Custodian is not left guessing.
 function scheduleNextLine(row) {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
-  if (row.status === 'Pending Approval') return { text: 'Waiting for the Admin to approve' };
-  if (row.status === 'Declined') return { text: row.decline_reason ? `Declined: ${row.decline_reason}` : 'Declined' };
+  if (row.status === 'Pending Approval') return { text: 'Waiting for the Admin to approve', tone: 'pending' };
+  if (row.status === 'Declined') return { text: row.decline_reason ? `Declined: ${row.decline_reason}` : 'Declined', tone: 'overdue' };
   if (row.status !== 'Scheduled') return null;
-  if (row.resulting_ticket_id) return { text: 'Job created: repair in progress' };
-  if (!row.assigned_to) return { text: 'No mechanic assigned yet', warn: true };
+  if (row.resulting_ticket_id) return { text: 'Job created: repair in progress', tone: 'job' };
+  if (!row.assigned_to) return { text: 'No mechanic assigned yet', warn: true, tone: 'overdue' };
   const day = String(row.scheduled_date).slice(0, 10);
-  if (day < today) return { text: 'Due, but no job has started yet. Tell the Admin if this stays.', warn: true };
-  if (day === today) return { text: 'Due today: the job starts automatically' };
-  return { text: `Approved: the job starts on ${formatDate(row.scheduled_date)}` };
+  if (day < today) return { text: 'Overdue: no job has been started yet', warn: true, tone: 'overdue' };
+  if (day === today) return { text: 'Due today: ready to start', tone: 'today' };
+  return { text: `Approved: due ${formatDate(row.scheduled_date)}`, tone: 'approved' };
 }
 
-function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restoreRecord, onReassign, onViewTicket, onApprove, onDecline) {
+function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restoreRecord, onReassign, onViewTicket, onApprove, onDecline, onRecordWork) {
   return [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'schedule_id') },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
@@ -8714,7 +8729,7 @@ function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restor
               Scheduled/Completed/Cancelled fall back to the same plain
               style StatusBadge gave them, so this is a strict addition. */}
           <TicketStatusBadge value={row.status} />
-          {(() => { const next = scheduleNextLine(row); return next ? <small className={`schedule-next-line${next.warn ? ' is-warn' : ''}`}>{next.text}</small> : null; })()}
+          {(() => { const next = scheduleNextLine(row); return next ? <small className={`schedule-next-line${next.warn ? ' is-warn' : ''}${next.tone ? ` is-${next.tone}` : ''}`}>{next.text}</small> : null; })()}
           {/* #11 — a scheduled PM whose date has passed is overdue: flag it
               loudly instead of leaving it to sit silently on the calendar. */}
           {isScheduleOverdue(row) && (
@@ -8773,7 +8788,7 @@ function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restor
             iconOnly
             row={row} currentUser={currentUser} onEdit={onEdit}
             onViewRecord={onViewRecord} onReassign={onReassign} onViewTicket={onViewTicket}
-            onApprove={onApprove} onDecline={onDecline}
+            onApprove={onApprove} onDecline={onDecline} onRecordWork={onRecordWork}
             onRestore={restoreRecord ? () => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored for Admin approval.', 'Restore this schedule for Admin approval?') : undefined}
             onDelete={() => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.', `Cancel the ${row.maintenance_type} schedule for ${row.vehicle?.vehicle_name ?? 'this vehicle'}? It can be restored later if needed.`)}
           />
@@ -8884,11 +8899,15 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
   );
 }
 
-function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline }) {
+function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline, onRecordWork }) {
   const actionClass = (tone = '') => `sch-action ${tone}${iconOnly ? ' icon-btn' : ''}`;
   const becameTicket = row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket;
+  // The assigned mechanic logs the work from My Tasks once the schedule has become a job.
+  const canRecordWork = onRecordWork && row.status === 'Scheduled'
+    && currentUser?.role === 'Maintenance Personnel' && String(row.assigned_to) === String(currentUser.id);
   return (
     <div className="sch-card-actions">
+      {canRecordWork && <button className={actionClass('is-success')} onClick={() => onRecordWork(row)} type="button" title="Record Repair Work" aria-label="Record Repair Work"><Icon name="clipboard" size={14} />{!iconOnly && <span>Record Repair Work</span>}</button>}
       {becameTicket && <button className={actionClass('is-info')} onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" aria-label={`View Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}`} title={`This schedule became Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })} — open it`}><Icon name="ticket" size={14} />{!iconOnly && <span>Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</span>}</button>}
       {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className={actionClass('is-info')} onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label={`View Maintenance Record #${recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}`}><Icon name="wrench" size={14} />{!iconOnly && <span>Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</span>}</button>}
       {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className={actionClass('is-success')} onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} />{!iconOnly && <span>Approve</span>}</button>}
@@ -13612,10 +13631,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   const chosenRepairType = usesDonorParts ? 'cannibalized' : (doesStandard ? 'in_house' : '');
   const [noRepairOpen, setNoRepairOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
-  const [holdOpen, setHoldOpen] = useState(false);
-  const [holdReason, setHoldReason] = useState('Waiting for parts');
-  const [holdNote, setHoldNote] = useState('');
-  const [holdDate, setHoldDate] = useState('');
   const [returnReason, setReturnReason] = useState('');
   const [noRepairNotes, setNoRepairNotes] = useState('');
   const [methodBusy, setMethodBusy] = useState(false);
@@ -13789,19 +13804,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                 </div>
               )}
             </div>
-
-            <div className="lr-field">
-              <label className="lr-label" htmlFor={`${idBase}-work`}>Work Performed {(doesStandard || !repairType) && <abbr className="required-asterisk" title="required">*</abbr>}</label>
-              <textarea
-                id={`${idBase}-work`}
-                className="lr-textarea"
-                required={doesStandard || !repairType}
-                rows={4}
-                placeholder={repairType === 'cannibalized' && !doesStandard ? 'Optional — add repair details if you also repaired something (a part-only job can leave this blank).' : 'Describe what you repaired, what you found, what you replaced, adjustments made, and testing performed.'}
-                value={repairLogs}
-                onChange={(e) => { setRepairLogs(e.target.value); onDirty?.(); }}
-              />
-            </div>
           </section>
 
           {repairType === 'cannibalized' && (
@@ -13890,6 +13892,21 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             </section>
           )}
 
+          <section className="lr-group">
+            <div className="lr-field">
+              <label className="lr-label" htmlFor={`${idBase}-work`}>Work Performed {(doesStandard || !repairType) && <abbr className="required-asterisk" title="required">*</abbr>}</label>
+              <textarea
+                id={`${idBase}-work`}
+                className="lr-textarea"
+                required={doesStandard || !repairType}
+                rows={4}
+                placeholder={repairType === 'cannibalized' && !doesStandard ? 'Optional — add repair details if you also repaired something (a part-only job can leave this blank).' : 'Describe what you repaired, what you found, what you replaced, adjustments made, and testing performed.'}
+                value={repairLogs}
+                onChange={(e) => { setRepairLogs(e.target.value); onDirty?.(); }}
+              />
+            </div>
+          </section>
+
           {awaitingShopReturn && (
             <p className="lr-note">Evidence, parts and dates apply once the vehicle is back from the shop — mark it Received above when it comes in.</p>
           )}
@@ -13930,31 +13947,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                   onClick={async () => { setSubmittingRepair(true); try { await onResume(ticket); } finally { setSubmittingRepair(false); } }}>
                   Resume work
                 </button>
-              </div>
-            )}
-            {isMechanic && onHold && !ticket?.on_hold_since && ticket?.repair_type !== 'external' && (
-              <div className={`lr-field lr-no-repair${holdOpen ? ' is-open' : ''}`}>
-                {!holdOpen
-                  ? <button type="button" className="ghost-button" onClick={() => setHoldOpen(true)}>Put on hold</button>
-                  : (
-                    <>
-                      <label className="lr-label" htmlFor={`${idBase}-hold`}>Why is the work on hold? <abbr className="required-asterisk" title="required">*</abbr></label>
-                      <select id={`${idBase}-hold`} className="lr-textarea" style={{ minHeight: 0, height: 42, maxWidth: 320 }} value={holdReason} onChange={(e) => setHoldReason(e.target.value)}>
-                        <option>Waiting for parts</option>
-                        <option>Waiting for outside shop</option>
-                        <option>Waiting for vehicle access</option>
-                        <option>Other</option>
-                      </select>
-                      <textarea className="lr-textarea" rows={2} aria-label="Note (required for Other)" placeholder={holdReason === 'Other' ? 'Explain the hold (required)' : 'Optional note'} value={holdNote} onChange={(e) => setHoldNote(e.target.value)} />
-                      <label className="lr-label" htmlFor={`${idBase}-hold-date`}>Expected back to work (optional)</label>
-                      <input id={`${idBase}-hold-date`} type="date" className="lr-textarea" style={{ minHeight: 0, height: 42, maxWidth: 220 }} min={new Date().toISOString().slice(0, 10)} value={holdDate} onChange={(e) => setHoldDate(e.target.value)} />
-                      <small className="lr-hint">You stay assigned. The Custodian and Admin are told, and no reminders are sent while it is on hold.</small>
-                      <button type="button" className="primary-button" disabled={(holdReason === 'Other' && holdNote.trim().length < 3) || submittingRepair}
-                        onClick={async () => { setSubmittingRepair(true); try { await onHold(ticket, { reason: holdReason, note: holdNote.trim() || undefined, expected_date: holdDate || undefined }); } finally { setSubmittingRepair(false); } }}>
-                        Put on hold
-                      </button>
-                    </>
-                  )}
               </div>
             )}
             {isMechanic && onReturnToAdmin && (

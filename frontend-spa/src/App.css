@@ -17369,3 +17369,16 @@ html[data-theme="dark"] .status-badge.no-administrator { background: rgba(217, 1
 .sa-user-group-meta { font-size: 0.82rem; color: var(--text-muted, #64748b); }
 .sa-user-group.is-open .sa-user-group-head { border-bottom: 1px solid var(--border, #dbe5f3); }
 .sa-user-group .table-shell { margin: 0; border: 0; border-radius: 0; }
+
+/* Scheduled Services: colored "what happens next" pill under the status badge. */
+.schedule-next-line[class*="is-"]:not(.is-warn),.schedule-next-line.is-overdue { display: inline-block; padding: 3px 10px; border-radius: 999px; border: 1px solid transparent; }
+.schedule-next-line.is-approved { background: #dcfce7; color: #166534; border-color: #bbf7d0; }
+.schedule-next-line.is-today { background: #fef3c7; color: #92400e; border-color: #fde68a; font-weight: 700; }
+.schedule-next-line.is-overdue { background: #fee2e2; color: #991b1b; border-color: #fecaca; font-weight: 700; }
+.schedule-next-line.is-pending { background: #ffedd5; color: #9a3412; border-color: #fed7aa; }
+.schedule-next-line.is-job { background: #dbeafe; color: #1d4ed8; border-color: #bfdbfe; }
+:root[data-theme="dark"] .schedule-next-line.is-approved { background: #14532d; color: #bbf7d0; border-color: #166534; }
+:root[data-theme="dark"] .schedule-next-line.is-today { background: #78350f; color: #fde68a; border-color: #92400e; }
+:root[data-theme="dark"] .schedule-next-line.is-overdue { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+:root[data-theme="dark"] .schedule-next-line.is-pending { background: #7c2d12; color: #fed7aa; border-color: #9a3412; }
+:root[data-theme="dark"] .schedule-next-line.is-job { background: #1e3a8a; color: #bfdbfe; border-color: #1d4ed8; }

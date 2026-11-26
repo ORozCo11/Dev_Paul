@@ -43,7 +43,8 @@ class ConvertDueSchedulesToTickets extends Command
 {
     use ChecksRecurrence;
 
-    protected $signature = 'schedules:convert-due-to-tickets';
+    // --schedule=ID converts just that schedule right now, ignoring its date (the assigned mechanic starting early).
+    protected $signature = 'schedules:convert-due-to-tickets {--schedule= : Convert only this schedule id, even before it is due}';
 
     protected $description = 'Auto-propose a ticket for every Scheduled maintenance entry whose date has arrived';
 
@@ -52,13 +53,13 @@ class ConvertDueSchedulesToTickets extends Command
         $localNow = now('Asia/Manila');
         $due = VehicleMaintenanceSchedule::where('status', 'Scheduled')
             ->whereNull('resulting_ticket_id')
-            ->where(function ($query) use ($localNow) {
+            ->when($this->option('schedule'), fn ($q, $id) => $q->whereKey($id), fn ($q) => $q->where(function ($query) use ($localNow) {
                 $query->whereDate('scheduled_date', '<', $localNow->toDateString())
                     ->orWhere(function ($today) use ($localNow) {
                         $today->whereDate('scheduled_date', $localNow->toDateString())
                             ->where(fn ($time) => $time->whereNull('scheduled_time')->orWhere('scheduled_time', '<=', $localNow->format('H:i:s')));
                     });
-            })
+            }))
             ->with('vehicle')
             ->get();
 

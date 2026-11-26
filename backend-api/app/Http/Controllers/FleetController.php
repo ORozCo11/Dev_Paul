@@ -3328,6 +3328,21 @@ class FleetController extends Controller
      * mainly so GuardsOpenWorkOnDeactivation's block on deactivating someone
      * with a Scheduled assignment has somewhere to send the Admin.
      */
+    /** The assigned mechanic starts a Scheduled Service now instead of waiting for its due date. */
+    public function startScheduleEarly(Request $request, VehicleMaintenanceSchedule $schedule)
+    {
+        $user = $request->user();
+        abort_unless($user->hasRole('Maintenance Personnel') && (int) $schedule->assigned_to === (int) $user->id, 403, 'Only the assigned mechanic can start this service.');
+        abort_unless($schedule->status === 'Scheduled', 422, "Only a Scheduled service can be started. Current status: {$schedule->status}.");
+        abort_if($schedule->resulting_ticket_id, 422, 'This service already has a job.');
+
+        \Illuminate\Support\Facades\Artisan::call('schedules:convert-due-to-tickets', ['--schedule' => $schedule->schedule_id]);
+        $schedule->refresh();
+        abort_unless($schedule->resulting_ticket_id, 422, $schedule->hold_reason ?: 'The job could not be started. Tell the Admin.');
+
+        return response()->json(['message' => 'Job started. Record the repair from My Tasks.', 'ticket_id' => $schedule->resulting_ticket_id]);
+    }
+
     public function reassignSchedule(Request $request, VehicleMaintenanceSchedule $schedule)
     {
         return DB::transaction(function () use ($request, $schedule) {

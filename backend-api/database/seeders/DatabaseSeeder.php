@@ -22,6 +22,9 @@ class DatabaseSeeder extends Seeder
             MunicipalityScopeSeeder::class,
             FleetReferenceSeeder::class,
             SampleFleetSeeder::class,
+            GuadalupeSampleSeeder::class,
+            // Demo account-switcher login (superadmin@demotest.com / test123), local/testing only.
+            ImpersonationAccountSeeder::class,
         ]);
     }
 }
