@@ -225,6 +225,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::put('/maintenance-schedules/{schedule}/approve', [FleetController::class, 'approveSchedule']);
     Route::put('/maintenance-schedules/{schedule}/decline', [FleetController::class, 'declineSchedule']);
     Route::put('/maintenance-schedules/{schedule}/undecline', [FleetController::class, 'undeclineSchedule']);
+    Route::post('/maintenance-schedules/{schedule}/start', [FleetController::class, 'startScheduleEarly']);
     Route::put('/maintenance-schedules/{schedule}/reassign', [FleetController::class, 'reassignSchedule']);
     Route::post('/maintenance-schedules/{schedule}/restore', [FleetController::class, 'restoreSchedule']);
     Route::delete('/maintenance-schedules/{schedule}', [FleetController::class, 'deleteSchedule']);
