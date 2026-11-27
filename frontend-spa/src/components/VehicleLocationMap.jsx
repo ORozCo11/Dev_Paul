@@ -94,7 +94,7 @@ export default function VehicleLocationMap({ lat, lng, label, scrollWheelZoom = 
           <Tooltip sticky>{boundary?.label ?? 'Barangay boundary'}</Tooltip>
         </Polygon>
       ))}
-      <Marker position={center} icon={vehiclePin}>
+      <Marker position={center} icon={vehiclePin} title="Vehicle location" alt="Vehicle location">
         {label && (
           <Tooltip permanent direction="top">{label}</Tooltip>
         )}

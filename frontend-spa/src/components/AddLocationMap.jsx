@@ -102,6 +102,8 @@ export default function AddLocationMap({ marker, boundaryPolygons, onPick: onPic
         <Marker
           position={[marker.lat, marker.lng]}
           icon={pickPin}
+          title="Vehicle location pin. Drag to adjust."
+          alt="Vehicle location pin"
           draggable
           eventHandlers={{ dragend: (event) => { const { lat, lng } = event.target.getLatLng(); if (isPointWithinBoundaryPolygons({ lat, lng }, boundaryPolygons)) onPickAnywhere({ lat, lng }); else { event.target.setLatLng([marker.lat, marker.lng]); onOutside?.({ lat, lng }); } } }}
         />

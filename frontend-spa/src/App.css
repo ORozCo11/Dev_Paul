@@ -17554,3 +17554,77 @@ html[data-theme="dark"] .status-badge.no-administrator { background: rgba(217, 1
 .salvage-stock-head h3 { margin: 0; }
 .dp-hint { color: var(--text-muted, #64748b); font-size: 0.78rem; }
 .salvage-section .row-actions-visible { display: inline-flex; gap: 8px; }
+
+/* Overdue schedule: one red badge in the status cell, and the next step as plain text under it. */
+.schedule-next-line.is-warn.is-late { display: block; max-width: 230px; padding: 0; border: 0; background: none; color: #991b1b; font-weight: 600; text-align: center; white-space: normal; }
+:root[data-theme="dark"] .schedule-next-line.is-warn.is-late { color: #fca5a5; }
+
+/* The three outcomes on Record Repair Work are buttons, not radio circles. Blue = repaired, teal = nothing wrong, amber = hand back. */
+html .lr-outcome-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 76px; padding: 12px 16px; border: 2px solid var(--lr-c, #2563eb); border-radius: 12px; background: var(--lr-bg, #eff6ff); color: var(--lr-fg, #1e3a8a); text-align: center; cursor: pointer; transition: background .15s ease, color .15s ease, transform .12s ease, box-shadow .15s ease; }
+html .lr-outcome-btn .lr-method-check { display: none; }
+html .lr-outcome-btn .lr-method-text { display: grid; gap: 3px; justify-items: center; }
+html .lr-outcome-btn strong { font-size: 1rem; color: inherit; }
+html .lr-outcome-btn small { color: inherit; opacity: .82; font-size: .78rem; line-height: 1.3; }
+html .lr-outcome-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15, 23, 42, .12); }
+html .lr-outcome-btn.is-selected { background: var(--lr-c, #2563eb); color: #fff; box-shadow: 0 4px 14px rgba(15, 23, 42, .18); }
+html .lr-outcome-btn:focus-visible { outline: 3px solid rgba(37, 99, 235, .4); outline-offset: 2px; }
+html .lr-outcome-repair { --lr-c: #2563eb; --lr-bg: #eff6ff; --lr-fg: #1e3a8a; }
+html .lr-outcome-no_repair { --lr-c: #0d9488; --lr-bg: #f0fdfa; --lr-fg: #115e59; }
+html .lr-outcome-return { --lr-c: #d97706; --lr-bg: #fffbeb; --lr-fg: #78350f; }
+html[data-theme="dark"] .lr-outcome-repair { --lr-bg: rgba(37, 99, 235, .16); --lr-fg: #bfdbfe; }
+html[data-theme="dark"] .lr-outcome-no_repair { --lr-bg: rgba(13, 148, 136, .16); --lr-fg: #99f6e4; }
+html[data-theme="dark"] .lr-outcome-return { --lr-bg: rgba(217, 119, 6, .16); --lr-fg: #fde68a; }
+html .lr-outcome-btn.is-selected, html .lr-outcome-btn.is-selected:hover { border-color: var(--lr-c) !important; }
+html[data-theme="dark"] .lr-outcome-form .lr-label { color: #e2e8f0; }
+
+/* Decommission request banner on a vehicle's page. */
+.decom-banner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; margin: 0 0 16px; padding: 14px 18px; border-radius: 12px; border: 1px solid #fde68a; background: #fffbeb; color: #78350f; }
+.decom-banner.is-declined { border-color: #e2e8f0; background: #f8fafc; color: #334155; }
+.decom-banner-text { flex: 1 1 320px; min-width: 0; }
+.decom-banner-text strong { display: inline-flex; align-items: center; gap: 8px; }
+.decom-banner-text p { margin: 4px 0 2px; overflow-wrap: anywhere; }
+.decom-banner-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+html[data-theme="dark"] .decom-banner { border-color: rgba(251, 191, 36, .4); background: rgba(217, 119, 6, .14); color: #fde68a; }
+html[data-theme="dark"] .decom-banner.is-declined { border-color: #334155; background: #1e293b; color: #cbd5e1; }
+
+/* ===== UI review fixes (27 Nov 2026): contrast, dark-mode panels, phone touch targets ===== */
+
+/* Small grey text on white cards (process steps) was 2.6:1; now 4.7:1. */
+.ticket-process-flow-label, .ticket-process-flow-step > small, .ticket-process-flow-step.is-upcoming .ticket-process-flow-marker { color: #64748b; }
+/* Footer text on the blue band was 3.6:1; now white. */
+.workspace-footer-copyright, .workspace-footer-links a { color: #fff; }
+.workspace-footer-copyright { opacity: 0.92; }
+/* Bottom nav labels (phone) were 3.6:1. */
+@media (max-width: 760px) { .mobile-bottom-nav button { color: #475569; } .mobile-bottom-nav button.active { color: #1d4ed8; } }
+
+/* Dark theme: the ticket detail card stays white by design, so the badges and buttons on it use their light-theme colours. */
+html[data-theme="dark"] .ticket-detail-panel .status-badge { color: #334155; background: #f1f5f9; border-color: #cbd5e1; }
+html[data-theme="dark"] .ticket-detail-panel .status-badge.priority-high, html[data-theme="dark"] .ticket-detail-panel .status-badge.needs-repair { color: #991b1b; background: #fee2e2; border-color: #fecaca; }
+html[data-theme="dark"] .ticket-detail-panel .status-badge.priority-medium, html[data-theme="dark"] .ticket-detail-panel .status-badge.ticket-repair, html[data-theme="dark"] .ticket-detail-panel .status-badge.under-maintenance { color: #92400e; background: #fef3c7; border-color: #fde68a; }
+html[data-theme="dark"] .ticket-detail-panel .status-badge.priority-low { color: #166534; background: #dcfce7; border-color: #bbf7d0; }
+html[data-theme="dark"] .ticket-detail-panel .status-badge.ticket-forinspect { color: #3730a3; background: #e0e7ff; border-color: #c7d2fe; }
+html[data-theme="dark"] .ticket-detail-panel .status-badge.ticket-repair-source-badge { color: #0369a1; background: #e0f2fe; border-color: #bae6fd; }
+html[data-theme="dark"] .ticket-detail-panel .ghost-button.cancel-btn { color: #b91c1c; background: #fff1f2; border-color: #fca5a5; }
+html[data-theme="dark"] .ticket-detail-panel .ticket-role-tag { color: #334155; }
+/* Dark theme: forms that sit straight on the dark page (Add User and similar) had dark text on dark. */
+html[data-theme="dark"] .fx-head h2, html[data-theme="dark"] .fx-title { color: #f1f5f9; }
+html[data-theme="dark"] .fx-desc { color: #cbd5e1; }
+html[data-theme="dark"] .fx-field > label, html[data-theme="dark"] .fx-field label.fx-label { color: #e2e8f0; }
+html[data-theme="dark"] .fx-main .fx-section-title { color: #93c5fd; }
+/* Dark theme: the filter bar stays white, so its checkbox label is dark, not light. */
+html[data-theme="dark"] .module-filter-panel .schedule-cancelled-toggle { color: #334155 !important; }
+html[data-theme="dark"] .issue-note-cell { color: #cbd5e1; }
+/* Dark theme: blue text buttons were 3.3:1 on dark. */
+html[data-theme="dark"] .sa-text-button, html[data-theme="dark"] .focus-more, html[data-theme="dark"] .focus-tasks li > button { color: #93c5fd; }
+/* Salvage steps box: it was light with light text in dark mode. */
+html[data-theme="dark"] .salvage-steps { background: #1e293b; color: #e2e8f0; }
+
+/* Phone: tap targets of at least 32px. */
+@media (max-width: 700px) {
+  .focus-fleetbar-track button, .focus-fleetbar-legend button { min-height: 28px; }
+  .subissue-toggle { min-width: 32px; min-height: 32px; }
+  .ticket-subissue-toggle-all { min-height: 32px; padding: 6px 12px; }
+}
+
+html[data-theme="dark"] .metric-grid.stat-one-line .metric-card-iconic .metric-card-body span:first-child { color: #cbd5e1; }
+html[data-theme="dark"] .module-filter-panel .filter-label span, html[data-theme="dark"] .module-filter-panel .filter-date-group > span { color: #475569; }

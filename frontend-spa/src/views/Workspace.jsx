@@ -1155,6 +1155,15 @@ function Workspace() {
     return () => { cancelled = true; };
   }, [activeModule, loadModule]);
 
+  // The repair page finds its job in the work-order list. A Custodian opening it from a ticket or the dashboard
+  // has not loaded that list (their own module is a different one), so load it when the page opens.
+  useEffect(() => {
+    if (!logRepairsTicketId || activeModule === 'ticketWorkOrders') return undefined;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) loadModule('ticketWorkOrders').catch((error) => showError(error, setNotice)); });
+    return () => { cancelled = true; };
+  }, [logRepairsTicketId, activeModule, loadModule]);
+
   // A page left open in the background goes stale (someone else approved, assigned or closed something). When the tab
   // becomes active again after a minute, quietly reload the list being shown. Never while a form or detail page is open,
   // so nothing the person is typing is replaced.
@@ -3037,6 +3046,7 @@ function Workspace() {
               allHubs={allHubs}
               basePath={roleRoutes[user.role]}
               canManage={hasRole(user, 'Admin')}
+              canProposeDecommission={canDo(user, 'vehicle.decommission_propose')}
               // 2026-10-06 spec reversal — Maintenance Personnel can now view
               // documents and upload repair evidence (edit only their own
               // upload); Custodian keeps upload + edit-own (VehicleFiles/
@@ -4675,7 +4685,7 @@ function SalvageInventoryPage({ user, notify }) {
   return (
     <ModulePanel description="Parts that can still be used from decommissioned vehicles. A repair that uses parts from another vehicle takes them from this list.">
       <div className="salvage-steps" aria-label="How it works">
-        <span><b>1</b> The Admin decommissions the vehicle.</span>
+        <span><b>1</b> The Custodian proposes it, and the Admin approves the decommissioning.</span>
         <span><b>2</b> The mechanic lists every part that can still be used.</span>
         <span><b>3</b> Repairs take parts from the list, and the stock goes down.</span>
       </div>
@@ -4683,7 +4693,7 @@ function SalvageInventoryPage({ user, notify }) {
 
       <section className="salvage-section" aria-labelledby="salvage-queue-h">
         <h3 id="salvage-queue-h">Decommissioned vehicles <span className="count-badge">{waiting.length} waiting</span></h3>
-        {!queue.length ? <p className="empty-state">No vehicle has been decommissioned. When the Admin decommissions one, it appears here for the parts list.</p> : (
+        {!queue.length ? <p className="empty-state">No vehicle has been decommissioned. Once the Admin approves a decommission request, the vehicle appears here for the parts list.</p> : (
           <ul className="salvage-queue">
             {queue.map((vehicle) => (
               <li key={vehicle.vehicle_id} className={vehicle.salvage_completed_at ? 'is-done' : ''}>
@@ -8916,7 +8926,13 @@ function maintenanceStatusColumns(setEditTarget, currentUserId) {
 }
 
 // One line under a schedule's status that says what happens to it next, so the Custodian is not left guessing.
-function scheduleNextLine(row) {
+// Whole days between a schedule's date and today (positive when the date has passed).
+function scheduleDaysLate(row) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  return Math.round((Date.parse(today) - Date.parse(String(row.scheduled_date).slice(0, 10))) / 86400000);
+}
+
+function scheduleNextLine(row, role) {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
   if (row.status === 'Pending Approval') return { text: 'Waiting for the Admin to approve', tone: 'pending' };
   if (row.status === 'Declined') return { text: row.decline_reason ? `Declined: ${row.decline_reason}` : 'Declined', tone: 'overdue' };
@@ -8924,7 +8940,13 @@ function scheduleNextLine(row) {
   if (row.resulting_ticket_id) return { text: 'Job created: repair in progress', tone: 'job' };
   if (!row.assigned_to) return { text: 'No mechanic assigned yet', warn: true, tone: 'overdue' };
   const day = String(row.scheduled_date).slice(0, 10);
-  if (day < today) return { text: 'Overdue: no job has been started yet', warn: true, tone: 'overdue' };
+  if (day < today) {
+    // The red OVERDUE badge above already says it is late; this line says what the reader can do about it.
+    const text = role === 'Maintenance Personnel' ? 'Not started. Open it to record the work.'
+      : role === 'Admin' ? 'No job started. Check with the mechanic or reassign.'
+      : 'Waiting for the mechanic to start.';
+    return { text, warn: true, tone: 'late' };
+  }
   if (day === today) return { text: 'Due today: ready to start', tone: 'today' };
   return { text: `Approved: due ${formatDate(row.scheduled_date)}`, tone: 'approved' };
 }
@@ -8965,13 +8987,10 @@ function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restor
               already covers Pending Approval/Declined (shared with tickets);
               Scheduled/Completed/Cancelled fall back to the same plain
               style StatusBadge gave them, so this is a strict addition. */}
-          <TicketStatusBadge value={row.status} />
-          {(() => { const next = scheduleNextLine(row); return next ? <small className={`schedule-next-line${next.warn ? ' is-warn' : ''}${next.tone ? ` is-${next.tone}` : ''}`}>{next.text}</small> : null; })()}
-          {/* #11 — a scheduled PM whose date has passed is overdue: flag it
-              loudly instead of leaving it to sit silently on the calendar. */}
-          {isScheduleOverdue(row) && (
-            <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>OVERDUE</span>
-          )}
+          {isScheduleOverdue(row)
+            ? <span className="status-badge overdue" title={`The scheduled date (${formatDate(row.scheduled_date)}) has passed and no job has started`}>Overdue · {scheduleDaysLate(row)} day{scheduleDaysLate(row) === 1 ? '' : 's'}</span>
+            : <TicketStatusBadge value={row.status} />}
+          {(() => { const next = scheduleNextLine(row, currentUser?.role); return next ? <small className={`schedule-next-line${next.warn ? ' is-warn' : ''}${next.tone ? ` is-${next.tone}` : ''}`}>{next.text}</small> : null; })()}
           {/* Traceability — the schedule row only ever showed "Completed" as
               a label with nothing to verify it against. This shows what the
               linked Maintenance Record actually reached: still awaiting
@@ -11351,6 +11370,18 @@ function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, looku
                       </button>
                     </div>
                   )}
+                  {/* The named shop tester: nothing to do until the vehicle is sent; then receive it; then test it and write it up. */}
+                  {ticket.status === 'Active' && canDo(user, 'external.receive') && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && String(si.external_tester_id) === String(userId) && (
+                    <div className="subissue-head-right">
+                      {!si.external_sent_at || si.verification_verdict === 'Rejected'
+                        ? <p className="lr-note">Waiting for the Custodian to send the vehicle to the shop. You will be told, and this button appears here.</p>
+                        : onLogRepairs && (
+                          <button className="primary-button" type="button" onClick={() => onLogRepairs(ticket, si)}>
+                            <Icon name="vehicle" size={14} /> {si.external_returned_at ? 'Test it and write up the repair' : 'Receive the vehicle from the shop'}
+                          </button>
+                        )}
+                    </div>
+                  )}
                   {onLogRepairs && ticket.status === 'Active' && canDo(user, 'subissue.log_repair') && si.status === 'Under Repair' && String(si.assigned_mechanic_id) === String(userId) && (
                     <div className="subissue-head-right">
                       <button className="primary-button" type="button" onClick={() => onLogRepairs(ticket, si)}>
@@ -12833,11 +12864,13 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
   );
 }
 
-function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canRequestInspection = false, canRecordParts = false, setNotice, onSaved, onRequestConfirmation }) {
+function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canRequestInspection = false, canRecordParts = false, canProposeDecommission = false, setNotice, onSaved, onRequestConfirmation }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(new URLSearchParams(location.search).get('tab') === 'edit');
   const [decommissioning, setDecommissioning] = useState(false);
+  const [proposingDecommission, setProposingDecommission] = useState(false);
+  const [decliningDecommission, setDecliningDecommission] = useState(false);
   const [readiness, setReadiness] = useState(null);
   const [readinessLoaded, setReadinessLoaded] = useState(false);
   const [readinessLoadFailed, setReadinessLoadFailed] = useState(false);
@@ -12921,6 +12954,41 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
     }
   };
 
+  const handleProposeDecommission = async (reason) => {
+    setNotice(null);
+    try {
+      await api.post(`/vehicles/${vehicleId}/decommission-proposal`, { reason });
+      await onSaved();
+      setNotice({ type: 'success', text: 'Sent to the Admin. The vehicle stays in service until they decide.' });
+      setProposingDecommission(false);
+    } catch (error) {
+      showError(error, setNotice);
+    }
+  };
+
+  const handleWithdrawDecommission = async () => {
+    setNotice(null);
+    try {
+      await api.put(`/vehicles/${vehicleId}/decommission-proposal/withdraw`);
+      await onSaved();
+      setNotice({ type: 'success', text: 'Request withdrawn.' });
+    } catch (error) {
+      showError(error, setNotice);
+    }
+  };
+
+  const handleDeclineDecommission = async (reason) => {
+    setNotice(null);
+    try {
+      await api.put(`/vehicles/${vehicleId}/decommission-proposal/decline`, { decline_reason: reason });
+      await onSaved();
+      setNotice({ type: 'success', text: 'Request declined. The Custodian was told why.' });
+      setDecliningDecommission(false);
+    } catch (error) {
+      showError(error, setNotice);
+    }
+  };
+
   const handleRecommission = async () => {
     setNotice(null);
     try {
@@ -12992,6 +13060,11 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
               <Icon name="search" size={13} /> Request Custodian Inspection
             </button>
           )}
+          {canProposeDecommission && !canManage && vehicle.status !== 'Decommissioned' && vehicle.decommission_status !== 'Proposed' && !editing && (
+            <button className="btn-sm danger-button" type="button" onClick={() => setProposingDecommission(true)}>
+              <Icon name="alert" size={13} /> Recommend decommissioning
+            </button>
+          )}
           {canManage && vehicle.status !== 'Decommissioned' && !editing && (
             <button className="btn-sm danger-button" type="button" onClick={() => setDecommissioning(true)}>
               <Icon name="alert" size={13} /> Decommission
@@ -13009,6 +13082,36 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
           )}
         </div>
       </div>
+
+      {vehicle.status !== 'Decommissioned' && vehicle.decommission_status === 'Proposed' && (
+        <div className="decom-banner is-proposed" role="status">
+          <div className="decom-banner-text">
+            <strong><Icon name="alert" size={16} /> Decommission requested</strong>
+            <p>{vehicle.decommission_proposed_by_name ?? 'The Custodian'} asked to retire this vehicle{vehicle.decommission_proposed_at ? ` on ${formatDate(vehicle.decommission_proposed_at)}` : ''}: {vehicle.decommission_proposal_reason}</p>
+            <small>{canManage ? 'It stays in service until you decide. Approving moves it to the Salvage Inventory for the mechanic.' : 'Waiting for the Admin to decide. The vehicle stays in service meanwhile.'}</small>
+          </div>
+          <div className="decom-banner-actions">
+            {canManage && <button className="btn-sm danger-button" type="button" onClick={() => onRequestConfirmation?.({
+              title: 'Approve decommissioning',
+              message: `Retire ${vehicle.vehicle_name} from the fleet? It leaves readiness and coverage, and the mechanic is asked to list its salvageable parts. Its history is kept.`,
+              confirmLabel: 'Approve and decommission',
+              variant: 'danger',
+              onConfirm: () => handleDecommission(vehicle.decommission_proposal_reason),
+            })}>Approve</button>}
+            {canManage && <button className="btn-sm ghost-button" type="button" onClick={() => setDecliningDecommission(true)}>Decline</button>}
+            {canProposeDecommission && !canManage && <button className="btn-sm ghost-button" type="button" onClick={handleWithdrawDecommission}>Withdraw request</button>}
+          </div>
+        </div>
+      )}
+      {vehicle.status !== 'Decommissioned' && vehicle.decommission_status === 'Declined' && (
+        <div className="decom-banner is-declined" role="status">
+          <div className="decom-banner-text">
+            <strong><Icon name="alert" size={16} /> Decommission request declined</strong>
+            <p>{vehicle.decommission_decline_reason}</p>
+            <small>The vehicle stays in service{vehicle.decommission_declined_at ? ` (declined ${formatDate(vehicle.decommission_declined_at)})` : ''}.</small>
+          </div>
+        </div>
+      )}
 
       {vehicle.status === 'Decommissioned' && (
         <div style={{ margin: '0 0 16px', padding: '14px 18px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
@@ -13063,6 +13166,31 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
           onCancel={() => setDecommissioning(false)}
           onSubmit={(payload) => handleDecommission(payload.decommission_reason)}
           submitLabel="Decommission Vehicle"
+          title=""
+        />
+      </FormModal>
+
+      <FormModal open={proposingDecommission} title={`Recommend decommissioning ${vehicle.vehicle_name}`} onClose={() => setProposingDecommission(false)}>
+        <p className="muted" style={{ marginBottom: 12, fontSize: '0.85rem' }}>
+          The Admin decides. The vehicle stays in service until they approve. A vehicle with an open ticket cannot be proposed.
+        </p>
+        <SmartForm
+          fields={[{ label: 'Why should this vehicle be retired?', name: 'reason', required: true, type: 'textarea', rows: 4 }]}
+          key="propose-decommission"
+          onCancel={() => setProposingDecommission(false)}
+          onSubmit={(payload) => handleProposeDecommission(payload.reason)}
+          submitLabel="Send to Admin"
+          title=""
+        />
+      </FormModal>
+
+      <FormModal open={decliningDecommission} title={`Decline decommissioning ${vehicle.vehicle_name}`} onClose={() => setDecliningDecommission(false)}>
+        <SmartForm
+          fields={[{ label: 'Why does it stay in service?', name: 'decline_reason', required: true, type: 'textarea', rows: 3 }]}
+          key="decline-decommission"
+          onCancel={() => setDecliningDecommission(false)}
+          onSubmit={(payload) => handleDeclineDecommission(payload.decline_reason)}
+          submitLabel="Decline request"
           title=""
         />
       </FormModal>
@@ -13959,7 +14087,10 @@ function CannibalizationManagement({ ticket, vehicleOptions, onChanged, notify }
 function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty, onExternalSend, onExternalReturn, onNoRepair, onReturnToAdmin, onHold, onResume, isMechanic = false, onDonorChanged, notify }) {
   // A repair can be a standard repair, use parts from another vehicle, or both. "Both" is recorded as a
   // cannibalized repair that also carries the mechanic's own work and purchased parts.
-  const [doesStandard, setDoesStandard] = useState(false);
+  // A routine scheduled service (oil change, tires, preventive maintenance) is almost always a standard repair, so that is
+  // ticked from the start; parts from another vehicle stays one tick away.
+  const isScheduledJob = ticket?.title === 'Scheduled Maintenance';
+  const [doesStandard, setDoesStandard] = useState(isScheduledJob);
   const [usesDonorParts, setUsesDonorParts] = useState(false);
   const chosenRepairType = usesDonorParts ? 'cannibalized' : (doesStandard ? 'in_house' : '');
   const [noRepairOpen, setNoRepairOpen] = useState(false);
@@ -14003,7 +14134,9 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   const needsShopCycle = repairType === 'external' && (!ticket.external_sent_at || !ticket.external_returned_at || ticket.verification_verdict === 'Rejected');
   const awaitingShopReturn = repairType === 'external' && !!ticket.external_sent_at && !ticket.external_returned_at;
   const outcomeMode = isMechanic && ticket.repair_type !== 'external' && !!(onNoRepair || onReturnToAdmin);
-  const showRepairForm = !outcomeMode || outcome === 'repair';
+  // The shop tester, while the vehicle is still at the shop, only needs the receive form: no repair log, parts or files yet.
+  const receiveOnly = isMechanic && awaitingShopReturn;
+  const showRepairForm = (!outcomeMode || outcome === 'repair') && !receiveOnly;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -14107,7 +14240,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
           <section className="lr-group lr-workorder" aria-labelledby={`${idBase}-wo`}>
             <h4 className="lr-section-label" id={`${idBase}-wo`}>Work Order Overview</h4>
             <dl className="lr-kv">
-              <div><dt>Repair Item</dt><dd>{ticket.title}</dd></div>
+              <div><dt>Repair Item</dt><dd>{isScheduledJob && ticket.maintenance_type ? `${ticket.maintenance_type} (scheduled service)` : ticket.title}</dd></div>
               <div><dt>Main Issue</dt><dd>{ticketTitle(ticket)}</dd></div>
               {workDescription && <div className="lr-kv-wide"><dt>Description</dt><dd>{workDescription}</dd></div>}
             </dl>
@@ -14128,7 +14261,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                   ['no_repair', 'No repair needed', 'You checked and nothing needs fixing. Say what you checked.', !!onNoRepair],
                   ['return', 'Return to Admin', 'It is not yours to do, or needs other skills. Say why; the Admin reassigns it.', !!onReturnToAdmin],
                 ].filter((choice) => choice[3]).map(([key, label, hint]) => (
-                  <button key={key} type="button" role="radio" aria-checked={outcome === key} className={`lr-method-choice${outcome === key ? ' is-selected' : ''}`} onClick={() => setOutcome(key)}>
+                  <button key={key} type="button" role="radio" aria-checked={outcome === key} className={`lr-method-choice lr-outcome-btn lr-outcome-${key}${outcome === key ? ' is-selected' : ''}`} onClick={() => setOutcome(key)}>
                     <span className="lr-method-check" aria-hidden="true" />
                     <span className="lr-method-text"><strong>{label}</strong><small>{hint}</small></span>
                   </button>
@@ -14291,17 +14424,17 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             </div>
           </section>}
 
-          {awaitingShopReturn && (
+          {awaitingShopReturn && !receiveOnly && (
             <p className="lr-note">Evidence, parts and dates apply once the vehicle is back from the shop — mark it Received above when it comes in.</p>
           )}
 
           {(showRepairForm || !outcomeMode) && <div className="lr-side-actions lr-main-actions">
-            <p className="lr-hint">
+            {!receiveOnly && <p className="lr-hint">
               Recorded under Ticket #{ticketNumber(ticket)} · {namedPartCount} part{namedPartCount === 1 ? '' : 's'} · {attachments.length ? `${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : 'no evidence attached'}
-            </p>
-            {needsShopCycle && <p className="lr-note">{ticket.verification_verdict === 'Rejected' ? 'Record a new shop visit and return for this rejected repair.' : 'Send to the shop and mark returned before submitting.'}</p>}
+            </p>}
+            {needsShopCycle && !receiveOnly && <p className="lr-note">{ticket.verification_verdict === 'Rejected' ? 'Record a new shop visit and return for this rejected repair.' : 'Send to the shop and mark returned before submitting.'}</p>}
             {isMechanic ? (
-              <>
+              receiveOnly ? null : <>
                 <button className="primary-button lr-submit" type="submit" disabled={needsShopCycle || submittingRepair || shopBusy}>{submittingRepair ? 'Submitting...' : 'Submit Repair Log'}</button>
               </>
             ) : (

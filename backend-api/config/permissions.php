@@ -32,6 +32,8 @@ return [
     'vehicle.edit' => ['Admin'],
     'vehicle.archive' => ['Admin'],
     'vehicle.restore' => ['Admin'],
+    // The Custodian proposes decommissioning a vehicle; the Admin approves (decommission) or declines.
+    'vehicle.decommission_propose' => ['Custodian'],
     'vehicle.decommission' => ['Admin'],
     'vehicle.readiness_check' => ['Custodian'],
     'vehicle.mark_available' => ['Admin', 'Custodian'],

@@ -37,9 +37,10 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let cancelled = false;
-    const requests = [api.get('/tickets'), api.get('/maintenance-schedules')];
-    Promise.all(requests).then(([tickets, schedules]) => {
-      if (!cancelled) { setFeed({ tickets: tickets.data, schedules: schedules.data, role }); setError(''); }
+    // The Admin also needs the vehicles to see decommission requests waiting for them.
+    const requests = [api.get('/tickets'), api.get('/maintenance-schedules'), role === 'Admin' ? api.get('/vehicles').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })];
+    Promise.all(requests).then(([tickets, schedules, vehicles]) => {
+      if (!cancelled) { setFeed({ tickets: tickets.data, schedules: schedules.data, vehicles: Array.isArray(vehicles.data) ? vehicles.data : (vehicles.data?.data ?? []), role }); setError(''); }
     }).catch(() => { if (!cancelled) setError('Assignments could not be loaded. Retry or open the relevant module.'); });
     return () => { cancelled = true; };
     // Not keyed on `data`: the dashboard summary is re-polled every 15s and on
@@ -52,6 +53,7 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const loading = pending && !error;
   const tickets = pending ? [] : feed.tickets;
   const schedules = pending ? [] : feed.schedules;
+  const decommissionRequests = pending ? [] : (feed.vehicles ?? []).filter((v) => v.decommission_status === 'Proposed' && v.status !== 'Decommissioned');
   const admin = role === 'Admin';
   const custodian = role === 'Custodian';
   const mine = tickets.filter((t) => sameId(t.assigned_mechanic_id, user.id) || (t.sub_issues ?? []).some((s) => sameId(s.assigned_mechanic_id, user.id) || sameId(s.external_tester_id, user.id)));
@@ -77,6 +79,7 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const activeMine = mine.filter((t) => t.status === 'Active');
   const tasks = admin ? [
     ...pendingTickets.map((t) => ticketTask(t, 'Review ticket proposal', 'Review proposal')),
+    ...decommissionRequests.map((v) => ({ key: `decommission-${v.vehicle_id}`, title: 'Review decommission request', reference: `${v.vehicle_name} · ${v.plate_number ?? ''}`, status: 'Proposed', date: v.decommission_proposed_at, icon: 'vehicle', open: () => onNavigate(`${basePath}/vehicles/${v.vehicle_id}`), action: 'Review request' })),
     ...pendingSchedules.map((s) => ({ ...scheduleTask(s, 'Review booking'), title: 'Review schedule booking' })),
     ...tickets.filter((t) => t.status === 'Active' && (t.sub_issues ?? []).some((s) => s.status === 'Under Repair' && (s.repair_type === 'external' ? !s.external_tester_id : !s.assigned_mechanic_id)))
       .map((t) => ticketTask(t, (t.sub_issues ?? []).some((s) => s.returned_to_admin_at && s.status === 'Under Repair') ? 'Reassign returned work' : 'Assign maintenance personnel', 'Assign mechanic')),

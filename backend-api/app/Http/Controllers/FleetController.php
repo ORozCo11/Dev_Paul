@@ -1220,6 +1220,66 @@ class FleetController extends Controller
      * must be settled first — a beyond-repair vehicle's unfinishable ticket
      * is exactly what decision-close (Problem 1) exists for.
      */
+    /** The Custodian recommends retiring a vehicle. Nothing changes for the vehicle until the Admin approves. */
+    public function proposeDecommission(Request $request, Vehicle $vehicle)
+    {
+        $this->requireAbility($request, 'vehicle.decommission_propose');
+        abort_if($vehicle->status === 'Decommissioned', 422, 'This vehicle is already decommissioned.');
+        abort_if($vehicle->decommission_status === 'Proposed', 422, 'A decommission request for this vehicle is already waiting for the Admin.');
+        $open = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)->whereNotIn('status', ['Closed', 'Cancelled'])->count();
+        abort_if($open > 0, 422, 'Close or cancel this vehicle\'s open ticket(s) before proposing to decommission it.');
+        $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:5000']]);
+
+        $vehicle->update([
+            'decommission_status' => 'Proposed',
+            'decommission_proposal_reason' => $data['reason'],
+            'decommission_proposed_by' => $request->user()->id,
+            'decommission_proposed_by_name' => $request->user()->name,
+            'decommission_proposed_at' => now(),
+            'decommission_decline_reason' => null,
+            'decommission_declined_at' => null,
+        ]);
+        $this->history($vehicle, 'Decommission Proposed', "{$request->user()->name} proposed decommissioning {$vehicle->vehicle_name}: {$data['reason']}", 'vehicles', $vehicle->vehicle_id, $request);
+        $this->log($request, 'Propose Decommission', 'Vehicle Management', $vehicle->vehicle_id, "Proposed decommissioning vehicle {$vehicle->vehicle_name}");
+        $this->notifyAdmins('Decommission Proposed', "{$request->user()->name} proposes to decommission {$vehicle->vehicle_name} ({$vehicle->plate_number}): {$data['reason']}", 'decommission_proposed', $vehicle->barangay_id);
+
+        return response()->json($vehicle->fresh(['category']));
+    }
+
+    public function withdrawDecommissionProposal(Request $request, Vehicle $vehicle)
+    {
+        $this->requireAbility($request, 'vehicle.decommission_propose');
+        abort_unless($vehicle->decommission_status === 'Proposed', 422, 'There is no pending decommission request for this vehicle.');
+        $vehicle->update(['decommission_status' => null, 'decommission_proposal_reason' => null, 'decommission_proposed_by' => null, 'decommission_proposed_by_name' => null, 'decommission_proposed_at' => null]);
+        $this->history($vehicle, 'Decommission Withdrawn', "The decommission request for {$vehicle->vehicle_name} was withdrawn.", 'vehicles', $vehicle->vehicle_id, $request);
+
+        return response()->json($vehicle->fresh(['category']));
+    }
+
+    /** The Admin says no. The vehicle stays in service and the Custodian is told why. */
+    public function declineDecommissionProposal(Request $request, Vehicle $vehicle)
+    {
+        $this->requireAbility($request, 'vehicle.decommission');
+        abort_unless($vehicle->decommission_status === 'Proposed', 422, 'There is no pending decommission request for this vehicle.');
+        $data = $request->validate(['decline_reason' => ['required', 'string', 'min:5', 'max:5000']]);
+        $proposer = $vehicle->decommission_proposed_by;
+
+        $vehicle->update([
+            'decommission_status' => 'Declined',
+            'decommission_decline_reason' => $data['decline_reason'],
+            'decommission_declined_at' => now(),
+            'decommission_proposal_reason' => null,
+            'decommission_proposed_at' => null,
+        ]);
+        $this->history($vehicle, 'Decommission Declined', "The decommission request for {$vehicle->vehicle_name} was declined: {$data['decline_reason']}", 'vehicles', $vehicle->vehicle_id, $request);
+        $this->log($request, 'Decline Decommission', 'Vehicle Management', $vehicle->vehicle_id, "Declined decommissioning vehicle {$vehicle->vehicle_name}");
+        if ($proposer) {
+            $this->notifyUser((int) $proposer, 'Decommission Declined', "{$vehicle->vehicle_name} stays in service. Reason: {$data['decline_reason']}", 'decommission_declined');
+        }
+
+        return response()->json($vehicle->fresh(['category']));
+    }
+
     public function decommissionVehicle(Request $request, Vehicle $vehicle)
     {
         $this->requireAbility($request, 'vehicle.decommission');
@@ -1247,7 +1307,15 @@ class FleetController extends Controller
             'decommission_reason' => $data['decommission_reason'],
             'decommissioned_by' => $request->user()->id,
             'decommissioned_at' => now(),
+            'decommission_status' => null,
+            'decommission_decline_reason' => null,
+            'decommission_declined_at' => null,
         ]);
+        if ($vehicle->decommission_proposed_by) {
+            $this->notifyUser((int) $vehicle->decommission_proposed_by, 'Decommission Approved', "{$vehicle->vehicle_name} was decommissioned. The mechanic will list its salvageable parts.", 'decommission_approved');
+        }
+        // Mechanics are told there is a parts list to make.
+        User::where('barangay_id', $vehicle->barangay_id)->havingRole('Maintenance Personnel')->get()->each(fn (User $mechanic) => $this->notifyUser($mechanic->id, 'Vehicle Ready for Salvage', "{$vehicle->vehicle_name} was decommissioned. List the parts that can still be used (Salvage Inventory).", 'salvage_ready'));
 
         $this->history($vehicle, 'Vehicle Decommissioned', "{$vehicle->vehicle_name} was decommissioned (end of life): {$data['decommission_reason']}", 'vehicles', $vehicle->vehicle_id, $request);
         $this->log($request, 'Decommission', 'Vehicle Management', $vehicle->vehicle_id, "Decommissioned vehicle {$vehicle->vehicle_name}");

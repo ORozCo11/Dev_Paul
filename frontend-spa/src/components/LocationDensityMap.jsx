@@ -721,6 +721,8 @@ function LocationDensityMap({
         {hubs.map((hub) => (
           <Marker
             icon={hubIcons[hub.id]}
+            title={`Hub: ${hub.name ?? hub.code ?? hub.id}`}
+            alt={`Hub ${hub.name ?? hub.code ?? hub.id}`}
             key={hub.id}
             position={[hub.lat, hub.lng]}
             zIndexOffset={1050}
@@ -762,6 +764,8 @@ function LocationDensityMap({
         {vehicleGroups.map(({ hub, vehicles: hubVehicles }) => (
           <Marker
             icon={vehicleIcons[hub.id]}
+            title={`${hub.name ?? hub.code ?? 'Hub'}: ${hubVehicles.length} vehicle${hubVehicles.length === 1 ? '' : 's'}`}
+            alt={`${hub.name ?? hub.code ?? 'Hub'} vehicles`}
             key={`vehicles-${hub.id}`}
             position={[hub.lat, hub.lng]}
             zIndexOffset={1400}
@@ -798,6 +802,8 @@ function LocationDensityMap({
         {selectedVehicleGroup && (
           <Marker
             icon={selectedVehicleIcon}
+            title="Selected vehicle"
+            alt="Selected vehicle"
             key={`selected-vehicle-${selectedVehicleGroup.vehicle.vehicle_id}`}
             position={[selectedVehicleGroup.hub.lat, selectedVehicleGroup.hub.lng]}
             zIndexOffset={1750}
