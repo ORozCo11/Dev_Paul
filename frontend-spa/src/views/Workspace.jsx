@@ -5578,12 +5578,13 @@ function VehicleProfilePhoto({ file, existingUrl, onChange }) {
   const [preview, setPreview] = useState(null);
   const inputRef = useRef(null);
   useEffect(() => {
-    if (!isFile(file)) { setPreview(null); return; }
+    if (!isFile(file)) return undefined;
     const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
+    // Set from a frame callback, not synchronously in the effect body.
+    const frame = requestAnimationFrame(() => setPreview(url));
+    return () => { cancelAnimationFrame(frame); URL.revokeObjectURL(url); };
   }, [file]);
-  const src = preview ?? (existingUrl ? resolvePhotoUrl(existingUrl) : null);
+  const src = (isFile(file) && preview) || (existingUrl ? resolvePhotoUrl(existingUrl) : null);
   return (
     <div className="vehicle-profile-photo">
       {src ? <img src={src} alt="Vehicle profile" /> : <div className="vehicle-profile-photo-empty"><Icon name="vehicle" size={40} /><span>No vehicle photo</span></div>}
@@ -10919,7 +10920,7 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
 // TICKET DETAIL PANEL — shown when admin clicks a ticket row
 // =========================================================================
 
-function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, lookups, proposalSyncNotice, onAssignTicketMechanic, onReassignCustodian, onReopenDone, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSetShopTester, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false, onRecordGoodCheck }) {
+function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, lookups, proposalSyncNotice, onAssignTicketMechanic, onReassignCustodian, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSetShopTester, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false, onRecordGoodCheck }) {
   const [cancelling, setCancelling] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [reassigningCustodian, setReassigningCustodian] = useState(false);
