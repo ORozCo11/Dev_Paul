@@ -16967,6 +16967,13 @@ html .ticket-detail-panel .ticket-hero-badges > span { width: auto; min-width: 0
   margin: 0;
   box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3);
 }
+.workspace-form-feedback {
+  /* Workspace validation notices should not trap clicks on the form below.
+     Keep the message itself interactive so its close button still works. */
+  pointer-events: none;
+  background: transparent;
+}
+.workspace-form-feedback .qa-inline-error { pointer-events: auto; }
 .ticket-create-form > .ticket-create-header { grid-row: 1; }
 .ticket-create-form > .ticket-method-section { grid-row: 2; }
 
@@ -17294,6 +17301,148 @@ html .lr-btn-norepair:disabled, html .lr-btn-return:disabled { opacity: 0.55; }
 /* A long unbroken vehicle name wraps instead of pushing the profile page wider than the screen. */
 .vehicle-profile-header, .vehicle-profile-heading, .vehicle-profile-dashboard { min-width: 0; max-width: 100%; }
 .vehicle-profile-heading h2, .vehicle-profile-subtitle, .ticket-detail-title, .row-title-text { overflow-wrap: anywhere; }
+
+/* Let vehicle history use the full row instead of inheriting the first
+   overview column's narrow width. This keeps dates and descriptions readable
+   while preserving the three balanced summary cards above it. */
+.vehicle-profile-overview > .vehicle-history-card {
+  grid-column: 1 / -1;
+  min-width: 0;
+  height: auto;
+  align-self: start;
+}
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-list {
+  width: 100%;
+  margin-bottom: 8px;
+}
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-list li {
+  grid-template-columns: minmax(145px, 190px) minmax(170px, 220px) minmax(0, 1fr) minmax(120px, 170px);
+  gap: 14px;
+  align-items: start;
+  padding: 10px 2px;
+}
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-what,
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-who {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .vehicle-profile-overview > .vehicle-history-card .vehicle-history-list li {
+    grid-template-columns: minmax(125px, 180px) minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .vehicle-profile-overview > .vehicle-history-card .vehicle-history-list li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+  }
+}
+
+/* Give the information card more room and keep status details readable. */
+@media (min-width: 1201px) {
+  .vehicle-profile-overview:has(> .veh-files) {
+    grid-template-columns: minmax(350px, 1.15fr) minmax(350px, 1.25fr) minmax(240px, .8fr);
+  }
+}
+@media (max-width: 1200px) {
+  .vehicle-profile-overview,
+  .vehicle-profile-overview:has(> .veh-files) {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  }
+  .vehicle-profile-overview:has(> .veh-files) > .veh-files { grid-column: 1 / -1; }
+}
+@media (max-width: 820px) {
+  .vehicle-profile-overview,
+  .vehicle-profile-overview:has(> .veh-files) { grid-template-columns: minmax(0, 1fr); }
+  .vehicle-profile-overview:has(> .veh-files) > .veh-files { grid-column: auto; }
+}
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-list li {
+  grid-template-columns: minmax(180px, 210px) minmax(170px, 220px) minmax(0, 1fr) minmax(120px, 170px);
+}
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-when {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 900px) {
+  .vehicle-profile-overview > .vehicle-history-card .vehicle-history-list li {
+    grid-template-columns: minmax(180px, 210px) minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .vehicle-profile-overview > .vehicle-history-card .vehicle-history-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.vehicle-profile-overview > .vehicle-history-card { container-type: inline-size; }
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-list {
+  padding-inline: 14px;
+}
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-list li {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+.vehicle-profile-overview > .vehicle-history-card .vehicle-history-when {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.stacked-bar-chart { min-width: 0; width: 100%; }
+.stacked-bar-legend {
+  min-width: 0;
+  width: 100%;
+  justify-content: flex-start;
+  gap: 10px 16px;
+}
+.stacked-bar-legend-item {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.stacked-bar-legend-item strong {
+  color: var(--text-strong, #0f172a);
+}
+.page-chart-panel > .stacked-bar-chart {
+  height: auto;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+.lr-side-actions.lr-main-actions > .lr-cancel { order: 6; }
+.ticket-create-actions {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.ticket-create-actions > button {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 0;
+}
+.ticket-create-actions > .primary-button {
+  flex: 0 1 200px;
+  width: 200px;
+  min-width: min(200px, 100%);
+}
+@media (max-width: 520px) {
+  .ticket-create-actions > button { flex: 1 1 140px; }
+}
+@container (min-width: 480px) {
+  .vehicle-history-list li {
+    grid-template-columns: minmax(180px, 210px) minmax(0, 1fr);
+    gap: 8px 14px;
+  }
+}
+@container (min-width: 760px) {
+  .vehicle-history-list li {
+    grid-template-columns: minmax(180px, 210px) minmax(170px, 220px) minmax(0, 1fr) minmax(120px, 170px);
+    gap: 14px;
+  }
+  .vehicle-history-when { white-space: nowrap; }
+}
 
 /* Status chips wrap inside their card on tablet widths instead of pushing the page sideways. */
 .status-chip-filter, .status-chip-filter .ticket-filter-controls { min-width: 0; max-width: 100%; }

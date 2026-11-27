@@ -1241,7 +1241,19 @@ function Workspace() {
       setNotice(warning
         ? { type: 'warning', text: `${successMsg} ⚠ ${warning}` }
         : { type: 'success', text: successMsg });
-      await refreshCurrent();
+      const proposalDecision = /^\/tickets\/\d+\/(approve|decline)$/.test(path);
+      if (proposalDecision) {
+        // The decision request has already committed. A failure in unrelated
+        // dashboard/lookups refreshes must not be reported as a failed
+        // approval, or users may retry a decision that already succeeded.
+        try {
+          await refreshCurrent();
+        } catch {
+          setNotice({ type: 'warning', text: `${successMsg} The decision was saved, but some page data could not refresh. The ticket details are being reloaded.` });
+        }
+      } else {
+        await refreshCurrent();
+      }
       return true;
     } catch (error) {
       showError(error, setNotice);
@@ -2868,7 +2880,7 @@ function Workspace() {
           )}
 
         {notice && notice.lines ? (
-          <div className="form-feedback" aria-live="polite">
+          <div className="form-feedback workspace-form-feedback" aria-live="polite">
             <div className="qa-inline-error" role="alert">
               <Icon name="alert" size={17} className="toast-notice-icon" />
               <div className="toast-notice-lines">
@@ -3033,7 +3045,6 @@ function Workspace() {
               canManageDocuments={canDo(user, 'document.create')}
               canViewDocuments={canDo(user, 'document.view')}
               currentUser={user}
-              canCheckReadiness={canDo(user, 'vehicle.readiness_check')}
               canRequestInspection={canDo(user, 'vehicle.request_inspection')}
               canRecordParts={canDo(user, 'cannibalization.record')}
               // Production-readiness audit finding #8 — the reliability
@@ -10385,6 +10396,66 @@ function RepairSourceBadge({ ticket }) {
   return <span className="status-badge ticket-repair-source-badge" style={{ color: source.color, background: source.bg, borderColor: source.color }}>{source.label}</span>;
 }
 
+// Fields that determine what an Admin is approving. Keep this deliberately
+// limited to the proposal itself, so unrelated activity (for example a
+// notification or page view) never invalidates a review.
+function proposalSnapshot(ticket) {
+  return JSON.stringify({
+    status: ticket?.status,
+    correction_requested_at: ticket?.correction_requested_at,
+    ticket_description: ticket?.ticket_description ?? '',
+    priority: ticket?.priority ?? '',
+    assigned_custodian_id: ticket?.assigned_custodian_id ?? null,
+    sub_issues: (ticket?.sub_issues ?? []).map((item) => ({
+      sub_issue_id: item.sub_issue_id,
+      title: item.title ?? '',
+      maintenance_type: item.maintenance_type ?? '',
+      repair_type: item.repair_type ?? '',
+      suggested_mechanic_id: item.suggested_mechanic_id ?? null,
+      assigned_mechanic_id: item.assigned_mechanic_id ?? null,
+      external_reason: item.external_reason ?? '',
+      external_work_scope: item.external_work_scope ?? '',
+    })).sort((a, b) => Number(a.sub_issue_id) - Number(b.sub_issue_id)),
+  });
+}
+
+function proposalChangeLabels(previous, latest) {
+  const labels = [];
+  if ((previous?.ticket_description ?? '') !== (latest?.ticket_description ?? '')) labels.push('proposal details');
+  if ((previous?.priority ?? '') !== (latest?.priority ?? '')) labels.push('priority');
+  if (String(previous?.assigned_custodian_id ?? '') !== String(latest?.assigned_custodian_id ?? '')) labels.push('assigned Custodian');
+  const beforeItems = (previous?.sub_issues ?? []).map((item) => ({
+    sub_issue_id: item.sub_issue_id,
+    title: item.title ?? '',
+    maintenance_type: item.maintenance_type ?? '',
+    repair_type: item.repair_type ?? '',
+    suggested_mechanic_id: item.suggested_mechanic_id ?? null,
+    assigned_mechanic_id: item.assigned_mechanic_id ?? null,
+    external_reason: item.external_reason ?? '',
+    external_work_scope: item.external_work_scope ?? '',
+  })).sort((a, b) => Number(a.sub_issue_id) - Number(b.sub_issue_id));
+  const afterItems = (latest?.sub_issues ?? []).map((item) => ({
+    sub_issue_id: item.sub_issue_id,
+    title: item.title ?? '',
+    maintenance_type: item.maintenance_type ?? '',
+    repair_type: item.repair_type ?? '',
+    suggested_mechanic_id: item.suggested_mechanic_id ?? null,
+    assigned_mechanic_id: item.assigned_mechanic_id ?? null,
+    external_reason: item.external_reason ?? '',
+    external_work_scope: item.external_work_scope ?? '',
+  })).sort((a, b) => Number(a.sub_issue_id) - Number(b.sub_issue_id));
+  if (JSON.stringify(beforeItems) !== JSON.stringify(afterItems)) {
+    const assignmentsChanged = beforeItems.length !== afterItems.length || beforeItems.some((item, index) => {
+      const next = afterItems[index];
+      return !next || item.suggested_mechanic_id !== next.suggested_mechanic_id || item.assigned_mechanic_id !== next.assigned_mechanic_id;
+    });
+    labels.push(assignmentsChanged ? 'repair items or assigned Maintenance Personnel' : 'repair items');
+  }
+  if (previous?.status !== latest?.status || previous?.correction_requested_at !== latest?.correction_requested_at) labels.push('proposal status');
+  if (Number(previous?.decision_revision ?? 0) !== Number(latest?.decision_revision ?? 0) && labels.length === 0) labels.push('decision history');
+  return labels;
+}
+
 // The ticket's overall status as a tinted pill in its status colour —
 // separate from priority (TicketStatusBadge keeps its own priority colours).
 function TicketStatusPill({ status, size = 'normal' }) {
@@ -10434,7 +10505,7 @@ function TicketProposalReview({ user, ticket, lookups, onApprove, onDecline, onU
 
   // Keyed by ticket id so a fresh mount (a different ticket) always starts
   // from that ticket's own values instead of whatever was last typed here.
-  return <TicketProposalReviewForm key={`${ticket.ticket_id}:${ticket.decision_revision}`} ticket={ticket} lookups={lookups} onApprove={onApprove} onDecline={onDecline} onUndecline={onUndecline} onRequestCorrections={onRequestCorrections} />;
+  return <TicketProposalReviewForm key={`${ticket.ticket_id}:${ticket.decision_revision}:${proposalSnapshot(ticket)}`} ticket={ticket} lookups={lookups} onApprove={onApprove} onDecline={onDecline} onUndecline={onUndecline} onRequestCorrections={onRequestCorrections} />;
 }
 
 function TicketCorrectionsPending({ ticket, onDecline }) {
@@ -10537,6 +10608,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
   const [declining, setDeclining] = useState(false);
   const [requestingCorrections, setRequestingCorrections] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [validationLine, setValidationLine] = useState(null);
   // An external-shop ticket goes to an outside shop: no in-house mechanic.
   const extSub = (ticket.sub_issues ?? []).find((si) => si.repair_type === 'external');
@@ -10548,8 +10620,9 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
   // One mechanic does the whole ticket now — approving is the single
   // moment the ticket gets both activated AND dispatched, in one step.
   const submitApprove = async () => {
-    if (subRows.some((row) => !row.assigned_mechanic_id)) {
-      setValidationLine('Assign Maintenance Personnel to every sub-issue before approving (for an external shop job, the person who will test it when it returns).');
+    if (submittingRef.current) return;
+    if (subRows.some((row) => row.repair_type !== 'external' && !row.assigned_mechanic_id)) {
+      setValidationLine('Assign Maintenance Personnel to every sub-issue before approving.');
       return;
     }
     if (subRows.some((row) => String(row.assigned_mechanic_id) === String(ticket.assigned_custodian_id))) {
@@ -10563,6 +10636,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
       return;
     }
     setValidationLine(null);
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await onApprove({
@@ -10576,6 +10650,7 @@ function TicketProposalReviewForm({ ticket, lookups, onApprove, onDecline, onUnd
         })),
       });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -10844,7 +10919,7 @@ function TwoColumnSubIssueEditor({ items, onChange, maintenanceTypeOptions, mech
 // TICKET DETAIL PANEL — shown when admin clicks a ticket row
 // =========================================================================
 
-function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, lookups, onAssignTicketMechanic, onReassignCustodian, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSetShopTester, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false, onRecordGoodCheck }) {
+function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, lookups, proposalSyncNotice, onAssignTicketMechanic, onReassignCustodian, onReopenDone, onLogRepairs, onSubmitForVerification, onVerifyTicket, onCancel, onUncancel, onDelete, onRequestConfirmation, onSetShopTester, onApproveProposal, onDeclineProposal, onUndeclineProposal, onRequestCorrections, onResubmitProposal, onClose, asPage = false, onRecordGoodCheck }) {
   const [cancelling, setCancelling] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [reassigningCustodian, setReassigningCustodian] = useState(false);
@@ -10920,6 +10995,11 @@ function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, looku
 
   const panel = (
       <div className={`ticket-detail-panel${asPage ? ' is-page' : ''}`} onClick={asPage ? undefined : (e) => e.stopPropagation()}>
+        {proposalSyncNotice && (
+          <p className="notice warning" role="status" style={{ margin: '0 0 12px' }}>
+            <Icon name="alert" size={14} /> {proposalSyncNotice}
+          </p>
+        )}
         <section className="ticket-process-hero ticket-process-hero--simple">
           <div className="ticket-process-hero-main">
             <div className="ticket-process-kicker">
@@ -11457,26 +11537,86 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [proposalSyncNotice, setProposalSyncNotice] = useState(null);
+  const ticketReadSequence = useRef(0);
+  const ticketRef = useRef(null);
+  const proposalDecisionInFlight = useRef(false);
 
-  const loadTicket = useCallback(() => {
-    return api.get(`/tickets/${ticketId}`)
-      .then((response) => {
-        setTicket(response.data);
+  const loadTicket = useCallback(async ({ reportProposalChanges = false } = {}) => {
+    const requestSequence = ++ticketReadSequence.current;
+    try {
+      const response = await api.get(`/tickets/${ticketId}`);
+      const latest = response.data;
+      // Initial load, polling, and post-action refreshes can overlap. Only
+      // allow the newest-started read to replace the detail currently shown.
+      if (requestSequence === ticketReadSequence.current) {
+        const previous = ticketRef.current;
+        ticketRef.current = latest;
+        setTicket(latest);
         setNotFound(false);
-      })
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false));
+        if (reportProposalChanges && previous && proposalSnapshot(previous) !== proposalSnapshot(latest)) {
+          const changes = proposalChangeLabels(previous, latest);
+          const summary = changes.length ? changes.join(', ') : 'decision history';
+          setProposalSyncNotice(`This ticket was updated while open (${summary}). The latest status is ${latest.status}; review the refreshed details before deciding.`);
+        }
+        return latest;
+      }
+      return ticketRef.current ?? latest;
+    } catch (error) {
+      if (requestSequence === ticketReadSequence.current && !ticketRef.current) setNotFound(true);
+      throw error;
+    } finally {
+      if (requestSequence === ticketReadSequence.current) setLoading(false);
+    }
   }, [ticketId]);
 
-  useEffect(() => { loadTicket(); }, [loadTicket]);
+  useEffect(() => { loadTicket().catch(() => {}); }, [loadTicket]);
 
   // After an action: refresh in place (no full-page spinner, which would
   // unmount the panel and wipe whatever the user typed if it failed) and
   // hand the action's success flag on so forms only close on success.
-  const afterAction = (ok) => api.get(`/tickets/${ticketId}`)
-    .then((response) => setTicket(response.data))
-    .catch(() => {})
-    .then(() => ok);
+  const afterAction = async (ok) => {
+    try { await loadTicket(); } catch { /* retain the last visible ticket */ }
+    return ok;
+  };
+
+  const decideProposal = async (snapshot, payload, decision) => {
+    if (proposalDecisionInFlight.current) return false;
+    proposalDecisionInFlight.current = true;
+    try {
+      const latest = await loadTicket();
+      const changed = Number(latest.decision_revision ?? 0) !== Number(snapshot.decision_revision ?? 0)
+        || proposalSnapshot(latest) !== proposalSnapshot(snapshot);
+      if (changed || latest.status !== 'Pending Approval' || latest.correction_requested_at) {
+        const changes = proposalChangeLabels(snapshot, latest);
+        const summary = changes.length ? changes.join(', ') : 'proposal status';
+        setProposalSyncNotice(`The proposal changed before ${decision} (${summary}). The latest status is ${latest.status}; review the refreshed ticket before deciding again.`);
+        return false;
+      }
+
+      setProposalSyncNotice(null);
+      const path = decision === 'approve' ? `/tickets/${snapshot.ticket_id}/approve` : `/tickets/${snapshot.ticket_id}/decline`;
+      const success = decision === 'approve' ? 'Ticket proposal approved.' : 'Ticket proposal declined.';
+      const ok = await sendTicketAction(path, { ...payload, expected_revision: latest.decision_revision ?? 0 }, success);
+      let after = null;
+      try { after = await loadTicket(); } catch { /* retain the visible ticket */ }
+      if (ok === false) {
+        if (after && (Number(after.decision_revision ?? 0) !== Number(snapshot.decision_revision ?? 0)
+          || proposalSnapshot(after) !== proposalSnapshot(snapshot))) {
+          const changes = proposalChangeLabels(snapshot, after);
+          const summary = changes.length ? changes.join(', ') : 'proposal status';
+          setProposalSyncNotice(`The proposal changed while your decision was being submitted (${summary}). The latest status is ${after.status}; review the refreshed ticket.`);
+        }
+        return false;
+      }
+      return true;
+    } catch {
+      setProposalSyncNotice('The latest ticket could not be loaded. Check your connection and refresh before deciding.');
+      return false;
+    } finally {
+      proposalDecisionInFlight.current = false;
+    }
+  };
 
   // Silent background refresh — same request as loadTicket, but doesn't
   // flip the page back to the loading spinner, so it can run on an interval
@@ -11487,12 +11627,11 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
   // next time they happen to reopen it.
   useEffect(() => {
     const interval = setInterval(() => {
-      api.get(`/tickets/${ticketId}`)
-        .then((response) => setTicket(response.data))
-        .catch(() => {});
+      if (proposalDecisionInFlight.current) return;
+      loadTicket({ reportProposalChanges: true }).catch(() => {});
     }, 15000);
     return () => clearInterval(interval);
-  }, [ticketId]);
+  }, [loadTicket]);
 
   if (loading) return <ModuleLoader label="Loading ticket" />;
 
@@ -11512,6 +11651,7 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
       user={user}
       userId={userId}
       ticket={ticket}
+      proposalSyncNotice={proposalSyncNotice}
       lookups={ticketLookups}
       onAddSubIssue={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues`, payload, 'Sub-issue added.', 'post').then(afterAction)}
       onEditSubIssue={(t, id, payload) => sendTicketAction(`/tickets/${t.ticket_id}/sub-issues/${id}`, payload, 'Sub-issue updated.').then(afterAction)}
@@ -11526,11 +11666,11 @@ function TicketProfilePage({ ticketId, user, userId, ticketLookups, onBack, onDe
       onCancel={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/cancel`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Ticket cancelled.').then(afterAction)}
       onUncancel={(t) => sendTicketAction(`/tickets/${t.ticket_id}/uncancel`, { expected_revision: t.decision_revision ?? 0 }, 'Ticket restored.').then(afterAction)}
       onDelete={(t) => onDeleteTicket(t).then((ok) => { if (ok !== false) onBack(); else afterAction(false); return ok; })}
-      onApproveProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/approve`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Ticket proposal approved.').then(afterAction)}
+      onApproveProposal={(t, payload) => decideProposal(t, payload, 'approve')}
       // Declining no longer deletes the ticket — it becomes a visible,
       // reversible Declined status, so this stays on the page and refreshes
       // in place, same as every other action here.
-      onDeclineProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/decline`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Ticket proposal declined.').then(afterAction)}
+      onDeclineProposal={(t, payload) => decideProposal(t, payload, 'decline')}
       onUndeclineProposal={(t) => sendTicketAction(`/tickets/${t.ticket_id}/undecline`, { expected_revision: t.decision_revision ?? 0 }, 'Proposal restored to Pending Approval.').then(afterAction)}
       onRequestCorrections={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/request-corrections`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Corrections requested from the Custodian.').then(afterAction)}
       onResubmitProposal={(t, payload) => sendTicketAction(`/tickets/${t.ticket_id}/resubmit`, { ...payload, expected_revision: t.decision_revision ?? 0 }, 'Corrected proposal submitted for Admin review.').then(afterAction)}
@@ -12692,7 +12832,7 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
   );
 }
 
-function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canCheckReadiness = false, canRequestInspection = false, canRecordParts = false, setNotice, onSaved, onRequestConfirmation }) {
+function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canRequestInspection = false, canRecordParts = false, setNotice, onSaved, onRequestConfirmation }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(new URLSearchParams(location.search).get('tab') === 'edit');
@@ -12700,7 +12840,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
   const [readiness, setReadiness] = useState(null);
   const [readinessLoaded, setReadinessLoaded] = useState(false);
   const [readinessLoadFailed, setReadinessLoadFailed] = useState(false);
-  const [checkingReadiness, setCheckingReadiness] = useState(false);
   // Live-tracks the Edit form's Vehicle Category select so switching a vehicle
   // to a Water category shows Hull Material/Engine Type immediately,
   // instead of only after saving and reloading. Reset whenever a different
@@ -12764,41 +12903,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
       loadReadiness();
       await onSaved();
       setNotice({ type: 'success', text: item.blocks ? `${item.name} now counts as minor: the vehicle can still respond without it.` : `${item.name} now holds the vehicle back from being ready.` });
-    } catch (error) {
-      showError(error, setNotice);
-    }
-  };
-
-  const handleReadinessCheck = async (payload) => {
-    setNotice(null);
-    try {
-      const response = await api.post(`/vehicles/${vehicleId}/readiness-check`, payload);
-      loadReadiness();
-      await onSaved();
-      setNotice({ type: 'success', text: 'Readiness check recorded.' });
-      setCheckingReadiness(false);
-
-      // Only offered when the backend confirms it's safe: every item
-      // passed AND the vehicle has no open ticket. A vehicle with an open
-      // ticket must go back to Available through that ticket closing, not
-      // through a generic checklist that never looked at the actual repair.
-      if (response.data.can_mark_available) {
-        onRequestConfirmation?.({
-          title: 'Mark Vehicle Available',
-          message: `Every item passed and ${vehicle.vehicle_name} has no open ticket — mark it Available now?`,
-          confirmLabel: 'Mark Available',
-          onConfirm: async () => {
-            try {
-              await api.put(`/vehicles/${vehicleId}/mark-available`);
-              await onSaved();
-              loadReadiness();
-              setNotice({ type: 'success', text: 'Vehicle marked Available.' });
-            } catch (error) {
-              showError(error, setNotice);
-            }
-          },
-        });
-      }
     } catch (error) {
       showError(error, setNotice);
     }
@@ -12887,11 +12991,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
               <Icon name="search" size={13} /> Request Custodian Inspection
             </button>
           )}
-          {canCheckReadiness && !['Decommissioned', 'Inactive'].includes(vehicle.status) && !editing && (
-            <button className="btn-sm success-button" type="button" onClick={() => setCheckingReadiness(true)}>
-              <Icon name="checkCircle" size={13} /> Readiness Check
-            </button>
-          )}
           {canManage && vehicle.status !== 'Decommissioned' && !editing && (
             <button className="btn-sm danger-button" type="button" onClick={() => setDecommissioning(true)}>
               <Icon name="alert" size={13} /> Decommission
@@ -12952,15 +13051,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
           </ul>
         </div>
       )}
-
-      <FormModal open={checkingReadiness} title={`Readiness Check — ${vehicle.vehicle_name}`} onClose={() => setCheckingReadiness(false)}>
-        <ReadinessCheckForm
-          key={`readiness-${vehicle.vehicle_id}`}
-          vehicle={vehicle}
-          onCancel={() => setCheckingReadiness(false)}
-          onSubmit={handleReadinessCheck}
-        />
-      </FormModal>
 
       <FormModal open={decommissioning} title={`Decommission ${vehicle.vehicle_name}`} onClose={() => setDecommissioning(false)}>
         <p className="muted" style={{ marginBottom: 12, fontSize: '0.85rem' }}>
@@ -15485,8 +15575,15 @@ function useColumnChooser(storageKey, allColumns, defaultHidden = []) {
   // before a new column existed (it gets appended) must not leave Action in
   // the middle of the row.
   const isActionKey = (k) => k === 'action' || k === 'actions';
+  // Keep bulk-selection checkboxes at the far left despite saved column orders.
+  const selectionKeys = allColumns.filter((column) => column.key === 'select').map((column) => column.key);
   const idKeys = allColumns.filter((column) => /\bID$/.test(column.label)).map((column) => column.key);
-  const orderedKeys = [...idKeys, ...order.filter((k) => !idKeys.includes(k) && !isActionKey(k)), ...order.filter(isActionKey)];
+  const orderedKeys = [
+    ...selectionKeys,
+    ...idKeys,
+    ...order.filter((k) => !selectionKeys.includes(k) && !idKeys.includes(k) && !isActionKey(k)),
+    ...order.filter(isActionKey),
+  ];
   // Older saved preferences may hide IDs. Always show them and keep the picker checked.
   const effectiveHidden = new Set([...hidden].filter((key) => !idKeys.includes(key)));
   const visibleColumns = orderedKeys.map((k) => byKey.get(k)).filter((c) => c && !effectiveHidden.has(c.key));

@@ -233,6 +233,84 @@ class TicketDecisionSafetyTest extends TestCase
         $this->putJson("/api/tickets/{$t->ticket_id}/approve",['assigned_mechanic_id'=>$this->mechanic->id,'expected_revision'=>1])->assertStatus(409);
         $this->assertSame('Pending Approval',$t->fresh()->status);
     }
+
+    public function test_review_reads_latest_proposal_and_allows_a_current_revision_decision(): void
+    {
+        $t = $this->propose();
+        Sanctum::actingAs($this->admin, ['*']);
+
+        $detail = $this->getJson("/api/tickets/{$t->ticket_id}")
+            ->assertOk()
+            ->assertJsonPath('status', 'Pending Approval')
+            ->assertJsonPath('decision_revision', 0)
+            ->assertJsonPath('ticket_description', 'QA findings')
+            ->assertJsonPath('priority', 'High')
+            ->assertJsonPath('sub_issues.0.title', 'Brake repair');
+
+        $subIssueId = $detail->json('sub_issues.0.sub_issue_id');
+        $this->putJson("/api/tickets/{$t->ticket_id}/approve", [
+            'expected_revision' => 0,
+            'sub_issues' => [[
+                'sub_issue_id' => $subIssueId,
+                'assigned_mechanic_id' => $this->mechanic->id,
+            ]],
+        ])->assertOk()
+            ->assertJsonPath('status', 'Active')
+            ->assertJsonPath('decision_revision', 1)
+            ->assertJsonPath('sub_issues.0.assigned_mechanic_id', $this->mechanic->id);
+
+        // A repeated click or retry cannot dispatch the same proposal twice.
+        $this->putJson("/api/tickets/{$t->ticket_id}/approve", [
+            'expected_revision' => 0,
+            'sub_issues' => [['sub_issue_id' => $subIssueId, 'assigned_mechanic_id' => $this->mechanic->id]],
+        ])->assertUnprocessable();
+        $this->assertSame(['Approved'], array_column($t->fresh()->decision_history, 'event'));
+    }
+
+    public function test_review_refresh_exposes_another_admin_change_and_blocks_only_the_old_snapshot(): void
+    {
+        $t = $this->propose();
+        Sanctum::actingAs($this->admin, ['*']);
+        $opened = $this->getJson("/api/tickets/{$t->ticket_id}")->assertOk()->json();
+
+        // Simulate a second browser returning the proposal for corrections
+        // after this Admin opened the page.
+        $this->putJson("/api/tickets/{$t->ticket_id}/request-corrections", [
+            'correction_reason' => 'Clarify the brake symptoms',
+            'expected_revision' => 0,
+        ])->assertOk();
+
+        $latest = $this->getJson("/api/tickets/{$t->ticket_id}")
+            ->assertOk()
+            ->assertJsonPath('decision_revision', 1)
+            ->assertJsonPath('correction_reason', 'Clarify the brake symptoms')
+            ->assertJsonPath('ticket_description', 'QA findings')
+            ->assertJsonPath('sub_issues.0.title', 'Brake repair');
+
+        $this->assertSame(0, $opened['decision_revision']);
+        $this->putJson("/api/tickets/{$t->ticket_id}/approve", [
+            'expected_revision' => $opened['decision_revision'],
+            'assigned_mechanic_id' => $this->mechanic->id,
+        ])->assertStatus(409);
+        $this->assertSame('Pending Approval', $t->fresh()->status);
+        $this->assertSame(1, $latest->json('decision_revision'));
+
+        // A current decision is still allowed, while a repeat is rejected by
+        // the status guard and cannot add a second history entry.
+        $this->putJson("/api/tickets/{$t->ticket_id}/decline", [
+            'decline_reason' => 'No longer required',
+            'expected_revision' => 1,
+        ])->assertOk()->assertJsonPath('status', 'Declined');
+        $this->putJson("/api/tickets/{$t->ticket_id}/decline", [
+            'decline_reason' => 'Duplicate decision',
+            'expected_revision' => 2,
+        ])->assertUnprocessable();
+        $this->putJson("/api/tickets/{$t->ticket_id}/approve", [
+            'expected_revision' => 2,
+            'assigned_mechanic_id' => $this->mechanic->id,
+        ])->assertUnprocessable();
+        $this->assertSame(['Corrections Requested', 'Declined'], array_column($t->fresh()->decision_history, 'event'));
+    }
     public function test_correction_failure_does_not_partially_change_proposal_or_history(): void
     {
         $t=$this->propose();Sanctum::actingAs($this->admin,['*']);
