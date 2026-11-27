@@ -38,9 +38,9 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   useEffect(() => {
     let cancelled = false;
     // The Admin also needs the vehicles to see decommission requests waiting for them.
-    const requests = [api.get('/tickets'), api.get('/maintenance-schedules'), role === 'Admin' ? api.get('/vehicles').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })];
-    Promise.all(requests).then(([tickets, schedules, vehicles]) => {
-      if (!cancelled) { setFeed({ tickets: tickets.data, schedules: schedules.data, vehicles: Array.isArray(vehicles.data) ? vehicles.data : (vehicles.data?.data ?? []), role }); setError(''); }
+    const requests = [api.get('/tickets'), api.get('/maintenance-schedules'), role === 'Admin' ? api.get('/vehicles').catch(() => ({ data: [] })) : Promise.resolve({ data: [] }), role === 'Maintenance Personnel' ? api.get('/salvage-parts/queue').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })];
+    Promise.all(requests).then(([tickets, schedules, vehicles, salvage]) => {
+      if (!cancelled) { setFeed({ tickets: tickets.data, schedules: schedules.data, vehicles: Array.isArray(vehicles.data) ? vehicles.data : (vehicles.data?.data ?? []), salvage: Array.isArray(salvage.data) ? salvage.data : [], role }); setError(''); }
     }).catch(() => { if (!cancelled) setError('Assignments could not be loaded. Retry or open the relevant module.'); });
     return () => { cancelled = true; };
     // Not keyed on `data`: the dashboard summary is re-polled every 15s and on
@@ -53,6 +53,7 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const loading = pending && !error;
   const tickets = pending ? [] : feed.tickets;
   const schedules = pending ? [] : feed.schedules;
+  const salvageWaiting = pending ? [] : (feed.salvage ?? []).filter((v) => !v.salvage_completed_at);
   const decommissionRequests = pending ? [] : (feed.vehicles ?? []).filter((v) => v.decommission_status === 'Proposed' && v.status !== 'Decommissioned');
   const admin = role === 'Admin';
   const custodian = role === 'Custodian';
@@ -90,7 +91,7 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
     ...tickets.filter((t) => t.status === 'Active' && sameId(t.assigned_custodian_id, user.id) && shopItems(t).some((x) => x.external_sent_at && !x.external_returned_at && x.external_expected_return && String(x.external_expected_return).slice(0, 10) < today)).map((t) => ticketTask(t, 'The shop is late: follow up', 'Open ticket')),
     ...tickets.filter((t) => t.status === 'Open' && sameId(t.assigned_custodian_id, user.id)).map((t) => ticketTask(t, 'Inspect reported issue', 'Inspect issue')),
     ...watch.map((v) => ({ key: `readiness-${v.vehicle_id}`, title: 'Check vehicle readiness', reference: v.vehicle_name, status: ({ not_ready: 'Failed last check', stale: 'Check expired', unchecked: 'Not checked' })[v.state] ?? v.state, urgent: v.state === 'not_ready', icon: 'vehicle', open: () => onNavigate(`${basePath}/vehicles/${v.vehicle_id}`), action: 'Check vehicle' })),
-  ] : [...activeMine.flatMap((t) => { const shop = shopTaskFor(t); if (shop) return [ticketTask(t, shop[0], shop[1])]; return shopItems(t).some((x) => sameId(x.external_tester_id, user.id)) && !t.sub_issues.some((x) => sameId(x.assigned_mechanic_id, user.id)) ? [] : [ticketTask(t, undefined, 'Open job')]; }), ...mySchedules.map((s) => scheduleTask(s, 'Open service'))];
+  ] : [...salvageWaiting.map((v) => ({ key: `salvage-${v.vehicle_id}`, title: 'List salvageable parts', reference: `${v.vehicle_name} · ${v.plate_number ?? ''}`, status: 'Decommissioned', date: v.decommissioned_at, icon: 'vehicle', open: () => go('salvage'), action: 'Log parts' })), ...activeMine.flatMap((t) => { const shop = shopTaskFor(t); if (shop) return [ticketTask(t, shop[0], shop[1])]; return shopItems(t).some((x) => sameId(x.external_tester_id, user.id)) && !t.sub_issues.some((x) => sameId(x.assigned_mechanic_id, user.id)) ? [] : [ticketTask(t, undefined, 'Open job')]; }), ...mySchedules.map((s) => scheduleTask(s, 'Open service'))];
   // Keep the same kind of item together (all proposals, then all bookings, then all overdue ...), oldest first
   // inside each group, instead of mixing kinds by urgency.
   const groupOf = (task) => `${String(task.key).split('-')[0]}|${task.status}`;

@@ -935,6 +935,7 @@ function Workspace() {
     if (notice.ticket_id) navigate(`${base}/tickets/${notice.ticket_id}`);
     else if (notice.schedule_id) navigate(`${base}/schedules/${notice.schedule_id}`);
     else if (notice.issue_report_id) navigate(`${base}/issues/${notice.issue_report_id}`);
+    else if (notice.type === 'salvage_ready') navigate(`${base}?module=salvage`);
     else if (notice.vehicle_id) navigate(`${base}/vehicles/${notice.vehicle_id}`);
   };
   const markAllNotificationsRead = async () => {
@@ -7964,6 +7965,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
         render: (row) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
             <StatusBadge value={vehicleConditionLabel(row)} />
+            {row.decommission_status === 'Proposed' && row.status !== 'Decommissioned' && <span className="status-badge pending" title="A decommission request is waiting for the Admin">Decommission requested</span>}
             {/* Every sub-issue is resolved, only Close Ticket is left. */}
             {row.awaiting_closure && (
               <span
@@ -12881,6 +12883,15 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
   const [editCategoryId, setEditCategoryId] = useState(null);
 
   const vehicle = (lookups.vehicles ?? []).find((v) => String(v.vehicle_id) === String(vehicleId));
+  // While a decommission request waits, the Admin needs to know if an open ticket blocks approving it.
+  const [blockingTickets, setBlockingTickets] = useState([]);
+  const awaitingDecision = canManage && vehicle?.decommission_status === 'Proposed' && vehicle?.status !== 'Decommissioned';
+  useEffect(() => {
+    if (!awaitingDecision) return undefined;
+    let live = true;
+    api.get(`/vehicles/${vehicleId}/open-tickets`).then((r) => { if (live) setBlockingTickets(Array.isArray(r.data) ? r.data : []); }).catch(() => {});
+    return () => { live = false; };
+  }, [awaitingDecision, vehicleId]);
 
   const vehicleEditKey = JSON.stringify([vehicle?.vehicle_id]);
   const [previousVehicleEditKey, setPreviousVehicleEditKey] = useState(vehicleEditKey);
@@ -13089,9 +13100,10 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
             <strong><Icon name="alert" size={16} /> Decommission requested</strong>
             <p>{vehicle.decommission_proposed_by_name ?? 'The Custodian'} asked to retire this vehicle{vehicle.decommission_proposed_at ? ` on ${formatDate(vehicle.decommission_proposed_at)}` : ''}: {vehicle.decommission_proposal_reason}</p>
             <small>{canManage ? 'It stays in service until you decide. Approving moves it to the Salvage Inventory for the mechanic.' : 'Waiting for the Admin to decide. The vehicle stays in service meanwhile.'}</small>
+            {canManage && blockingTickets.length > 0 && <small className="decom-blocker" role="alert">Cannot approve yet: close or cancel {blockingTickets.map((t) => `Ticket #${t.barangay_number ?? t.ticket_id}`).join(', ')} first.</small>}
           </div>
           <div className="decom-banner-actions">
-            {canManage && <button className="btn-sm danger-button" type="button" onClick={() => onRequestConfirmation?.({
+            {canManage && <button className="btn-sm danger-button" type="button" disabled={blockingTickets.length > 0} title={blockingTickets.length ? 'An open ticket blocks this' : undefined} onClick={() => onRequestConfirmation?.({
               title: 'Approve decommissioning',
               message: `Retire ${vehicle.vehicle_name} from the fleet? It leaves readiness and coverage, and the mechanic is asked to list its salvageable parts. Its history is kept.`,
               confirmLabel: 'Approve and decommission',
@@ -14255,13 +14267,23 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
           {outcomeMode && (
             <section className="lr-group lr-outcome" aria-labelledby={`${idBase}-out`}>
               <h4 className="lr-section-label" id={`${idBase}-out`}>What are you doing with this job?</h4>
-              <div className="lr-method-choices" role="radiogroup" aria-labelledby={`${idBase}-out`}>
+              <div className="lr-method-choices" role="radiogroup" aria-labelledby={`${idBase}-out`} onKeyDown={(event) => {
+                // Standard radio-group keys: arrows move the choice, as they do for a native radio group.
+                if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(event.key)) return;
+                const radios = [...event.currentTarget.querySelectorAll('[role=radio]')];
+                const at = radios.indexOf(document.activeElement);
+                if (at < 0) return;
+                event.preventDefault();
+                const next = radios[(at + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) + radios.length) % radios.length];
+                next.focus();
+                setOutcome(next.dataset.outcome);
+              }}>
                 {[
                   ['repair', 'I repaired it', 'Record the work, parts and photos, then submit the repair log.', true],
                   ['no_repair', 'No repair needed', 'You checked and nothing needs fixing. Say what you checked.', !!onNoRepair],
                   ['return', 'Return to Admin', 'It is not yours to do, or needs other skills. Say why; the Admin reassigns it.', !!onReturnToAdmin],
                 ].filter((choice) => choice[3]).map(([key, label, hint]) => (
-                  <button key={key} type="button" role="radio" aria-checked={outcome === key} className={`lr-method-choice lr-outcome-btn lr-outcome-${key}${outcome === key ? ' is-selected' : ''}`} onClick={() => setOutcome(key)}>
+                  <button key={key} type="button" role="radio" data-outcome={key} tabIndex={outcome === key || (!outcome && key === 'repair') ? 0 : -1} aria-checked={outcome === key} className={`lr-method-choice lr-outcome-btn lr-outcome-${key}${outcome === key ? ' is-selected' : ''}`} onClick={() => setOutcome(key)}>
                     <span className="lr-method-check" aria-hidden="true" />
                     <span className="lr-method-text"><strong>{label}</strong><small>{hint}</small></span>
                   </button>

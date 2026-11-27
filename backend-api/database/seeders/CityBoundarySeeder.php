@@ -27,7 +27,7 @@ class CityBoundarySeeder extends Seeder
 
         $updated = 0;
         foreach ($entries as $entry) {
-            if (!$entry['geometry']) {
+            if (!$entry['geometry'] || $entry['code'] !== MunicipalityScopeSeeder::CITY_CODE) {
                 continue;
             }
 

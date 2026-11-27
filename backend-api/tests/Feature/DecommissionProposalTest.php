@@ -124,4 +124,52 @@ class DecommissionProposalTest extends TestCase
         $this->assertNull($this->vehicle->fresh()->decommission_status);
         $this->putJson("/api/vehicles/{$this->vehicle->vehicle_id}/decommission-proposal/withdraw")->assertUnprocessable();
     }
+
+    #[Test]
+    public function the_notices_open_the_vehicle(): void
+    {
+        $this->propose()->assertOk();
+        $this->assertSame($this->vehicle->vehicle_id, Notification::where('user_id', $this->admin->id)->where('type', 'decommission_proposed')->value('vehicle_id'));
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/vehicles/{$this->vehicle->vehicle_id}/decommission", ['decommission_reason' => 'Engine is beyond repair'])->assertOk();
+        foreach ([[$this->custodian, 'decommission_approved'], [$this->mechanic, 'salvage_ready']] as [$user, $type]) {
+            $this->assertSame($this->vehicle->vehicle_id, Notification::where('user_id', $user->id)->where('type', $type)->value('vehicle_id'), $type);
+        }
+    }
+
+    #[Test]
+    public function decommissioning_cancels_the_vehicles_open_schedules_and_tells_the_mechanic(): void
+    {
+        $open = \App\Models\VehicleMaintenanceSchedule::create(['vehicle_id' => $this->vehicle->vehicle_id, 'maintenance_type' => 'Oil Change', 'scheduled_date' => now()->addWeek()->toDateString(), 'status' => 'Scheduled', 'created_by' => $this->custodian->id, 'assigned_to' => $this->mechanic->id]);
+        $done = \App\Models\VehicleMaintenanceSchedule::create(['vehicle_id' => $this->vehicle->vehicle_id, 'maintenance_type' => 'Tire Service', 'scheduled_date' => now()->subWeek()->toDateString(), 'status' => 'Completed', 'created_by' => $this->custodian->id, 'assigned_to' => $this->mechanic->id]);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/vehicles/{$this->vehicle->vehicle_id}/decommission", ['decommission_reason' => 'End of life'])->assertOk();
+
+        $this->assertSame('Cancelled', $open->fresh()->status);
+        $this->assertSame('Completed', $done->fresh()->status);
+        $this->assertTrue(Notification::where('user_id', $this->mechanic->id)->where('type', 'schedule_cancelled')->where('schedule_id', $open->schedule_id)->exists());
+    }
+
+    #[Test]
+    public function recommissioning_removes_unused_salvage_and_keeps_used_lines_as_history(): void
+    {
+        $this->vehicle->update(['status' => 'Decommissioned', 'salvage_completed_at' => now()]);
+        $unused = \App\Models\SalvagePart::create(['vehicle_id' => $this->vehicle->vehicle_id, 'part_name' => 'Radiator', 'part_condition' => 'Good', 'quantity' => 2, 'quantity_available' => 2]);
+        $used = \App\Models\SalvagePart::create(['vehicle_id' => $this->vehicle->vehicle_id, 'part_name' => 'Alternator', 'part_condition' => 'Good', 'quantity' => 3, 'quantity_available' => 1]);
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->postJson("/api/vehicles/{$this->vehicle->vehicle_id}/restore")->assertOk();
+
+        $this->assertNull(\App\Models\SalvagePart::find($unused->salvage_part_id));
+        $this->assertSame([2, 0], [$used->fresh()->quantity, $used->fresh()->quantity_available]);
+        $this->assertNull($this->vehicle->fresh()->salvage_completed_at);
+    }
+
+    #[Test]
+    public function a_declined_ticket_proposal_does_not_block_decommissioning(): void
+    {
+        MaintenanceTicket::create(['vehicle_id' => $this->vehicle->vehicle_id, 'created_by' => $this->custodian->id, 'ticket_title' => 'T', 'ticket_description' => 'x', 'priority' => 'Low', 'status' => 'Declined', 'assigned_custodian_id' => $this->custodian->id]);
+        $this->propose()->assertOk();
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/vehicles/{$this->vehicle->vehicle_id}/decommission", ['decommission_reason' => 'End of life'])->assertOk();
+    }
 }

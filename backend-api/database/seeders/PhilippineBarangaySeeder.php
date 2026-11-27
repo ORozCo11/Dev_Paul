@@ -17,6 +17,11 @@ class PhilippineBarangaySeeder extends Seeder
         $count = 0;
 
         foreach ($catalog as $cityCode => $entries) {
+            // This instance serves one municipality, so only its barangays are loaded (the other ~42,000 were loaded and then
+            // deleted again by MunicipalityScopeSeeder, which made a fresh seed take about two minutes).
+            if ($cityCode !== MunicipalityScopeSeeder::CITY_CODE) {
+                continue;
+            }
             $city = $cities->get($cityCode);
             if (!$city) {
                 throw new \RuntimeException("Missing parent city {$cityCode}; run ProvinceSeeder and CitySeeder first.");

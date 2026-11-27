@@ -60,6 +60,7 @@ class SalvageController extends Controller
         abort_unless($vehicle->status === 'Decommissioned', 422, 'Parts can only be logged from a decommissioned vehicle. Ask the Admin to decommission it first.');
         abort_if($vehicle->salvage_completed_at, 422, 'The parts list for this vehicle is already finished. Reopen it to add more.');
 
+        $this->abortIfListed((int) $data['vehicle_id'], $data['part_name']);
         $part = SalvagePart::create($data + ['barangay_id' => $vehicle->barangay_id, 'quantity_available' => $data['quantity'], 'logged_by' => $request->user()->id]);
         $this->log($request, 'Add', "Logged {$part->quantity} x {$part->part_name} from {$vehicle->vehicle_name} as salvageable.", $part->salvage_part_id);
 
@@ -70,6 +71,7 @@ class SalvageController extends Controller
     {
         $this->requireAbility($request, 'salvage.manage');
         $data = $this->validated($request, false);
+        $this->abortIfListed((int) $salvagePart->vehicle_id, $data['part_name'], $salvagePart->salvage_part_id);
         $used = $salvagePart->quantity - $salvagePart->quantity_available;
         abort_if($data['quantity'] < $used, 422, "{$used} of this part have already been used in repairs, so the total cannot be below {$used}.");
 
@@ -115,6 +117,10 @@ class SalvageController extends Controller
 
     private function validated(Request $request, bool $withVehicle = true): array
     {
+        if (is_string($request->input('part_name'))) {
+            $request->merge(['part_name' => preg_replace('/\s+/u', ' ', trim($request->input('part_name')))]);
+        }
+
         return $request->validate([
             'vehicle_id' => $withVehicle ? ['required', 'integer', 'exists:vehicles,vehicle_id'] : ['sometimes', 'integer'],
             'part_name' => ['required', 'string', 'max:255'],
@@ -124,6 +130,14 @@ class SalvageController extends Controller
             'storage_location' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+    }
+
+    /** One line per part per vehicle: raise its quantity instead of listing it twice (spacing and capitals do not count). */
+    private function abortIfListed(int $vehicleId, string $name, ?int $exceptId = null): void
+    {
+        $exists = SalvagePart::where('vehicle_id', $vehicleId)->when($exceptId, fn ($q) => $q->where('salvage_part_id', '!=', $exceptId))
+            ->whereRaw('LOWER(TRIM(part_name)) = ?', [mb_strtolower(trim($name))])->exists();
+        abort_if($exists, 422, "{$name} is already listed for this vehicle. Edit that line to change its quantity.");
     }
 
     private function present(SalvagePart $part): array

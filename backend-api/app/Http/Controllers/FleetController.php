@@ -1204,6 +1204,16 @@ class FleetController extends Controller
             'decommissioned_at' => null,
         ]);
 
+        if ($wasDecommissioned) {
+            // The vehicle is back in service, so nothing of it is salvage any more. Parts already used in repairs stay on
+            // record (with nothing left); unused lines are removed.
+            \App\Models\SalvagePart::where('vehicle_id', $vehicle->vehicle_id)->get()->each(function (\App\Models\SalvagePart $part) {
+                $used = $part->quantity - $part->quantity_available;
+                $used > 0 ? $part->update(['quantity' => $used, 'quantity_available' => 0]) : $part->delete();
+            });
+            $vehicle->update(['salvage_completed_at' => null, 'salvage_completed_by' => null]);
+        }
+
         \App\Services\VehicleOperationalState::refresh($vehicle, true);
 
         $verb = $wasDecommissioned ? 'recommissioned' : 'restored';
@@ -1226,7 +1236,7 @@ class FleetController extends Controller
         $this->requireAbility($request, 'vehicle.decommission_propose');
         abort_if($vehicle->status === 'Decommissioned', 422, 'This vehicle is already decommissioned.');
         abort_if($vehicle->decommission_status === 'Proposed', 422, 'A decommission request for this vehicle is already waiting for the Admin.');
-        $open = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)->whereNotIn('status', ['Closed', 'Cancelled'])->count();
+        $open = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)->whereNotIn('status', ['Closed', 'Cancelled', 'Declined'])->count();
         abort_if($open > 0, 422, 'Close or cancel this vehicle\'s open ticket(s) before proposing to decommission it.');
         $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:5000']]);
 
@@ -1241,7 +1251,7 @@ class FleetController extends Controller
         ]);
         $this->history($vehicle, 'Decommission Proposed', "{$request->user()->name} proposed decommissioning {$vehicle->vehicle_name}: {$data['reason']}", 'vehicles', $vehicle->vehicle_id, $request);
         $this->log($request, 'Propose Decommission', 'Vehicle Management', $vehicle->vehicle_id, "Proposed decommissioning vehicle {$vehicle->vehicle_name}");
-        $this->notifyAdmins('Decommission Proposed', "{$request->user()->name} proposes to decommission {$vehicle->vehicle_name} ({$vehicle->plate_number}): {$data['reason']}", 'decommission_proposed', $vehicle->barangay_id);
+        $this->notifyAdmins('Decommission Proposed', "{$request->user()->name} proposes to decommission {$vehicle->vehicle_name} ({$vehicle->plate_number}): {$data['reason']}", 'decommission_proposed', $vehicle->barangay_id, ['vehicle_id' => $vehicle->vehicle_id]);
 
         return response()->json($vehicle->fresh(['category']));
     }
@@ -1274,7 +1284,7 @@ class FleetController extends Controller
         $this->history($vehicle, 'Decommission Declined', "The decommission request for {$vehicle->vehicle_name} was declined: {$data['decline_reason']}", 'vehicles', $vehicle->vehicle_id, $request);
         $this->log($request, 'Decline Decommission', 'Vehicle Management', $vehicle->vehicle_id, "Declined decommissioning vehicle {$vehicle->vehicle_name}");
         if ($proposer) {
-            $this->notifyUser((int) $proposer, 'Decommission Declined', "{$vehicle->vehicle_name} stays in service. Reason: {$data['decline_reason']}", 'decommission_declined');
+            $this->notifyUser((int) $proposer, 'Decommission Declined', "{$vehicle->vehicle_name} stays in service. Reason: {$data['decline_reason']}", 'decommission_declined', ['vehicle_id' => $vehicle->vehicle_id]);
         }
 
         return response()->json($vehicle->fresh(['category']));
@@ -1287,7 +1297,7 @@ class FleetController extends Controller
         abort_if($vehicle->status === 'Decommissioned', 422, 'This vehicle is already decommissioned.');
 
         $openTickets = MaintenanceTicket::where('vehicle_id', $vehicle->vehicle_id)
-            ->whereNotIn('status', ['Closed', 'Cancelled'])
+            ->whereNotIn('status', ['Closed', 'Cancelled', 'Declined'])
             ->get(['ticket_id', 'barangay_number', 'ticket_title']);
         if ($openTickets->isNotEmpty()) {
             abort(response()->json([
@@ -1312,10 +1322,18 @@ class FleetController extends Controller
             'decommission_declined_at' => null,
         ]);
         if ($vehicle->decommission_proposed_by) {
-            $this->notifyUser((int) $vehicle->decommission_proposed_by, 'Decommission Approved', "{$vehicle->vehicle_name} was decommissioned. The mechanic will list its salvageable parts.", 'decommission_approved');
+            $this->notifyUser((int) $vehicle->decommission_proposed_by, 'Decommission Approved', "{$vehicle->vehicle_name} was decommissioned. The mechanic will list its salvageable parts.", 'decommission_approved', ['vehicle_id' => $vehicle->vehicle_id]);
         }
+        // A retired vehicle cannot be serviced: its booked services are cancelled (not left to show as overdue).
+        VehicleMaintenanceSchedule::where('vehicle_id', $vehicle->vehicle_id)->whereIn('status', ['Scheduled', 'Pending Approval'])->whereNull('resulting_ticket_id')->get()->each(function (VehicleMaintenanceSchedule $schedule) use ($vehicle, $request) {
+            $schedule->update(['status' => 'Cancelled', 'hold_reason' => null]);
+            $this->history($vehicle, 'Maintenance Schedule Cancelled', "Maintenance schedule #{$schedule->schedule_id} was cancelled because {$vehicle->vehicle_name} was decommissioned.", 'vehicle_maintenance_schedules', $schedule->schedule_id, $request);
+            if ($schedule->assigned_to) {
+                $this->notifyUser((int) $schedule->assigned_to, 'Service Cancelled', "{$schedule->maintenance_type} on {$vehicle->vehicle_name} was cancelled because the vehicle was decommissioned.", 'schedule_cancelled', ['schedule_id' => $schedule->schedule_id]);
+            }
+        });
         // Mechanics are told there is a parts list to make.
-        User::where('barangay_id', $vehicle->barangay_id)->havingRole('Maintenance Personnel')->get()->each(fn (User $mechanic) => $this->notifyUser($mechanic->id, 'Vehicle Ready for Salvage', "{$vehicle->vehicle_name} was decommissioned. List the parts that can still be used (Salvage Inventory).", 'salvage_ready'));
+        User::where('barangay_id', $vehicle->barangay_id)->havingRole('Maintenance Personnel')->get()->each(fn (User $mechanic) => $this->notifyUser($mechanic->id, 'Vehicle Ready for Salvage', "{$vehicle->vehicle_name} was decommissioned. List the parts that can still be used (Salvage Inventory).", 'salvage_ready', ['vehicle_id' => $vehicle->vehicle_id]));
 
         $this->history($vehicle, 'Vehicle Decommissioned', "{$vehicle->vehicle_name} was decommissioned (end of life): {$data['decommission_reason']}", 'vehicles', $vehicle->vehicle_id, $request);
         $this->log($request, 'Decommission', 'Vehicle Management', $vehicle->vehicle_id, "Decommissioned vehicle {$vehicle->vehicle_name}");

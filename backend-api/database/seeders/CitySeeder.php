@@ -23,6 +23,10 @@ class CitySeeder extends Seeder
         $provinceIdsByCode = Province::pluck('id', 'code');
 
         foreach ($cities as $city) {
+            // One municipality is served, so only it is loaded (the other ~1,600 cities were loaded and removed again).
+            if ($city['code'] !== MunicipalityScopeSeeder::CITY_CODE) {
+                continue;
+            }
             $provinceId = $provinceIdsByCode[$city['provinceCode']] ?? null;
 
             if (!$provinceId) {

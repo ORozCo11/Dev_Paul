@@ -180,4 +180,21 @@ class SalvageInventoryTest extends TestCase
 
         return [$ticketId, $subId];
     }
+
+    #[Test]
+    public function a_part_is_listed_once_per_vehicle_whatever_the_case_or_spacing_and_names_are_trimmed(): void
+    {
+        $this->decommission();
+        $first = $this->logPart(['part_name' => '  Alternator  ']);
+        $this->assertSame('Alternator', $first['part_name']);
+
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->postJson('/api/salvage-parts', ['vehicle_id' => $this->donor->vehicle_id, 'part_name' => 'ALTERNATOR', 'part_condition' => 'Good', 'quantity' => 1])->assertUnprocessable();
+        $this->postJson('/api/salvage-parts', ['vehicle_id' => $this->donor->vehicle_id, 'part_name' => 'alternator   ', 'part_condition' => 'Good', 'quantity' => 1])->assertUnprocessable();
+        $second = $this->postJson('/api/salvage-parts', ['vehicle_id' => $this->donor->vehicle_id, 'part_name' => 'Radiator', 'part_condition' => 'Good', 'quantity' => 1])->assertCreated()->json();
+
+        // renaming one line onto another is refused too; keeping its own name is fine
+        $this->putJson("/api/salvage-parts/{$second['salvage_part_id']}", ['part_name' => 'alternator', 'part_condition' => 'Good', 'quantity' => 1])->assertUnprocessable();
+        $this->putJson("/api/salvage-parts/{$second['salvage_part_id']}", ['part_name' => 'Radiator', 'part_condition' => 'Good', 'quantity' => 2])->assertOk();
+    }
 }

@@ -17628,3 +17628,6 @@ html[data-theme="dark"] .salvage-steps { background: #1e293b; color: #e2e8f0; }
 
 html[data-theme="dark"] .metric-grid.stat-one-line .metric-card-iconic .metric-card-body span:first-child { color: #cbd5e1; }
 html[data-theme="dark"] .module-filter-panel .filter-label span, html[data-theme="dark"] .module-filter-panel .filter-date-group > span { color: #475569; }
+
+.decom-blocker { display: block; margin-top: 4px; color: #b91c1c; font-weight: 700; }
+html[data-theme="dark"] .decom-blocker { color: #fca5a5; }
