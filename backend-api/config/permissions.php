@@ -176,6 +176,10 @@ return [
     // shop tester receives it, tests it and writes the repair up
     // (external.receive); the Custodian then only verifies. The Admin approves
     // the proposal and names the tester, and never handles the shop.
+    // Salvage inventory: parts that can still be used from decommissioned vehicles.
+    'salvage.view' => ['Admin', 'Custodian', 'Maintenance Personnel'],
+    'salvage.manage' => ['Maintenance Personnel'],
+
     'external.handle' => ['Custodian'],
     'external.receive' => ['Maintenance Personnel'],
     // Cannibalization records: anyone on the barangay's repair side can record

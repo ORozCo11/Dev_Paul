@@ -54,7 +54,15 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const schedules = pending ? [] : feed.schedules;
   const admin = role === 'Admin';
   const custodian = role === 'Custodian';
-  const mine = tickets.filter((t) => sameId(t.assigned_mechanic_id, user.id) || (t.sub_issues ?? []).some((s) => sameId(s.assigned_mechanic_id, user.id)));
+  const mine = tickets.filter((t) => sameId(t.assigned_mechanic_id, user.id) || (t.sub_issues ?? []).some((s) => sameId(s.assigned_mechanic_id, user.id) || sameId(s.external_tester_id, user.id)));
+  // Outside-shop trips: say what is expected of this person at each stop.
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  const shopItems = (t) => (t.sub_issues ?? []).filter((x) => x.repair_type === 'external' && x.status === 'Under Repair' && !x.assigned_mechanic_id);
+  const shopTaskFor = (t) => {
+    const item = shopItems(t).find((x) => sameId(x.external_tester_id, user.id));
+    if (!item || !item.external_sent_at) return null;   // not sent yet: nothing for the tester to do
+    return item.external_returned_at ? ['Test the vehicle and write up the repair', 'Open job'] : ['Receive the vehicle from the shop', 'Receive'];
+  };
   const mySchedules = schedules.filter((s) => sameId(s.assigned_to, user.id) && s.status === 'Scheduled' && !s.resulting_ticket_id);
   const overdueSchedules = schedules.filter(isScheduleOverdue);
   const myOverdue = mySchedules.filter(isScheduleOverdue);
@@ -75,9 +83,11 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
     ...overdueSchedules.filter((s) => !s.resulting_ticket_id).map((s) => scheduleTask(s, 'Check schedule')),
   ] : custodian ? [
     ...verifications.map((t) => ticketTask(t, 'Verify completed repair', 'Verify repair')),
+    ...tickets.filter((t) => t.status === 'Active' && sameId(t.assigned_custodian_id, user.id) && shopItems(t).some((x) => !x.external_sent_at)).map((t) => ticketTask(t, 'Send the vehicle to the shop', 'Send to shop')),
+    ...tickets.filter((t) => t.status === 'Active' && sameId(t.assigned_custodian_id, user.id) && shopItems(t).some((x) => x.external_sent_at && !x.external_returned_at && x.external_expected_return && String(x.external_expected_return).slice(0, 10) < today)).map((t) => ticketTask(t, 'The shop is late: follow up', 'Open ticket')),
     ...tickets.filter((t) => t.status === 'Open' && sameId(t.assigned_custodian_id, user.id)).map((t) => ticketTask(t, 'Inspect reported issue', 'Inspect issue')),
     ...watch.map((v) => ({ key: `readiness-${v.vehicle_id}`, title: 'Check vehicle readiness', reference: v.vehicle_name, status: ({ not_ready: 'Failed last check', stale: 'Check expired', unchecked: 'Not checked' })[v.state] ?? v.state, urgent: v.state === 'not_ready', icon: 'vehicle', open: () => onNavigate(`${basePath}/vehicles/${v.vehicle_id}`), action: 'Check vehicle' })),
-  ] : [...activeMine.map((t) => ticketTask(t, undefined, 'Open job')), ...mySchedules.map((s) => scheduleTask(s, 'Open service'))];
+  ] : [...activeMine.flatMap((t) => { const shop = shopTaskFor(t); if (shop) return [ticketTask(t, shop[0], shop[1])]; return shopItems(t).some((x) => sameId(x.external_tester_id, user.id)) && !t.sub_issues.some((x) => sameId(x.assigned_mechanic_id, user.id)) ? [] : [ticketTask(t, undefined, 'Open job')]; }), ...mySchedules.map((s) => scheduleTask(s, 'Open service'))];
   // Keep the same kind of item together (all proposals, then all bookings, then all overdue ...), oldest first
   // inside each group, instead of mixing kinds by urgency.
   const groupOf = (task) => `${String(task.key).split('-')[0]}|${task.status}`;

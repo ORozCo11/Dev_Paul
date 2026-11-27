@@ -49,6 +49,8 @@ class Vehicle extends Model
         'decommission_reason',
         'decommissioned_by',
         'decommissioned_at',
+        'salvage_completed_at',
+        'salvage_completed_by',
     ];
 
     protected static function booted(): void

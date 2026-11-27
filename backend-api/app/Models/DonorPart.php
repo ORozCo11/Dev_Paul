@@ -10,9 +10,19 @@ class DonorPart extends Model
     protected $table = 'ticket_sub_issue_donor_parts';
     protected $primaryKey = 'part_id';
 
-    protected $fillable = ['sub_issue_id', 'donor_vehicle_id', 'part_name', 'quantity', 'blocks_readiness', 'part_condition', 'installed_at', 'reason', 'notes', 'restored_at', 'restored_by'];
+    protected $fillable = ['sub_issue_id', 'salvage_part_id', 'donor_vehicle_id', 'part_name', 'quantity', 'blocks_readiness', 'part_condition', 'installed_at', 'reason', 'notes', 'restored_at', 'restored_by'];
 
     protected $casts = ['quantity' => 'integer', 'blocks_readiness' => 'boolean', 'installed_at' => 'date:Y-m-d', 'restored_at' => 'datetime'];
+
+    protected static function booted(): void
+    {
+        // A part taken from the salvage inventory goes back into stock when this record is removed.
+        static::deleting(function (DonorPart $part) {
+            if ($part->salvage_part_id) {
+                SalvagePart::withoutGlobalScopes()->whereKey($part->salvage_part_id)->increment('quantity_available', $part->quantity);
+            }
+        });
+    }
 
     /** The vehicle this part was taken from. */
     public function donorVehicle()

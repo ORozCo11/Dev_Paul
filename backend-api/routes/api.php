@@ -137,6 +137,13 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::delete('/vehicles/{vehicle}', [FleetController::class, 'archiveVehicle']);
     Route::post('/vehicles/{vehicle}/restore', [FleetController::class, 'restoreVehicle']);
     Route::put('/vehicles/{vehicle}/decommission', [FleetController::class, 'decommissionVehicle']);
+    Route::get('/salvage-parts', [\App\Http\Controllers\SalvageController::class, 'index']);
+    Route::get('/salvage-parts/queue', [\App\Http\Controllers\SalvageController::class, 'queue']);
+    Route::post('/salvage-parts', [\App\Http\Controllers\SalvageController::class, 'store']);
+    Route::put('/salvage-parts/{salvagePart}', [\App\Http\Controllers\SalvageController::class, 'update']);
+    Route::delete('/salvage-parts/{salvagePart}', [\App\Http\Controllers\SalvageController::class, 'destroy']);
+    Route::put('/vehicles/{vehicle}/salvage-complete', [\App\Http\Controllers\SalvageController::class, 'complete']);
+    Route::put('/vehicles/{vehicle}/salvage-reopen', [\App\Http\Controllers\SalvageController::class, 'reopen']);
     Route::get('/vehicles/{vehicle}/reliability', [FleetController::class, 'vehicleReliability']);
     Route::get('/vehicles/{vehicle}/readiness', [FleetController::class, 'vehicleReadiness']);
     Route::post('/vehicles/{vehicle}/request-inspection', [FleetController::class, 'requestInspection']);

@@ -78,6 +78,7 @@ const modulesByRole = {
     ] },
     { section: 'Reference', icon: 'list', items: [
       ['categories', 'Vehicle Types'],
+      ['salvage', 'Salvage Inventory'],
       ['logs', 'Activity Log'],
     ] },
   ],
@@ -99,6 +100,7 @@ const modulesByRole = {
     ] },
     { section: 'Reference', icon: 'list', items: [
       ['histories', 'Vehicle History'],
+      ['salvage', 'Salvage Inventory'],
     ] },
   ],
   'Maintenance Personnel': [
@@ -109,6 +111,8 @@ const modulesByRole = {
       // The sub-page of My Tasks: the mechanic's routine services (oil changes and the like).
       ['schedules', 'Scheduled Services'],
     ] },
+    // Parts that can still be used from decommissioned vehicles; repairs draw from this stock.
+    { section: 'Parts', icon: 'list', items: [['salvage', 'Salvage Inventory']] },
   ],
 };
 
@@ -424,7 +428,7 @@ const moduleIconNames = {
   tickets: 'ticket', ticketArchives: 'archive', reportOrPropose: 'alert',
   myTasks: 'clipboard', ticketPropose: 'document',
   ticketVerifications: 'checkCircle', ticketWorkOrders: 'clipboard', workTracker: 'columns',
-  histories: 'undo', reports: 'document', logs: 'history', users: 'users',
+  histories: 'undo', reports: 'document', logs: 'history', users: 'users', salvage: 'list',
 };
 
 function renderModuleIcon(key) {
@@ -1663,24 +1667,41 @@ function Workspace() {
     variant: 'primary',
     onConfirm: () => approveScheduleNow(target),
   }));
-  // The assigned mechanic opens the job now (even before the due date), then logs the repair from My Tasks.
-  const recordScheduleWork = (target) => setConfirmDialog({
-    title: 'Record Repair Work',
-    message: target.resulting_ticket_id
-      ? `Open ${target.vehicle?.vehicle_name ?? 'this vehicle'}'s job in My Tasks to record the work?`
-      : `Start ${target.maintenance_type} on ${target.vehicle?.vehicle_name ?? 'this vehicle'} now${String(target.scheduled_date).slice(0, 10) > new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }) ? ` (scheduled for ${formatDate(target.scheduled_date)})` : ''}? You can then record the repair from My Tasks.`,
-    confirmLabel: target.resulting_ticket_id ? 'Open My Tasks' : 'Start Job',
-    variant: 'primary',
-    onConfirm: async () => {
-      setNotice(null);
-      try {
-        if (!target.resulting_ticket_id) await api.post(`/maintenance-schedules/${target.schedule_id}/start`);
-        navigate(`${roleRoutes[user.role]}/tickets`);
-      } catch (error) {
-        showError(error, setNotice);
+  // The assigned mechanic works a scheduled service exactly like a repair: this opens the same Record Repair Work page
+  // (parts bought, cost, photos; or "no repair needed" / "return to Admin"). Only starting before the due date asks first.
+  const openScheduleWork = async (target) => {
+    setNotice(null);
+    try {
+      let ticketId = target.resulting_ticket_id;
+      let subIssueId = null;
+      if (!ticketId) {
+        setNotice({ type: 'success', text: 'Starting the job, one moment…' });
+        const { data } = await api.post(`/maintenance-schedules/${target.schedule_id}/start`);
+        ticketId = data.ticket_id;
+        subIssueId = data.sub_issue_id;
       }
-    },
-  });
+      if (!subIssueId) {
+        const { data } = await api.get(`/tickets/${ticketId}`);
+        subIssueId = data.sub_issues?.[0]?.sub_issue_id;
+      }
+      // The repair page finds its job in the work-order list, so load that list first (the new job is not in it yet).
+      await loadModule('ticketWorkOrders');
+      navigate(subIssueId ? `${roleRoutes[user.role]}/work-orders/${ticketId}/${subIssueId}/log-repairs` : `${roleRoutes[user.role]}/tickets/${ticketId}`);
+    } catch (error) {
+      showError(error, setNotice);
+    }
+  };
+  const recordScheduleWork = (target) => {
+    const early = !target.resulting_ticket_id && String(target.scheduled_date).slice(0, 10) > new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+    if (!early) { openScheduleWork(target); return; }
+    setConfirmDialog({
+      title: 'Start this service early?',
+      message: `${target.maintenance_type} on ${target.vehicle?.vehicle_name ?? 'this vehicle'} is scheduled for ${formatDate(target.scheduled_date)}. Start it now and record the work?`,
+      confirmLabel: 'Start and Record Work',
+      variant: 'primary',
+      onConfirm: () => openScheduleWork(target),
+    });
+  };
   const declineSchedule = async (target, payload) => {
     setNotice(null);
     try {
@@ -4068,6 +4089,10 @@ function Workspace() {
       );
     }
 
+    if (activeModule === 'salvage') {
+      return <SalvageInventoryPage user={user} notify={setNotice} />;
+    }
+
     if (activeModule === 'histories') {
       const historyActivityTypeOptions = [...new Set((records.histories ?? []).map((h) => h.activity_type).filter(Boolean))].sort();
       return (
@@ -4574,6 +4599,206 @@ function ModulePanel({ children, description, statCards, chart, filterBar, tabBa
         {children}
       </section>
     </div>
+  );
+}
+
+
+const SALVAGE_CATEGORIES = ['Engine', 'Transmission', 'Electrical', 'Brakes', 'Tires and wheels', 'Body', 'Pump and hydraulics', 'Other'];
+const SALVAGE_CONDITIONS = ['Good', 'Usable', 'Needs refurbishing'];
+
+// Salvage inventory: an Admin decommissions a vehicle, the mechanic lists the parts that can still be used,
+// and repairs take parts from this stock. Admin and Custodian can only read it.
+function SalvageInventoryPage({ user, notify }) {
+  const canManage = canDo(user, 'salvage.manage');
+  const [parts, setParts] = useState(null);
+  const [queue, setQueue] = useState([]);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [modal, setModal] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  // Bumping `version` reloads both lists; the effect owns the fetch so state is only set from its callbacks.
+  const [version, setVersion] = useState(0);
+  const load = useCallback(async () => { setVersion((n) => n + 1); }, []);
+  useEffect(() => {
+    let live = true;
+    Promise.all([api.get('/salvage-parts'), api.get('/salvage-parts/queue')]).then(([list, vehicles]) => {
+      if (!live) return;
+      setParts(list.data);
+      setQueue(vehicles.data);
+      setError('');
+    }).catch((err) => { if (live) setError(describeError(err, 'The salvage inventory could not be loaded.')); });
+    return () => { live = false; };
+  }, [version]);
+
+  const waiting = queue.filter((vehicle) => !vehicle.salvage_completed_at);
+  const finishList = async (vehicle, nothing = false) => {
+    setBusy(true);
+    try {
+      const { data } = await api.put(`/vehicles/${vehicle.vehicle_id}/salvage-complete`, nothing ? { nothing_salvageable: true } : {});
+      setQueue((rowsNow) => rowsNow.map((row) => (row.vehicle_id === vehicle.vehicle_id ? { ...row, salvage_completed_at: data.salvage_completed_at ?? new Date().toISOString() } : row)));
+      notify?.({ type: 'success', text: `Parts list for ${vehicle.vehicle_name} finished.` });
+      await load();
+    } catch (err) { notify?.({ type: 'error', text: describeError(err, 'Could not finish the list.') }); } finally { setBusy(false); }
+  };
+  const reopenList = async (vehicle) => {
+    setBusy(true);
+    try { await api.put(`/vehicles/${vehicle.vehicle_id}/salvage-reopen`); setQueue((rowsNow) => rowsNow.map((row) => (row.vehicle_id === vehicle.vehicle_id ? { ...row, salvage_completed_at: null } : row))); await load(); } catch (err) { notify?.({ type: 'error', text: describeError(err, 'Could not reopen the list.') }); } finally { setBusy(false); }
+  };
+  const removePart = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    try {
+      await api.delete(`/salvage-parts/${deleting.salvage_part_id}`);
+      notify?.({ type: 'success', text: 'Part removed from the inventory.' });
+      setDeleting(null);
+      await load();
+    } catch (err) { notify?.({ type: 'error', text: describeError(err, 'Could not remove that part.') }); setDeleting(null); } finally { setBusy(false); }
+  };
+
+  const q = search.trim().toLowerCase();
+  const shown = (parts ?? []).filter((row) => !q || [row.part_name, row.category, row.vehicle_name, row.plate_number, row.storage_location].some((value) => String(value ?? '').toLowerCase().includes(q)));
+  const inStock = (parts ?? []).reduce((sum, row) => sum + row.quantity_available, 0);
+
+  return (
+    <ModulePanel description="Parts that can still be used from decommissioned vehicles. A repair that uses parts from another vehicle takes them from this list.">
+      <div className="salvage-steps" aria-label="How it works">
+        <span><b>1</b> The Admin decommissions the vehicle.</span>
+        <span><b>2</b> The mechanic lists every part that can still be used.</span>
+        <span><b>3</b> Repairs take parts from the list, and the stock goes down.</span>
+      </div>
+      {error && <p className="notice danger" role="alert">{error} <button type="button" className="ghost-button" onClick={load}>Retry</button></p>}
+
+      <section className="salvage-section" aria-labelledby="salvage-queue-h">
+        <h3 id="salvage-queue-h">Decommissioned vehicles <span className="count-badge">{waiting.length} waiting</span></h3>
+        {!queue.length ? <p className="empty-state">No vehicle has been decommissioned. When the Admin decommissions one, it appears here for the parts list.</p> : (
+          <ul className="salvage-queue">
+            {queue.map((vehicle) => (
+              <li key={vehicle.vehicle_id} className={vehicle.salvage_completed_at ? 'is-done' : ''}>
+                <div>
+                  <strong>{vehicle.vehicle_name}</strong> <span className="muted">{vehicle.plate_number}</span>
+                  <small className="muted">Decommissioned {vehicle.decommissioned_at ? formatDate(vehicle.decommissioned_at) : ''}{vehicle.decommission_reason ? `: ${vehicle.decommission_reason}` : ''}</small>
+                </div>
+                <span className={`status-badge ${vehicle.salvage_completed_at ? 'completed' : 'pending'}`}>{vehicle.salvage_completed_at ? 'List finished' : (vehicle.parts_logged ? `${vehicle.parts_logged} part line${vehicle.parts_logged === 1 ? '' : 's'} logged` : 'Waiting for the parts list')}</span>
+                {canManage && (
+                  <span className="salvage-queue-actions">
+                    {!vehicle.salvage_completed_at && <button type="button" className="primary-button btn-sm" onClick={() => setModal({ mode: 'add', vehicleId: vehicle.vehicle_id })}><Icon name="plus" size={14} /> Log parts</button>}
+                    {!vehicle.salvage_completed_at && vehicle.parts_logged > 0 && <button type="button" className="ghost-button btn-sm" disabled={busy} onClick={() => finishList(vehicle)}>Finish list</button>}
+                    {!vehicle.salvage_completed_at && !vehicle.parts_logged && <button type="button" className="ghost-button btn-sm" disabled={busy} onClick={() => finishList(vehicle, true)}>Nothing salvageable</button>}
+                    {vehicle.salvage_completed_at && <button type="button" className="ghost-button btn-sm" disabled={busy} onClick={() => reopenList(vehicle)}>Reopen</button>}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="salvage-section" aria-labelledby="salvage-stock-h">
+        <div className="salvage-stock-head">
+          <h3 id="salvage-stock-h">In stock <span className="count-badge">{inStock}</span></h3>
+          <LocalSearchInput value={search} onChange={setSearch} placeholder="Search parts, vehicle or location..." />
+        </div>
+        {parts === null ? <p className="muted" role="status">Loading the inventory…</p> : !shown.length ? <p className="empty-state">{parts.length ? 'No part matches your search.' : 'No parts logged yet.'}</p> : (
+          <div className="table-shell"><table>
+            <thead><tr><th>Part</th><th>From vehicle</th><th>Condition</th><th className="cell-center">In stock</th><th>Stored at</th><th>Logged</th>{canManage && <th className="cell-center">Actions</th>}</tr></thead>
+            <tbody>{shown.map((row) => (
+              <tr key={row.salvage_part_id}>
+                <td data-label="Part"><strong>{row.part_name}</strong>{row.category && <small className="muted"> · {row.category}</small>}{row.notes && <small className="muted" style={{ display: 'block' }}>{row.notes}</small>}</td>
+                <td data-label="From vehicle">{row.vehicle_name} <span className="muted">{row.plate_number}</span></td>
+                <td data-label="Condition"><span className={`status-badge ${row.part_condition === 'Good' ? 'completed' : row.part_condition === 'Usable' ? 'pending' : 'inactive'}`}>{row.part_condition}</span></td>
+                <td data-label="In stock" className="cell-center"><strong>{row.quantity_available}</strong> <span className="muted">of {row.quantity}</span></td>
+                <td data-label="Stored at">{row.storage_location || <span className="muted">Not recorded</span>}</td>
+                <td data-label="Logged"><DateBadge value={row.created_at} /><small className="muted" style={{ display: 'block' }}>{row.logged_by}</small></td>
+                {canManage && <td data-label="Actions" className="cell-center"><span className="row-actions-visible">
+                  <button type="button" className="icon-btn btn-edit-action" title="Edit part" aria-label={`Edit ${row.part_name}`} onClick={() => setModal({ mode: 'edit', part: row })}><Icon name="edit" size={15} /></button>
+                  <button type="button" className="icon-btn btn-delete-action" title={row.quantity_available < row.quantity ? 'Already used in a repair' : 'Remove part'} aria-label={`Remove ${row.part_name}`} disabled={row.quantity_available < row.quantity} onClick={() => setDeleting(row)}><Icon name="trash" size={15} /></button>
+                </span></td>}
+              </tr>
+            ))}</tbody>
+          </table></div>
+        )}
+      </section>
+
+      <FormModal open={!!modal} title={modal?.mode === 'edit' ? 'Edit salvageable part' : 'Log salvageable parts'} onClose={() => setModal(null)}>
+        {modal && <SalvagePartForm key={`${modal.mode}-${modal.part?.salvage_part_id ?? modal.vehicleId}`} mode={modal.mode} part={modal.part} vehicleId={modal.vehicleId} vehicles={waiting} existing={parts ?? []} onClose={() => setModal(null)} onSaved={load} notify={notify} />}
+      </FormModal>
+      <FormModal open={!!deleting} title="Remove this part?" onClose={() => setDeleting(null)}>
+        {deleting && <div className="dp-form">
+          <p>Remove <strong>{deleting.quantity} × {deleting.part_name}</strong> from the inventory? It has not been used in any repair.</p>
+          <div className="can-actions"><button type="button" className="ghost-button cancel-btn" onClick={() => setDeleting(null)} disabled={busy}>Cancel</button><button type="button" className="danger-button" onClick={removePart} disabled={busy}>{busy ? 'Removing…' : 'Remove part'}</button></div>
+        </div>}
+      </FormModal>
+    </ModulePanel>
+  );
+}
+
+function SalvagePartForm({ mode, part, vehicleId, vehicles, existing, onClose, onSaved, notify }) {
+  const blank = { vehicle_id: vehicleId ?? '', part_name: '', category: '', part_condition: 'Good', quantity: 1, storage_location: '', notes: '' };
+  const [v, setV] = useState(() => (part ? { vehicle_id: part.vehicle_id, part_name: part.part_name, category: part.category ?? '', part_condition: part.part_condition, quantity: part.quantity, storage_location: part.storage_location ?? '', notes: part.notes ?? '' } : blank));
+  const [errors, setErrors] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [added, setAdded] = useState(0);
+  const set = (key, value) => { setV((current) => ({ ...current, [key]: value })); setErrors((current) => ({ ...current, [key]: undefined })); };
+  const used = part ? part.quantity - part.quantity_available : 0;
+  const duplicate = mode === 'add' && v.part_name.trim() && existing.some((row) => String(row.vehicle_id) === String(v.vehicle_id) && row.part_name.trim().toLowerCase() === v.part_name.trim().toLowerCase());
+
+  const save = async (again) => {
+    if (saving) return;
+    const local = {};
+    if (!v.vehicle_id) local.vehicle_id = 'Choose the decommissioned vehicle.';
+    if (!v.part_name.trim()) local.part_name = 'Enter the part name.';
+    if (!Number.isInteger(Number(v.quantity)) || Number(v.quantity) < 1) local.quantity = 'Quantity must be a whole number of 1 or more.';
+    else if (Number(v.quantity) < used) local.quantity = `${used} already used in repairs, so the total cannot be below ${used}.`;
+    setErrors(local);
+    if (Object.keys(local).length) return;
+    setSaving(true);
+    try {
+      const body = { ...v, vehicle_id: Number(v.vehicle_id), quantity: Number(v.quantity) };
+      Object.keys(body).forEach((key) => { if (body[key] === '') body[key] = null; });
+      if (mode === 'edit') await api.put(`/salvage-parts/${part.salvage_part_id}`, body); else await api.post('/salvage-parts', body);
+      notify?.({ type: 'success', text: mode === 'edit' ? 'Part updated.' : `${body.part_name} added to the inventory.` });
+      await onSaved();
+      if (again && mode === 'add') { setAdded((count) => count + 1); setV({ ...blank, vehicle_id: v.vehicle_id }); } else onClose();
+    } catch (err) {
+      const serverErrors = err.response?.data?.errors;
+      if (serverErrors) setErrors(Object.fromEntries(Object.entries(serverErrors).map(([key, messages]) => [key, messages[0]])));
+      else setErrors({ _form: describeError(err, 'Could not save this part.') });
+    } finally { setSaving(false); }
+  };
+
+  const field = (name, label, control, required) => (
+    <label className={`dp-field${errors[name] ? ' has-error' : ''}`}>
+      <span>{label}{required && <b className="req"> *</b>}</span>
+      {control}
+      {errors[name] && <small className="dp-error" role="alert">{errors[name]}</small>}
+    </label>
+  );
+  const vehicleName = vehicles.find((vehicle) => String(vehicle.vehicle_id) === String(v.vehicle_id))?.vehicle_name ?? part?.vehicle_name;
+
+  return (
+    <form className="dp-form" onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); save(false); }} noValidate>
+      {errors._form && <div className="notice danger" role="alert">{errors._form}</div>}
+      {added > 0 && <p className="notice success" role="status">{added} part{added === 1 ? '' : 's'} added. Add the next one, or close when you are done.</p>}
+      <div className="dp-grid">
+        {field('vehicle_id', 'From vehicle', mode === 'edit' || vehicleId
+          ? <input type="text" value={vehicleName ?? ''} disabled />
+          : <select value={v.vehicle_id} onChange={(e) => set('vehicle_id', e.target.value)}><option value="">Choose a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle.vehicle_id} value={vehicle.vehicle_id}>{vehicle.vehicle_name} ({vehicle.plate_number})</option>)}</select>, true)}
+        {field('part_name', 'Part name', <input type="text" maxLength={255} value={v.part_name} onChange={(e) => set('part_name', e.target.value)} placeholder="e.g. Alternator" />, true)}
+        {field('category', 'Category', <select value={v.category} onChange={(e) => set('category', e.target.value)}><option value="">Not set</option>{SALVAGE_CATEGORIES.map((name) => <option key={name}>{name}</option>)}</select>)}
+        {field('part_condition', 'Condition', <select value={v.part_condition} onChange={(e) => set('part_condition', e.target.value)}>{SALVAGE_CONDITIONS.map((name) => <option key={name}>{name}</option>)}</select>, true)}
+        {field('quantity', 'Quantity', <input type="number" min="1" step="1" value={v.quantity} onChange={(e) => set('quantity', e.target.value)} />, true)}
+        {field('storage_location', 'Stored at', <input type="text" maxLength={255} value={v.storage_location} onChange={(e) => set('storage_location', e.target.value)} placeholder="e.g. Motor pool, shelf A" />)}
+      </div>
+      {duplicate && <small className="dp-hint">This part is already listed for this vehicle. Edit that line to change its quantity instead of adding it twice.</small>}
+      {field('notes', 'Notes', <textarea rows={2} maxLength={2000} value={v.notes} onChange={(e) => set('notes', e.target.value)} placeholder="What state is it in? Anything the next mechanic should know." />)}
+      <div className="can-actions">
+        <button type="button" className="ghost-button" onClick={onClose} disabled={saving}>{added ? 'Done' : 'Cancel'}</button>
+        {mode === 'add' && <button type="button" className="ghost-button" disabled={saving} onClick={() => save(true)}>Save and add another</button>}
+        <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving…' : (mode === 'edit' ? 'Save changes' : 'Save')}</button>
+      </div>
+    </form>
   );
 }
 
@@ -13375,11 +13600,16 @@ function DonorPartModal({ mode, part, base, donorVehicleId, onClose, onSaved, no
   const [saving, setSaving] = useState(false);
   // The shared list of part names, so the same part is always spelled the same way.
   const [partNames, setPartNames] = useState([]);
+  // Parts already logged from decommissioned vehicles: choosing one takes it out of stock.
+  const [stock, setStock] = useState([]);
+  const [salvageId, setSalvageId] = useState('');
   useEffect(() => {
     let cancelled = false;
     api.get('/part-names').then((r) => { if (!cancelled) setPartNames((Array.isArray(r.data) ? r.data : []).map((p) => p.name)); }).catch(() => {});
+    if (mode === 'add') api.get('/salvage-parts').then((r) => { if (!cancelled) setStock((Array.isArray(r.data) ? r.data : []).filter((row) => row.quantity_available > 0 && (!donorVehicleId || String(row.vehicle_id) === String(donorVehicleId)))); }).catch(() => {});
     return () => { cancelled = true; };
-  }, []);
+  }, [mode, donorVehicleId]);
+  const chosenStock = stock.find((row) => String(row.salvage_part_id) === salvageId);
   const set = (k, val) => { setV((s) => ({ ...s, [k]: val })); setErrors((e) => ({ ...e, [k]: undefined })); };
 
   const submit = async (e) => {
@@ -13389,8 +13619,9 @@ function DonorPartModal({ mode, part, base, donorVehicleId, onClose, onSaved, no
     e.stopPropagation();
     if (saving || readOnly) return;
     const local = {};
-    if (!v.part_name.trim()) local.part_name = 'Enter the part name.';
+    if (!chosenStock && !v.part_name.trim()) local.part_name = 'Enter the part name.';
     if (!Number.isInteger(Number(v.quantity)) || Number(v.quantity) < 1) local.quantity = 'Quantity must be a whole number of 1 or more.';
+    else if (chosenStock && Number(v.quantity) > chosenStock.quantity_available) local.quantity = `Only ${chosenStock.quantity_available} left in the inventory.`;
     setErrors(local);
     if (Object.keys(local).length) return;
     setSaving(true);
@@ -13398,6 +13629,7 @@ function DonorPartModal({ mode, part, base, donorVehicleId, onClose, onSaved, no
       const body = { ...v, quantity: Number(v.quantity) };
       Object.keys(body).forEach((k) => { if (body[k] === '') body[k] = null; });
       if (mode === 'edit') await api.put(`${base}/donor-parts/${part.part_id}`, body);
+      else if (chosenStock) await api.post(`${base}/donor-parts`, { salvage_part_id: chosenStock.salvage_part_id, quantity: body.quantity });
       else await api.post(`${base}/donor-parts`, { ...body, donor_vehicle_id: donorVehicleId ?? null });
       notify?.({ type: 'success', text: mode === 'edit' ? 'Donor part updated.' : 'Donor part added.' });
       await onSaved();
@@ -13422,9 +13654,19 @@ function DonorPartModal({ mode, part, base, donorVehicleId, onClose, onSaved, no
   return (
     <form className="dp-form" onSubmit={submit} noValidate>
       {errors._form && <div className="notice danger" role="alert">{errors._form}</div>}
+      {mode === 'add' && stock.length > 0 && (
+        <label className="dp-field">
+          <span>Take it from the salvage inventory</span>
+          <select value={salvageId} onChange={(e) => { setSalvageId(e.target.value); setErrors({}); }}>
+            <option value="">Not from the inventory (type the part below)</option>
+            {stock.map((row) => <option key={row.salvage_part_id} value={row.salvage_part_id}>{row.part_name}: {row.vehicle_name}, {row.quantity_available} left ({row.part_condition})</option>)}
+          </select>
+          {chosenStock && <small className="dp-hint">Comes from {chosenStock.vehicle_name}{chosenStock.storage_location ? `, stored at ${chosenStock.storage_location}` : ''}. The stock goes down by the quantity you use.</small>}
+        </label>
+      )}
       <div className="dp-grid">
-        {field('part_name', 'Part name', readOnly
-          ? <input type="text" value={v.part_name} disabled />
+        {field('part_name', 'Part name', readOnly || chosenStock || part?.salvage_part_id
+          ? <input type="text" value={chosenStock ? chosenStock.part_name : v.part_name} disabled />
           : <CreatableSelect value={v.part_name} options={partNames} catalogEndpoint="/part-names" newItemLabel="part" placeholder="Select a part or type to add new" onChange={(val) => set('part_name', val)} />, true)}
         {field('quantity', 'Quantity', <input type="number" min="1" step="1" value={v.quantity} disabled={readOnly} onChange={(e) => set('quantity', e.target.value)} />, true)}
       </div>
@@ -13631,6 +13873,8 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   const chosenRepairType = usesDonorParts ? 'cannibalized' : (doesStandard ? 'in_house' : '');
   const [noRepairOpen, setNoRepairOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
+  // A mechanic first says what they are doing with the job, then sees only what that choice needs.
+  const [outcome, setOutcome] = useState('');
   const [returnReason, setReturnReason] = useState('');
   const [noRepairNotes, setNoRepairNotes] = useState('');
   const [methodBusy, setMethodBusy] = useState(false);
@@ -13667,6 +13911,8 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   // disabled, since a mechanic may still want to note something early.
   const needsShopCycle = repairType === 'external' && (!ticket.external_sent_at || !ticket.external_returned_at || ticket.verification_verdict === 'Rejected');
   const awaitingShopReturn = repairType === 'external' && !!ticket.external_sent_at && !ticket.external_returned_at;
+  const outcomeMode = isMechanic && ticket.repair_type !== 'external' && !!(onNoRepair || onReturnToAdmin);
+  const showRepairForm = !outcomeMode || outcome === 'repair';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -13762,7 +14008,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
         </div>
       )}
 
-      <form className="smart-form lr-workspace" onSubmit={handleSubmit} autoComplete="off" noValidate>
+      <form className={`smart-form lr-workspace${showRepairForm ? '' : ' lr-solo'}`} onSubmit={handleSubmit} autoComplete="off" noValidate>
         <div className="lr-main">
           {/* Work order — only as tall as its content. Vehicle, ticket #,
               type and status already live in the header above, so this
@@ -13782,8 +14028,55 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             )}
           </section>
 
+          {outcomeMode && (
+            <section className="lr-group lr-outcome" aria-labelledby={`${idBase}-out`}>
+              <h4 className="lr-section-label" id={`${idBase}-out`}>What are you doing with this job?</h4>
+              <div className="lr-method-choices" role="radiogroup" aria-labelledby={`${idBase}-out`}>
+                {[
+                  ['repair', 'I repaired it', 'Record the work, parts and photos, then submit the repair log.', true],
+                  ['no_repair', 'No repair needed', 'You checked and nothing needs fixing. Say what you checked.', !!onNoRepair],
+                  ['return', 'Return to Admin', 'It is not yours to do, or needs other skills. Say why; the Admin reassigns it.', !!onReturnToAdmin],
+                ].filter((choice) => choice[3]).map(([key, label, hint]) => (
+                  <button key={key} type="button" role="radio" aria-checked={outcome === key} className={`lr-method-choice${outcome === key ? ' is-selected' : ''}`} onClick={() => setOutcome(key)}>
+                    <span className="lr-method-check" aria-hidden="true" />
+                    <span className="lr-method-text"><strong>{label}</strong><small>{hint}</small></span>
+                  </button>
+                ))}
+              </div>
+              {!outcome && <p className="lr-hint">Pick one. You will only see what that choice needs.</p>}
+              {outcome === 'no_repair' && onNoRepair && (
+                <div className="lr-field lr-outcome-form">
+                  <label className="lr-label" htmlFor={`${idBase}-nr`}>What did you check, and why is no repair needed? <abbr className="required-asterisk" title="required">*</abbr></label>
+                  <textarea id={`${idBase}-nr`} className="lr-textarea" rows={3} value={noRepairNotes} onChange={(e) => setNoRepairNotes(e.target.value)} />
+                  <small className="lr-hint">The Custodian is told and checks the vehicle. Nothing is recorded as repaired.</small>
+                  <div className="lr-outcome-actions">
+                    <button type="button" className="primary-button lr-btn-norepair" disabled={noRepairNotes.trim().length < 5 || submittingRepair}
+                      onClick={async () => { setSubmittingRepair(true); try { await onNoRepair(ticket, { notes: noRepairNotes.trim() }); } finally { setSubmittingRepair(false); } }}>
+                      Send to Custodian: no repair needed
+                    </button>
+                    <button className="ghost-button cancel-btn lr-cancel" onClick={onBack} type="button">Cancel</button>
+                  </div>
+                </div>
+              )}
+              {outcome === 'return' && onReturnToAdmin && (
+                <div className="lr-field lr-outcome-form">
+                  <label className="lr-label" htmlFor={`${idBase}-ra`}>Why are you returning this to the Admin? <abbr className="required-asterisk" title="required">*</abbr></label>
+                  <textarea id={`${idBase}-ra`} className="lr-textarea" rows={3} placeholder="e.g. It needs a welder, not a mechanic." value={returnReason} onChange={(e) => setReturnReason(e.target.value)} />
+                  <small className="lr-hint">The Admin reassigns it or cancels the ticket. The Custodian is told too.</small>
+                  <div className="lr-outcome-actions">
+                    <button type="button" className="primary-button lr-btn-return" disabled={returnReason.trim().length < 5 || submittingRepair}
+                      onClick={async () => { setSubmittingRepair(true); try { await onReturnToAdmin(ticket, { reason: returnReason.trim() }); } finally { setSubmittingRepair(false); } }}>
+                      Return to Admin
+                    </button>
+                    <button className="ghost-button cancel-btn lr-cancel" onClick={onBack} type="button">Cancel</button>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* The primary task — visually the heaviest group on the page. */}
-          <section className="lr-group lr-primary" aria-labelledby={`${idBase}-rw`}>
+          {showRepairForm && <section className="lr-group lr-primary" aria-labelledby={`${idBase}-rw`}>
             <h4 className="lr-section-label" id={`${idBase}-rw`}>Repair Details</h4>
             <div className="lr-field">
               <span className="lr-label" id={`${idBase}-type`}>Repair Method</span>
@@ -13804,9 +14097,9 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                 </div>
               )}
             </div>
-          </section>
+          </section>}
 
-          {repairType === 'cannibalized' && (
+          {showRepairForm && repairType === 'cannibalized' && (
             <CannibalizationManagement key={`${ticket.ticket_id}:${ticket.sub_issue_id}`} ticket={ticket} vehicleOptions={vehicleOptions} onChanged={onDonorChanged} notify={notify} />
           )}
 
@@ -13892,7 +14185,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             </section>
           )}
 
-          <section className="lr-group">
+          {showRepairForm && <section className="lr-group">
             <div className="lr-field">
               <label className="lr-label" htmlFor={`${idBase}-work`}>Work Performed {(doesStandard || !repairType) && <abbr className="required-asterisk" title="required">*</abbr>}</label>
               <textarea
@@ -13905,13 +14198,13 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                 onChange={(e) => { setRepairLogs(e.target.value); onDirty?.(); }}
               />
             </div>
-          </section>
+          </section>}
 
           {awaitingShopReturn && (
             <p className="lr-note">Evidence, parts and dates apply once the vehicle is back from the shop — mark it Received above when it comes in.</p>
           )}
 
-          <div className="lr-side-actions lr-main-actions">
+          {(showRepairForm || !outcomeMode) && <div className="lr-side-actions lr-main-actions">
             <p className="lr-hint">
               Recorded under Ticket #{ticketNumber(ticket)} · {namedPartCount} part{namedPartCount === 1 ? '' : 's'} · {attachments.length ? `${attachments.length} file${attachments.length === 1 ? '' : 's'} attached` : 'no evidence attached'}
             </p>
@@ -13923,7 +14216,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             ) : (
               <p className="lr-note">{ticket.external_returned_at ? 'The vehicle is back from the shop. A Maintenance Personnel will test it and submit it. You will verify it afterwards.' : 'Record the hand-over to the shop here. The Maintenance Personnel receives the vehicle back and tests it.'}</p>
             )}
-            {isMechanic && onNoRepair && repairType !== 'external' && (
+            {isMechanic && onNoRepair && repairType !== 'external' && !outcomeMode && (
               <div className={`lr-field lr-no-repair${noRepairOpen ? ' is-open' : ''}`}>
                 {!noRepairOpen
                   ? <button type="button" className="ghost-button lr-btn-norepair" onClick={() => setNoRepairOpen(true)}>No repair needed</button>
@@ -13949,7 +14242,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                 </button>
               </div>
             )}
-            {isMechanic && onReturnToAdmin && (
+            {isMechanic && onReturnToAdmin && !outcomeMode && (
               <div className={`lr-field lr-no-repair${returnOpen ? ' is-open' : ''}`}>
                 {!returnOpen
                   ? <button type="button" className="ghost-button lr-btn-return" onClick={() => setReturnOpen(true)}>Return to Admin</button>
@@ -13967,12 +14260,12 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
               </div>
             )}
             <button className="ghost-button cancel-btn lr-cancel" onClick={onBack} type="button">Cancel</button>
-          </div>
+          </div>}
 
 
         </div>
 
-        <aside className="lr-side-column" aria-label="Repair record and submission">
+        {showRepairForm && <aside className="lr-side-column" aria-label="Repair record and submission">
           <div className="lr-side">
           {/* Part name takes the row, cost is a fixed narrow column — no
               more fields pinned to opposite edges of the page. Same
@@ -14013,7 +14306,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 
           </div>
           <RepairFileCabinet files={attachments} savedFiles={[...(ticket.attachment_files ?? []).map((file) => ({ ...file, url: resolvePhotoUrl(file.url) })), ...(ticket.attachment_url ? [{ url: resolvePhotoUrl(ticket.attachment_url), name: 'Previous repair attachment' }] : [])]} onChange={(files) => { setAttachments(files); onDirty?.(); }} onError={(text) => notify?.({ type: 'error', text })} />
-        </aside>
+        </aside>}
       </form>
     </ModulePanel>
   );

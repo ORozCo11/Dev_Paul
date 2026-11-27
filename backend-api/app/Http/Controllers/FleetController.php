@@ -3340,7 +3340,9 @@ class FleetController extends Controller
         $schedule->refresh();
         abort_unless($schedule->resulting_ticket_id, 422, $schedule->hold_reason ?: 'The job could not be started. Tell the Admin.');
 
-        return response()->json(['message' => 'Job started. Record the repair from My Tasks.', 'ticket_id' => $schedule->resulting_ticket_id]);
+        $subIssueId = \App\Models\TicketSubIssue::where('ticket_id', $schedule->resulting_ticket_id)->orderBy('sub_issue_id')->value('sub_issue_id');
+
+        return response()->json(['message' => 'Job started. Record the work now.', 'ticket_id' => $schedule->resulting_ticket_id, 'sub_issue_id' => $subIssueId]);
     }
 
     public function reassignSchedule(Request $request, VehicleMaintenanceSchedule $schedule)

@@ -17382,3 +17382,26 @@ html[data-theme="dark"] .status-badge.no-administrator { background: rgba(217, 1
 :root[data-theme="dark"] .schedule-next-line.is-overdue { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
 :root[data-theme="dark"] .schedule-next-line.is-pending { background: #7c2d12; color: #fed7aa; border-color: #9a3412; }
 :root[data-theme="dark"] .schedule-next-line.is-job { background: #1e3a8a; color: #bfdbfe; border-color: #1d4ed8; }
+
+/* Record Repair Work: the mechanic picks one outcome, then sees only what it needs. */
+.smart-form.lr-workspace.lr-solo { grid-template-columns: minmax(0, 1fr); }
+.lr-outcome .lr-method-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .lr-outcome .lr-method-choices { grid-template-columns: minmax(0, 1fr); } }
+.lr-outcome-form { margin-top: 14px; max-width: 720px; }
+.lr-outcome-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+
+/* Salvage inventory */
+.salvage-steps { display: flex; flex-wrap: wrap; gap: 10px 22px; padding: 12px 14px; margin-bottom: 14px; border-radius: 10px; background: var(--surface-muted, #f1f5f9); font-size: 0.86rem; }
+.salvage-steps b { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin-right: 6px; border-radius: 50%; background: #2563eb; color: #fff; font-size: 0.74rem; }
+.salvage-section { margin-bottom: 22px; }
+.salvage-section h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 1rem; }
+.salvage-queue { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.salvage-queue li { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; padding: 12px 14px; border: 1px solid var(--border, #dbe5f3); border-radius: 10px; }
+.salvage-queue li > div { flex: 1 1 240px; min-width: 0; }
+.salvage-queue li small { display: block; margin-top: 2px; }
+.salvage-queue li.is-done { opacity: 0.8; }
+.salvage-queue-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.salvage-stock-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.salvage-stock-head h3 { margin: 0; }
+.dp-hint { color: var(--text-muted, #64748b); font-size: 0.78rem; }
+.salvage-section .row-actions-visible { display: inline-flex; gap: 8px; }

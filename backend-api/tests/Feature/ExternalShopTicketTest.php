@@ -180,4 +180,30 @@ class ExternalShopTicketTest extends TestCase
         $this->putJson("/api/tickets/{$id}/verify", ['verification_verdict' => 'Approved', 'test_attested' => true])->assertForbidden();
         $this->assertSame('For Verification', MaintenanceTicket::find($id)->status);
     }
+
+    #[Test]
+    public function every_step_of_the_shop_trip_tells_the_next_person(): void
+    {
+        $id = $this->propose('external');
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/tickets/{$id}/approve", ['assigned_mechanic_id' => $this->mechanic->id])->assertOk();
+        $sub = MaintenanceTicket::with('subIssues')->find($id)->subIssues->first();
+        $base = "/api/tickets/{$id}/sub-issues/{$sub->sub_issue_id}";
+
+        // Approval tells the Custodian what to do next.
+        $approved = \App\Models\Notification::where('user_id', $this->custodian->id)->where('type', 'ticket_approved')->first();
+        $this->assertStringContainsString('outside shop', $approved->message);
+
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->putJson("{$base}/external-sent", ['external_vendor' => 'Toyota Mandaue', 'external_reason' => 'Parts or service only available from an authorized shop', 'external_work_scope' => 'Rebuild', 'external_expected_return' => now()->addDays(4)->toDateString()])->assertOk();
+        $toTester = \App\Models\Notification::where('user_id', $this->mechanic->id)->where('type', 'external_sent')->first();
+        $this->assertNotNull($toTester, 'the named tester is told the vehicle left');
+        $this->assertStringContainsString('Toyota Mandaue', $toTester->message);
+        $this->assertStringContainsString('Expected back', $toTester->message);
+        $this->assertTrue(\App\Models\Notification::where('user_id', $this->admin->id)->where('type', 'external_sent')->exists(), 'the Admin is told too');
+
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $this->putJson("{$base}/external-returned", ['external_return_notes' => 'Back.', 'external_actual_cost' => 500])->assertOk();
+        $this->assertTrue(\App\Models\Notification::where('user_id', $this->custodian->id)->where('type', 'external_returned')->exists(), 'the Custodian is told it is back');
+    }
 }

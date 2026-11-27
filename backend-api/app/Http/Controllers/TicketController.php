@@ -719,7 +719,8 @@ class TicketController extends Controller
             $this->notifyUser(
                 $ticket->assigned_custodian_id,
                 'Ticket Proposal Approved',
-                "Your proposed ticket \"{$ticket->ticket_title}\" for {$vehicle->vehicle_name} was approved.",
+                "Your proposed ticket \"{$ticket->ticket_title}\" for {$vehicle->vehicle_name} was approved."
+                    . ($isExternalTicket ? ' Next: take the vehicle to the outside shop and record it as sent on the ticket (Log Repairs). The Maintenance Personnel named to test it is told when you do.' : ''),
                 'ticket_approved',
                 $ticket->ticket_id
             );
@@ -1681,6 +1682,10 @@ class TicketController extends Controller
     public function storeDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
     {
         $this->authorizeDonorEdit($request, $ticket, $subIssue);
+        // A part chosen from the salvage inventory carries its own donor vehicle and reduces the stock.
+        if ($request->filled('salvage_part_id')) {
+            return $this->storeDonorPartFromSalvage($request, $ticket, $subIssue);
+        }
         $this->requireDonorSet($ticket, $subIssue);
         $data = $request->validate($this->donorPartRules());
 
@@ -1708,6 +1713,44 @@ class TicketController extends Controller
         return response()->json($part, 201);
     }
 
+    private function storeDonorPartFromSalvage(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue)
+    {
+        $data = $request->validate([
+            'salvage_part_id' => ['required', 'integer'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:100000'],
+            'installed_at' => ['nullable', 'date', 'before_or_equal:today'],
+            'reason' => ['nullable', 'string', 'max:2000'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+        abort_unless($subIssue->repair_type === 'cannibalized', 422, 'Choose "Uses Parts From Another Vehicle" for this repair first.');
+
+        $part = DB::transaction(function () use ($data, $ticket, $subIssue) {
+            $stock = \App\Models\SalvagePart::lockForUpdate()->find($data['salvage_part_id']);
+            abort_if(! $stock, 422, 'That part is no longer in the salvage inventory.');
+            abort_if($data['quantity'] > $stock->quantity_available, 422, "Only {$stock->quantity_available} of {$stock->part_name} left in the inventory.");
+            $this->assertDonorEligible($ticket, (int) $stock->vehicle_id);
+            if (! $subIssue->source_vehicle_id) {
+                $subIssue->update(['source_vehicle_id' => $stock->vehicle_id]);
+            }
+            $stock->decrement('quantity_available', $data['quantity']);
+
+            return $subIssue->donorParts()->create([
+                'salvage_part_id' => $stock->salvage_part_id,
+                'donor_vehicle_id' => $stock->vehicle_id,
+                'part_name' => $stock->part_name,
+                'quantity' => $data['quantity'],
+                'blocks_readiness' => false,   // the donor vehicle is already decommissioned
+                'part_condition' => $stock->part_condition,
+                'installed_at' => $data['installed_at'] ?? null,
+                'reason' => $data['reason'] ?? null,
+                'notes' => $data['notes'] ?? null,
+            ]);
+        });
+        $this->log($request, 'Donor Part Added', "Ticket #{$ticket->display_number} - took {$part->quantity} x {$part->part_name} from the salvage inventory.", $ticket->ticket_id);
+
+        return response()->json($part, 201);
+    }
+
     public function updateDonorPart(Request $request, MaintenanceTicket $ticket, TicketSubIssue $subIssue, int $part)
     {
         $this->authorizeDonorEdit($request, $ticket, $subIssue);
@@ -1716,6 +1759,18 @@ class TicketController extends Controller
         $data = $request->validate($this->donorPartRules());
         // A part stays with the donor it was recorded against.
         unset($data['donor_vehicle_id']);
+        if ($record->salvage_part_id) {
+            // Taken from the inventory: its name is fixed and the stock follows the quantity.
+            unset($data['part_name']);
+            DB::transaction(function () use ($record, &$data) {
+                $stock = \App\Models\SalvagePart::lockForUpdate()->find($record->salvage_part_id);
+                $delta = ((int) ($data['quantity'] ?? $record->quantity)) - $record->quantity;
+                if ($stock) {
+                    abort_if($delta > $stock->quantity_available, 422, "Only {$stock->quantity_available} more of {$stock->part_name} left in the inventory.");
+                    $stock->update(['quantity_available' => $stock->quantity_available - $delta]);
+                }
+            });
+        }
         $record->update($data);
         $this->log($request, 'Donor Part Updated', "Ticket #{$ticket->display_number} - updated donor part {$record->part_name}.", $ticket->ticket_id);
 
@@ -1727,7 +1782,7 @@ class TicketController extends Controller
         $this->authorizeDonorEdit($request, $ticket, $subIssue);
         $record = $subIssue->donorParts()->where('part_id', $part)->firstOrFail();
         $name = $record->part_name;
-        $record->delete();
+        $record->delete();   // the model gives any salvage stock back
         $this->log($request, 'Donor Part Removed', "Ticket #{$ticket->display_number} - removed donor part {$name}.", $ticket->ticket_id);
 
         return response()->json(['message' => 'Donor part removed.']);
@@ -1811,6 +1866,12 @@ class TicketController extends Controller
         ]);
         $this->log($request, 'Sent Out', "Ticket #{$ticket->display_number} — sub-issue \"{$subIssue->title}\" sent to {$data['external_vendor']}.", $ticket->ticket_id);
 
+        // Nobody should have to wonder where the vehicle is: the named tester and the Admin are told it left, and when it is due back.
+        $back = ! empty($data['external_expected_return']) ? ' Expected back '.\Illuminate\Support\Carbon::parse($data['external_expected_return'])->format('M j, Y').'.' : '';
+        $summary = "Ticket #{$ticket->display_number}: \"{$subIssue->title}\" was sent to {$data['external_vendor']} by {$request->user()->name}.{$back}";
+        $this->notifyUser($subIssue->external_tester_id, 'Vehicle Sent to the Shop', $summary.' You will receive it back and test it.', 'external_sent', $ticket->ticket_id);
+        $this->notifyAdmins('Vehicle Sent to the Shop', $summary, 'external_sent', $ticket->ticket_id, $ticket->vehicle->barangay_id);
+
         return $subIssue->fresh();
     }
 
@@ -1851,6 +1912,7 @@ class TicketController extends Controller
         $this->workEvent($subIssue, $request, 'Returned from External Shop', $data);
         $subIssue->update($data + ['external_returned_at' => now(), 'external_received_by' => $request->user()->id, 'maintenance_cost' => $costs->contains(fn ($cost) => $cost === null) ? null : $costs->sum()]);
         $this->log($request, 'Returned From Shop', "Ticket #{$ticket->display_number} — sub-issue \"{$subIssue->title}\" returned from {$subIssue->external_vendor}.", $ticket->ticket_id);
+        $this->notifyUser($ticket->assigned_custodian_id, 'Vehicle Back From the Shop', "Ticket #{$ticket->display_number}: \"{$subIssue->title}\" is back from {$subIssue->external_vendor}. {$request->user()->name} received it and will test it; you verify afterwards.", 'external_returned', $ticket->ticket_id);
 
         return $subIssue->fresh();
     }
