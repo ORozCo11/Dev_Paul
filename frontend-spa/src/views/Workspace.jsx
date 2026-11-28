@@ -4706,7 +4706,7 @@ function SalvageInventoryPage({ user, notify }) {
     { key: 'status', label: 'Status', className: 'cell-center', render: (row) => (row.state === 'Proposed'
       ? <span className="status-badge decom-status decom-waiting">{canDecide ? 'Waiting for your approval' : 'Pending · waiting for approval'}</span>
       : row.state === 'Declined' ? <span className="status-badge decom-status decom-declined">Declined</span>
-        : <><span className="status-badge decom-status decom-done">Decommissioned</span><small className="muted" style={{ display: 'block', marginTop: 4 }}>{row.parts_logged > 0 ? `${row.parts_logged} part${row.parts_logged === 1 ? '' : 's'} listed` : row.salvage_completed_at ? 'No usable parts' : 'Parts list needed'}</small></>) },
+        : <><span className="status-badge decom-status decom-done">Decommissioned</span>{row.parts_logged > 0 ? null : <small className="muted" style={{ display: 'block', marginTop: 4 }}>{row.salvage_completed_at ? 'No usable parts' : 'Parts list needed'}</small>}</>) },
     { key: 'stock', label: 'Parts In Stock', className: 'cell-center', render: (row) => (row.state === 'Approved' ? <><strong>{row.units_in_stock}</strong> <span className="muted">of {row.units_listed}</span></> : <span className="muted">-</span>) },
     { key: 'actions', label: 'Actions', className: 'cell-center', render: (row) => <button type="button" className="icon-btn btn-view-action" title="View" aria-label={`View ${row.vehicle_name}`} onClick={(e) => { e.stopPropagation(); open(row); }}><Icon name="eye" size={16} /></button> },
   ];
@@ -8341,8 +8341,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
         className: 'cell-center',
         render: (row) => (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-            <StatusBadge value={vehicleConditionLabel(row)} />
-            {row.decommission_status === 'Proposed' && row.status !== 'Decommissioned' && <span className="status-badge pending" title="A decommission request is waiting for the Admin">Decommission requested</span>}
+            <StatusBadge value={vehicleConditionLabel(row)} />
             {/* Every sub-issue is resolved, only Close Ticket is left. */}
             {row.awaiting_closure && (
               <span
