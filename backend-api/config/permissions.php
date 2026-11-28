@@ -32,8 +32,9 @@ return [
     'vehicle.edit' => ['Admin'],
     'vehicle.archive' => ['Admin'],
     'vehicle.restore' => ['Admin'],
-    // The Custodian proposes decommissioning a vehicle; the Admin approves (decommission) or declines.
-    'vehicle.decommission_propose' => ['Custodian'],
+    // The mechanic proposes decommissioning a vehicle (they know it is finished); the Admin approves (decommission) or declines.
+    'vehicle.decommission_propose' => ['Maintenance Personnel'],
+    'vehicle.decommission_view' => ['Admin', 'Maintenance Personnel'],
     'vehicle.decommission' => ['Admin'],
     'vehicle.readiness_check' => ['Custodian'],
     'vehicle.mark_available' => ['Admin', 'Custodian'],
@@ -179,7 +180,7 @@ return [
     // (external.receive); the Custodian then only verifies. The Admin approves
     // the proposal and names the tester, and never handles the shop.
     // Salvage inventory: parts that can still be used from decommissioned vehicles.
-    'salvage.view' => ['Admin', 'Custodian', 'Maintenance Personnel'],
+    'salvage.view' => ['Admin', 'Maintenance Personnel'],
     'salvage.manage' => ['Maintenance Personnel'],
 
     'external.handle' => ['Custodian'],

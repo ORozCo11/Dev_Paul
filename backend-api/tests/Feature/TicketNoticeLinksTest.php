@@ -176,4 +176,29 @@ class TicketNoticeLinksTest extends TestCase
         $this->putJson("/api/tickets/{$id}/verify", ['verification_verdict' => 'Rejected', 'verification_notes' => 'Redo', 'failed_sub_issue_ids' => [$sub->sub_issue_id]])->assertOk();
         $this->assertEveryNoticeOpens('rejected for rework');
     }
+
+    #[Test]
+    public function a_reassignment_keeps_its_reason_for_the_new_owner_and_puts_it_in_the_notice(): void
+    {
+        $id = $this->propose('in_house');
+        Sanctum::actingAs($this->admin, ['*']);
+        $this->putJson("/api/tickets/{$id}/approve", ['assigned_mechanic_id' => $this->mechanic->id])->assertOk();
+
+        $this->putJson("/api/tickets/{$id}/assign-mechanic", ['assigned_mechanic_id' => $this->mechanic2->id, 'reassign_reason' => 'First mechanic is on leave.'])->assertOk();
+        $item = MaintenanceTicket::with('subIssues')->find($id)->subIssues->first();
+        $this->assertSame('First mechanic is on leave.', $item->reassign_reason);
+        $this->assertSame($this->admin->name, $item->reassigned_by_name);
+        $this->assertNotNull($item->reassigned_at);
+        $this->assertStringContainsString('First mechanic is on leave.', Notification::where('user_id', $this->mechanic2->id)->where('type', 'work_order_assigned')->latest('notification_id')->value('message'));
+
+        $this->putJson("/api/tickets/{$id}/reassign-custodian", ['assigned_custodian_id' => $this->custodian2->id, 'reassign_reason' => 'Original Custodian is away.'])->assertOk();
+        $ticket = MaintenanceTicket::find($id);
+        $this->assertSame('Original Custodian is away.', $ticket->custodian_reassign_reason);
+        $this->assertSame($this->admin->name, $ticket->custodian_reassigned_by_name);
+        $this->assertStringContainsString('Original Custodian is away.', Notification::where('user_id', $this->custodian2->id)->where('type', 'ticket_reassigned')->value('message'));
+
+        // the new Custodian and mechanic can read it on the ticket itself
+        Sanctum::actingAs($this->custodian2, ['*']);
+        $this->getJson("/api/tickets/{$id}")->assertOk()->assertJsonPath('custodian_reassign_reason', 'Original Custodian is away.')->assertJsonPath('sub_issues.0.reassign_reason', 'First mechanic is on leave.');
+    }
 }

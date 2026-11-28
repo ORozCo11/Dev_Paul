@@ -137,6 +137,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::delete('/vehicles/{vehicle}', [FleetController::class, 'archiveVehicle']);
     Route::post('/vehicles/{vehicle}/restore', [FleetController::class, 'restoreVehicle']);
     Route::put('/vehicles/{vehicle}/decommission', [FleetController::class, 'decommissionVehicle']);
+    Route::get('/decommission-requests', [FleetController::class, 'decommissionRequests']);
     Route::post('/vehicles/{vehicle}/decommission-proposal', [FleetController::class, 'proposeDecommission']);
     Route::put('/vehicles/{vehicle}/decommission-proposal/withdraw', [FleetController::class, 'withdrawDecommissionProposal']);
     Route::put('/vehicles/{vehicle}/decommission-proposal/decline', [FleetController::class, 'declineDecommissionProposal']);

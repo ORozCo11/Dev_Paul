@@ -63,11 +63,13 @@ class SalvageInventoryTest extends TestCase
     }
 
     #[Test]
-    public function only_the_mechanic_edits_and_admin_and_custodian_can_read(): void
+    public function only_the_mechanic_edits_and_the_admin_can_read_and_the_custodian_has_no_access(): void
     {
         $this->decommission();
         $part = $this->logPart();
-        foreach ([$this->admin, $this->custodian] as $reader) {
+        Sanctum::actingAs($this->custodian, ['*']);
+        $this->getJson('/api/salvage-parts')->assertForbidden();
+        foreach ([$this->admin] as $reader) {
             Sanctum::actingAs($reader, ['*']);
             $this->getJson('/api/salvage-parts')->assertOk()->assertJsonCount(1);
             $this->getJson('/api/salvage-parts/queue')->assertOk();
@@ -91,10 +93,9 @@ class SalvageInventoryTest extends TestCase
         $this->putJson("/api/vehicles/{$this->donor->vehicle_id}/salvage-complete", ['nothing_salvageable' => true])->assertOk();
         $this->assertNotNull($this->getJson('/api/salvage-parts/queue')->json('0.salvage_completed_at'));
 
-        // Finished lists take no more parts until reopened.
-        $this->postJson('/api/salvage-parts', ['vehicle_id' => $this->donor->vehicle_id, 'part_name' => 'X', 'part_condition' => 'Good', 'quantity' => 1])->assertUnprocessable();
-        $this->putJson("/api/vehicles/{$this->donor->vehicle_id}/salvage-reopen")->assertOk();
+        // Logging a part on a vehicle marked "no usable parts" takes it back to waiting for its list.
         $this->postJson('/api/salvage-parts', ['vehicle_id' => $this->donor->vehicle_id, 'part_name' => 'X', 'part_condition' => 'Good', 'quantity' => 1])->assertCreated();
+        $this->assertNull($this->getJson('/api/salvage-parts/queue')->json('0.salvage_completed_at'));
         $this->putJson("/api/vehicles/{$this->working()}/salvage-complete")->assertUnprocessable();   // not decommissioned
     }
 
@@ -196,5 +197,20 @@ class SalvageInventoryTest extends TestCase
         // renaming one line onto another is refused too; keeping its own name is fine
         $this->putJson("/api/salvage-parts/{$second['salvage_part_id']}", ['part_name' => 'alternator', 'part_condition' => 'Good', 'quantity' => 1])->assertUnprocessable();
         $this->putJson("/api/salvage-parts/{$second['salvage_part_id']}", ['part_name' => 'Radiator', 'part_condition' => 'Good', 'quantity' => 2])->assertOk();
+    }
+
+    #[Test]
+    public function a_part_needs_only_a_name_and_a_quantity(): void
+    {
+        $this->decommission();
+        Sanctum::actingAs($this->mechanic, ['*']);
+        $part = $this->postJson('/api/salvage-parts', ['vehicle_id' => $this->donor->vehicle_id, 'part_name' => 'Alternator', 'quantity' => 2])->assertCreated()->json();
+        $this->assertSame(2, $part['quantity_available']);
+        $this->assertSame('Good', $part['part_condition']);
+        $this->assertNull($part['storage_location']);
+
+        // editing without those fields keeps what was there
+        $this->putJson("/api/salvage-parts/{$part['salvage_part_id']}", ['part_name' => 'Alternator', 'quantity' => 3])->assertOk();
+        $this->assertSame('Good', SalvagePart::find($part['salvage_part_id'])->part_condition);
     }
 }

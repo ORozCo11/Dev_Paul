@@ -29,6 +29,9 @@ class MaintenanceTicket extends Model
     protected $fillable = [
         'correction_reason',
         'correction_requested_at',
+        'custodian_reassigned_at',
+        'custodian_reassign_reason',
+        'custodian_reassigned_by_name',
         'decision_history',
         'decision_revision',
         'vehicle_id',
@@ -59,6 +62,7 @@ class MaintenanceTicket extends Model
 
     protected $casts = [
         'correction_requested_at' => 'datetime',
+        'custodian_reassigned_at' => 'datetime',
         'decision_history' => 'array',
         'decision_revision' => 'integer',
         'assigned_at'         => 'datetime',

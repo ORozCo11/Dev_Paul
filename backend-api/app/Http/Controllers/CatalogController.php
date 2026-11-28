@@ -89,7 +89,7 @@ class CatalogController extends Controller
 
     public function maintenanceTypes()
     {
-        return MaintenanceType::orderBy('name')->get(['id', 'name']);
+        return MaintenanceType::inUsualOrder(MaintenanceType::get(['id', 'name']));
     }
 
     public function storeMaintenanceType(Request $request)

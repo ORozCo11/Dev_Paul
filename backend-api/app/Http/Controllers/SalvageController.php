@@ -39,15 +39,20 @@ class SalvageController extends Controller
     {
         $this->requireAbility($request, 'salvage.view');
 
-        $counts = SalvagePart::selectRaw('vehicle_id, COUNT(*) as part_lines')->groupBy('vehicle_id')->pluck('part_lines', 'vehicle_id');
+        $sums = SalvagePart::selectRaw('vehicle_id, COUNT(*) as part_lines, SUM(quantity) as listed, SUM(quantity_available) as in_stock')->groupBy('vehicle_id')->get()->keyBy('vehicle_id');
 
-        return Vehicle::where('status', 'Decommissioned')->orderByDesc('decommissioned_at')->get()->map(fn (Vehicle $vehicle) => [
+        return Vehicle::with('category')->where('status', 'Decommissioned')->orderByDesc('decommissioned_at')->get()->map(fn (Vehicle $vehicle) => [
             'vehicle_id' => $vehicle->vehicle_id,
             'vehicle_name' => $vehicle->vehicle_name,
             'plate_number' => $vehicle->plate_number,
             'decommissioned_at' => $vehicle->decommissioned_at,
             'decommission_reason' => $vehicle->decommission_reason,
-            'parts_logged' => (int) ($counts[$vehicle->vehicle_id] ?? 0),
+            'parts_logged' => (int) ($sums[$vehicle->vehicle_id]->part_lines ?? 0),
+            'units_listed' => (int) ($sums[$vehicle->vehicle_id]->listed ?? 0),
+            'units_in_stock' => (int) ($sums[$vehicle->vehicle_id]->in_stock ?? 0),
+            'photo_url' => $vehicle->photo_url,
+            'vehicle_type' => $vehicle->category?->category_name,
+            'brand' => $vehicle->brand, 'model' => $vehicle->model, 'year_model' => $vehicle->year_model,
             'salvage_completed_at' => $vehicle->salvage_completed_at,
         ])->values();
     }
@@ -58,13 +63,16 @@ class SalvageController extends Controller
         $data = $this->validated($request);
         $vehicle = Vehicle::findOrFail($data['vehicle_id']);
         abort_unless($vehicle->status === 'Decommissioned', 422, 'Parts can only be logged from a decommissioned vehicle. Ask the Admin to decommission it first.');
-        abort_if($vehicle->salvage_completed_at, 422, 'The parts list for this vehicle is already finished. Reopen it to add more.');
+        // A vehicle marked "no usable parts" that turns out to have some simply goes back to waiting for its list.
+        if ($vehicle->salvage_completed_at) {
+            $vehicle->update(['salvage_completed_at' => null, 'salvage_completed_by' => null]);
+        }
 
         $this->abortIfListed((int) $data['vehicle_id'], $data['part_name']);
         $part = SalvagePart::create($data + ['barangay_id' => $vehicle->barangay_id, 'quantity_available' => $data['quantity'], 'logged_by' => $request->user()->id]);
         $this->log($request, 'Add', "Logged {$part->quantity} x {$part->part_name} from {$vehicle->vehicle_name} as salvageable.", $part->salvage_part_id);
 
-        return response()->json($this->present($part->load(['vehicle:vehicle_id,vehicle_name,plate_number', 'loggedBy:id,name'])), 201);
+        return response()->json($this->present($part->refresh()->load(['vehicle:vehicle_id,vehicle_name,plate_number', 'loggedBy:id,name'])), 201);
     }
 
     public function update(Request $request, SalvagePart $salvagePart)
@@ -121,15 +129,21 @@ class SalvageController extends Controller
             $request->merge(['part_name' => preg_replace('/\s+/u', ' ', trim($request->input('part_name')))]);
         }
 
-        return $request->validate([
+        $data = $request->validate([
             'vehicle_id' => $withVehicle ? ['required', 'integer', 'exists:vehicles,vehicle_id'] : ['sometimes', 'integer'],
             'part_name' => ['required', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:80'],
-            'part_condition' => ['required', Rule::in(self::CONDITIONS)],
+            // Not asked for on screen any more; it stays optional so older callers keep working (default Good).
+            'part_condition' => ['nullable', Rule::in(self::CONDITIONS)],
             'quantity' => ['required', 'integer', 'min:1', 'max:9999'],
             'storage_location' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+        if (($data['part_condition'] ?? null) === null) {
+            unset($data['part_condition']);
+        }
+
+        return $data;
     }
 
     /** One line per part per vehicle: raise its quantity instead of listing it twice (spacing and capitals do not count). */

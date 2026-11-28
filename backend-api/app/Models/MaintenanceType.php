@@ -8,6 +8,19 @@ class MaintenanceType extends Model
 {
     protected $fillable = ['name'];
 
+    /** Preventive Maintenance first, then the most common repair types, then everything else A to Z. */
+    private const USUAL_ORDER = [
+        'Preventive Maintenance', 'Oil Change', 'Tire Service', 'Brake System', 'Engine Repair', 'Air-Conditioning',
+        'Electrical System', 'Steering System', 'Hydraulic System', 'Pump Service', 'Siren and Lights', 'Outboard Service', 'Hull Repair',
+    ];
+
+    public static function inUsualOrder(\Illuminate\Support\Collection $rows, string $key = 'name'): \Illuminate\Support\Collection
+    {
+        $rank = array_flip(array_map('mb_strtolower', self::USUAL_ORDER));
+
+        return $rows->sortBy(fn ($row) => sprintf('%03d|%s', $rank[mb_strtolower(is_array($row) ? $row[$key] : (is_object($row) ? $row->{$key} : $row))] ?? 999, mb_strtolower(is_array($row) ? $row[$key] : (is_object($row) ? $row->{$key} : $row))))->values();
+    }
+
     /**
      * Look up a name case-insensitively and create it if it doesn't exist
      * yet — this is what makes the catalog grow from real use instead of

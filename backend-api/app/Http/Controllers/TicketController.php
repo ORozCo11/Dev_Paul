@@ -201,7 +201,7 @@ class TicketController extends Controller
             // (Active or awaiting verification) and approved schedules waiting.
             'maintenance_personnel' => $this->mechanicsWithWorkload($request->user()->barangay_id),
             'priorities'            => $this->priorities,
-            'maintenance_types'     => MaintenanceType::orderBy('name')->pluck('name'),
+            'maintenance_types'     => MaintenanceType::inUsualOrder(MaintenanceType::pluck('name')),
             // 'Pending Approval' included so a Custodian's proposal has a
             // checkbox of its own in the ticket list's status filter — it
             // used to have none, so narrowing by any of the other 4 statuses
@@ -781,6 +781,7 @@ class TicketController extends Controller
                     'assigned_mechanic_id' => $mechanic->id,
                     'prior_mechanic_ids' => collect($item->prior_mechanic_ids ?? [])->push($previous)->filter()->unique()->values()->all(),
                     'mechanic_assigned_at' => now(), 'mechanic_assigned_by' => $request->user()->id,
+                    'reassigned_at' => now(), 'reassign_reason' => $data['reassign_reason'], 'reassigned_by_name' => $request->user()->name,
                     'returned_to_admin_at' => null, 'returned_to_admin_by' => null, 'returned_to_admin_reason' => null,
                 ]);
                 $this->notifyUser($mechanic->id, 'Work Order Reassigned to You', "Ticket #{$ticket->display_number}: {$item->title}. Reason: {$data['reassign_reason']}", 'work_order_assigned', $ticket->ticket_id);
@@ -1452,7 +1453,7 @@ class TicketController extends Controller
             $previousCustodianId = $ticket->assigned_custodian_id;
             $previousName = User::find($previousCustodianId)?->name ?? 'the previous Custodian';
 
-            $ticket->update(['assigned_custodian_id' => $newCustodian->id]);
+            $ticket->update(['assigned_custodian_id' => $newCustodian->id, 'custodian_reassigned_at' => now(), 'custodian_reassign_reason' => $data['reassign_reason'], 'custodian_reassigned_by_name' => $request->user()->name]);
 
             // Sub-issues already handed off for verification have the OLD
             // custodian stamped on them (logRepairs copies it at that moment),
@@ -1478,7 +1479,7 @@ class TicketController extends Controller
             $this->notifyUser(
                 $newCustodian->id,
                 'Ticket Reassigned to You',
-                "You are now the Custodian for Ticket #{$ticket->display_number} ({$vehicleName})."
+                "You are now the Custodian for Ticket #{$ticket->display_number} ({$vehicleName}). Reason: {$data['reassign_reason']}"
                 . ($cascaded > 0 ? " {$cascaded} repair(s) are awaiting your verification." : ''),
                 'ticket_reassigned',
                 $ticket->ticket_id

@@ -100,7 +100,6 @@ const modulesByRole = {
     ] },
     { section: 'Reference', icon: 'list', items: [
       ['histories', 'Vehicle History'],
-      ['salvage', 'Salvage Inventory'],
     ] },
   ],
   'Maintenance Personnel': [
@@ -428,7 +427,7 @@ const moduleIconNames = {
   tickets: 'ticket', ticketArchives: 'archive', reportOrPropose: 'alert',
   myTasks: 'clipboard', ticketPropose: 'document',
   ticketVerifications: 'checkCircle', ticketWorkOrders: 'clipboard', workTracker: 'columns',
-  histories: 'undo', reports: 'document', logs: 'history', users: 'users', salvage: 'list',
+  histories: 'undo', reports: 'document', logs: 'history', users: 'users', salvage: 'tools',
 };
 
 function renderModuleIcon(key) {
@@ -488,7 +487,10 @@ function Workspace() {
   const vehicleViewParam = new URLSearchParams(location.search).get('view');
   const vehicleView = ['ready', 'notready', 'readiness'].includes(vehicleViewParam) ? vehicleViewParam : 'all';
   const subPageTitle =
-    (isNewVehiclePage && 'Add Vehicle')
+    (new URLSearchParams(location.search).get('module') === 'salvageView' && 'Salvage Vehicle')
+    ||    (new URLSearchParams(location.search).get('module') === 'decommissionView' && 'Decommission Request')
+    ||    (new URLSearchParams(location.search).get('module') === 'salvageLog' && (new URLSearchParams(location.search).get('part') ? 'Edit Salvageable Part' : 'Log Salvageable Parts'))
+    ||    (isNewVehiclePage && 'Add Vehicle')
     || (vehicleProfileId && 'Vehicle Profile')
     || (isNewTicketPage && 'Create New Ticket')
     || (ticketProfileId && 'Ticket Details')
@@ -703,6 +705,9 @@ function Workspace() {
     : hasWorkTabsNav && ['schedules', 'ticketWorkOrders'].includes(breadcrumbModule) ? 'ticketWorkOrders'
     : hasAdminWorkNav && ADMIN_WORK_TABS.includes(breadcrumbModule) ? 'tickets'
     : hasVehicleTabsNav && breadcrumbModule === 'locations' ? 'vehicles'
+    : breadcrumbModule === 'salvageLog' ? 'salvage'
+    : breadcrumbModule === 'decommissionView' ? 'salvage'
+    : breadcrumbModule === 'salvageView' ? 'salvage'
     : breadcrumbModule;
   // Always starts expanded — a collapsed sidebar should only ever be a
   // deliberate, in-session choice (the toggle button), never the default a
@@ -2417,7 +2422,13 @@ function Workspace() {
     selected: selectedReadiness,
     toggle: (id) => setSelectedReadiness((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id])),
     onProposeRepair: (row) => { setPrefilledTicketData({ vehicle_id: row.vehicle_id, entry_mode: 'in_house' }); navigate(`${roleRoutes[user.role]}/tickets/new`); },
-  }))();
+  }).reduce((cols, col, i, all) => {
+    const eye = (row) => <button className="btn-view-action icon-btn" onClick={(e) => { e.stopPropagation(); openVehicleProfile(row); }} type="button" title="View vehicle" aria-label={`View ${row.vehicle_name}`}><Icon name="eye" size={14} /></button>;
+    if (col.key === 'action') cols.push({ ...col, render: (row) => <div className="row-actions">{eye(row)}{col.render(row)}</div> });
+    else cols.push(col);
+    if (i === all.length - 1 && !all.some((c) => c.key === 'action')) cols.push({ key: 'action', label: 'Action', locked: true, className: 'cell-center', render: (row) => <div className="row-actions">{eye(row)}</div> });
+    return cols;
+  }, []))();
   const vehicleColumnChooser = useColumnChooser(`vms_vehicle_columns_v4_${vehicleView}`, vehicleColumnDefs);
 
   // Every other module's table gets the same Choose Columns / drag-to-reorder
@@ -2428,7 +2439,7 @@ function Workspace() {
   const categoryColumnDefs = (() => categoryColumns((row) => navigate(`${roleRoutes[user.role]}/categories/${row.category_id}/edit`), deleteRecord, canDo(user, 'vehicle_type.edit') || canDo(user, 'vehicle_type.delete')))();
   const categoryColumnChooser = useColumnChooser('vms_category_columns_s2', categoryColumnDefs, ['id', 'description']);
 
-  const userColumnDefs = (() => userColumns((row) => navigate(`${roleRoutes[user.role]}/users/${row.id}/edit`), toggleUserActive, user.id, resendUserCredentials))();
+  const userColumnDefs = (() => userColumns((row) => navigate(`${roleRoutes[user.role]}/users/${row.id}/edit`), toggleUserActive, user.id, resendUserCredentials, (row) => navigate(`${roleRoutes[user.role]}/users/${row.id}`)))();
   const userColumnChooser = useColumnChooser('vms_user_columns_s2', userColumnDefs, ['id', 'phone']);
 
   const locationColumnChooser = useColumnChooser('vms_location_columns_s2', locationTableColumns, ['id', 'plate', 'address_area', 'updated_by', 'time']);
@@ -2437,20 +2448,12 @@ function Workspace() {
   // The clock is read once when the page opens (render must stay pure); the charts count back from it.
   const [pageNow] = useState(() => Date.now());
   const pageCharts = useMemo(() => {
-    const day = 24 * 60 * 60 * 1000;
-    const within = (value, days) => value && pageNow - new Date(value).getTime() < days * day;
     const countBy = (rows, keyOf) => { const map = new Map(); rows.forEach((row) => { const key = keyOf(row); if (key) map.set(key, (map.get(key) ?? 0) + 1); }); return [...map.entries()]; };
-    const perDay = (rows, field, days = 7) => Array.from({ length: days }, (_, i) => {
-      const date = new Date(pageNow - (days - 1 - i) * day);
-      const count = rows.filter((row) => row[field] && new Date(row[field]).toDateString() === date.toDateString()).length;
-      return { label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), value: count, color: CHART.blue };
-    });
     const fleet = (records.vehicles ?? []).filter((row) => row.readiness_state !== 'retired');
     const ready = fleet.filter((row) => row.readiness_state === 'ready');
     const notReady = fleet.filter((row) => row.readiness_state !== 'ready');
     // Condition Monitoring does not load the vehicle list itself; the shared lookup carries each vehicle's condition.
     const inService = (lookups.vehicles ?? []).filter((row) => !['Inactive', 'Decommissioned'].includes(row.status));
-    const histories = records.histories ?? [];
     const logs = records.logs ?? [];
     const archives = records.ticketArchives ?? [];
     const users = records.users ?? [];
@@ -2501,7 +2504,6 @@ function Workspace() {
           { label: 'Maintenance Personnel', value: users.filter((row) => row.role === 'Maintenance Personnel').length, color: CHART.blue },
         ],
       },
-      histories: { title: 'Vehicle activity, last 7 days', note: `${histories.filter((row) => within(row.created_at, 7)).length} events`, type: 'column', data: perDay(histories, 'created_at') },
       logs: {
         title: 'Most active people', note: `${logs.length} entries`, type: 'bar',
         data: countBy(logs, (row) => row.user?.name ?? row.user_name ?? 'System').sort((a, b) => b[1] - a[1]).slice(0, 5).map(([label, value]) => ({ label, value })),
@@ -2511,7 +2513,7 @@ function Workspace() {
         data: months.map((d) => ({ label: d.toLocaleDateString('en-US', { month: 'short' }), value: archives.filter((row) => row.archived_at && new Date(row.archived_at).getFullYear() === d.getFullYear() && new Date(row.archived_at).getMonth() === d.getMonth()).length, color: CHART.green })),
       },
     };
-  }, [pageNow, records.vehicles, records.histories, records.logs, records.ticketArchives, records.users, records.categories, lookups.vehicles]);
+  }, [pageNow, records.vehicles, records.logs, records.ticketArchives, records.users, records.categories, lookups.vehicles]);
 
   // The soonest open schedule (waiting for approval, or approved) for each vehicle.
   const nextScheduleByVehicle = useMemo(() => {
@@ -2544,15 +2546,18 @@ function Workspace() {
     [user.id],
   );
   const maintenanceStatusColumnDefsWithNote = useMemo(
-    () => withNoteColumn(maintenanceStatusColumnDefs, (r) => [r.problem_reason, r.action_taken].filter(Boolean).join(' — '), { label: 'Details' }),
+    () => withNoteColumn(maintenanceStatusColumnDefs, (r) => [r.problem_reason, plainWorkText(r.action_taken)].filter(Boolean).join(' — '), { label: 'Details' }),
     [maintenanceStatusColumnDefs],
   );
   const maintenanceStatusColumnChooser = useColumnChooser('vms_maintenance_status_columns_s2', maintenanceStatusColumnDefsWithNote, ['id', 'plate']);
 
-  const scheduleColumnDefs = (() => scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord, setReassignScheduleTarget, openTicketProfile, approveSchedule, setDeclineScheduleTarget, recordScheduleWork))();
+  const scheduleColumnDefs = (() => scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord, setReassignScheduleTarget, openTicketProfile, approveSchedule, setDeclineScheduleTarget, recordScheduleWork, (row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}`)))();
   const scheduleColumnChooser = useColumnChooser('vms_schedule_columns_s2', scheduleColumnDefs, ['id', 'plate', 'time', 'repeat', 'location']);
 
-  const historyColumnsWithNote = useMemo(() => withNoteColumn(historyColumns, (r) => r.description, { label: 'Description', width: '24%' }), []);
+  const historyColumnsWithNote = [
+    ...withNoteColumn(historyColumns, (r) => r.description, { label: 'Description', width: '24%' }),
+    { key: 'action', label: 'Action', locked: true, className: 'cell-center', render: (row) => <button className="btn-view-action icon-btn" onClick={(e) => { e.stopPropagation(); openVehicleProfile({ vehicle_id: row.vehicle_id ?? row.vehicle?.vehicle_id }); }} type="button" title="View vehicle" aria-label="View vehicle"><Icon name="eye" size={14} /></button> },
+  ];
   const vehicleHistoryColumnChooser = useColumnChooser('vms_vehicle_history_columns_s2', historyColumnsWithNote, ['id', 'plate', 'related', 'related_record', 'time']);
 
   const logColumnDefs = (() => logColumns(lookups.vehicles, openVehicleProfile, openTicketProfile))();
@@ -2567,7 +2572,7 @@ function Workspace() {
       className: 'cell-center',
       render: (row) => (
         <div className="row-actions">
-          {row.final_status === 'Closed' && <button className="btn-view-action icon-btn" type="button" title="View Ticket" aria-label="View Ticket" onClick={() => openTicketProfile({ ticket_id: row.ticket_id })}><Icon name="eye" size={14} /></button>}
+          {row.ticket_id && !row.deleted_at && row.final_status !== 'Deleted' && <button className="btn-view-action icon-btn" type="button" title="View Ticket" aria-label="View Ticket" onClick={() => openTicketProfile({ ticket_id: row.ticket_id })}><Icon name="eye" size={14} /></button>}
           {row.deleted_at || row.final_status === 'Deleted' ? (
             <button className="btn-reopen-action icon-btn" type="button" title="Restore Ticket" aria-label="Restore Ticket" onClick={() => setConfirmDialog({
               title: 'Restore Ticket', message: row.deleted_at ? 'Restore this record to Archived Tickets?' : 'Restore this deleted ticket and its recorded repair progress?', confirmLabel: 'Restore', variant: 'primary',
@@ -2676,7 +2681,7 @@ function Workspace() {
   const useFolders = modules.some(([k]) => k === 'maintenanceGroup' || k === 'conditions');
   const parentOf = (key) => (!useFolders ? null : VEHICLE_SUBPAGE_VIEWS[key] ? 'vehicles'
     : (['tickets', 'maintenance'].includes(key) && modules.some(([k]) => k === 'maintenanceGroup')) ? 'maintenanceGroup'
-      : key === 'schedules' ? schedulesParent : null);
+        : key === 'schedules' ? schedulesParent : null);
   const childrenOf = (parent) => modules.map(([k]) => k).filter((k) => parentOf(k) === parent);
   const groupHasPage = (parent) => (parent !== 'maintenanceGroup' && breadcrumbModule === parent) || childrenOf(parent).some((k) => (VEHICLE_SUBPAGE_VIEWS[k] ? breadcrumbModule === 'vehicles' : breadcrumbModule === k));
   // Groups start folded and open by themselves while you are on one of their pages; the row or the arrow opens or folds one.
@@ -3047,7 +3052,6 @@ function Workspace() {
               allHubs={allHubs}
               basePath={roleRoutes[user.role]}
               canManage={hasRole(user, 'Admin')}
-              canProposeDecommission={canDo(user, 'vehicle.decommission_propose')}
               // 2026-10-06 spec reversal — Maintenance Personnel can now view
               // documents and upload repair evidence (edit only their own
               // upload); Custodian keeps upload + edit-own (VehicleFiles/
@@ -4114,13 +4118,21 @@ function Workspace() {
     if (activeModule === 'salvage') {
       return <SalvageInventoryPage user={user} notify={setNotice} />;
     }
+    if (activeModule === 'salvageView') {
+      return <SalvageViewPage user={user} notify={setNotice} search={location.search} />;
+    }
+    if (activeModule === 'salvageLog') {
+      return <SalvageLogPage user={user} notify={setNotice} search={location.search} />;
+    }
+    if (activeModule === 'decommissionView') {
+      return <DecommissionDetailPage user={user} notify={setNotice} search={location.search} />;
+    }
 
     if (activeModule === 'histories') {
       const historyActivityTypeOptions = [...new Set((records.histories ?? []).map((h) => h.activity_type).filter(Boolean))].sort();
       return (
         <ModulePanel
           description="Everything that happened to each vehicle, in order. Read only."
-          chart={<PageChart spec={pageCharts.histories} />}
           filterBar={
             <div className="filter-bar-container">
               <div className="filter-label"><span>Filters:</span></div>
@@ -4625,143 +4637,463 @@ function ModulePanel({ children, description, statCards, chart, filterBar, tabBa
 }
 
 
-const SALVAGE_CATEGORIES = ['Engine', 'Transmission', 'Electrical', 'Brakes', 'Tires and wheels', 'Body', 'Pump and hydraulics', 'Other'];
-const SALVAGE_CONDITIONS = ['Good', 'Usable', 'Needs refurbishing'];
+function salvageBadge(vehicle) {
+  const [tone, text] = vehicle.parts_logged > 0 ? ['done', `${vehicle.parts_logged} part${vehicle.parts_logged === 1 ? '' : 's'} listed`] : vehicle.salvage_completed_at ? ['none', 'No usable parts'] : ['needed', 'Parts list needed'];
+  return <span className={`status-badge decom-status decom-${tone}`}>{text}</span>;
+}
 
-// Salvage inventory: an Admin decommissions a vehicle, the mechanic lists the parts that can still be used,
-// and repairs take parts from this stock. Admin and Custodian can only read it.
+// Salvage Inventory: every vehicle that is proposed, decommissioned or declined, in one list.
+// Pending ones wait for the Admin; decommissioned ones are where the mechanic lists the usable parts.
 function SalvageInventoryPage({ user, notify }) {
-  const canManage = canDo(user, 'salvage.manage');
-  const [parts, setParts] = useState(null);
-  const [queue, setQueue] = useState([]);
+  const navigate = useNavigate();
+  const canPropose = canDo(user, 'vehicle.decommission_propose');
+  const canDecide = canDo(user, 'vehicle.decommission');
+  const [rows, setRows] = useState(null);
   const [error, setError] = useState('');
-  const [search, setSearch] = useState('');
-  const [modal, setModal] = useState(null);
-  const [deleting, setDeleting] = useState(null);
-  const [busy, setBusy] = useState(false);
-
-  // Bumping `version` reloads both lists; the effect owns the fetch so state is only set from its callbacks.
   const [version, setVersion] = useState(0);
-  const load = useCallback(async () => { setVersion((n) => n + 1); }, []);
+  // Pending and decommissioned are what the work is about; declined ones are one tick away.
+  const [filter, setFilter] = useState(['pending', 'decommissioned']);
+  const [search, setSearch] = useState('');
+  const [proposing, setProposing] = useState(false);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     let live = true;
-    Promise.all([api.get('/salvage-parts'), api.get('/salvage-parts/queue')]).then(([list, vehicles]) => {
-      if (!live) return;
-      setParts(list.data);
-      setQueue(vehicles.data);
-      setError('');
-    }).catch((err) => { if (live) setError(describeError(err, 'The salvage inventory could not be loaded.')); });
+    api.get('/decommission-requests').then((res) => { if (live) { setRows(res.data); setError(''); } })
+      .catch((err) => { if (live) setError(describeError(err, 'The salvage inventory could not be loaded.')); });
     return () => { live = false; };
   }, [version]);
 
-  const waiting = queue.filter((vehicle) => !vehicle.salvage_completed_at);
-  const finishList = async (vehicle, nothing = false) => {
-    setBusy(true);
-    try {
-      const { data } = await api.put(`/vehicles/${vehicle.vehicle_id}/salvage-complete`, nothing ? { nothing_salvageable: true } : {});
-      setQueue((rowsNow) => rowsNow.map((row) => (row.vehicle_id === vehicle.vehicle_id ? { ...row, salvage_completed_at: data.salvage_completed_at ?? new Date().toISOString() } : row)));
-      notify?.({ type: 'success', text: `Parts list for ${vehicle.vehicle_name} finished.` });
-      await load();
-    } catch (err) { notify?.({ type: 'error', text: describeError(err, 'Could not finish the list.') }); } finally { setBusy(false); }
-  };
-  const reopenList = async (vehicle) => {
-    setBusy(true);
-    try { await api.put(`/vehicles/${vehicle.vehicle_id}/salvage-reopen`); setQueue((rowsNow) => rowsNow.map((row) => (row.vehicle_id === vehicle.vehicle_id ? { ...row, salvage_completed_at: null } : row))); await load(); } catch (err) { notify?.({ type: 'error', text: describeError(err, 'Could not reopen the list.') }); } finally { setBusy(false); }
-  };
-  const removePart = async () => {
-    if (!deleting) return;
-    setBusy(true);
-    try {
-      await api.delete(`/salvage-parts/${deleting.salvage_part_id}`);
-      notify?.({ type: 'success', text: 'Part removed from the inventory.' });
-      setDeleting(null);
-      await load();
-    } catch (err) { notify?.({ type: 'error', text: describeError(err, 'Could not remove that part.') }); setDeleting(null); } finally { setBusy(false); }
-  };
-
+  const bucket = (row) => (row.state === 'Proposed' ? 'pending' : row.state === 'Declined' ? 'declined' : 'decommissioned');
+  const open = (row) => navigate(`${roleRoutes[user.role]}?module=${row.state === 'Approved' ? 'salvageView' : 'decommissionView'}&vehicle=${row.vehicle_id}`);
+  const list = rows ?? [];
+  const counts = list.reduce((acc, row) => { acc[bucket(row)] += 1; return acc; }, { pending: 0, decommissioned: 0, declined: 0 });
   const q = search.trim().toLowerCase();
-  const shown = (parts ?? []).filter((row) => !q || [row.part_name, row.category, row.vehicle_name, row.plate_number, row.storage_location].some((value) => String(value ?? '').toLowerCase().includes(q)));
-  const inStock = (parts ?? []).reduce((sum, row) => sum + row.quantity_available, 0);
+  const shown = list.filter((row) => (!filter.length || filter.includes(bucket(row)))
+    && (!q || [row.vehicle_name, row.plate_number, row.vehicle_type, row.reason, row.proposed_by].some((value) => String(value ?? '').toLowerCase().includes(q))));
+  const chips = [
+    { key: 'pending', label: canDecide ? 'Waiting for approval' : 'Pending', bg: '#fef3c7', color: '#92400e' },
+    { key: 'decommissioned', label: 'Decommissioned', bg: '#dcfce7', color: '#166534' },
+    { key: 'declined', label: 'Declined', bg: '#fee2e2', color: '#991b1b' },
+  ];
+  const chart = {
+    title: 'Vehicles by status', type: 'donut', center: list.length, centerSub: 'Vehicles',
+    data: [
+      { label: canDecide ? 'Waiting for approval' : 'Pending approval', value: counts.pending, color: CHART.amber },
+      { label: 'Decommissioned', value: counts.decommissioned, color: CHART.green },
+      { label: 'Declined', value: counts.declined, color: CHART.red },
+    ],
+  };
+  const columns = [
+    { key: 'vehicle', label: 'Vehicle', render: (row) => <><strong>{row.vehicle_name}</strong> <span className="muted">{row.plate_number}</span>{row.vehicle_type && <small className="muted" style={{ display: 'block' }}>{row.vehicle_type}</small>}</> },
+    { key: 'reason', label: 'Reason', render: (row) => <>{row.reason}{row.state === 'Declined' && row.decline_reason && <small className="muted" style={{ display: 'block' }}>Declined: {row.decline_reason}</small>}</> },
+    { key: 'status', label: 'Status', className: 'cell-center', render: (row) => (row.state === 'Proposed'
+      ? <span className="status-badge decom-status decom-waiting">{canDecide ? 'Waiting for your approval' : 'Pending · waiting for approval'}</span>
+      : row.state === 'Declined' ? <span className="status-badge decom-status decom-declined">Declined</span>
+        : <><span className="status-badge decom-status decom-done">Decommissioned</span><small className="muted" style={{ display: 'block', marginTop: 4 }}>{row.parts_logged > 0 ? `${row.parts_logged} part${row.parts_logged === 1 ? '' : 's'} listed` : row.salvage_completed_at ? 'No usable parts' : 'Parts list needed'}</small></>) },
+    { key: 'stock', label: 'Parts In Stock', className: 'cell-center', render: (row) => (row.state === 'Approved' ? <><strong>{row.units_in_stock}</strong> <span className="muted">of {row.units_listed}</span></> : <span className="muted">-</span>) },
+    { key: 'actions', label: 'Actions', className: 'cell-center', render: (row) => <button type="button" className="icon-btn btn-view-action" title="View" aria-label={`View ${row.vehicle_name}`} onClick={(e) => { e.stopPropagation(); open(row); }}><Icon name="eye" size={16} /></button> },
+  ];
 
   return (
-    <ModulePanel description="Parts that can still be used from decommissioned vehicles. A repair that uses parts from another vehicle takes them from this list.">
-      <div className="salvage-steps" aria-label="How it works">
-        <span><b>1</b> The Custodian proposes it, and the Admin approves the decommissioning.</span>
-        <span><b>2</b> The mechanic lists every part that can still be used.</span>
-        <span><b>3</b> Repairs take parts from the list, and the stock goes down.</span>
+    <ModulePanel
+      description={canDecide ? 'Vehicles the Maintenance Personnel asked to retire, and the usable parts from vehicles already decommissioned. Open a pending one to approve or decline it.' : 'Recommend retiring a vehicle that is not worth repairing. Once the Admin approves, list the parts that can still be used.'}
+      chart={<PageChart spec={chart} />}
+      filterBar={<StatusChipFilter chips={chips} selected={filter} onApply={setFilter} />}
+    >
+      {error && <p className="notice danger" role="alert">{error} <button type="button" className="ghost-button" onClick={() => setVersion((n) => n + 1)}>Retry</button></p>}
+      <div className="panel-header-bar">
+        <h3>Vehicles <span className="count-badge">{shown.length}</span></h3>
+        <LocalSearchInput value={search} onChange={setSearch} placeholder="Search vehicle, plate or reason..." onAdd={canPropose ? () => setProposing(true) : undefined} addLabel="Request Decommission" />
       </div>
-      {error && <p className="notice danger" role="alert">{error} <button type="button" className="ghost-button" onClick={load}>Retry</button></p>}
+      {rows === null && !error ? <p className="muted" role="status">Loading…</p> : <PaginatedTable columns={columns} rows={shown} onRowClick={open} emptyMessage={list.length ? 'No vehicle matches the current filter. Tick more statuses and press Filter.' : 'No vehicle has been proposed or decommissioned yet.'} />}
 
-      <section className="salvage-section" aria-labelledby="salvage-queue-h">
-        <h3 id="salvage-queue-h">Decommissioned vehicles <span className="count-badge">{waiting.length} waiting</span></h3>
-        {!queue.length ? <p className="empty-state">No vehicle has been decommissioned. Once the Admin approves a decommission request, the vehicle appears here for the parts list.</p> : (
-          <ul className="salvage-queue">
-            {queue.map((vehicle) => (
-              <li key={vehicle.vehicle_id} className={vehicle.salvage_completed_at ? 'is-done' : ''}>
-                <div>
-                  <strong>{vehicle.vehicle_name}</strong> <span className="muted">{vehicle.plate_number}</span>
-                  <small className="muted">Decommissioned {vehicle.decommissioned_at ? formatDate(vehicle.decommissioned_at) : ''}{vehicle.decommission_reason ? `: ${vehicle.decommission_reason}` : ''}</small>
-                </div>
-                <span className={`status-badge ${vehicle.salvage_completed_at ? 'completed' : 'pending'}`}>{vehicle.salvage_completed_at ? 'List finished' : (vehicle.parts_logged ? `${vehicle.parts_logged} part line${vehicle.parts_logged === 1 ? '' : 's'} logged` : 'Waiting for the parts list')}</span>
-                {canManage && (
-                  <span className="salvage-queue-actions">
-                    {!vehicle.salvage_completed_at && <button type="button" className="primary-button btn-sm" onClick={() => setModal({ mode: 'add', vehicleId: vehicle.vehicle_id })}><Icon name="plus" size={14} /> Log parts</button>}
-                    {!vehicle.salvage_completed_at && vehicle.parts_logged > 0 && <button type="button" className="ghost-button btn-sm" disabled={busy} onClick={() => finishList(vehicle)}>Finish list</button>}
-                    {!vehicle.salvage_completed_at && !vehicle.parts_logged && <button type="button" className="ghost-button btn-sm" disabled={busy} onClick={() => finishList(vehicle, true)}>Nothing salvageable</button>}
-                    {vehicle.salvage_completed_at && <button type="button" className="ghost-button btn-sm" disabled={busy} onClick={() => reopenList(vehicle)}>Reopen</button>}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="salvage-section" aria-labelledby="salvage-stock-h">
-        <div className="salvage-stock-head">
-          <h3 id="salvage-stock-h">In stock <span className="count-badge">{inStock}</span></h3>
-          <LocalSearchInput value={search} onChange={setSearch} placeholder="Search parts, vehicle or location..." />
-        </div>
-        {parts === null ? <p className="muted" role="status">Loading the inventory…</p> : !shown.length ? <p className="empty-state">{parts.length ? 'No part matches your search.' : 'No parts logged yet.'}</p> : (
-          <div className="table-shell"><table>
-            <thead><tr><th>Part</th><th>From vehicle</th><th>Condition</th><th className="cell-center">In stock</th><th>Stored at</th><th>Logged</th>{canManage && <th className="cell-center">Actions</th>}</tr></thead>
-            <tbody>{shown.map((row) => (
-              <tr key={row.salvage_part_id}>
-                <td data-label="Part"><strong>{row.part_name}</strong>{row.category && <small className="muted"> · {row.category}</small>}{row.notes && <small className="muted" style={{ display: 'block' }}>{row.notes}</small>}</td>
-                <td data-label="From vehicle">{row.vehicle_name} <span className="muted">{row.plate_number}</span></td>
-                <td data-label="Condition"><span className={`status-badge ${row.part_condition === 'Good' ? 'completed' : row.part_condition === 'Usable' ? 'pending' : 'inactive'}`}>{row.part_condition}</span></td>
-                <td data-label="In stock" className="cell-center"><strong>{row.quantity_available}</strong> <span className="muted">of {row.quantity}</span></td>
-                <td data-label="Stored at">{row.storage_location || <span className="muted">Not recorded</span>}</td>
-                <td data-label="Logged"><DateBadge value={row.created_at} /><small className="muted" style={{ display: 'block' }}>{row.logged_by}</small></td>
-                {canManage && <td data-label="Actions" className="cell-center"><span className="row-actions-visible">
-                  <button type="button" className="icon-btn btn-edit-action" title="Edit part" aria-label={`Edit ${row.part_name}`} onClick={() => setModal({ mode: 'edit', part: row })}><Icon name="edit" size={15} /></button>
-                  <button type="button" className="icon-btn btn-delete-action" title={row.quantity_available < row.quantity ? 'Already used in a repair' : 'Remove part'} aria-label={`Remove ${row.part_name}`} disabled={row.quantity_available < row.quantity} onClick={() => setDeleting(row)}><Icon name="trash" size={15} /></button>
-                </span></td>}
-              </tr>
-            ))}</tbody>
-          </table></div>
-        )}
-      </section>
-
-      <FormModal open={!!modal} title={modal?.mode === 'edit' ? 'Edit salvageable part' : 'Log salvageable parts'} onClose={() => setModal(null)}>
-        {modal && <SalvagePartForm key={`${modal.mode}-${modal.part?.salvage_part_id ?? modal.vehicleId}`} mode={modal.mode} part={modal.part} vehicleId={modal.vehicleId} vehicles={waiting} existing={parts ?? []} onClose={() => setModal(null)} onSaved={load} notify={notify} />}
+      <FormModal open={proposing} title="Request decommissioning" onClose={() => setProposing(false)}>
+        {proposing && <DecommissionProposeForm busy={busy} onCancel={() => setProposing(false)} onSubmit={async (vehicleId, reason) => {
+          setBusy(true);
+          try { await api.post(`/vehicles/${vehicleId}/decommission-proposal`, { reason }); notify?.({ type: 'success', text: 'Request sent to the Admin.' }); setProposing(false); setVersion((n) => n + 1); } catch (err) { notify?.({ type: 'error', text: describeError(err, 'Could not send the request.') }); } finally { setBusy(false); }
+        }} />}
       </FormModal>
-      <FormModal open={!!deleting} title="Remove this part?" onClose={() => setDeleting(null)}>
-        {deleting && <div className="dp-form">
-          <p>Remove <strong>{deleting.quantity} × {deleting.part_name}</strong> from the inventory? It has not been used in any repair.</p>
-          <div className="can-actions"><button type="button" className="ghost-button cancel-btn" onClick={() => setDeleting(null)} disabled={busy}>Cancel</button><button type="button" className="danger-button" onClick={removePart} disabled={busy}>{busy ? 'Removing…' : 'Remove part'}</button></div>
+    </ModulePanel>
+  );
+}
+
+// One vehicle's salvage page: its profile, the numbers, and a table of its parts.
+function SalvageViewPage({ user, notify, search }) {
+  const navigate = useNavigate();
+  const vehicleId = new URLSearchParams(search).get('vehicle');
+  const canManage = canDo(user, 'salvage.manage');
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [version, setVersion] = useState(0);
+  const [removing, setRemoving] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const reload = () => setVersion((n) => n + 1);
+  const go = (query) => navigate(`${roleRoutes[user.role]}?${query}`);
+
+  useEffect(() => {
+    let live = true;
+    Promise.all([api.get('/salvage-parts/queue'), api.get('/salvage-parts')])
+      .then(([queue, parts]) => { if (live) { setData({ vehicle: queue.data.find((row) => String(row.vehicle_id) === String(vehicleId)) ?? null, parts: parts.data.filter((row) => String(row.vehicle_id) === String(vehicleId)) }); setError(''); } })
+      .catch((err) => { if (live) setError(describeError(err, 'This vehicle could not be loaded.')); });
+    return () => { live = false; };
+  }, [vehicleId, version]);
+
+  const act = async (fn, okText, failText) => {
+    setBusy(true);
+    try { await fn(); notify?.({ type: 'success', text: okText }); setRemoving(null); reload(); } catch (err) { notify?.({ type: 'error', text: describeError(err, failText) }); setRemoving(null); } finally { setBusy(false); }
+  };
+
+  const backButton = <button type="button" className="ghost-button schedule-detail-back" onClick={() => go('module=salvage')}><Icon name="arrowLeft" size={15} /> Salvage Inventory</button>;
+  if (error) return <ModulePanel>{backButton}<p className="notice danger" role="alert">{error}</p></ModulePanel>;
+  if (!data) return <ModulePanel><p className="muted" role="status">Loading…</p></ModulePanel>;
+  const { vehicle, parts } = data;
+  if (!vehicle) return <ModulePanel>{backButton}<p className="empty-state">This vehicle is not in the salvage inventory. It may have been recommissioned.</p></ModulePanel>;
+
+  const used = vehicle.units_listed - vehicle.units_in_stock;
+  const cards = [
+    { key: 'lines', label: 'Parts Listed', icon: 'list', bg: '#dbeafe', color: '#1d4ed8' },
+    { key: 'stock', label: 'Units In Stock', icon: 'checkCircle', bg: '#dcfce7', color: '#16a34a' },
+    { key: 'used', label: 'Used In Repairs', icon: 'wrench', bg: '#fef3c7', color: '#d97706' },
+  ];
+  const columns = [
+    { key: 'part', label: 'Part', render: (row) => <strong>{row.part_name}</strong> },
+    { key: 'listed', label: 'Listed', className: 'cell-center', render: (row) => row.quantity },
+    { key: 'stock', label: 'In Stock', className: 'cell-center', render: (row) => <strong>{row.quantity_available}</strong> },
+    { key: 'used', label: 'Used', className: 'cell-center', render: (row) => row.quantity - row.quantity_available },
+    { key: 'logged', label: 'Logged', render: (row) => <><DateBadge value={row.created_at} /><small className="muted" style={{ display: 'block' }}>{row.logged_by}</small></> },
+    ...(canManage ? [{ key: 'actions', label: 'Actions', className: 'cell-center', render: (row) => (
+      <span className="row-actions-visible">
+        <button type="button" className="icon-btn btn-edit-action" title="Edit part" aria-label={`Edit ${row.part_name}`} onClick={(e) => { e.stopPropagation(); go(`module=salvageLog&from=salvageView&vehicle=${vehicle.vehicle_id}&part=${row.salvage_part_id}`); }}><Icon name="edit" size={15} /></button>
+        <button type="button" className="icon-btn btn-delete-action" title={row.quantity_available < row.quantity ? 'Already used in a repair' : 'Remove part'} aria-label={`Remove ${row.part_name}`} disabled={row.quantity_available < row.quantity} onClick={(e) => { e.stopPropagation(); setRemoving(row); }}><Icon name="trash" size={15} /></button>
+      </span>
+    ) }] : []),
+  ];
+
+  return (
+    <ModulePanel statCards={<ModuleStatCards readOnly totalLabel="Parts Listed" total={vehicle.parts_logged} cards={cards.slice(1)} counts={{ stock: vehicle.units_in_stock, used }} />}>
+      <section className="dcx-hero salv-hero">
+        <div className="dcx-photo">{vehicle.photo_url ? <img src={resolvePhotoUrl(vehicle.photo_url)} alt={vehicle.vehicle_name} /> : <Icon name="vehicle" size={56} />}</div>
+        <div className="dcx-main">
+          <div className="dcx-title"><h2>{vehicle.vehicle_name}</h2>{salvageBadge(vehicle)}</div>
+          <div className="dcx-chips">{[vehicle.plate_number, vehicle.vehicle_type, [vehicle.brand, vehicle.model].filter(Boolean).join(' '), vehicle.year_model].filter(Boolean).map((item) => <span key={item}>{item}</span>)}</div>
+          <p className="dcx-sub">Decommissioned {vehicle.decommissioned_at ? formatDate(vehicle.decommissioned_at) : ''}{vehicle.decommission_reason ? ` · ${vehicle.decommission_reason}` : ''}</p>
+          {canManage && (
+            <div className="dcv-actions dcx-actions">
+              <button type="button" className="primary-button" onClick={() => go(`module=salvageLog&from=salvageView&vehicle=${vehicle.vehicle_id}`)}><Icon name="plus" size={14} /> Log parts</button>
+              {!vehicle.parts_logged && !vehicle.salvage_completed_at && <button type="button" className="ghost-button" disabled={busy} onClick={() => act(() => api.put(`/vehicles/${vehicle.vehicle_id}/salvage-complete`, { nothing_salvageable: true }), 'Marked as no usable parts.', 'Could not save that.')}>No usable parts</button>}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <div className="panel-header-bar"><h3>Parts <span className="count-badge">{parts.length}</span></h3></div>
+      <PaginatedTable columns={columns} rows={parts} emptyMessage={vehicle.salvage_completed_at ? 'No usable parts. Use Log parts if you find some.' : 'No parts listed yet. Use Log parts to add the ones that can still be used.'} />
+
+      <FormModal open={!!removing} title="Remove this part?" onClose={() => setRemoving(null)}>
+        {removing && <div className="dp-form">
+          <p>Remove <strong>{removing.quantity} x {removing.part_name}</strong> from the inventory? It has not been used in any repair.</p>
+          <div className="can-actions"><button type="button" className="ghost-button cancel-btn" onClick={() => setRemoving(null)} disabled={busy}>Cancel</button><button type="button" className="danger-button" onClick={() => act(() => api.delete(`/salvage-parts/${removing.salvage_part_id}`), 'Part removed.', 'Could not remove that part.')} disabled={busy}>{busy ? 'Removing…' : 'Remove part'}</button></div>
         </div>}
       </FormModal>
     </ModulePanel>
   );
 }
 
-function SalvagePartForm({ mode, part, vehicleId, vehicles, existing, onClose, onSaved, notify }) {
-  const blank = { vehicle_id: vehicleId ?? '', part_name: '', category: '', part_condition: 'Good', quantity: 1, storage_location: '', notes: '' };
-  const [v, setV] = useState(() => (part ? { vehicle_id: part.vehicle_id, part_name: part.part_name, category: part.category ?? '', part_condition: part.part_condition, quantity: part.quantity, storage_location: part.storage_location ?? '', notes: part.notes ?? '' } : blank));
+function decomBadge(row, canDecide) {
+  const [tone, text] = row.state === 'Proposed' ? ['waiting', canDecide ? 'For your approval' : 'Waiting for the Admin']
+    : row.state === 'Declined' ? ['declined', 'Declined']
+      : row.parts_logged > 0 ? ['done', 'Decommissioned · parts listed'] : row.salvage_completed_at ? ['none', 'Decommissioned · no usable parts'] : ['needed', 'Decommissioned · parts list needed'];
+  return <span className={`status-badge decom-status decom-${tone}`}>{text}</span>;
+}
+
+// One decommission request on its own page: the vehicle, the story so far, and what the viewer can do next.
+function DecommissionDetailPage({ user, notify, search }) {
+  const navigate = useNavigate();
+  const vehicleId = new URLSearchParams(search).get('vehicle');
+  const canPropose = canDo(user, 'vehicle.decommission_propose');
+  const canDecide = canDo(user, 'vehicle.decommission');
+  const canList = canDo(user, 'salvage.manage');
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [version, setVersion] = useState(0);
+  const [panel, setPanel] = useState(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  // Open tickets stop a vehicle from being decommissioned; tell the Admin before they press Approve.
+  const [openTickets, setOpenTickets] = useState([]);
+  const reload = () => setVersion((n) => n + 1);
+  const back = () => navigate(`${roleRoutes[user.role]}?module=salvage`);
+
+  useEffect(() => {
+    let live = true;
+    Promise.all([api.get('/decommission-requests'), api.get('/salvage-parts').catch(() => ({ data: [] }))])
+      .then(([list, parts]) => {
+        if (!live) return;
+        setData({ row: list.data.find((r) => String(r.vehicle_id) === String(vehicleId)) ?? null, parts: parts.data.filter((p) => String(p.vehicle_id) === String(vehicleId)) });
+        setError('');
+      }).catch((err) => { if (live) setError(describeError(err, 'This request could not be loaded.')); });
+    return () => { live = false; };
+  }, [vehicleId, version]);
+
+  const waitingForDecision = canDecide && data?.row?.state === 'Proposed';
+  useEffect(() => {
+    if (!waitingForDecision) return undefined;
+    let live = true;
+    api.get(`/vehicles/${vehicleId}/open-tickets`).then((res) => { if (live) setOpenTickets(Array.isArray(res.data) ? res.data : []); }).catch(() => {});
+    return () => { live = false; };
+  }, [waitingForDecision, vehicleId]);
+
+  const act = async (fn, okText, failText) => {
+    setBusy(true);
+    try { await fn(); notify?.({ type: 'success', text: okText }); setPanel(null); setDeclineReason(''); reload(); } catch (err) { notify?.({ type: 'error', text: describeError(err, failText) }); } finally { setBusy(false); }
+  };
+
+  if (error) return <ModulePanel><button type="button" className="ghost-button schedule-detail-back" onClick={back}><Icon name="arrowLeft" size={15} /> Salvage Inventory</button><p className="notice danger" role="alert">{error}</p></ModulePanel>;
+  if (!data) return <ModulePanel><p className="muted" role="status">Loading…</p></ModulePanel>;
+  const { row, parts } = data;
+  if (!row) return <ModulePanel><button type="button" className="ghost-button schedule-detail-back" onClick={back}><Icon name="arrowLeft" size={15} /> Salvage Inventory</button><p className="empty-state">This request no longer exists. It may have been withdrawn.</p></ModulePanel>;
+
+  const approved = row.state === 'Approved';
+  const steps = [
+    { label: 'Recommended', detail: `${row.proposed_by ?? 'Admin'}${row.proposed_at ? ` · ${formatDate(row.proposed_at)}` : ''}`, state: 'done' },
+    row.state === 'Declined'
+      ? { label: 'Declined', detail: row.decision_at ? formatDate(row.decision_at) : '', state: 'bad' }
+      : { label: approved ? 'Approved' : 'Admin decision', detail: approved && row.decision_at ? formatDate(row.decision_at) : 'Waiting', state: approved ? 'done' : 'now' },
+    ...(row.state === 'Declined' ? [] : [{ label: 'Parts list', detail: row.parts_logged > 0 ? `${row.parts_logged} part${row.parts_logged === 1 ? '' : 's'} listed` : (row.salvage_completed_at ? 'No usable parts' : (approved ? 'Needed' : 'After approval')), state: row.parts_logged > 0 || row.salvage_completed_at ? 'done' : (approved ? 'now' : 'todo') }]),
+  ];
+  const logPartsPath = `${roleRoutes[user.role]}?module=salvageLog&from=decommissionView&vehicle=${row.vehicle_id}`;
+  const confirmBar = (children) => <div className="dcv-panel">{children}</div>;
+
+  const meta = [row.plate_number, row.vehicle_type, [row.brand, row.model].filter(Boolean).join(' '), row.year_model].filter(Boolean);
+
+  return (
+    <ModulePanel>
+      <div className="dcx">
+
+        <section className="dcx-hero">
+          <div className="dcx-photo">
+            {row.photo_url ? <img src={resolvePhotoUrl(row.photo_url)} alt={row.vehicle_name} /> : <Icon name="vehicle" size={56} />}
+          </div>
+          <div className="dcx-main">
+            <div className="dcx-title">
+              <h2>{row.vehicle_name}</h2>
+              {decomBadge(row, canDecide)}
+            </div>
+            <div className="dcx-chips">{meta.map((item) => <span key={item}>{item}</span>)}{row.condition && <span className={row.condition === 'Good' ? 'dcx-chip-warn' : ''} title="The vehicle's current condition">Condition: {row.condition}</span>}</div>
+            {canDecide && row.state === 'Proposed' && row.condition === 'Good' && <p className="dcx-good-note" role="status">This vehicle is in Good condition. Check the reason before you approve.</p>}
+            <p className="dcx-sub">
+              {row.proposed_by ? <>Recommended by <strong>{row.proposed_by}</strong>{row.proposed_at ? ` on ${formatDate(row.proposed_at)}` : ''}</> : 'Decommissioned directly by the Admin'}
+            </p>
+
+            {panel === 'approve' && confirmBar(<>
+              <p>This retires <strong>{row.vehicle_name}</strong> from service. Its history is kept, and an Admin can recommission it later. The mechanic will then list its usable parts.</p>
+              <div className="dcv-actions"><button type="button" className="ghost-button cancel-btn" disabled={busy} onClick={() => setPanel(null)}>Cancel</button><button type="button" className="primary-button" disabled={busy} onClick={() => act(() => api.put(`/vehicles/${row.vehicle_id}/decommission`, { decommission_reason: row.reason }), 'Vehicle decommissioned.', 'Could not decommission the vehicle.')}>{busy ? 'Approving…' : 'Confirm approval'}</button></div>
+            </>)}
+            {panel === 'decline' && confirmBar(<>
+              <label className="lr-label" htmlFor="dcv-decline">Why are you declining this? <abbr className="required-asterisk" title="required">*</abbr></label>
+              <textarea id="dcv-decline" className="lr-textarea" rows={3} value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} />
+              <div className="dcv-actions"><button type="button" className="ghost-button cancel-btn" disabled={busy} onClick={() => setPanel(null)}>Cancel</button><button type="button" className="danger-button" disabled={busy || declineReason.trim().length < 5} onClick={() => act(() => api.put(`/vehicles/${row.vehicle_id}/decommission-proposal/decline`, { decline_reason: declineReason.trim() }), 'Request declined.', 'Could not decline the request.')}>{busy ? 'Declining…' : 'Decline request'}</button></div>
+            </>)}
+
+            {canDecide && row.state === 'Proposed' && openTickets.length > 0 && <p className="dcx-good-note" role="alert">This vehicle still has {openTickets.length === 1 ? 'an open ticket' : `${openTickets.length} open tickets`} ({openTickets.map((tk) => `#${tk.barangay_number ?? tk.ticket_id}`).join(', ')}). Close or cancel {openTickets.length === 1 ? 'it' : 'them'} before approving. You can still decline.</p>}
+            {!panel && (
+              <div className="dcv-actions dcx-actions">
+                {row.state === 'Proposed' && canDecide && <button type="button" className="primary-button" disabled={openTickets.length > 0} title={openTickets.length ? 'Close or cancel the open ticket first' : undefined} onClick={() => setPanel('approve')}>Approve</button>}
+                {row.state === 'Proposed' && canDecide && <button type="button" className="danger-button" onClick={() => setPanel('decline')}>Decline</button>}
+                {row.state === 'Proposed' && canPropose && <button type="button" className="ghost-button" disabled={busy} onClick={() => act(() => api.put(`/vehicles/${row.vehicle_id}/decommission-proposal/withdraw`), 'Request withdrawn.', 'Could not withdraw the request.').then(back)}>Withdraw request</button>}
+                {approved && canList && <button type="button" className="primary-button" onClick={() => navigate(logPartsPath)}><Icon name="plus" size={14} /> Log parts</button>}
+              </div>
+            )}
+          </div>
+        </section>
+
+        <ol className="dcx-steps" aria-label="Progress">
+          {steps.map((step, index) => (
+            <li key={step.label} className={`dcx-step is-${step.state}`}>
+              <span className="dcx-dot" aria-hidden="true">{step.state === 'done' ? '✓' : step.state === 'bad' ? '✕' : index + 1}</span>
+              <span className="dcx-step-text"><b>{step.label}</b><small>{step.detail}</small></span>
+            </li>
+          ))}
+        </ol>
+
+        <div className="dcx-cols">
+          <section className="dcx-card">
+            <h3>Reason</h3>
+            <p>{row.reason}</p>
+            {row.state === 'Declined' && row.decline_reason && <div className="dcx-declined"><strong>Declined:</strong> {row.decline_reason}</div>}
+          </section>
+          <section className="dcx-card">
+            <h3>Parts from this vehicle <span className="count-badge">{parts.length}</span></h3>
+            {!approved ? <p className="muted">Parts can be listed once the Admin approves the decommissioning.</p>
+              : !parts.length ? <p className="muted">No parts listed yet.</p> : (
+                <ul className="dcx-parts">
+                  {parts.map((part) => (
+                    <li key={part.salvage_part_id}>
+                      <span><strong>{part.part_name}</strong></span>
+                      <span className="dcx-qty">{part.quantity_available} <small className="muted">of {part.quantity}</small></span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </section>
+        </div>
+      </div>
+    </ModulePanel>
+  );
+}
+
+function DecommissionProposeForm({ busy, onCancel, onSubmit }) {
+  const [vehicles, setVehicles] = useState(null);
+  const [vehicleId, setVehicleId] = useState('');
+  const [reason, setReason] = useState('');
+  const [sure, setSure] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    api.get('/vehicles').then((res) => {
+      const list = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
+      if (live) setVehicles(list.filter((v) => v.status !== 'Decommissioned' && v.decommission_status !== 'Proposed'));
+    }).catch(() => { if (live) setVehicles([]); });
+    return () => { live = false; };
+  }, []);
+  const chosen = (vehicles ?? []).find((v) => String(v.vehicle_id) === String(vehicleId));
+  const goodCondition = chosen?.condition === 'Good';
+  const submit = (e) => {
+    e.preventDefault();
+    if (!vehicleId) return setError('Choose the vehicle.');
+    if (reason.trim().length < 5) return setError('Write the reason (at least 5 characters).');
+    if (goodCondition && !sure) return setError('Tick the box to confirm you want to retire a vehicle in good condition.');
+    setError('');
+    onSubmit(vehicleId, reason.trim());
+  };
+  return (
+    <form className="dp-form" onSubmit={submit} noValidate>
+      <p className="muted" style={{ fontSize: '0.85rem' }}>The Admin decides. The vehicle stays in service until they approve. A vehicle with an open ticket cannot be recommended.</p>
+      {error && <div className="notice danger" role="alert">{error}</div>}
+      <label className="dp-field"><span>Vehicle<b className="req"> *</b></span>
+        <select value={vehicleId} onChange={(e) => { setVehicleId(e.target.value); setSure(false); }}><option value="">{vehicles === null ? 'Loading…' : 'Choose a vehicle'}</option>{(vehicles ?? []).map((v) => <option key={v.vehicle_id} value={v.vehicle_id}>{v.vehicle_name} ({v.plate_number})</option>)}</select></label>
+      {goodCondition && (
+        <div className="notice warning" role="alert">
+          <strong>This vehicle is in Good condition.</strong> Retire it only if it is too old, replaced, sold or not worth keeping. Say which in the reason.
+          <label className="lr-check"><input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} /><span>Yes, I want to request decommissioning for a vehicle in good condition.</span></label>
+        </div>
+      )}
+      <label className="dp-field"><span>Reason<b className="req"> *</b></span><textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} /></label>
+      <div className="can-actions"><button type="button" className="ghost-button cancel-btn" onClick={onCancel} disabled={busy}>Cancel</button><button type="submit" className="primary-button" disabled={busy}>{busy ? 'Sending…' : 'Send to Admin'}</button></div>
+    </form>
+  );
+}
+
+// Logging (or editing) salvageable parts is a page of its own, not a pop-up.
+function SalvageLogPage({ user, notify, search }) {
+  const navigate = useNavigate();
+  const params = new URLSearchParams(search);
+  const from = ['decommissionView', 'salvageView'].includes(params.get('from')) ? params.get('from') : 'salvage';
+  const [pickedVehicle, setPickedVehicle] = useState(params.get('vehicle') ?? '');
+  const [editingId, setEditingId] = useState(params.get('part') ?? null);
+  const [removing, setRemoving] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    let live = true;
+    Promise.all([api.get('/salvage-parts'), api.get('/salvage-parts/queue'), api.get('/decommission-requests').catch(() => ({ data: [] }))])
+      .then(([list, queue, requests]) => { if (live) setData({ parts: list.data, queue: queue.data, requests: requests.data }); })
+      .catch((err) => { if (live) setError(describeError(err, 'The parts list could not be loaded.')); });
+    return () => { live = false; };
+  }, [version]);
+  const reload = async () => setVersion((n) => n + 1);
+
+  const editing = editingId && data ? data.parts.find((row) => String(row.salvage_part_id) === String(editingId)) : null;
+  const vehicleId = editing ? String(editing.vehicle_id) : pickedVehicle;
+  const waiting = data?.queue ?? [];
+  const request = data?.requests.find((row) => String(row.vehicle_id) === String(vehicleId));
+  const vehicle = (data?.queue ?? []).find((row) => String(row.vehicle_id) === String(vehicleId));
+  const vehicleParts = (data?.parts ?? []).filter((row) => String(row.vehicle_id) === String(vehicleId));
+  const back = () => navigate(`${roleRoutes[user.role]}?module=${from}${['decommissionView', 'salvageView'].includes(from) ? `&vehicle=${vehicleId}` : ''}`);
+
+  const remove = async () => {
+    if (!removing) return;
+    setBusy(true);
+    try { await api.delete(`/salvage-parts/${removing.salvage_part_id}`); notify?.({ type: 'success', text: 'Part removed.' }); setRemoving(null); await reload(); } catch (err) { notify?.({ type: 'error', text: describeError(err, 'Could not remove that part.') }); setRemoving(null); } finally { setBusy(false); }
+  };
+
+  return (
+    <ModulePanel>
+      <div className="slg">
+        {error && <p className="notice danger" role="alert">{error}</p>}
+        {!data && !error ? <p className="muted" role="status">Loading…</p> : data && (
+          <div className="slg-cols">
+            <section className="slg-left">
+              {!vehicleId ? (
+                <div className="slg-pick">
+                  <label className="lr-label" htmlFor="slg-vehicle">Which vehicle are you taking parts from? <abbr className="required-asterisk" title="required">*</abbr></label>
+                  <select id="slg-vehicle" value={pickedVehicle} onChange={(e) => setPickedVehicle(e.target.value)}>
+                    <option value="">Choose a decommissioned vehicle</option>
+                    {waiting.map((row) => <option key={row.vehicle_id} value={row.vehicle_id}>{row.vehicle_name} ({row.plate_number})</option>)}
+                  </select>
+                  {!waiting.length && <p className="muted">No decommissioned vehicle is waiting for a parts list.</p>}
+                </div>
+              ) : (
+                <>
+                  <div className="slg-profile">
+                    <div className="slg-photo">{request?.photo_url ? <img src={resolvePhotoUrl(request.photo_url)} alt={vehicle?.vehicle_name ?? ''} /> : <Icon name="vehicle" size={44} />}</div>
+                    <div className="slg-profile-text">
+                      <h3>{vehicle?.vehicle_name ?? request?.vehicle_name}</h3>
+                      <p className="muted">{[vehicle?.plate_number ?? request?.plate_number, request?.vehicle_type, [request?.brand, request?.model].filter(Boolean).join(' '), request?.year_model].filter(Boolean).join(' · ')}</p>
+                      <div className="slg-desc"><span>Reason for decommissioning</span><p>{request?.reason ?? vehicle?.decommission_reason ?? '-'}</p></div>
+                    </div>
+                  </div>
+                  <SalvagePartForm key={editing ? `edit-${editing.salvage_part_id}` : `add-${vehicleId}`} mode={editing ? 'edit' : 'add'} part={editing} vehicleId={Number(vehicleId)} hideVehicle
+                    vehicles={data.queue} existing={data.parts}
+                    onClose={() => { if (editing) { setEditingId(null); } else { back(); } }}
+                    onSaved={reload} notify={notify} />
+                </>
+              )}
+            </section>
+
+            <aside className="slg-right" aria-label="Parts listed for this vehicle">
+              <h3>Parts listed <span className="count-badge">{vehicleParts.length}</span></h3>
+              {!vehicleId ? <p className="muted">Choose a vehicle to see its parts.</p> : !vehicleParts.length ? <p className="muted">Nothing listed yet. Parts you save appear here, and you can edit or remove them.</p> : (
+                <ul className="slg-list">
+                  {vehicleParts.map((row) => {
+                    const used = row.quantity - row.quantity_available;
+                    return (
+                      <li key={row.salvage_part_id} className={editing?.salvage_part_id === row.salvage_part_id ? 'is-editing' : ''}>
+                        {removing?.salvage_part_id === row.salvage_part_id ? (
+                          <div className="slg-confirm"><span>Remove {row.part_name}?</span><span><button type="button" className="ghost-button btn-sm" disabled={busy} onClick={() => setRemoving(null)}>No</button> <button type="button" className="danger-button btn-sm" disabled={busy} onClick={remove}>Yes, remove</button></span></div>
+                        ) : (
+                          <>
+                            <div className="slg-item"><strong>{row.part_name}</strong><small className="muted">{row.quantity} listed{used ? ` · ${used} used in repairs` : ''}</small></div>
+                            {(
+                              <span className="row-actions-visible">
+                                <button type="button" className="icon-btn btn-edit-action" title="Edit part" aria-label={`Edit ${row.part_name}`} onClick={() => setEditingId(String(row.salvage_part_id))}><Icon name="edit" size={15} /></button>
+                                <button type="button" className="icon-btn btn-delete-action" title={used ? 'Already used in a repair' : 'Remove part'} aria-label={`Remove ${row.part_name}`} disabled={used > 0} onClick={() => setRemoving(row)}><Icon name="trash" size={15} /></button>
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </aside>
+          </div>
+        )}
+      </div>
+    </ModulePanel>
+  );
+}
+
+function SalvagePartForm({ mode, part, vehicleId, vehicles, existing, onClose, onSaved, notify, hideVehicle = false }) {
+  const blank = { vehicle_id: vehicleId ?? '', part_name: '', quantity: 1 };
+  const [v, setV] = useState(() => (part ? { vehicle_id: part.vehicle_id, part_name: part.part_name, quantity: part.quantity } : blank));
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const [added, setAdded] = useState(0);
+  const [addedNames, setAddedNames] = useState([]);
+  const added = addedNames.length;
   const set = (key, value) => { setV((current) => ({ ...current, [key]: value })); setErrors((current) => ({ ...current, [key]: undefined })); };
   const used = part ? part.quantity - part.quantity_available : 0;
   const duplicate = mode === 'add' && v.part_name.trim() && existing.some((row) => String(row.vehicle_id) === String(v.vehicle_id) && row.part_name.trim().toLowerCase() === v.part_name.trim().toLowerCase());
@@ -4782,7 +5114,7 @@ function SalvagePartForm({ mode, part, vehicleId, vehicles, existing, onClose, o
       if (mode === 'edit') await api.put(`/salvage-parts/${part.salvage_part_id}`, body); else await api.post('/salvage-parts', body);
       notify?.({ type: 'success', text: mode === 'edit' ? 'Part updated.' : `${body.part_name} added to the inventory.` });
       await onSaved();
-      if (again && mode === 'add') { setAdded((count) => count + 1); setV({ ...blank, vehicle_id: v.vehicle_id }); } else onClose();
+      if (again && mode === 'add') { setAddedNames((names) => [...names, `${body.quantity} x ${body.part_name}`]); setV({ ...blank, vehicle_id: v.vehicle_id }); } else onClose();
     } catch (err) {
       const serverErrors = err.response?.data?.errors;
       if (serverErrors) setErrors(Object.fromEntries(Object.entries(serverErrors).map(([key, messages]) => [key, messages[0]])));
@@ -4797,25 +5129,43 @@ function SalvagePartForm({ mode, part, vehicleId, vehicles, existing, onClose, o
       {errors[name] && <small className="dp-error" role="alert">{errors[name]}</small>}
     </label>
   );
-  const vehicleName = vehicles.find((vehicle) => String(vehicle.vehicle_id) === String(v.vehicle_id))?.vehicle_name ?? part?.vehicle_name;
+  const vehicleRow = vehicles.find((vehicle) => String(vehicle.vehicle_id) === String(v.vehicle_id));
+  const vehicleName = vehicleRow?.vehicle_name ?? part?.vehicle_name;
+  const plate = vehicleRow?.plate_number ?? part?.plate_number;
+  const bump = (delta) => set('quantity', Math.max(1, (Number(v.quantity) || 0) + delta));
 
   return (
-    <form className="dp-form" onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); save(false); }} noValidate>
+    <form className="slg-form" onSubmit={(e) => { e.preventDefault(); e.stopPropagation(); save(false); }} noValidate>
       {errors._form && <div className="notice danger" role="alert">{errors._form}</div>}
-      {added > 0 && <p className="notice success" role="status">{added} part{added === 1 ? '' : 's'} added. Add the next one, or close when you are done.</p>}
-      <div className="dp-grid">
-        {field('vehicle_id', 'From vehicle', mode === 'edit' || vehicleId
-          ? <input type="text" value={vehicleName ?? ''} disabled />
-          : <select value={v.vehicle_id} onChange={(e) => set('vehicle_id', e.target.value)}><option value="">Choose a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle.vehicle_id} value={vehicle.vehicle_id}>{vehicle.vehicle_name} ({vehicle.plate_number})</option>)}</select>, true)}
-        {field('part_name', 'Part name', <input type="text" maxLength={255} value={v.part_name} onChange={(e) => set('part_name', e.target.value)} placeholder="e.g. Alternator" />, true)}
-        {field('category', 'Category', <select value={v.category} onChange={(e) => set('category', e.target.value)}><option value="">Not set</option>{SALVAGE_CATEGORIES.map((name) => <option key={name}>{name}</option>)}</select>)}
-        {field('part_condition', 'Condition', <select value={v.part_condition} onChange={(e) => set('part_condition', e.target.value)}>{SALVAGE_CONDITIONS.map((name) => <option key={name}>{name}</option>)}</select>, true)}
-        {field('quantity', 'Quantity', <input type="number" min="1" step="1" value={v.quantity} onChange={(e) => set('quantity', e.target.value)} />, true)}
-        {field('storage_location', 'Stored at', <input type="text" maxLength={255} value={v.storage_location} onChange={(e) => set('storage_location', e.target.value)} placeholder="e.g. Motor pool, shelf A" />)}
+      {hideVehicle ? null : mode === 'edit' || vehicleId ? (
+        <div className="slg-vehicle">
+          <span className="slg-vehicle-icon"><Icon name="vehicle" size={20} /></span>
+          <div><small>Taking parts from</small><strong>{vehicleName}</strong>{plate && <span className="muted"> · {plate}</span>}</div>
+        </div>
+      ) : field('vehicle_id', 'Taking parts from', <select value={v.vehicle_id} onChange={(e) => set('vehicle_id', e.target.value)}><option value="">Choose a vehicle</option>{vehicles.map((vehicle) => <option key={vehicle.vehicle_id} value={vehicle.vehicle_id}>{vehicle.vehicle_name} ({vehicle.plate_number})</option>)}</select>, true)}
+
+      <div className="slg-row">
+        {field('part_name', 'Part name', <input type="text" autoFocus maxLength={255} value={v.part_name} onChange={(e) => set('part_name', e.target.value)} placeholder="e.g. Alternator" />, true)}
+        <div className={`dp-field${errors.quantity ? ' has-error' : ''}`}>
+          <span id="slg-qty-l">Quantity<b className="req"> *</b></span>
+          <div className="slg-stepper" role="group" aria-labelledby="slg-qty-l">
+            <button type="button" aria-label="One less" onClick={() => bump(-1)} disabled={Number(v.quantity) <= 1}>&minus;</button>
+            <input type="number" min="1" step="1" value={v.quantity} onChange={(e) => set('quantity', e.target.value)} aria-labelledby="slg-qty-l" />
+            <button type="button" aria-label="One more" onClick={() => bump(1)}>+</button>
+          </div>
+          {errors.quantity && <small className="dp-error" role="alert">{errors.quantity}</small>}
+        </div>
       </div>
       {duplicate && <small className="dp-hint">This part is already listed for this vehicle. Edit that line to change its quantity instead of adding it twice.</small>}
-      {field('notes', 'Notes', <textarea rows={2} maxLength={2000} value={v.notes} onChange={(e) => set('notes', e.target.value)} placeholder="What state is it in? Anything the next mechanic should know." />)}
-      <div className="can-actions">
+
+      {added > 0 && (
+        <div className="slg-added" role="status">
+          <strong>Added so far ({added})</strong>
+          <ul>{addedNames.map((name, index) => <li key={`${name}-${index}`}>&#10003; {name}</li>)}</ul>
+        </div>
+      )}
+
+      <div className="slg-actions">
         <button type="button" className="ghost-button" onClick={onClose} disabled={saving}>{added ? 'Done' : 'Cancel'}</button>
         {mode === 'add' && <button type="button" className="ghost-button" disabled={saving} onClick={() => save(true)}>Save and add another</button>}
         <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Saving…' : (mode === 'edit' ? 'Save changes' : 'Save')}</button>
@@ -8055,9 +8405,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
               of shifting depending on whether a row has this button. */}
           {row.open_ticket_id && onViewTicket ? (
             <button className="btn-view-action icon-btn" onClick={() => onViewTicket({ ticket_id: row.open_ticket_id })} type="button" title={`View Ticket #${row.open_ticket_number ?? row.open_ticket_id}`} aria-label={`View Ticket #${row.open_ticket_number ?? row.open_ticket_id}`}><Icon name="ticket" size={14} /></button>
-          ) : (
-            <span className="icon-btn-spacer" aria-hidden="true" />
-          )}
+          ) : null}
           {(row.status === 'Inactive' || row.status === 'Decommissioned') ? (
             canRestoreVehicle && (
               <button className="btn-edit-action icon-btn" onClick={() => restoreRecord(`/vehicles/${row.vehicle_id}/restore`, row.status === 'Decommissioned' ? 'Vehicle recommissioned.' : 'Vehicle restored.')} type="button" title={row.status === 'Decommissioned' ? 'Recommission' : 'Restore'} aria-label="Restore"><Icon name="undo" size={14} /></button>
@@ -8099,7 +8447,7 @@ function categoryColumns(onEdit, deleteRecord, canManage = true) {
   return canManage ? columns : columns.filter((column) => column.key !== 'action');
 }
 
-function userColumns(onEdit, onToggleActive, currentUserId, onResend) {
+function userColumns(onEdit, onToggleActive, currentUserId, onResend, onView) {
   return [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'id') },
     { key: 'user', label: 'User', locked: true, render: (row) => <UserAvatarName user={row} /> },
@@ -8121,17 +8469,19 @@ function userColumns(onEdit, onToggleActive, currentUserId, onResend) {
       className: 'cell-center',
       render: (row) => (
         <div className="row-actions">
+          <button className="btn-view-action icon-btn" onClick={(e) => { e.stopPropagation(); onView(row); }} type="button" title="View profile" aria-label="View profile"><Icon name="eye" size={14} /></button>
           <button className="btn-edit-action icon-btn" onClick={() => onEdit(row)} type="button" title="Edit" aria-label="Edit"><Icon name="edit" size={14} /></button>
-          {row.id !== currentUserId && !(Array.isArray(row.roles) ? row.roles.includes('Admin') : row.role === 'Admin') && (
+          {/* Fixed slots: a row without a button keeps its place, so the icons line up down the column. */}
+          {row.id !== currentUserId && !(Array.isArray(row.roles) ? row.roles.includes('Admin') : row.role === 'Admin') ? (
             <button className="btn-edit-action icon-btn" onClick={() => onResend(row)} type="button" title="Send new temporary password" aria-label="Send new temporary password"><Icon name="mail" size={14} /></button>
-          )}
-          {row.id !== currentUserId && (
+          ) : <span className="icon-btn-spacer" aria-hidden="true" />}
+          {row.id !== currentUserId ? (
             row.is_active ? (
               <button className="btn-archive-action icon-btn" onClick={() => onToggleActive(row, false)} type="button" title="Deactivate (reversible)" aria-label="Deactivate"><Icon name="archive" size={14} /></button>
             ) : (
               <button className="btn-edit-action icon-btn" onClick={() => onToggleActive(row, true)} type="button" title="Activate" aria-label="Activate"><Icon name="undo" size={14} /></button>
             )
-          )}
+          ) : <span className="icon-btn-spacer" aria-hidden="true" />}
         </div>
       ),
     },
@@ -8601,7 +8951,7 @@ function maintenanceColumns(onViewRecord) {
     { key: 'plate', width: '9%', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
     { key: 'source', width: '15%', label: 'Source', locked: true, render: (row) => <span className="maintenance-record-source"><StatusBadge value={maintenanceSourceLabel(row)} /></span> },
     { key: 'type', width: '11%', label: 'Maintenance Type', render: (row) => row.maintenance_type || '-' },
-    { key: 'work', width: '15%', label: 'Work Performed', render: (row) => row.action_taken || '-' },
+    { key: 'work', width: '15%', label: 'Work Performed', render: (row) => plainWorkText(row.action_taken) || '-' },
     { key: 'personnel', width: '14%', label: 'Completed By / Shop', render: (row) => row.is_external && row.external_vendor ? row.external_vendor : <UserAvatarName user={row.maintenance_personnel} fallback={row.performed_by_other ?? row.external_vendor ?? '-'} /> },
     { key: 'date_completed', width: '9%', label: 'Date Completed', className: 'cell-center', render: (row) => <DateBadge value={row.date_completed} /> },
     { key: 'action', width: '7%', label: 'Action', locked: true, className: 'cell-center', render: (row) => (
@@ -8707,7 +9057,7 @@ function MaintenanceRecordDetail({ record, onConfirm, onReopen, onDecisionClose,
           </div>
           <div>
             <span className="maintenance-detail-label">Action Taken</span>
-            {record.action_taken || '—'}
+            {plainWorkText(record.action_taken) || '—'}
           </div>
           <div>
             <span className="maintenance-detail-label">Parts Used</span>
@@ -8953,7 +9303,7 @@ function scheduleNextLine(row, role) {
   return { text: `Approved: due ${formatDate(row.scheduled_date)}`, tone: 'approved' };
 }
 
-function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restoreRecord, onReassign, onViewTicket, onApprove, onDecline, onRecordWork) {
+function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restoreRecord, onReassign, onViewTicket, onApprove, onDecline, onRecordWork, onViewSchedule) {
   return [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'schedule_id') },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
@@ -9042,6 +9392,7 @@ function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restor
       className: 'cell-center schedule-action-cell',
       render: (row) => (
         <div className="schedule-table-actions">
+          <button className="sch-action icon-btn btn-view-action" onClick={(e) => { e.stopPropagation(); onViewSchedule(row); }} type="button" title="View schedule" aria-label="View schedule"><Icon name="eye" size={14} /></button>
           <MaintenanceScheduleActions
             iconOnly
             row={row} currentUser={currentUser} onEdit={onEdit}
@@ -9089,7 +9440,6 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
   const recurrence = row.recurrence_months ? (RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`) : 'One-time';
   const dateLabel = `${formatDate(row.scheduled_date)}${row.scheduled_time ? ` · ${String(row.scheduled_time).slice(0, 5)}` : ''}`;
   const linkedTicket = row.resulting_ticket_id && actions.onViewTicket;
-  const linkedRecord = row.resulting_maintenance_id && actions.onViewRecord;
   const statusMessage = row.status === 'Pending Approval'
     ? 'This schedule is waiting for an administrator to review it.'
     : row.status === 'Declined'
@@ -9103,54 +9453,32 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
             : 'Review the service details, assignment, and location below.';
   return (
     <ModulePanel>
-      <div className="maintenance-schedule-detail">
+      <div className="maintenance-schedule-detail sd2">
         <button type="button" className="ghost-button schedule-detail-back" onClick={onBack}><Icon name="arrowLeft" size={15} /> Maintenance Schedules</button>
-        <header className={`schedule-detail-hero${overdue ? ' is-overdue' : ''}`}>
-          <div className="schedule-detail-hero-main">
-            <button className="schedule-detail-vehicle-photo" type="button" disabled={!actions.onViewVehicle || !row.vehicle} onClick={() => actions.onViewVehicle?.(row.vehicle)} aria-label={row.vehicle ? `Open ${row.vehicle.vehicle_name} vehicle profile` : undefined}>
-              {row.vehicle?.photo_url ? <img src={resolvePhotoUrl(row.vehicle.photo_url)} alt={row.vehicle.vehicle_name} /> : <Icon name="vehicle" size={26} />}
-            </button>
-            <div className="schedule-detail-heading">
-              <div className="schedule-detail-eyebrow">Maintenance schedule <span>#{recordNumber(row, 'schedule_id')}</span></div>
-              <h2>{row.maintenance_type}</h2>
-              <p>{row.vehicle?.vehicle_name || 'Vehicle not assigned'}{row.vehicle?.plate_number ? <span> · {row.vehicle.plate_number}</span> : null}</p>
-            </div>
-          </div>
-          <div className="schedule-detail-status">
-            <TicketStatusBadge value={row.status} />
-            {overdue && <span className="sch-overdue-pill">OVERDUE</span>}
-          </div>
-        </header>
-
-        <div className="schedule-detail-layout">
-          <section className="schedule-detail-main">
-            <div className="schedule-detail-section-heading">
-              <div><span className="schedule-detail-kicker">Service plan</span><h3>Schedule information</h3></div>
-              <span className="schedule-detail-count"><Icon name="calendar" size={14} /> Schedule #{recordNumber(row, 'schedule_id')}</span>
-            </div>
-            <dl className="schedule-detail-facts">
-              <div className={`schedule-detail-fact${overdue ? ' is-alert' : ''}`}><dt><Icon name="calendar" size={15} /> Scheduled date</dt><dd>{dateLabel}</dd></div>
-              <div className="schedule-detail-fact"><dt><Icon name="undo" size={15} /> Repeat</dt><dd>{recurrence}</dd></div>
-              <div className="schedule-detail-fact"><dt><Icon name="wrench" size={15} /> Assigned mechanic</dt><dd>{row.assigned_to_user?.name ? <AssignedPersonnelNames people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} /> : <span className="muted">Unassigned</span>}</dd></div>
-              <div className="schedule-detail-fact"><dt><Icon name="pin" size={15} /> Service location</dt><dd>{row.service_location || <span className="muted">Not set</span>}</dd></div>
-              <div className="schedule-detail-fact"><dt><Icon name="vehicle" size={15} /> Vehicle</dt><dd>{row.vehicle?.vehicle_name || 'Not assigned'}{row.vehicle?.plate_number ? <span className="schedule-detail-subvalue">{row.vehicle.plate_number}</span> : null}</dd></div>
-              <div className="schedule-detail-fact"><dt><Icon name="checkCircle" size={15} /> Schedule status</dt><dd><TicketStatusBadge value={row.status} />{overdue && <span className="schedule-detail-overdue-text">Past due</span>}</dd></div>
+        <div className="sd2-grid">
+          <button className="sd2-photo" type="button" disabled={!actions.onViewVehicle || !row.vehicle} onClick={() => actions.onViewVehicle?.(row.vehicle)} aria-label={row.vehicle ? `Open ${row.vehicle.vehicle_name}` : 'Vehicle'}>
+            {row.vehicle?.photo_url ? <img src={resolvePhotoUrl(row.vehicle.photo_url)} alt={row.vehicle.vehicle_name} /> : <Icon name="vehicle" size={64} />}
+          </button>
+          <section className="sd2-info">
+            <header className="sd2-head">
+              <div>
+                <h2>{row.maintenance_type}</h2>
+                <p>{row.vehicle?.vehicle_name || 'Vehicle not assigned'}{row.vehicle?.plate_number ? ` · ${row.vehicle.plate_number}` : ''} · Schedule #{recordNumber(row, 'schedule_id')}</p>
+              </div>
+              {overdue ? <span className="status-badge overdue">Overdue · {scheduleDaysLate(row)} day{scheduleDaysLate(row) === 1 ? '' : 's'}</span> : <TicketStatusBadge value={row.status} />}
+            </header>
+            <dl className="sd2-facts">
+              <div className={overdue ? 'is-alert' : ''}><dt>Date</dt><dd>{dateLabel}</dd></div>
+              <div><dt>Repeats</dt><dd>{recurrence}</dd></div>
+              <div><dt>Mechanic</dt><dd>{row.assigned_to_user?.name ? <AssignedPersonnelNames people={[{ ...row.assigned_to_user, role: 'Maintenance Personnel' }]} /> : <span className="muted">Unassigned</span>}</dd></div>
+              <div><dt>Location</dt><dd>{row.service_location || <span className="muted">Not set</span>}</dd></div>
             </dl>
-            {row.notes && <section className="schedule-detail-notes"><div className="schedule-detail-section-heading"><div><span className="schedule-detail-kicker">Additional details</span><h3>Schedule notes</h3></div></div><p>{row.notes}</p></section>}
+            {row.notes && <section className="schedule-detail-notes sd2-notes"><div className="schedule-detail-section-heading"><div><span className="schedule-detail-kicker">Additional details</span><h3>Schedule notes</h3></div></div><p>{row.notes}</p></section>}
             {row.status === 'Declined' && row.decline_reason && <section className="schedule-detail-notes is-declined"><div className="schedule-detail-section-heading"><div><span className="schedule-detail-kicker">Review outcome</span><h3>Decline reason</h3></div></div><p>{row.decline_reason}</p></section>}
+            <p className="sd2-status-line">{statusMessage}</p>
+            {row.status === 'Completed' && completedRecord && <div className={`schedule-detail-verification${completedRecord.progress_status === 'Completed' ? ' is-done' : ''}`}><span>{completedRecord.progress_status === 'Completed' ? 'Verification complete' : 'Record awaiting verification'}</span><strong>{completedRecord.date_completed ? formatDate(completedRecord.date_completed) : completedRecord.progress_status}</strong></div>}
+            <div className="sd2-actions"><MaintenanceScheduleActions row={row} currentUser={currentUser} {...actions} /></div>
           </section>
-
-          <aside className="schedule-detail-side">
-            <section className="schedule-detail-workflow">
-              <span className="schedule-detail-kicker">Workflow</span>
-              <div className="schedule-detail-workflow-title"><span className="schedule-detail-workflow-icon"><Icon name={linkedTicket ? 'ticket' : linkedRecord ? 'wrench' : 'calendar'} size={17} /></span><h3>{linkedTicket ? 'Maintenance ticket' : linkedRecord ? 'Maintenance record' : row.status === 'Pending Approval' ? 'Approval pending' : 'Schedule tracking'}</h3></div>
-              <p>{statusMessage}</p>
-              {linkedTicket && <button type="button" className="btn-view-action sch-linked-action schedule-detail-link" onClick={() => actions.onViewTicket({ ticket_id: row.resulting_ticket_id })}><Icon name="ticket" size={15} /> Open Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</button>}
-              {linkedRecord && <button type="button" className="btn-view-action sch-linked-action schedule-detail-link" onClick={() => actions.onViewRecord(row)}><Icon name="wrench" size={15} /> Open Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</button>}
-              {row.status === 'Completed' && completedRecord && <div className={`schedule-detail-verification${completedRecord.progress_status === 'Completed' ? ' is-done' : ''}`}><span>{completedRecord.progress_status === 'Completed' ? 'Verification complete' : 'Record awaiting verification'}</span><strong>{completedRecord.date_completed ? formatDate(completedRecord.date_completed) : completedRecord.progress_status}</strong></div>}
-            </section>
-            <section className="schedule-detail-actions"><span className="schedule-detail-kicker">Available actions</span><h3>Schedule actions</h3><MaintenanceScheduleActions row={row} currentUser={currentUser} {...actions} /></section>
-          </aside>
         </div>
       </div>
     </ModulePanel>
@@ -9159,14 +9487,15 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
 
 function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline, onRecordWork }) {
   const actionClass = (tone = '') => `sch-action ${tone}${iconOnly ? ' icon-btn' : ''}`;
-  const becameTicket = row.status === 'Scheduled' && row.resulting_ticket_id && onViewTicket;
+  // The job a schedule became stays reachable after it is done too, so the finished work can be opened from the schedule.
+  const becameTicket = ['Scheduled', 'Completed'].includes(row.status) && row.resulting_ticket_id && onViewTicket;
   // The assigned mechanic logs the work from My Tasks once the schedule has become a job.
   const canRecordWork = onRecordWork && row.status === 'Scheduled'
     && currentUser?.role === 'Maintenance Personnel' && String(row.assigned_to) === String(currentUser.id);
   return (
     <div className="sch-card-actions">
-      {canRecordWork && <button className={actionClass('is-success')} onClick={() => onRecordWork(row)} type="button" title="Record Repair Work" aria-label="Record Repair Work"><Icon name="clipboard" size={14} />{!iconOnly && <span>Record Repair Work</span>}</button>}
-      {becameTicket && <button className={actionClass('is-info')} onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" aria-label={`View Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}`} title={`This schedule became Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })} — open it`}><Icon name="ticket" size={14} />{!iconOnly && <span>Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</span>}</button>}
+      {canRecordWork && <button className={iconOnly ? 'icon-btn btn-view-action' : actionClass('is-success')} onClick={() => onRecordWork(row)} type="button" title="Open work order" aria-label="Open work order"><Icon name="wrench" size={iconOnly ? 16 : 14} />{!iconOnly && <span>Open work order</span>}</button>}
+      {becameTicket && <button className={actionClass('is-info')} onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" aria-label={`View Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}`} title={`This schedule became Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })} — open it`}><Icon name="eye" size={14} />{!iconOnly && <span>Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</span>}</button>}
       {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className={actionClass('is-info')} onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label={`View Maintenance Record #${recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}`}><Icon name="wrench" size={14} />{!iconOnly && <span>Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</span>}</button>}
       {canDo(currentUser, 'schedule.approve') && ['Pending Approval', 'Declined'].includes(row.status) && onApprove && <button className={actionClass('is-success')} onClick={() => onApprove(row)} type="button" title="Approve" aria-label="Approve"><Icon name="checkCircle" size={14} />{!iconOnly && <span>Approve</span>}</button>}
       {canDo(currentUser, 'schedule.decline') && row.status === 'Pending Approval' && onDecline && <button className={actionClass('is-danger')} onClick={() => onDecline(row)} type="button" title="Decline" aria-label="Decline"><Icon name="close" size={14} />{!iconOnly && <span>Decline</span>}</button>}
@@ -9759,6 +10088,11 @@ function formatTime(value) {
 // bracketed timestamp buried in a wall of text.
 // `limit` (compact mode only, optional): show just the latest N entries
 // with a toggle to reveal the rest, so a long history stays one line tall.
+// Repair logs are stored as "[timestamp] what was done"; wherever only the work is shown, drop the timestamps.
+function plainWorkText(text) {
+  return String(text ?? '').replace(/^\s*\[\d{4}-\d{2}-\d{2}T[^\]]*\]\s*/gm, '').trim();
+}
+
 function RepairLogEntries({ text, compact = false, limit = null }) {
   const [showAll, setShowAll] = useState(false);
 
@@ -11035,21 +11369,16 @@ function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, looku
               )}
             </div>
             <h3 className="ticket-detail-title">{ticketTitle(ticket)}</h3>
-            <TicketTurnBanner ticket={ticket} onRecordGoodCheck={onRecordGoodCheck} />
+            <ReassignNotes ticket={ticket} />
             <div className="ticket-detail-meta">
               <div className="ticket-hero-badges">
                 <TicketStatusBadge value={ticket.priority} />
                 <TicketStageBadge ticket={ticket} variant="pill" />
               </div>
+              <TicketTurnBanner ticket={ticket} onRecordGoodCheck={onRecordGoodCheck} />
               {isAging && (
                 <span className="status-badge ticket-cancelled" title="This ticket has been open a long time; resolve or close it.">
                   <Icon name="alert" size={12} /> Aging: {daysOpen} days
-                </span>
-              )}
-              {ticket.recurrence_count > 0 && (
-                <span className="status-badge rework-warning" title="This Main Issue was already fixed on this vehicle recently; a recurring failure.">
-                  <Icon name="undo" size={12} /> Recurring: {ticket.recurrence_count + 1}
-                  {['st', 'nd', 'rd'][ticket.recurrence_count] ?? 'th'} time
                 </span>
               )}
             </div>
@@ -11340,6 +11669,12 @@ function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, looku
                       <p>{si.on_hold_reason}</p>
                     </div>
                   )}
+                  {si.reassigned_at && si.status === 'Under Repair' && si.reassign_reason && (
+                    <div className="reassign-note" role="status">
+                      <strong>Reassigned{si.assigned_mechanic?.name ? ` to ${si.assigned_mechanic.name}` : ''} · {formatDate(si.reassigned_at)}</strong>
+                      <p>{si.reassigned_by_name ? `By ${si.reassigned_by_name}. ` : ''}Reason: {si.reassign_reason}</p>
+                    </div>
+                  )}
                   {si.returned_to_admin_at && si.status === 'Under Repair' && (
                     <div className="lr-alert lr-alert-warning" role="status">
                       <strong>Returned to Admin{si.returned_to_admin_by?.name ? ` by ${si.returned_to_admin_by.name}` : ''} · {formatDate(si.returned_to_admin_at)}</strong>
@@ -11375,9 +11710,8 @@ function TicketDetailPanel({ onRecordConditionCheck, user, userId, ticket, looku
                   {/* The named shop tester: nothing to do until the vehicle is sent; then receive it; then test it and write it up. */}
                   {ticket.status === 'Active' && canDo(user, 'external.receive') && si.repair_type === 'external' && si.status === 'Under Repair' && !si.assigned_mechanic_id && String(si.external_tester_id) === String(userId) && (
                     <div className="subissue-head-right">
-                      {!si.external_sent_at || si.verification_verdict === 'Rejected'
-                        ? <p className="lr-note">Waiting for the Custodian to send the vehicle to the shop. You will be told, and this button appears here.</p>
-                        : onLogRepairs && (
+                      {!(!si.external_sent_at || si.verification_verdict === 'Rejected')
+                        && onLogRepairs && (
                           <button className="primary-button" type="button" onClick={() => onLogRepairs(ticket, si)}>
                             <Icon name="vehicle" size={14} /> {si.external_returned_at ? 'Test it and write up the repair' : 'Receive the vehicle from the shop'}
                           </button>
@@ -12506,43 +12840,6 @@ function IssueFilesCard({ issue }) {
 // a new sidebar module for one metric set.
 
 
-// Everything that happened to one vehicle, newest first. This replaces the separate Vehicle History page: a vehicle's
-// history lives on that vehicle's own profile.
-function VehicleHistoryCard({ vehicleId }) {
-  const { user } = useContext(AuthContext);
-  const allowed = canDo(user, 'vehicle.view_history');
-  const [rows, setRows] = useState(null);
-  const [showAll, setShowAll] = useState(false);
-  useEffect(() => {
-    if (!allowed) return undefined;
-    let cancelled = false;
-    api.get('/histories', { params: { vehicle_id: vehicleId } })
-      .then((res) => { if (!cancelled) setRows(res.data); })
-      .catch(() => { if (!cancelled) setRows([]); });
-    return () => { cancelled = true; };
-  }, [vehicleId, allowed]);
-  if (!allowed) return null;
-  const shown = rows ? (showAll ? rows : rows.slice(0, 8)) : [];
-  return (
-    <section className="veh-card vehicle-history-card">
-      <div className="veh-card-head"><Icon name="history" size={16} /><h4>History</h4><span className="count-badge">{rows?.length ?? 0}</span></div>
-      {rows === null ? <p className="muted">Loading history…</p> : rows.length === 0 ? <p className="muted">Nothing has happened to this vehicle yet.</p> : (
-        <ul className="vehicle-history-list">
-          {shown.map((row) => (
-            <li key={row.history_id}>
-              <span className="vehicle-history-when">{row.created_at ? formatDate(row.created_at) : ''}</span>
-              <strong>{row.activity_type}</strong>
-              <span className="vehicle-history-what">{row.description}</span>
-              {row.updated_by?.name && <span className="vehicle-history-who">{row.updated_by.name}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-      {rows && rows.length > 8 && <button type="button" className="ghost-button" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show fewer' : `Show all ${rows.length}`}</button>}
-    </section>
-  );
-}
-
 function VehicleFiles({ vehicleId, canManage, onRequestConfirmation }) {
   // canManage (Admin + Custodian, from VehicleProfilePage's
   // canManageDocuments) governs upload only here — VehicleFilesModal reads
@@ -12866,13 +13163,10 @@ function VehicleFilesModal({ onClose, vehicleId, documents, canManage, onChanged
   );
 }
 
-function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canRequestInspection = false, canRecordParts = false, canProposeDecommission = false, setNotice, onSaved, onRequestConfirmation }) {
+function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage = false, canManageDocuments = false, canViewDocuments = false, canRequestInspection = false, canRecordParts = false, setNotice, onSaved, onRequestConfirmation }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [editing, setEditing] = useState(new URLSearchParams(location.search).get('tab') === 'edit');
-  const [decommissioning, setDecommissioning] = useState(false);
-  const [proposingDecommission, setProposingDecommission] = useState(false);
-  const [decliningDecommission, setDecliningDecommission] = useState(false);
   const [readiness, setReadiness] = useState(null);
   const [readinessLoaded, setReadinessLoaded] = useState(false);
   const [readinessLoadFailed, setReadinessLoadFailed] = useState(false);
@@ -12883,15 +13177,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
   const [editCategoryId, setEditCategoryId] = useState(null);
 
   const vehicle = (lookups.vehicles ?? []).find((v) => String(v.vehicle_id) === String(vehicleId));
-  // While a decommission request waits, the Admin needs to know if an open ticket blocks approving it.
-  const [blockingTickets, setBlockingTickets] = useState([]);
-  const awaitingDecision = canManage && vehicle?.decommission_status === 'Proposed' && vehicle?.status !== 'Decommissioned';
-  useEffect(() => {
-    if (!awaitingDecision) return undefined;
-    let live = true;
-    api.get(`/vehicles/${vehicleId}/open-tickets`).then((r) => { if (live) setBlockingTickets(Array.isArray(r.data) ? r.data : []); }).catch(() => {});
-    return () => { live = false; };
-  }, [awaitingDecision, vehicleId]);
 
   const vehicleEditKey = JSON.stringify([vehicle?.vehicle_id]);
   const [previousVehicleEditKey, setPreviousVehicleEditKey] = useState(vehicleEditKey);
@@ -12948,53 +13233,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
       loadReadiness();
       await onSaved();
       setNotice({ type: 'success', text: item.blocks ? `${item.name} now counts as minor: the vehicle can still respond without it.` : `${item.name} now holds the vehicle back from being ready.` });
-    } catch (error) {
-      showError(error, setNotice);
-    }
-  };
-
-  const handleDecommission = async (reason) => {
-    setNotice(null);
-    try {
-      await api.put(`/vehicles/${vehicleId}/decommission`, { decommission_reason: reason });
-      await onSaved();
-      setNotice({ type: 'success', text: 'Vehicle decommissioned.' });
-      setDecommissioning(false);
-    } catch (error) {
-      showError(error, setNotice);
-    }
-  };
-
-  const handleProposeDecommission = async (reason) => {
-    setNotice(null);
-    try {
-      await api.post(`/vehicles/${vehicleId}/decommission-proposal`, { reason });
-      await onSaved();
-      setNotice({ type: 'success', text: 'Sent to the Admin. The vehicle stays in service until they decide.' });
-      setProposingDecommission(false);
-    } catch (error) {
-      showError(error, setNotice);
-    }
-  };
-
-  const handleWithdrawDecommission = async () => {
-    setNotice(null);
-    try {
-      await api.put(`/vehicles/${vehicleId}/decommission-proposal/withdraw`);
-      await onSaved();
-      setNotice({ type: 'success', text: 'Request withdrawn.' });
-    } catch (error) {
-      showError(error, setNotice);
-    }
-  };
-
-  const handleDeclineDecommission = async (reason) => {
-    setNotice(null);
-    try {
-      await api.put(`/vehicles/${vehicleId}/decommission-proposal/decline`, { decline_reason: reason });
-      await onSaved();
-      setNotice({ type: 'success', text: 'Request declined. The Custodian was told why.' });
-      setDecliningDecommission(false);
     } catch (error) {
       showError(error, setNotice);
     }
@@ -13071,16 +13309,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
               <Icon name="search" size={13} /> Request Custodian Inspection
             </button>
           )}
-          {canProposeDecommission && !canManage && vehicle.status !== 'Decommissioned' && vehicle.decommission_status !== 'Proposed' && !editing && (
-            <button className="btn-sm danger-button" type="button" onClick={() => setProposingDecommission(true)}>
-              <Icon name="alert" size={13} /> Recommend decommissioning
-            </button>
-          )}
-          {canManage && vehicle.status !== 'Decommissioned' && !editing && (
-            <button className="btn-sm danger-button" type="button" onClick={() => setDecommissioning(true)}>
-              <Icon name="alert" size={13} /> Decommission
-            </button>
-          )}
           {canManage && vehicle.status === 'Decommissioned' && (
             <button className="btn-sm primary-button" type="button" onClick={() => onRequestConfirmation?.({
               title: 'Recommission Vehicle',
@@ -13093,37 +13321,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
           )}
         </div>
       </div>
-
-      {vehicle.status !== 'Decommissioned' && vehicle.decommission_status === 'Proposed' && (
-        <div className="decom-banner is-proposed" role="status">
-          <div className="decom-banner-text">
-            <strong><Icon name="alert" size={16} /> Decommission requested</strong>
-            <p>{vehicle.decommission_proposed_by_name ?? 'The Custodian'} asked to retire this vehicle{vehicle.decommission_proposed_at ? ` on ${formatDate(vehicle.decommission_proposed_at)}` : ''}: {vehicle.decommission_proposal_reason}</p>
-            <small>{canManage ? 'It stays in service until you decide. Approving moves it to the Salvage Inventory for the mechanic.' : 'Waiting for the Admin to decide. The vehicle stays in service meanwhile.'}</small>
-            {canManage && blockingTickets.length > 0 && <small className="decom-blocker" role="alert">Cannot approve yet: close or cancel {blockingTickets.map((t) => `Ticket #${t.barangay_number ?? t.ticket_id}`).join(', ')} first.</small>}
-          </div>
-          <div className="decom-banner-actions">
-            {canManage && <button className="btn-sm danger-button" type="button" disabled={blockingTickets.length > 0} title={blockingTickets.length ? 'An open ticket blocks this' : undefined} onClick={() => onRequestConfirmation?.({
-              title: 'Approve decommissioning',
-              message: `Retire ${vehicle.vehicle_name} from the fleet? It leaves readiness and coverage, and the mechanic is asked to list its salvageable parts. Its history is kept.`,
-              confirmLabel: 'Approve and decommission',
-              variant: 'danger',
-              onConfirm: () => handleDecommission(vehicle.decommission_proposal_reason),
-            })}>Approve</button>}
-            {canManage && <button className="btn-sm ghost-button" type="button" onClick={() => setDecliningDecommission(true)}>Decline</button>}
-            {canProposeDecommission && !canManage && <button className="btn-sm ghost-button" type="button" onClick={handleWithdrawDecommission}>Withdraw request</button>}
-          </div>
-        </div>
-      )}
-      {vehicle.status !== 'Decommissioned' && vehicle.decommission_status === 'Declined' && (
-        <div className="decom-banner is-declined" role="status">
-          <div className="decom-banner-text">
-            <strong><Icon name="alert" size={16} /> Decommission request declined</strong>
-            <p>{vehicle.decommission_decline_reason}</p>
-            <small>The vehicle stays in service{vehicle.decommission_declined_at ? ` (declined ${formatDate(vehicle.decommission_declined_at)})` : ''}.</small>
-          </div>
-        </div>
-      )}
 
       {vehicle.status === 'Decommissioned' && (
         <div style={{ margin: '0 0 16px', padding: '14px 18px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b' }}>
@@ -13167,45 +13364,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
           </ul>
         </div>
       )}
-
-      <FormModal open={decommissioning} title={`Decommission ${vehicle.vehicle_name}`} onClose={() => setDecommissioning(false)}>
-        <p className="muted" style={{ marginBottom: 12, fontSize: '0.85rem' }}>
-          This permanently retires the vehicle (end of life) and removes it from readiness/coverage. Its full history is kept, and an Admin can recommission it later if this was a mistake.
-        </p>
-        <SmartForm
-          fields={[{ label: 'Reason for decommissioning', name: 'decommission_reason', required: true, type: 'textarea', rows: 3 }]}
-          key="decommission"
-          onCancel={() => setDecommissioning(false)}
-          onSubmit={(payload) => handleDecommission(payload.decommission_reason)}
-          submitLabel="Decommission Vehicle"
-          title=""
-        />
-      </FormModal>
-
-      <FormModal open={proposingDecommission} title={`Recommend decommissioning ${vehicle.vehicle_name}`} onClose={() => setProposingDecommission(false)}>
-        <p className="muted" style={{ marginBottom: 12, fontSize: '0.85rem' }}>
-          The Admin decides. The vehicle stays in service until they approve. A vehicle with an open ticket cannot be proposed.
-        </p>
-        <SmartForm
-          fields={[{ label: 'Why should this vehicle be retired?', name: 'reason', required: true, type: 'textarea', rows: 4 }]}
-          key="propose-decommission"
-          onCancel={() => setProposingDecommission(false)}
-          onSubmit={(payload) => handleProposeDecommission(payload.reason)}
-          submitLabel="Send to Admin"
-          title=""
-        />
-      </FormModal>
-
-      <FormModal open={decliningDecommission} title={`Decline decommissioning ${vehicle.vehicle_name}`} onClose={() => setDecliningDecommission(false)}>
-        <SmartForm
-          fields={[{ label: 'Why does it stay in service?', name: 'decline_reason', required: true, type: 'textarea', rows: 3 }]}
-          key="decline-decommission"
-          onCancel={() => setDecliningDecommission(false)}
-          onSubmit={(payload) => handleDeclineDecommission(payload.decline_reason)}
-          submitLabel="Decline request"
-          title=""
-        />
-      </FormModal>
 
       {editing ? (
         <section className="veh-card veh-edit-card">
@@ -13278,7 +13436,6 @@ function VehicleProfilePage({ vehicleId, lookups, allHubs, basePath, canManage =
           </section>
 
           {canViewDocuments && <VehicleFiles vehicleId={vehicle.vehicle_id} canManage={canManageDocuments} onRequestConfirmation={onRequestConfirmation} />}
-          <VehicleHistoryCard vehicleId={vehicle.vehicle_id} />
         </div>
 
         <section className="veh-card veh-map vehicle-profile-map">
@@ -13419,33 +13576,65 @@ function ticketTurn(ticket) {
   switch (ticket.status) {
     case 'Pending Approval':
       return ticket.correction_requested_at
-        ? { text: `Waiting for ${custodian} to revise the proposal the Admin sent back.`, tone: 'waiting' }
-        : { text: 'Waiting for the Admin to approve or decline this proposal.', tone: 'action' };
+        ? { text: `Waiting for ${custodian} to revise it.`, tone: 'waiting' }
+        : { text: 'Waiting for the Admin to decide.', tone: 'action' };
     case 'Declined':
-      return { text: 'Declined. The vehicle stays marked Needs Repair until the Custodian records a new condition check with the result Good, or proposes the repair again.', tone: 'info' };
+      return { text: 'Declined. The vehicle stays marked Needs Repair.', tone: 'info' };
     case 'Cancelled':
-      return { text: 'Cancelled. If the problem is gone, the Custodian records a condition check with the result Good to clear the Needs Repair mark.', tone: 'info' };
+      return { text: 'Cancelled. Record a Good condition check if the problem is gone.', tone: 'info' };
     case 'For Verification':
       return { text: `Waiting for ${custodian} to verify the repair.`, tone: 'waiting' };
     case 'Closed':
-      return { text: 'Done. The repair was verified and the ticket is closed.', tone: 'info' };
+      return { text: 'Done. Verified and closed.', tone: 'info' };
     case 'Active': {
       const subs = ticket.sub_issues ?? [];
-      if (subs.some((x) => x.returned_to_admin_at && x.status === 'Under Repair' && !x.assigned_mechanic_id)) return { text: 'Waiting for the Admin to reassign the work a mechanic sent back.', tone: 'action' };
-      if (subs.length > 0 && subs.every((x) => x.status === 'For Inspection')) return { text: `Waiting for ${mechanic} to submit the repair for verification.`, tone: 'action' };
+      if (subs.some((x) => x.returned_to_admin_at && x.status === 'Under Repair' && !x.assigned_mechanic_id)) return { text: 'Waiting for the Admin to reassign it.', tone: 'action' };
+      if (subs.length > 0 && subs.every((x) => x.status === 'For Inspection')) return { text: `Waiting for ${mechanic} to submit the repair.`, tone: 'action' };
       // Outside-shop work: say where the vehicle is, not "waiting for the mechanic".
       const shop = subs.find((x) => x.repair_type === 'external' && x.status === 'Under Repair' && !x.assigned_mechanic_id);
       if (shop) {
         const tester = shop.external_tester?.name ?? 'the Maintenance Personnel';
-        if (!shop.external_sent_at) return { text: `Waiting for ${custodian} to send the vehicle to the shop. ${tester} will test it when it comes back.`, tone: 'waiting' };
-        if (!shop.external_returned_at) return { text: `At the shop. When it comes back, ${tester} receives it and tests it.`, tone: 'waiting' };
-        return { text: `Back from the shop. Waiting for ${tester} to test it and write the repair up.`, tone: 'action' };
+        if (!shop.external_sent_at) return { text: `Waiting for ${custodian} to send it to the shop.`, tone: 'waiting' };
+        if (!shop.external_returned_at) return { text: `At the shop. ${tester} receives it when it is back.`, tone: 'waiting' };
+        return { text: `Back from the shop. Waiting for ${tester} to test it.`, tone: 'action' };
       }
-      return { text: `Waiting for ${mechanic} to finish the repair and test the vehicle.`, tone: 'info' };
+      return { text: `Waiting for ${mechanic} to finish the repair.`, tone: 'info' };
     }
     default:
       return null;
   }
+}
+
+
+// A ticket handed to someone else shows up in their list out of nowhere. For a week after, the new owner sees a
+// "Reassigned" mark above the title (hover for why); the reason is also written on the ticket and in the notice.
+const REASSIGN_SHOWN_DAYS = 7;
+function recentlyReassignedToMe(ticket, user) {
+  if (!user) return null;
+  const fresh = (value) => value && Date.now() - new Date(value).getTime() < REASSIGN_SHOWN_DAYS * 86400000;
+  if (fresh(ticket.custodian_reassigned_at) && String(ticket.assigned_custodian_id) === String(user.id) && ticket.status !== 'Closed') {
+    return { reason: ticket.custodian_reassign_reason, by: ticket.custodian_reassigned_by_name, at: ticket.custodian_reassigned_at };
+  }
+  const item = (ticket.sub_issues ?? []).find((si) => fresh(si.reassigned_at) && String(si.assigned_mechanic_id) === String(user.id) && si.status === 'Under Repair');
+  return item ? { reason: item.reassign_reason, by: item.reassigned_by_name, at: item.reassigned_at } : null;
+}
+
+function ReassignedPill({ ticket }) {
+  const { user } = useContext(AuthContext);
+  const note = recentlyReassignedToMe(ticket, user);
+  if (!note) return null;
+  return <span className="status-badge reassign-pill" title={note.reason ? `Reassigned to you: ${note.reason}` : 'Reassigned to you'}>Reassigned</span>;
+}
+
+// On the ticket page: who it was handed to, by whom, and why. Shown to everyone who can open the ticket.
+function ReassignNotes({ ticket }) {
+  if (!ticket.custodian_reassigned_at || ticket.status === 'Closed') return null;
+  return (
+    <div className="reassign-note" role="status">
+      <strong>Custodian reassigned</strong>
+      <p>{ticket.assigned_custodian?.name ?? 'The new Custodian'} took over{ticket.custodian_reassigned_by_name ? ` from ${ticket.custodian_reassigned_by_name}'s change` : ''} on {formatDate(ticket.custodian_reassigned_at)}.{ticket.custodian_reassign_reason ? ` Reason: ${ticket.custodian_reassign_reason}` : ''}</p>
+    </div>
+  );
 }
 
 function TicketTurnBanner({ ticket, onRecordGoodCheck }) {
@@ -13455,7 +13644,7 @@ function TicketTurnBanner({ ticket, onRecordGoodCheck }) {
   const waited = ticket.updated_at ? Math.floor((now - new Date(ticket.updated_at).getTime()) / 86400000) : 0;
   return (
     <p className={`ticket-turn-banner is-${turn.tone}`} role="status">
-      <strong>Next:</strong> {turn.text}{waited >= 1 && ['Pending Approval', 'For Verification', 'Active'].includes(ticket.status) ? ` Waiting ${waited} day${waited === 1 ? '' : 's'} since the last update.` : ''}
+      <strong>Next:</strong> {turn.text}{waited >= 3 && ['Pending Approval', 'For Verification', 'Active'].includes(ticket.status) ? ` (${waited} days, no update)` : ''}
       {onRecordGoodCheck && ['Declined', 'Cancelled'].includes(ticket.status) && ticket.vehicle?.condition === 'Needs Repair' && (
         <button className="success-button ticket-turn-action" type="button" onClick={() => onRecordGoodCheck(ticket.vehicle_id)}>Record a Good condition check</button>
       )}
@@ -13890,9 +14079,9 @@ function DonorPartModal({ mode, part, base, donorVehicleId, onClose, onSaved, no
           <span>Take it from the salvage inventory</span>
           <select value={salvageId} onChange={(e) => { setSalvageId(e.target.value); setErrors({}); }}>
             <option value="">Not from the inventory (type the part below)</option>
-            {stock.map((row) => <option key={row.salvage_part_id} value={row.salvage_part_id}>{row.part_name}: {row.vehicle_name}, {row.quantity_available} left ({row.part_condition})</option>)}
+            {stock.map((row) => <option key={row.salvage_part_id} value={row.salvage_part_id}>{row.part_name}: {row.vehicle_name}, {row.quantity_available} left</option>)}
           </select>
-          {chosenStock && <small className="dp-hint">Comes from {chosenStock.vehicle_name}{chosenStock.storage_location ? `, stored at ${chosenStock.storage_location}` : ''}. The stock goes down by the quantity you use.</small>}
+          {chosenStock && <small className="dp-hint">Comes from {chosenStock.vehicle_name}. The stock goes down by the quantity you use.</small>}
         </label>
       )}
       <div className="dp-grid">
@@ -14122,7 +14311,8 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
   const repairType = ticket?.repair_type === 'external' ? 'external' : chosenRepairType;
   // External shop stages: send out, then mark returned, then submit.
   const [sendForm, setSendForm] = useState({ external_vendor: ticket?.external_vendor ?? '', external_reason: ticket?.external_reason ?? '', external_work_scope: ticket?.external_work_scope ?? '', external_shop_contact: ticket?.external_shop_contact ?? '', external_shop_address: ticket?.external_shop_address ?? '', external_expected_return: '', external_estimated_cost: ticket?.external_estimated_cost ?? '' });
-  const [returnForm, setReturnForm] = useState({ external_return_notes: '', external_actual_cost: '', warranty_until: '' });
+  const [returnForm, setReturnForm] = useState({ external_return_notes: '' });
+  const [receivedOk, setReceivedOk] = useState(false);
 
   if (!ticket) {
     return (
@@ -14222,7 +14412,6 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             {[ticket.vehicle?.plate_number, ticket.maintenance_type, `Ticket #${ticketNumber(ticket)}`].filter(Boolean).join(' · ')}
           </p>
         </div>
-        <TicketStatusPill status={ticket.status} />
       </header>
 
       {ticket.confirmation_verdict === 'Reopened' && (
@@ -14244,6 +14433,12 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
         </div>
       )}
 
+      {ticket.reassigned_at && ticket.reassign_reason && (
+        <div className="reassign-note" role="status">
+          <strong>This job was reassigned to you · {formatDate(ticket.reassigned_at)}</strong>
+          <p>{ticket.reassigned_by_name ? `By ${ticket.reassigned_by_name}. ` : ''}Reason: {ticket.reassign_reason}</p>
+        </div>
+      )}
       <form className={`smart-form lr-workspace${showRepairForm ? '' : ' lr-solo'}`} onSubmit={handleSubmit} autoComplete="off" noValidate>
         <div className="lr-main">
           {/* Work order — only as tall as its content. Vehicle, ticket #,
@@ -14251,17 +14446,14 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
               only carries what the header doesn't: what to fix and why. */}
           <section className="lr-group lr-workorder" aria-labelledby={`${idBase}-wo`}>
             <h4 className="lr-section-label" id={`${idBase}-wo`}>Work Order Overview</h4>
+            <div className="lr-wo-body">
+            {ticket.vehicle?.photo_url && <img className="lr-wo-photo" src={resolvePhotoUrl(ticket.vehicle.photo_url)} alt={ticket.vehicle.vehicle_name ?? 'Vehicle'} />}
             <dl className="lr-kv">
               <div><dt>Repair Item</dt><dd>{isScheduledJob && ticket.maintenance_type ? `${ticket.maintenance_type} (scheduled service)` : ticket.title}</dd></div>
               <div><dt>Main Issue</dt><dd>{ticketTitle(ticket)}</dd></div>
               {workDescription && <div className="lr-kv-wide"><dt>Description</dt><dd>{workDescription}</dd></div>}
             </dl>
-            {ticket.repair_logs && (
-              <div className="lr-history">
-                <span className="lr-mini-label">Previous repair</span>
-                <RepairLogEntries text={ticket.repair_logs} compact limit={2} />
-              </div>
-            )}
+            </div>
           </section>
 
           {outcomeMode && (
@@ -14279,13 +14471,13 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                 setOutcome(next.dataset.outcome);
               }}>
                 {[
-                  ['repair', 'I repaired it', 'Record the work, parts and photos, then submit the repair log.', true],
-                  ['no_repair', 'No repair needed', 'You checked and nothing needs fixing. Say what you checked.', !!onNoRepair],
-                  ['return', 'Return to Admin', 'It is not yours to do, or needs other skills. Say why; the Admin reassigns it.', !!onReturnToAdmin],
-                ].filter((choice) => choice[3]).map(([key, label, hint]) => (
+                  ['repair', 'Repair', 'Fill in the repair form.', true],
+                  ['no_repair', 'No repair needed', 'Give the reason.', !!onNoRepair],
+                  ['return', 'Return', 'Give the reason.', !!onReturnToAdmin],
+                ].filter((choice) => choice[3]).map(([key, label]) => (
                   <button key={key} type="button" role="radio" data-outcome={key} tabIndex={outcome === key || (!outcome && key === 'repair') ? 0 : -1} aria-checked={outcome === key} className={`lr-method-choice lr-outcome-btn lr-outcome-${key}${outcome === key ? ' is-selected' : ''}`} onClick={() => setOutcome(key)}>
                     <span className="lr-method-check" aria-hidden="true" />
-                    <span className="lr-method-text"><strong>{label}</strong><small>{hint}</small></span>
+                    <span className="lr-method-text"><strong>{label}</strong></span>
                   </button>
                 ))}
               </div>
@@ -14405,25 +14597,10 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
                     <label className="lr-label" htmlFor={`${idBase}-rn`}>Result / Condition on Return <abbr className="required-asterisk" title="required">*</abbr></label>
                     <textarea id={`${idBase}-rn`} className="lr-textarea" rows={2} value={returnForm.external_return_notes} onChange={(e) => setReturnForm({ ...returnForm, external_return_notes: e.target.value })} />
                   </div>
-                  <div className="lr-two-col">
-                    <div className="lr-field">
-                      <label className="lr-label" htmlFor={`${idBase}-ra`}>Actual Cost (₱)</label>
-                      <input id={`${idBase}-ra`} type="number" min="0" value={returnForm.external_actual_cost} onChange={(e) => setReturnForm({ ...returnForm, external_actual_cost: e.target.value })} />
-                    </div>
-                    <div className="lr-field">
-                      <label className="lr-label" htmlFor={`${idBase}-rw2`}>Warranty Until</label>
-                      <DateFilterInput id={`${idBase}-rw2`} value={returnForm.warranty_until} onChange={(v) => setReturnForm({ ...returnForm, warranty_until: v })} />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="primary-button"
-                    style={{ alignSelf: 'flex-start' }}
-                    disabled={shopBusy || !returnForm.external_return_notes.trim()}
-                    onClick={async () => { if (shopBusy) return; setShopBusy(true); try { await onExternalReturn(ticket, Object.fromEntries(Object.entries(returnForm).filter(([, v]) => String(v).trim() !== ''))); } finally { setShopBusy(false); } }}
-                  >
-                    Mark as Received
-                  </button>
+                  <label className="lr-check">
+                    <input type="checkbox" checked={receivedOk} onChange={(e) => setReceivedOk(e.target.checked)} />
+                    <span>I confirm the vehicle is back from the shop and is working.</span>
+                  </label>
                 </>
               )) : (
                 <p className="lr-note">Returned from <strong>{ticket.external_vendor}</strong> on {formatDate(ticket.external_returned_at)}. {ticket.external_return_notes}</p>
@@ -14456,7 +14633,12 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
             </p>}
             {needsShopCycle && !receiveOnly && <p className="lr-note">{ticket.verification_verdict === 'Rejected' ? 'Record a new shop visit and return for this rejected repair.' : 'Send to the shop and mark returned before submitting.'}</p>}
             {isMechanic ? (
-              receiveOnly ? null : <>
+              receiveOnly ? (
+                <button type="button" className="primary-button lr-submit" disabled={shopBusy || !receivedOk || !returnForm.external_return_notes.trim()}
+                  onClick={async () => { if (shopBusy) return; setShopBusy(true); try { await onExternalReturn(ticket, { external_return_notes: returnForm.external_return_notes.trim() }); } finally { setShopBusy(false); } }}>
+                  {shopBusy ? 'Saving...' : 'Mark as Received'}
+                </button>
+              ) : <>
                 <button className="primary-button lr-submit" type="submit" disabled={needsShopCycle || submittingRepair || shopBusy}>{submittingRepair ? 'Submitting...' : 'Submit Repair Log'}</button>
               </>
             ) : (
@@ -14567,7 +14749,7 @@ function LogRepairsPage({ ticket, vehicleOptions = [], onBack, onSubmit, onDirty
 // an Admin/Custodian can spot and act on them without hunting through the
 // full list below. Always visible (even at a count of 0) so it reads as a
 // permanent fixture of the page, not something that randomly appears.
-function readyToCloseColumns(onCloseTicket) {
+function readyToCloseColumns(onCloseTicket, onViewTicket) {
   return [
     { key: 'ticket_id', label: 'Ticket ID', className: 'cell-center', render: (r) => <span className="row-title-text">#{ticketNumber(r)}</span> },
     { key: 'vehicle', label: 'Vehicle', render: (r) => <VehicleCell vehicle={r.vehicle} isRowTitle={false} /> },
@@ -14576,18 +14758,21 @@ function readyToCloseColumns(onCloseTicket) {
     { key: 'priority', label: 'Priority', className: 'cell-center', render: (r) => <TicketStatusBadge value={r.priority} /> },
     { key: 'progress', label: 'Sub-Issues', className: 'cell-center', render: (r) => `${r.progress?.done ?? 0}/${r.progress?.total ?? 0} done` },
     { key: 'created', label: 'Date Created', className: 'cell-center', render: (r) => <DateBadge value={r.created_at} /> },
-    ...(onCloseTicket ? [{ key: 'action', label: 'Action', className: 'cell-center', render: (r) => (
-      <button type="button" className="ready-to-close-action" aria-label={`Close ticket #${ticketNumber(r)}`} title="Verify the repair before closing this ticket" onClick={(event) => { event.stopPropagation(); onCloseTicket(r); }} onKeyDown={(event) => event.stopPropagation()}>
+    { key: 'action', label: 'Action', className: 'cell-center', render: (r) => (
+      <span className="row-actions">
+      <button type="button" className="icon-btn btn-view-action" title="View ticket" aria-label={`View ticket #${ticketNumber(r)}`} onClick={(event) => { event.stopPropagation(); onViewTicket(r); }}><Icon name="eye" size={16} /></button>
+      {onCloseTicket && <button type="button" className="ready-to-close-action" aria-label={`Close ticket #${ticketNumber(r)}`} title="Verify the repair before closing this ticket" onClick={(event) => { event.stopPropagation(); onCloseTicket(r); }} onKeyDown={(event) => event.stopPropagation()}>
         <Icon name="checkCircle" size={15} /> Close Ticket
-      </button>
-    ) }] : []),
+      </button>}
+      </span>
+    ) },
   ];
 }
 
 function TicketsReadyToClosePanel({ tickets, onViewTicket, onCloseTicket }) {
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState('');
-  const columns = useMemo(() => readyToCloseColumns(onCloseTicket), [onCloseTicket]);
+  const columns = useMemo(() => readyToCloseColumns(onCloseTicket, onViewTicket), [onCloseTicket, onViewTicket]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -14644,7 +14829,7 @@ function ticketTableColumns(onViewTicket, onChangeVisibility, { repairAction = f
       render: (r) => {
         return (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span className="ticket-list-title"><strong className="row-title-text">{ticketTitle(r)}</strong><small className="muted">{[r.vehicle?.vehicle_name, r.vehicle?.plate_number].filter(Boolean).join(' — ') || 'No vehicle'}</small></span>
+            <span className="ticket-list-title"><ReassignedPill ticket={r} /><strong className="row-title-text">{ticketTitle(r)}</strong><small className="muted">{[r.vehicle?.vehicle_name, r.vehicle?.plate_number].filter(Boolean).join(' — ') || 'No vehicle'}</small></span>
           </span>
         );
       },

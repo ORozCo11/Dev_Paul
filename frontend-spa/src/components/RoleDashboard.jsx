@@ -53,7 +53,7 @@ export default function RoleDashboard({ data, user, basePath, onNavigate, onGoTo
   const loading = pending && !error;
   const tickets = pending ? [] : feed.tickets;
   const schedules = pending ? [] : feed.schedules;
-  const salvageWaiting = pending ? [] : (feed.salvage ?? []).filter((v) => !v.salvage_completed_at);
+  const salvageWaiting = pending ? [] : (feed.salvage ?? []).filter((v) => !(v.parts_logged > 0) && !v.salvage_completed_at);
   const decommissionRequests = pending ? [] : (feed.vehicles ?? []).filter((v) => v.decommission_status === 'Proposed' && v.status !== 'Decommissioned');
   const admin = role === 'Admin';
   const custodian = role === 'Custodian';

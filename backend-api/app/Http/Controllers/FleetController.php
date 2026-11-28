@@ -78,7 +78,7 @@ class FleetController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name', 'email', 'role']),
             'issue_types' => FaultCategory::orderBy('name')->pluck('name'),
-            'maintenance_types' => MaintenanceType::orderBy('name')->pluck('name'),
+            'maintenance_types' => MaintenanceType::inUsualOrder(MaintenanceType::pluck('name')),
             'severity_levels' => ['Low', 'Medium', 'High'],
             'vehicle_statuses' => ['Available', 'Under Maintenance', 'Inactive', 'Decommissioned'],
             // "Needs Inspection" removed per product direction — a Custodian
@@ -1230,7 +1230,38 @@ class FleetController extends Controller
      * must be settled first — a beyond-repair vehicle's unfinishable ticket
      * is exactly what decision-close (Problem 1) exists for.
      */
-    /** The Custodian recommends retiring a vehicle. Nothing changes for the vehicle until the Admin approves. */
+    /** Every decommission request and where it stands: waiting for the Admin, approved (with its parts list), or declined. */
+    public function decommissionRequests(Request $request)
+    {
+        $this->requireAbility($request, 'vehicle.decommission_view');
+
+        $sums = \App\Models\SalvagePart::selectRaw('vehicle_id, COUNT(*) as part_lines, SUM(quantity) as listed, SUM(quantity_available) as in_stock')->groupBy('vehicle_id')->get()->keyBy('vehicle_id');
+
+        return Vehicle::with('category')->where(fn ($q) => $q->whereIn('decommission_status', ['Proposed', 'Declined'])->orWhere('status', 'Decommissioned'))
+            ->get()->map(function (Vehicle $v) use ($sums) {
+                $approved = $v->status === 'Decommissioned';
+
+                return [
+                    'vehicle_id' => $v->vehicle_id,
+                    'vehicle_name' => $v->vehicle_name,
+                    'plate_number' => $v->plate_number,
+                    'photo_url' => $v->photo_url, 'condition' => $v->condition, 'vehicle_type' => $v->category?->category_name, 'brand' => $v->brand, 'model' => $v->model, 'year_model' => $v->year_model,
+                    'state' => $approved ? 'Approved' : $v->decommission_status,
+                    'proposed_by' => $v->decommission_proposed_by_name,
+                    'proposed_at' => $v->decommission_proposed_at,
+                    'reason' => $approved ? ($v->decommission_proposal_reason ?: $v->decommission_reason) : $v->decommission_proposal_reason,
+                    'decision_at' => $approved ? $v->decommissioned_at : $v->decommission_declined_at,
+                    'decline_reason' => $v->decommission_decline_reason,
+                    'parts_logged' => (int) ($sums[$v->vehicle_id]->part_lines ?? 0),
+                    'units_listed' => (int) ($sums[$v->vehicle_id]->listed ?? 0), 'units_in_stock' => (int) ($sums[$v->vehicle_id]->in_stock ?? 0),
+                    'salvage_completed_at' => $v->salvage_completed_at,
+                ];
+            })
+            ->sortBy(fn ($row) => sprintf('%d|%s', ['Proposed' => 0, 'Approved' => 1, 'Declined' => 2][$row['state']] ?? 3, 'z'.(10000000000 - strtotime((string) ($row['decision_at'] ?? $row['proposed_at'] ?? now())))))
+            ->values();
+    }
+
+    /** The mechanic recommends retiring a vehicle. Nothing changes for the vehicle until the Admin approves. */
     public function proposeDecommission(Request $request, Vehicle $vehicle)
     {
         $this->requireAbility($request, 'vehicle.decommission_propose');
@@ -1333,7 +1364,7 @@ class FleetController extends Controller
             }
         });
         // Mechanics are told there is a parts list to make.
-        User::where('barangay_id', $vehicle->barangay_id)->havingRole('Maintenance Personnel')->get()->each(fn (User $mechanic) => $this->notifyUser($mechanic->id, 'Vehicle Ready for Salvage', "{$vehicle->vehicle_name} was decommissioned. List the parts that can still be used (Salvage Inventory).", 'salvage_ready', ['vehicle_id' => $vehicle->vehicle_id]));
+        User::where('barangay_id', $vehicle->barangay_id)->havingRole('Maintenance Personnel')->where('id', '!=', (int) $vehicle->decommission_proposed_by)->get()->each(fn (User $mechanic) => $this->notifyUser($mechanic->id, 'Vehicle Ready for Salvage', "{$vehicle->vehicle_name} was decommissioned. List the parts that can still be used (Salvage Inventory).", 'salvage_ready', ['vehicle_id' => $vehicle->vehicle_id]));
 
         $this->history($vehicle, 'Vehicle Decommissioned', "{$vehicle->vehicle_name} was decommissioned (end of life): {$data['decommission_reason']}", 'vehicles', $vehicle->vehicle_id, $request);
         $this->log($request, 'Decommission', 'Vehicle Management', $vehicle->vehicle_id, "Decommissioned vehicle {$vehicle->vehicle_name}");

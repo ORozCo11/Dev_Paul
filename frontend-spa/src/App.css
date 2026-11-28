@@ -1284,7 +1284,7 @@
 /* Holds an icon-btn's exact footprint (see .row-actions button.icon-btn
    below) when a row doesn't have that action, so the remaining buttons
    still land in the same column across every row instead of re-centering. */
-.icon-btn-spacer { display: inline-block; width: 32px; height: 32px; flex-shrink: 0; }
+.icon-btn-spacer { display: inline-block; width: 36px; height: 36px; flex-shrink: 0; }
 .notification-indicator {
   position: absolute; top: -4px; right: -4px;
   background: #ef4444; color: #ffffff;
@@ -4003,7 +4003,7 @@ button.wizard-step-pill:hover {
    no `placeholder` attribute fall back to always-floated rather than
    risking the overlap again — a label sitting on the border the whole
    time is a much smaller issue than one sitting on top of real text. */
-.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):has(input:not(:placeholder-shown)) > span,
+.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):has(input:not([type="hidden"]):not(:placeholder-shown)) > span,
 .smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):has(textarea:not(:placeholder-shown)) > span,
 .smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])):has(select:not(:invalid)) > span {
   top: -8px;
@@ -17631,3 +17631,217 @@ html[data-theme="dark"] .module-filter-panel .filter-label span, html[data-theme
 
 .decom-blocker { display: block; margin-top: 4px; color: #b91c1c; font-weight: 700; }
 html[data-theme="dark"] .decom-blocker { color: #fca5a5; }
+
+/* Schedule details: one photo, one set of facts, one row of actions. */
+.sd2-grid { display: grid; grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.3fr); gap: 22px; align-items: start; }
+.sd2-photo { display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 4 / 3; padding: 0; overflow: hidden; border: 1px solid var(--border, #dbe5f3); border-radius: 14px; background: var(--surface-muted, #eef3fa); color: #94a3b8; cursor: pointer; }
+.sd2-photo:disabled { cursor: default; }
+.sd2-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sd2-info { display: grid; gap: 14px; min-width: 0; }
+.sd2-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sd2-head h2 { margin: 0 0 4px; font-size: 1.5rem; line-height: 1.2; }
+.sd2-head p { margin: 0; color: var(--text-muted, #64748b); font-size: 0.9rem; }
+.sd2-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.sd2-facts > div { padding: 12px 14px; border: 1px solid var(--border, #dbe5f3); border-radius: 10px; background: var(--surface, #fff); }
+.sd2-facts > div.is-alert { border-color: #fecaca; background: #fff1f2; }
+.sd2-facts dt { margin: 0 0 4px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted, #64748b); }
+.sd2-facts dd { margin: 0; font-weight: 600; }
+.sd2-notes { margin: 0; }
+.sd2-status-line { margin: 0; color: var(--text-muted, #64748b); font-size: 0.88rem; }
+.sd2-actions { padding-top: 4px; }
+@media (max-width: 800px) { .sd2-grid { grid-template-columns: minmax(0, 1fr); } .sd2-facts { grid-template-columns: minmax(0, 1fr); } }
+
+/* Salvage: the "waiting" strip on the stock page and the filter on the history page. */
+.salvage-waiting-strip { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 16px; padding: 12px 16px; border: 1px solid #fde68a; border-radius: 10px; background: #fffbeb; color: #78350f; }
+html[data-theme="dark"] .salvage-waiting-strip { border-color: rgba(251, 191, 36, .4); background: rgba(217, 119, 6, .14); color: #fde68a; }
+.salvage-filter { display: inline-flex; gap: 6px; margin: 0 0 12px; padding: 4px; border: 1px solid var(--border, #dbe5f3); border-radius: 10px; }
+.salvage-filter button { padding: 6px 14px; border: 0; border-radius: 8px; background: transparent; color: inherit; font-weight: 600; cursor: pointer; }
+.salvage-filter button span { margin-left: 4px; opacity: .7; }
+.salvage-filter button.is-active { background: #2563eb; color: #fff; }
+.salvage-more { margin-top: 12px; }
+
+/* Reassigned tickets: the mark above the title and the reason note. */
+.ticket-list-title { display: flex; flex-direction: column; align-items: flex-start; }
+.reassign-pill { margin-bottom: 3px; padding: 2px 9px; border: 1px solid #fcd34d; background: #fef3c7; color: #92400e; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+html[data-theme="dark"] .reassign-pill { background: rgba(217, 119, 6, .22); color: #fde68a; border-color: rgba(252, 211, 77, .45); }
+.reassign-note { margin: 10px 0; padding: 10px 14px; border: 1px solid #fcd34d; border-left-width: 4px; border-radius: 8px; background: #fffbeb; color: #78350f; }
+.reassign-note strong { display: block; margin-bottom: 2px; }
+.reassign-note p { margin: 0; overflow-wrap: anywhere; }
+html[data-theme="dark"] .ticket-detail-panel .reassign-note { background: #fffbeb; color: #78350f; }
+
+.lr-check { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 0; font-weight: 600; cursor: pointer; }
+.lr-check input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+
+/* Record Repair Work: compact choice buttons and a bigger vehicle photo. */
+.lr-wo-body { display: grid; grid-template-columns: minmax(220px, 340px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.lr-wo-body:not(:has(.lr-wo-photo)) { grid-template-columns: minmax(0, 1fr); }
+.lr-wo-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 12px; border: 1px solid var(--border, #dbe5f3); }
+@media (max-width: 700px) { .lr-wo-body { grid-template-columns: minmax(0, 1fr); } }
+html .lr-outcome .lr-method-choices { display: flex; flex-wrap: wrap; gap: 10px; }
+html .lr-outcome-btn { min-height: 0; padding: 8px 22px; border-width: 1.5px; border-radius: 10px; flex: 0 0 auto; }
+html .lr-outcome-btn strong { font-size: 0.9rem; }
+
+/* The "Next" line sits beside the badges, short, instead of a full-width bar. */
+.ticket-detail-meta .ticket-turn-banner { margin: 0; padding: 4px 10px; display: inline-flex; align-items: center; flex-wrap: wrap; width: auto; max-width: 100%; font-size: 0.82rem; }
+
+/* Decommission statuses: four clearly different colors. */
+.status-badge.decom-status { border: 1px solid transparent; font-weight: 700; }
+html .status-badge.decom-waiting { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+html .status-badge.decom-needed { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+html .status-badge.decom-done { background: #dcfce7; color: #166534; border-color: #86efac; }
+html .status-badge.decom-declined { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+html[data-theme="dark"] .status-badge.decom-waiting { background: rgba(217, 119, 6, .22); color: #fde68a; border-color: rgba(252, 211, 77, .45); }
+html[data-theme="dark"] .status-badge.decom-needed { background: rgba(37, 99, 235, .25); color: #bfdbfe; border-color: rgba(147, 197, 253, .45); }
+html[data-theme="dark"] .status-badge.decom-done { background: rgba(22, 163, 74, .22); color: #bbf7d0; border-color: rgba(134, 239, 172, .4); }
+html[data-theme="dark"] .status-badge.decom-declined { background: rgba(220, 38, 38, .22); color: #fecaca; border-color: rgba(252, 165, 165, .4); }
+
+/* Decommission request page. */
+.dcv-photo { aspect-ratio: 4 / 3; cursor: default; }
+.dcv-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.dcv-step { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--border, #dbe5f3); border-top-width: 4px; border-radius: 10px; background: var(--surface, #fff); }
+.dcv-step b { font-size: 0.85rem; }
+.dcv-step small { color: var(--text-muted, #64748b); font-size: 0.78rem; }
+.dcv-step.is-done { border-top-color: #16a34a; }
+.dcv-step.is-now { border-top-color: #d97706; background: #fffbeb; }
+.dcv-step.is-bad { border-top-color: #dc2626; background: #fef2f2; }
+.dcv-step.is-todo { border-top-color: #cbd5e1; opacity: .75; }
+html[data-theme="dark"] .dcv-step.is-now { background: rgba(217, 119, 6, .14); }
+html[data-theme="dark"] .dcv-step.is-bad { background: rgba(220, 38, 38, .14); }
+.dcv-reason { padding: 12px 14px; border: 1px solid var(--border, #dbe5f3); border-radius: 10px; background: var(--surface, #fff); }
+.dcv-reason span { display: block; margin-bottom: 4px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted, #64748b); }
+.dcv-reason p { margin: 0; overflow-wrap: anywhere; }
+.dcv-reason.is-declined { border-color: #fecaca; background: #fef2f2; }
+html[data-theme="dark"] .dcv-reason.is-declined { background: rgba(220, 38, 38, .14); border-color: rgba(252, 165, 165, .4); }
+.dcv-panel { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border, #dbe5f3); border-radius: 10px; background: var(--surface-muted, #f8fafc); }
+.dcv-panel p { margin: 0; }
+.dcv-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* Decommission request page: smaller photo, facts up top, breathing room before the parts table. */
+.sd2-grid.dcv { grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 24px; }
+.dcv .dcv-photo { aspect-ratio: 4 / 3; max-height: 260px; }
+.dcv-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dcv-facts > div { padding: 8px 12px; }
+.dcv ~ .salvage-section { margin-top: 28px; }
+@media (max-width: 900px) { .dcv-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Decommission request page, redesigned. */
+.dcx { display: grid; gap: 22px; }
+.dcx-back { justify-self: start; }
+.dcx-hero { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 28px; align-items: center; padding: 22px; border: 1px solid var(--border, #dbe5f3); border-radius: 16px; background: var(--surface, #fff); box-shadow: 0 6px 20px rgba(15, 23, 42, .06); }
+.dcx-photo { display: flex; align-items: center; justify-content: center; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 14px; background: var(--surface-muted, #eef3fa); color: #94a3b8; }
+.dcx-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dcx-main { display: grid; gap: 12px; min-width: 0; align-content: center; }
+.dcx-title { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.dcx-title h2 { margin: 0; font-size: 1.7rem; line-height: 1.2; }
+.dcx-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.dcx-chips span { padding: 4px 12px; border: 1px solid var(--border, #dbe5f3); border-radius: 999px; background: var(--surface-muted, #f1f5f9); font-size: 0.82rem; font-weight: 600; }
+.dcx-sub { margin: 0; color: var(--text-muted, #64748b); }
+.dcx-actions { margin-top: 4px; }
+.dcx-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0; margin: 0; padding: 0; list-style: none; }
+.dcx-step { position: relative; display: flex; align-items: center; gap: 12px; padding: 4px 8px 4px 0; }
+.dcx-step:not(:last-child)::after { content: ''; position: absolute; left: 44px; right: 8px; top: 50%; height: 2px; background: var(--border, #dbe5f3); z-index: 0; }
+.dcx-dot { position: relative; z-index: 1; flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; border: 2px solid #cbd5e1; background: var(--surface, #fff); color: #64748b; font-weight: 800; font-size: 0.85rem; }
+.dcx-step-text { position: relative; z-index: 1; display: grid; padding: 0 8px; background: var(--page-bg, #eef3fb); }
+.dcx-step-text b { font-size: 0.9rem; }
+.dcx-step-text small { color: var(--text-muted, #64748b); font-size: 0.78rem; }
+.dcx-step.is-done .dcx-dot { background: #16a34a; border-color: #16a34a; color: #fff; }
+.dcx-step.is-now .dcx-dot { border-color: #d97706; color: #d97706; }
+.dcx-step.is-bad .dcx-dot { background: #dc2626; border-color: #dc2626; color: #fff; }
+.dcx-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 20px; align-items: start; }
+.dcx-card { padding: 18px 20px; border: 1px solid var(--border, #dbe5f3); border-radius: 14px; background: var(--surface, #fff); }
+.dcx-card h3 { margin: 0 0 10px; font-size: 1rem; }
+.dcx-card p { margin: 0; overflow-wrap: anywhere; }
+.dcx-declined { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: #fef2f2; color: #991b1b; }
+.dcx-parts { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.dcx-parts li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border, #dbe5f3); border-radius: 10px; }
+.dcx-qty { font-weight: 800; }
+html[data-theme="dark"] .dcx-declined { background: rgba(220, 38, 38, .16); color: #fecaca; }
+html[data-theme="dark"] .dcx-step-text { background: transparent; }
+@media (max-width: 860px) { .dcx-hero { grid-template-columns: minmax(0, 1fr); } .dcx-cols { grid-template-columns: minmax(0, 1fr); } .dcx-step:not(:last-child)::after { display: none; } }
+
+.dcx-step:not(:last-child)::after { display: none; }
+.dcx-step-text { background: transparent; padding: 0; }
+.dcx-steps { gap: 14px; padding: 14px 18px; border: 1px solid var(--border, #dbe5f3); border-radius: 14px; background: var(--surface, #fff); }
+.dcx-step:not(:last-child) { border-right: 1px solid var(--border, #e2e8f0); }
+@media (max-width: 860px) { .dcx-step:not(:last-child) { border-right: 0; } }
+
+/* Log salvageable parts page. */
+.slg-card { max-width: 640px; margin: 8px auto 0; padding: 26px 28px; border: 1px solid var(--border, #dbe5f3); border-radius: 16px; background: var(--surface, #fff); box-shadow: 0 6px 20px rgba(15, 23, 42, .06); }
+.slg-form { display: grid; gap: 18px; }
+.slg-vehicle { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 12px; background: var(--surface-muted, #eff6ff); }
+.slg-vehicle-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: #2563eb; color: #fff; flex: none; }
+.slg-vehicle small { display: block; color: var(--text-muted, #64748b); font-size: 0.74rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.slg-row { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 16px; align-items: start; }
+.slg-stepper { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; align-items: stretch; border: 1px solid var(--border, #cbd5e1); border-radius: 10px; overflow: hidden; background: var(--surface, #fff); }
+.slg-stepper button { border: 0; background: var(--surface-muted, #f1f5f9); font-size: 1.2rem; font-weight: 700; cursor: pointer; color: inherit; }
+.slg-stepper button:disabled { opacity: .4; cursor: default; }
+.slg-stepper input { border: 0; text-align: center; font-weight: 700; min-width: 0; padding: 10px 4px; background: transparent; color: inherit; -moz-appearance: textfield; }
+.slg-stepper input::-webkit-outer-spin-button, .slg-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.slg-added { padding: 12px 14px; border: 1px solid #bbf7d0; border-radius: 12px; background: #f0fdf4; color: #166534; }
+.slg-added ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+html[data-theme="dark"] .slg-added { background: rgba(22, 163, 74, .16); border-color: rgba(134, 239, 172, .4); color: #bbf7d0; }
+.slg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border, #e2e8f0); }
+@media (max-width: 560px) { .slg-row { grid-template-columns: minmax(0, 1fr); } .slg-card { padding: 18px; } }
+
+/* Log parts page: vehicle and form on the left, the parts list on the right. */
+.slg { display: grid; gap: 18px; }
+.slg-back { justify-self: start; }
+.slg-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, 1fr); gap: 22px; align-items: start; }
+.slg-left, .slg-right { padding: 22px; border: 1px solid var(--border, #dbe5f3); border-radius: 16px; background: var(--surface, #fff); box-shadow: 0 6px 20px rgba(15, 23, 42, .06); display: grid; gap: 18px; }
+.slg-right { gap: 12px; align-content: start; }
+.slg-right h3 { margin: 0; font-size: 1.05rem; }
+.slg-profile { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: start; }
+.slg-photo { display: grid; place-items: center; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 12px; background: var(--surface-muted, #eef3fa); color: #94a3b8; }
+.slg-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.slg-profile-text h3 { margin: 0 0 2px; font-size: 1.2rem; }
+.slg-profile-text > p { margin: 0 0 10px; }
+.slg-desc { padding: 10px 12px; border-radius: 10px; background: var(--surface-muted, #f1f5f9); }
+.slg-desc span { display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted, #64748b); }
+.slg-desc p { margin: 2px 0 0; overflow-wrap: anywhere; }
+.slg-pick { display: grid; gap: 8px; }
+.slg-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.slg-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--border, #dbe5f3); border-radius: 10px; }
+.slg-list li.is-editing { border-color: #2563eb; background: #eff6ff; }
+html[data-theme="dark"] .slg-list li.is-editing { background: rgba(37, 99, 235, .18); }
+.slg-item { display: grid; min-width: 0; }
+.slg-confirm { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; flex-wrap: wrap; }
+@media (max-width: 860px) { .slg-cols { grid-template-columns: minmax(0, 1fr); } .slg-profile { grid-template-columns: minmax(0, 1fr); } }
+
+.salv-hero { margin: 4px 0 18px; }
+
+/* An action group nested in another one (the eye plus a page's own buttons) is one row, not two with a gap. */
+.row-actions .row-actions { display: contents; }
+
+.dcx-chips .dcx-chip-warn { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
+.dcx-good-note { margin: 0; padding: 8px 12px; border-radius: 8px; background: #fffbeb; border: 1px solid #fde68a; color: #78350f; font-weight: 600; }
+
+/* The add button in a table header takes the colour of the band behind it, with a white outline. */
+html .panel-header-bar .icon-add-btn,
+html .schedule-panel-header .icon-add-btn { background: transparent; border: 1.5px solid #ffffff; color: #ffffff; }
+html .panel-header-bar .icon-add-btn:hover,
+html .panel-header-bar .icon-add-btn:focus-visible,
+html .schedule-panel-header .icon-add-btn:hover,
+html .schedule-panel-header .icon-add-btn:focus-visible { background: rgba(255, 255, 255, 0.18); border-color: #ffffff; color: #ffffff; }
+
+/* A field caption inside the box at rest reads as plain text, like a placeholder; it only turns into the small caps legend once it floats. The inner span just follows the outer one. */
+.smart-form label:not(:has(.checkbox-group)):not(:has(input[type="file"])) > span span:not(.required-asterisk) { font-size: inherit; font-weight: inherit; text-transform: inherit; letter-spacing: inherit; color: inherit; }
+
+/* Form and dialog action rows: every button the same size, and Cancel is a solid colour, not a pale one. */
+html :is(.form-actions, .can-actions, .slg-actions, .dcv-actions, .lr-outcome-actions, .confirm-dialog-actions, .modal-actions) > :is(button, .primary-button, .ghost-button, .danger-button) {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  height: 44px; min-height: 44px; min-width: 170px; padding: 0 22px; border-radius: 10px;
+  font-size: 0.9rem; font-weight: 700; line-height: 1;
+}
+html .ghost-button.cancel-btn,
+html[data-theme="dark"] .ghost-button.cancel-btn,
+html[data-theme="dark"] .ticket-detail-panel .ghost-button.cancel-btn { background: #dc2626; border: 1px solid #dc2626; color: #ffffff; }
+html .ghost-button.cancel-btn:hover:not(:disabled),
+html[data-theme="dark"] .ghost-button.cancel-btn:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; color: #ffffff; }
+
+/* Buttons in one action row share one width (the widest label sets it), so Cancel and the main button always match. */
+html :is(.form-actions, .can-actions, .slg-actions, .dcv-actions, .confirm-dialog-actions) { display: grid; grid-auto-flow: column; grid-auto-columns: 190px; justify-content: end; max-width: 100%; margin-left: auto; }
+html :is(.form-actions, .can-actions, .slg-actions, .dcv-actions, .confirm-dialog-actions) > :is(button, .primary-button, .ghost-button, .danger-button) { min-width: 0; width: 100%; }
+@media (max-width: 560px) { html :is(.form-actions, .can-actions, .slg-actions, .dcv-actions, .confirm-dialog-actions) { grid-auto-flow: row; width: 100%; } }
+
+html .status-badge.decom-none { background: #e2e8f0; color: #334155; border-color: #cbd5e1; }
+html[data-theme="dark"] .status-badge.decom-none { background: rgba(148, 163, 184, .2); color: #e2e8f0; border-color: rgba(148, 163, 184, .4); }
