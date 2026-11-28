@@ -14,9 +14,11 @@ class NotificationController extends Controller
     {
         $user = $request->user();
 
+        // The latest 50, plus every unread one however old, so the bell's number is the real number of unread notices.
+        $latest = Notification::where('user_id', $user->id)->latest()->limit(50)->pluck('notification_id');
         $notifications = Notification::where('user_id', $user->id)
+            ->where(fn ($q) => $q->whereNull('read_at')->orWhereIn('notification_id', $latest))
             ->latest()
-            ->limit(50)
             ->get();
 
         return response()->json($notifications);

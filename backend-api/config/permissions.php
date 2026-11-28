@@ -139,6 +139,7 @@ return [
     // (schedule.reassign) to the Maintenance Personnel who'll actually do
     // the work, exactly like reassigning a ticket's mechanic.
     'schedule.delete' => ['Custodian'],
+    'schedule.stop_repeat' => ['Admin', 'Custodian'],
     'schedule.restore' => ['Custodian'],
 
     // Reports & fleet-operational activity log

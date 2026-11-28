@@ -211,11 +211,15 @@ class FleetController extends Controller
                 // A mechanic's own badge only counts THEIR upcoming work, not
                 // the whole fleet's — same personalization pattern as the
                 // Custodian 'issues' badge above (own reports, not everyone's).
+                // A service that already became a job is counted as a work order, not here a second time. The Admin
+                // also sees the services waiting for approval, since that is what needs their decision.
                 'schedules' => ($user->hasRole('Maintenance Personnel') && !$user->hasRole('Admin'))
                     ? VehicleMaintenanceSchedule::where('status', 'Scheduled')
+                        ->whereNull('resulting_ticket_id')
                         ->where('assigned_to', $user->id)
                         ->count()
-                    : $upcomingMaintenance + $overdueMaintenance,
+                    : VehicleMaintenanceSchedule::where('status', 'Scheduled')->whereNull('resulting_ticket_id')->count()
+                        + ($user->hasRole('Admin') ? VehicleMaintenanceSchedule::where('status', 'Pending Approval')->count() : 0),
                 // Maintenance Records waiting on someone's check — the same
                 // "For Verification" list the Records page filters to.
                 'maintenance' => ($user->hasRole('Admin') || $user->hasRole('Custodian'))
@@ -240,7 +244,9 @@ class FleetController extends Controller
                 // Pending card is: tickets still Active in this mechanic's
                 // hands (a two-sub-issue ticket is one work order, not two).
                 'ticketWorkOrders' => MaintenanceTicket::where(fn ($query) => $query->where('assigned_mechanic_id', $request->user()->id)
-                        ->orWhereHas('subIssues', fn ($subs) => $subs->where('assigned_mechanic_id', $request->user()->id)))
+                        ->orWhereHas('subIssues', fn ($subs) => $subs->where('assigned_mechanic_id', $request->user()->id))
+                        // the person named to receive and test a vehicle that went to an outside shop
+                        ->orWhereHas('subIssues', fn ($subs) => $subs->where('external_tester_id', $request->user()->id)->whereNotNull('external_sent_at')->where('status', 'Under Repair')))
                     ->where('status', 'Active')
                     ->count(),
                 // Admin's queue of Custodian-proposed tickets awaiting
@@ -248,6 +254,14 @@ class FleetController extends Controller
                 'ticketProposals' => $user->hasRole('Admin')
                     ? MaintenanceTicket::where('status', 'Pending Approval')->count()
                     : 0,
+                // Salvage Inventory: the Admin's decommission requests waiting for a decision, and for a mechanic the
+                // decommissioned vehicles that still have no parts listed (and were not marked "no usable parts").
+                'salvage' => $user->hasRole('Admin')
+                    ? Vehicle::where('decommission_status', 'Proposed')->where('status', '!=', 'Decommissioned')->count()
+                    : ($user->hasRole('Maintenance Personnel')
+                        ? Vehicle::where('status', 'Decommissioned')->whereNull('salvage_completed_at')
+                            ->whereNotIn('vehicle_id', \App\Models\SalvagePart::select('vehicle_id'))->count()
+                        : 0),
             ],
             'vehicles_by_type' => Vehicle::query()
                 ->join('vehicle_categories', 'vehicles.category_id', '=', 'vehicle_categories.category_id')
@@ -3085,6 +3099,8 @@ class FleetController extends Controller
             // null/absent = one-time; otherwise the interval (months) to auto-
             // schedule the next service when this one is completed.
             'recurrence_months' => ['nullable', 'integer', 'min:1', 'max:60'],
+            // How many services the series has in all, counting this one; blank = repeat until someone stops it.
+            'recurrence_total' => ['nullable', 'integer', 'min:2', 'max:60'],
             // A confirmed decision to proceed despite checkScheduleConflicts()
             // below — the whole point is this NEVER blocks outright, only
             // asks for an explicit yes once the conflict is shown.
@@ -3100,6 +3116,7 @@ class FleetController extends Controller
         );
 
         $data['maintenance_type'] = MaintenanceType::resolve($data['maintenance_type']);
+        abort_if(! empty($data['recurrence_total']) && empty($data['recurrence_months']), 422, 'Choose how often it repeats before choosing how many times.');
 
         $vehicle = Vehicle::findOrFail($data['vehicle_id']);
         abort_if(in_array($vehicle->status, ['Inactive', 'Decommissioned'], true), 422, 'Cannot schedule a retired vehicle.');
@@ -3371,10 +3388,18 @@ class FleetController extends Controller
             // silently skip both.
             'status' => ['sometimes', Rule::in(['Cancelled'])],
             'recurrence_months' => ['nullable', 'integer', 'min:1', 'max:60'],
+            'recurrence_total' => ['nullable', 'integer', 'min:2', 'max:60'],
             'confirm_conflicts' => ['nullable', 'boolean'],
         ]);
 
         if (isset($data['status'])) return $this->deleteSchedule($request, $schedule);
+
+        // No repeat means no count either; a count needs a repeat.
+        $months = array_key_exists('recurrence_months', $data) ? $data['recurrence_months'] : $schedule->recurrence_months;
+        if (empty($months)) {
+            abort_if(! empty($data['recurrence_total']), 422, 'Choose how often it repeats before choosing how many times.');
+            $data['recurrence_total'] = null;
+        }
 
         // A date can only be moved to today or later; a schedule that is already overdue may still be edited
         // (notes, mechanic) as long as its date is left alone.
@@ -3536,6 +3561,27 @@ class FleetController extends Controller
     {
         abort_if($schedule->status === 'Completed' || $schedule->resulting_maintenance_id || $schedule->resulting_ticket_id,
             422, 'This schedule already has recorded work or a maintenance ticket. Manage that record instead; the schedule is locked.');
+    }
+
+    /**
+     * End a repeating series without touching this service: nothing further is booked once it is done.
+     * Works while the service is already a job (the plan itself is locked then) and needs no new approval.
+     */
+    public function stopRepeat(Request $request, VehicleMaintenanceSchedule $schedule)
+    {
+        return DB::transaction(function () use ($request, $schedule) {
+            $schedule = VehicleMaintenanceSchedule::whereKey($schedule->getKey())->lockForUpdate()->firstOrFail();
+            $this->requireAbility($request, 'schedule.stop_repeat');
+            $this->abortUnlessOwnBarangaySchedule($schedule);
+            abort_unless($schedule->recurrence_months, 422, 'This service does not repeat.');
+            abort_if(in_array($schedule->status, ['Completed', 'Cancelled', 'Declined'], true), 422, "This service is {$schedule->status}. Stop the next one in the series instead.");
+
+            $schedule->update(['recurrence_months' => null, 'recurrence_total' => null]);
+            $this->history($schedule->vehicle, 'Maintenance Schedule Repeat Stopped', "Repeating was stopped for maintenance schedule #{$schedule->schedule_id}.", 'vehicle_maintenance_schedules', $schedule->schedule_id, $request);
+            $this->log($request, 'Edit', 'Vehicle Maintenance Schedule', $schedule->schedule_id, "Stopped repeating schedule #{$schedule->schedule_id}");
+
+            return $schedule->fresh(['vehicle.category', 'createdBy', 'assignedToUser']);
+        });
     }
 
     public function deleteSchedule(Request $request, VehicleMaintenanceSchedule $schedule)

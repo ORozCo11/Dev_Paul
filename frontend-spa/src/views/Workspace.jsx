@@ -1687,6 +1687,22 @@ function Workspace() {
       showError(error, setNotice);
     }
   };
+  // Ends a repeating series without touching this service: once it is done, nothing further is booked.
+  const stopScheduleRepeat = (target) => setConfirmDialog({
+    title: 'Stop repeating',
+    message: `Stop repeating ${target.maintenance_type} for ${target.vehicle?.vehicle_name ?? 'this vehicle'}? This service stays as planned, but no further service is booked after it.`,
+    confirmLabel: 'Stop repeating',
+    variant: 'danger',
+    onConfirm: async () => {
+      try {
+        await api.put(`/maintenance-schedules/${target.schedule_id}/stop-repeat`);
+        await refreshCurrent();
+        setNotice({ type: 'success', text: 'Repeating stopped.' });
+      } catch (error) {
+        showError(error, setNotice);
+      }
+    },
+  });
   const approveSchedule = (target) => (!target.assigned_to ? setApproveScheduleTarget(target) : setConfirmDialog({
     title: 'Approve Maintenance Schedule',
     message: `Approve ${target.maintenance_type} for ${target.vehicle?.vehicle_name ?? 'this vehicle'} on ${formatDate(target.scheduled_date)}?`,
@@ -2551,7 +2567,7 @@ function Workspace() {
   );
   const maintenanceStatusColumnChooser = useColumnChooser('vms_maintenance_status_columns_s2', maintenanceStatusColumnDefsWithNote, ['id', 'plate']);
 
-  const scheduleColumnDefs = (() => scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord, setReassignScheduleTarget, openTicketProfile, approveSchedule, setDeclineScheduleTarget, recordScheduleWork, (row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}`)))();
+  const scheduleColumnDefs = (() => scheduleColumns((row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}/edit`), deleteRecord, user, (row) => navigate(`${roleRoutes[user.role]}/maintenance/${row.resulting_maintenance_id}`), restoreRecord, setReassignScheduleTarget, openTicketProfile, approveSchedule, setDeclineScheduleTarget, recordScheduleWork, (row) => navigate(`${roleRoutes[user.role]}/schedules/${row.schedule_id}`), stopScheduleRepeat))();
   const scheduleColumnChooser = useColumnChooser('vms_schedule_columns_s2', scheduleColumnDefs, ['id', 'plate', 'time', 'repeat', 'location']);
 
   const historyColumnsWithNote = [
@@ -4012,6 +4028,7 @@ function Workspace() {
           onViewTicket={openTicketProfile}
           onApprove={approveSchedule}
           onDecline={setDeclineScheduleTarget}
+          onStopRepeat={stopScheduleRepeat}
         />
           {renderReassignScheduleModal()}
           {renderDeclineScheduleModal()}
@@ -7936,6 +7953,16 @@ function scheduleFields(lookups, allHubs = [], isEdit = false, suggestOnly = fal
       min: 1,
       max: 60,
     },
+    {
+      label: 'Number of services (optional)',
+      name: 'recurrence_total',
+      group: '2. Date & recurrence',
+      fullWidth: true,
+      type: 'number',
+      min: 2,
+      max: 60,
+      hint: 'Counting this one: 3 means this service and two repeats. Leave blank to repeat until you stop it.',
+    },
     // A known hub, or "Other" for an outside repair shop not in that list.
     { label: 'Service Location', name: 'service_location', type: 'select-or-other', options: hubOptions, otherLabel: 'Other / External Shop', otherPlaceholder: 'e.g. Toyota Service Center', group: '3. Location & assignment' },
     { label: 'Assigned To', name: 'assigned_to', options: options(lookups.maintenance_personnel, 'id', 'name'), type: 'select', group: '3. Location & assignment' },
@@ -8359,7 +8386,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
       columns.push({
         key: 'action', label: 'Action', locked: true, className: 'cell-center',
         render: (row) => (row.readiness_days_left <= 2 && row.can_confirm_readiness !== false
-          ? <button className="readiness-text-btn is-ready" type="button" onClick={(e) => { e.stopPropagation(); onReadinessCheck(row); }}>Re-check</button>
+          ? <button className="icon-btn readiness-icon-btn" type="button" title="Re-check readiness" aria-label={`Re-check readiness of ${row.vehicle_name}`} onClick={(e) => { e.stopPropagation(); onReadinessCheck(row); }}><Icon name="checkCircle" size={16} /></button>
           : null),
       });
     }
@@ -8384,7 +8411,7 @@ function vehicleColumns(user, onEdit, deleteRecord, restoreRecord, filterStatus,
           }
           return (
             <div className="row-actions">
-              <button className={`readiness-text-btn ${row.can_confirm_readiness === false ? `is-blocked ${row.open_ticket_id ? 'is-ticket' : (row.missing_parts?.length ? 'is-part' : 'is-repair')}` : 'is-ready'}`} onClick={() => onReadinessCheck(row)} type="button" title={row.readiness_block_reason || 'Record Readiness Check'} aria-label="Record Readiness Check">{row.can_confirm_readiness === false ? (row.open_ticket_id ? 'Ongoing ticket' : (row.missing_parts?.length ? 'Missing part' : 'Needs repair')) : 'Check'}</button>
+              <button className={row.can_confirm_readiness === false ? `readiness-text-btn is-blocked ${row.open_ticket_id ? 'is-ticket' : (row.missing_parts?.length ? 'is-part' : 'is-repair')}` : 'icon-btn readiness-icon-btn'} onClick={() => onReadinessCheck(row)} type="button" title={row.readiness_block_reason || 'Record Readiness Check'} aria-label="Record Readiness Check">{row.can_confirm_readiness === false ? (row.open_ticket_id ? 'Ongoing ticket' : (row.missing_parts?.length ? 'Missing part' : 'Needs repair')) : <Icon name="checkCircle" size={16} />}</button>
             </div>
           );
         },
@@ -9303,7 +9330,7 @@ function scheduleNextLine(row, role) {
   return { text: `Approved: due ${formatDate(row.scheduled_date)}`, tone: 'approved' };
 }
 
-function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restoreRecord, onReassign, onViewTicket, onApprove, onDecline, onRecordWork, onViewSchedule) {
+function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restoreRecord, onReassign, onViewTicket, onApprove, onDecline, onRecordWork, onViewSchedule, onStopRepeat) {
   return [
     { key: 'id', label: 'ID', locked: true, className: 'cell-center', render: (row) => recordNumber(row, 'schedule_id') },
     { key: 'vehicle', label: 'Vehicle', locked: true, render: (row) => <VehicleCell vehicle={row.vehicle} /> }, { key: 'plate', label: 'Plate Number', className: 'cell-center', render: (row) => row.vehicle?.plate_number ?? '-' },
@@ -9323,7 +9350,7 @@ function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restor
     // "One-time" (plain text, no badge) needs the same explicit centering the
     // recurring branch gets for free from <StatusBadge> — otherwise it'd
     // sit flush left while every other row in this column is centered.
-    { key: 'repeat', label: 'Repeat', className: 'cell-center', render: (row) => row.recurrence_months ? <StatusBadge value={RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`} /> : <span className="muted">One-time</span> },
+    { key: 'repeat', label: 'Repeat', className: 'cell-center', render: (row) => row.recurrence_months ? <StatusBadge value={repeatLabel(row)} /> : <span className="muted">One-time</span> },
     { key: 'location', label: 'Location', render: (row) => row.service_location ?? '-' },
     {
       key: 'status',
@@ -9397,7 +9424,7 @@ function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restor
             iconOnly
             row={row} currentUser={currentUser} onEdit={onEdit}
             onViewRecord={onViewRecord} onReassign={onReassign} onViewTicket={onViewTicket}
-            onApprove={onApprove} onDecline={onDecline} onRecordWork={onRecordWork}
+            onApprove={onApprove} onDecline={onDecline} onRecordWork={onRecordWork} onStopRepeat={onStopRepeat}
             onRestore={restoreRecord ? () => restoreRecord(`/maintenance-schedules/${row.schedule_id}/restore`, 'Schedule restored for Admin approval.', 'Restore this schedule for Admin approval?') : undefined}
             onDelete={() => deleteRecord(`/maintenance-schedules/${row.schedule_id}`, 'Schedule cancelled.', `Cancel the ${row.maintenance_type} schedule for ${row.vehicle?.vehicle_name ?? 'this vehicle'}? It can be restored later if needed.`)}
           />
@@ -9408,6 +9435,12 @@ function scheduleColumns(onEdit, deleteRecord, currentUser, onViewRecord, restor
 }
 
 const RECURRENCE_LABEL = { 1: 'Monthly', 3: 'Every 3 months', 6: 'Every 6 months', 12: 'Every 12 months' };
+// "Every 3 months", and where it stands in a series with a set number of services: "Every 3 months · 2 of 3".
+function repeatLabel(row) {
+  if (!row.recurrence_months) return 'One-time';
+  const base = RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`;
+  return row.recurrence_total ? `${base} · ${row.recurrence_number ?? 1} of ${row.recurrence_total}` : base;
+}
 
 // #11 — a schedule is overdue when it's still 'Scheduled' but its date has
 // already passed (compared date-only, so "today" is never overdue).
@@ -9437,7 +9470,7 @@ function scheduleUrgencyBucket(row) {
 function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions }) {
   const overdue = isScheduleOverdue(row);
   const completedRecord = row.resulting_maintenance;
-  const recurrence = row.recurrence_months ? (RECURRENCE_LABEL[row.recurrence_months] ?? `Every ${row.recurrence_months} mo`) : 'One-time';
+  const recurrence = repeatLabel(row);
   const dateLabel = `${formatDate(row.scheduled_date)}${row.scheduled_time ? ` · ${String(row.scheduled_time).slice(0, 5)}` : ''}`;
   const linkedTicket = row.resulting_ticket_id && actions.onViewTicket;
   const statusMessage = row.status === 'Pending Approval'
@@ -9485,7 +9518,7 @@ function MaintenanceScheduleDetailPage({ row, currentUser, onBack, ...actions })
   );
 }
 
-function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline, onRecordWork }) {
+function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onEdit, onDelete, onViewRecord, onRestore, onReassign, onViewTicket, onApprove, onDecline, onRecordWork, onStopRepeat }) {
   const actionClass = (tone = '') => `sch-action ${tone}${iconOnly ? ' icon-btn' : ''}`;
   // The job a schedule became stays reachable after it is done too, so the finished work can be opened from the schedule.
   const becameTicket = ['Scheduled', 'Completed'].includes(row.status) && row.resulting_ticket_id && onViewTicket;
@@ -9494,6 +9527,7 @@ function MaintenanceScheduleActions({ iconOnly = false, row, currentUser, onEdit
     && currentUser?.role === 'Maintenance Personnel' && String(row.assigned_to) === String(currentUser.id);
   return (
     <div className="sch-card-actions">
+      {onStopRepeat && row.recurrence_months && ['Pending Approval', 'Scheduled'].includes(row.status) && canDo(currentUser, 'schedule.stop_repeat') && <button className={actionClass('is-danger')} onClick={() => onStopRepeat(row)} type="button" title="Stop repeating" aria-label="Stop repeating"><Icon name="ban" size={14} />{!iconOnly && <span>Stop repeating</span>}</button>}
       {canRecordWork && <button className={iconOnly ? 'icon-btn btn-view-action' : actionClass('is-success')} onClick={() => onRecordWork(row)} type="button" title="Open work order" aria-label="Open work order"><Icon name="wrench" size={iconOnly ? 16 : 14} />{!iconOnly && <span>Open work order</span>}</button>}
       {becameTicket && <button className={actionClass('is-info')} onClick={() => onViewTicket({ ticket_id: row.resulting_ticket_id })} type="button" aria-label={`View Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}`} title={`This schedule became Ticket #${ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })} — open it`}><Icon name="eye" size={14} />{!iconOnly && <span>Ticket #{ticketNumber(row.resulting_ticket ?? { ticket_id: row.resulting_ticket_id })}</span>}</button>}
       {row.status === 'Completed' && row.resulting_maintenance_id && onViewRecord && <button className={actionClass('is-info')} onClick={() => onViewRecord(row)} type="button" title="View Maintenance Record" aria-label={`View Maintenance Record #${recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}`}><Icon name="wrench" size={14} />{!iconOnly && <span>Record #{recordNumber(row.resulting_maintenance ?? { maintenance_id: row.resulting_maintenance_id }, 'maintenance_id')}</span>}</button>}

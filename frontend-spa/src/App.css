@@ -17845,3 +17845,9 @@ html :is(.form-actions, .can-actions, .slg-actions, .dcv-actions, .confirm-dialo
 
 html .status-badge.decom-none { background: #e2e8f0; color: #334155; border-color: #cbd5e1; }
 html[data-theme="dark"] .status-badge.decom-none { background: rgba(148, 163, 184, .2); color: #e2e8f0; border-color: rgba(148, 163, 184, .4); }
+
+/* The readiness Check / Re-check action is an icon button like the other row actions. */
+html .icon-btn.readiness-icon-btn { background: #16a34a; border-color: #16a34a; color: #ffffff; }
+html .icon-btn.readiness-icon-btn:hover { background: #15803d; border-color: #15803d; }
+html .table-shell .icon-btn.readiness-icon-btn, html .row-actions .icon-btn.readiness-icon-btn, html button.icon-btn.readiness-icon-btn { background: #16a34a !important; border-color: #16a34a !important; color: #ffffff !important; }
+html .table-shell .icon-btn.readiness-icon-btn:hover, html .row-actions .icon-btn.readiness-icon-btn:hover, html button.icon-btn.readiness-icon-btn:hover { background: #15803d !important; border-color: #15803d !important; }

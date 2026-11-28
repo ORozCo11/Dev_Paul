@@ -27,13 +27,22 @@ class VehicleMaintenanceSchedule extends Model
         'created_by',
         'assigned_to',
         'recurrence_months',
+        'recurrence_total',
+        'recurrence_number',
         'resulting_maintenance_id',
         'resulting_ticket_id',
         'due_notified_at',
     ];
 
+    // A new schedule is the first service of its series unless it says otherwise.
+    protected $attributes = [
+        'recurrence_number' => 1,
+    ];
+
     protected $casts = [
         'recurrence_months' => 'integer',
+        'recurrence_total' => 'integer',
+        'recurrence_number' => 'integer',
         'due_notified_at' => 'datetime',
     ];
 
@@ -89,6 +98,11 @@ class VehicleMaintenanceSchedule extends Model
             return null;
         }
 
+        // A series with a set number of services ends after the last one.
+        if ($this->recurrence_total && (int) $this->recurrence_number >= (int) $this->recurrence_total) {
+            return null;
+        }
+
         // addMonthsNoOverflow(), not addMonths(): plain addMonths() overflows
         // past a shorter target month (Jan 31 + 1 month lands on Mar 3, not
         // Feb 28) instead of clamping to that month's last day.
@@ -112,6 +126,8 @@ class VehicleMaintenanceSchedule extends Model
             'created_by'        => $userId,
             'assigned_to'       => $this->assigned_to,
             'recurrence_months' => $this->recurrence_months,
+            'recurrence_total'  => $this->recurrence_total,
+            'recurrence_number' => (int) $this->recurrence_number + 1,
         ]);
     }
 }

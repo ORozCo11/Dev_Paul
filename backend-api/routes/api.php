@@ -239,6 +239,7 @@ Route::middleware(['auth:sanctum', EnsureUserIsActive::class, \App\Http\Middlewa
     Route::post('/maintenance-schedules/{schedule}/start', [FleetController::class, 'startScheduleEarly']);
     Route::put('/maintenance-schedules/{schedule}/reassign', [FleetController::class, 'reassignSchedule']);
     Route::post('/maintenance-schedules/{schedule}/restore', [FleetController::class, 'restoreSchedule']);
+    Route::put('/maintenance-schedules/{schedule}/stop-repeat', [FleetController::class, 'stopRepeat']);
     Route::delete('/maintenance-schedules/{schedule}', [FleetController::class, 'deleteSchedule']);
 
     Route::get('/histories', [FleetController::class, 'histories']);
